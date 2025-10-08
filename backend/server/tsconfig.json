@@ -1,5 +1,5 @@
-// shopnish-separate/backend/server/tsconfig.json
 {
+
   "extends": "../../tsconfig.json", // ✅ दो स्तर ऊपर रूट tsconfig.json को एक्सटेंड करेगा
     "compilerOptions": {
         "composite": true,
@@ -23,7 +23,6 @@
                                                                                     }
                                                                                       },
                                                                                         "include": ["**/*.ts", "**/*.tsx"], // ✅ server/ फोल्डर के अंदर सभी .ts/.tsx फाइलों को शामिल करें
-                                                                                          "exclude": ["node_modules", "dist"]
-                                                                                          }
+                                                                                          "exclude": ["node_modules", "dist"]           }
 
-                                                                                          
+                                                                                        
