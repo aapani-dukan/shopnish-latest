@@ -1,0 +1,15 @@
+// client/tsconfig.json
+{
+  "extends": "../tsconfig.json", // ✅ यह एक्सटेंड सही है
+  "compilerOptions": {
+    // ... आपके मौजूदा विकल्प ...
+    "baseUrl": "./", // ✅ यह सही है (client फोल्डर के संदर्भ में)
+    "paths": {
+      "@/*": ["./src/*"], // ✅ यह सही है
+      "@shared/*": ["../shared/*"] // ✅ यह बिल्कुल सही है और आवश्यक है
+    },
+    "jsx": "react-jsx" // ✅ सुनिश्चित करें कि यह react-jsx पर सेट है, यदि आप React 17+ JSX transform का उपयोग कर रहे हैं।
+  },
+  "include": ["src"], // ✅ यह सही है
+  "exclude": ["node_modules", "dist"] // ✅ इसे जोड़ना अच्छा होगा
+}

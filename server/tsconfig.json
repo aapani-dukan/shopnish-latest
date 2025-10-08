@@ -1,0 +1,27 @@
+{
+  "extends": "../tsconfig.json", // ✅ यह एक्सटेंड सही है
+  "compilerOptions": {
+    "composite": true,
+    "tsBuildInfoFile": "../node_modules/.tsbuildinfo/tsconfig.server.tsbuildinfo",
+    "target": "ES2022",
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noEmit": false,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "types": ["node"],
+    "lib": ["ES2022"],
+    "outDir": "../dist",
+    "baseUrl": "..", // ✅ यह बिल्कुल सही है (रूट फोल्डर के संदर्भ में)
+    "paths": {
+      // ✅ ये पाथ्स सही हैं
+      "@shared/backend/*": ["shared/backend/*"],
+      "@shared/frontend/*": ["shared/frontend/*"] // ✅ यह भी रखें, भले ही सर्वर सिर्फ backend का उपयोग करे, साझा फ्रंटएंड प्रकारों के लिए उपयोगी हो सकता है।
+    }
+  },
+  "include": ["**/*.ts", "**/*.tsx"], // ✅ यह सही है
+  "exclude": ["node_modules", "dist"] // ✅ यह सही है
+}

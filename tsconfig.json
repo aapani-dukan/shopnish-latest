@@ -1,0 +1,35 @@
+{
+  "compilerOptions": {
+    "composite": true,
+    "skipLibCheck": true,
+    "module": "ESNext",
+    "moduleResolution": "bundler", // या "NodeNext" यदि आप Node.js के नवीनतम ESM रिजोल्यूशन का सख्ती से पालन करना चाहते हैं
+    "allowSyntheticDefaultImports": true,
+    "strict": true,
+    "noEmit": true, // यह सुनिश्चित करता है कि रूट tsconfig.json कोई JS फ़ाइल उत्पन्न न करे
+    "baseUrl": "./",
+    "paths": {
+      // ✅ ये पाथ्स सही हैं
+      "@shared/backend/*": ["shared/backend/*"],
+      "@shared/frontend/*": ["shared/frontend/*"],
+      // यदि आपके पास केवल "@shared" पाथ एलियास है, तो आप इसे ऐसे भी कर सकते हैं:
+      // "@shared/*": ["shared/*"]
+    }
+  },
+  "include": [
+    "server/**/*.ts",
+    "server/**/*.mts", // ✅ यदि आप .mts का उपयोग करते हैं तो इसे जोड़ें
+    "shared/**/*.ts",
+    "shared/**/*.tsx",
+    "client/**/*.ts",
+    "client/**/*.tsx"
+  ],
+  "exclude": [ // ✅ 'node_modules' को स्पष्ट रूप से बाहर करें
+    "node_modules",
+    "dist" // ✅ 'dist' फोल्डर को भी बाहर करें
+  ],
+  "references": [
+        // "noEmit": true,,
+    { "path": "./server" }
+  ]
+}

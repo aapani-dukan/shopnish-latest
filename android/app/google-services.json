@@ -1,0 +1,47 @@
+{
+  "project_info": {
+    "project_number": "352463214204",
+    "project_id": "aapani-dukan",
+    "storage_bucket": "aapani-dukan.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:352463214204:android:bacfe600bba057191fdbf9",
+        "android_client_info": {
+          "package_name": "com.shopnish.app"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "352463214204-e4m3oebenok24up0tr0q2a8r7lo61410.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.shopnish.app",
+            "certificate_hash": "89fecfa211171e609887f800c9069d2166128409"
+          }
+        },
+        {
+          "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAq2GbFOiMEedmLjp4ZxhwZ4I6OF2vp_DE"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "352463214204-nmv6u173l2soc6r78mbvlhfdr02modgb.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
