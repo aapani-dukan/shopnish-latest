@@ -1,0 +1,29 @@
+// shopnish-separate/backend/server/tsconfig.json
+{
+  "extends": "../../tsconfig.json", // ✅ दो स्तर ऊपर रूट tsconfig.json को एक्सटेंड करेगा
+    "compilerOptions": {
+        "composite": true,
+            "tsBuildInfoFile": "../../node_modules/.tsbuildinfo/tsconfig.backend.tsbuildinfo", // ✅ पाथ एडजस्ट किया गया
+                "target": "es2022",
+                    "module": "nodenext",
+                        "moduleResolution": "nodenext",
+                            "allowSyntheticDefaultImports": true,
+                                "strict": true,
+                                    "noEmit": false,
+                                        "esModuleInterop": true,
+                                            "skipLibCheck": true,
+                                                "forceConsistentCasingInFileNames": true,
+                                                    "types": ["node"],
+                                                        "lib": ["es2022"],
+                                                            "outDir": "./dist", // ✅ आउटपुट अब backend/server/dist में
+                                                                "baseUrl": "./", // server फोल्डर के संदर्भ में
+                                                                    "paths": {
+                                                                          // ✅ shared फोल्डर अब backend के रूट में है, इसलिए यहाँ से एक स्तर ऊपर
+                                                                                "@shared/*": ["../shared/*"]
+                                                                                    }
+                                                                                      },
+                                                                                        "include": ["**/*.ts", "**/*.tsx"], // ✅ server/ फोल्डर के अंदर सभी .ts/.tsx फाइलों को शामिल करें
+                                                                                          "exclude": ["node_modules", "dist"]
+                                                                                          }
+
+                                                                                          
