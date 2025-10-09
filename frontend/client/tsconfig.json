@@ -1,27 +1,35 @@
+// shopnish-seprate/frontend/client/tsconfig.json (संशोधित)
 {
-      // "extends": "../../tsconfig.json", // ❌ यह लाइन हटा दें
-        "compilerOptions": {
-            "target": "es2022",
-                "useDefineForClassFields": true,
-                    "lib": ["DOM", "DOM.Iterable", "es2022"],
-                        "module": "esnext",
-                            "skipLibCheck": true,
+  // "extends": "../../tsconfig.json", // यह लाइन पहले ही हटा दी गई है, बहुत अच्छा
+    "compilerOptions": {
+        "target": "es2022",
+            "useDefineForClassFields": true,
+                "lib": ["DOM", "DOM.Iterable", "es2022"],
+                    "module": "esnext",
+                        "skipLibCheck": true,
 
-                                /* Bundler mode */
-                                    "moduleResolution": "bundler",
-                                        "allowImportingTsExtensions": true,
-                                            "resolveJsonModule": true,
-                                                "isolatedModules": true,
-                                                    "noEmit": true,
-                                                        "jsx": "react-jsx",
+                            /* Bundler mode */
+                                "moduleResolution": "bundler",
+                                    "allowImportingTsExtensions": true,
+                                        "resolveJsonModule": true,
+                                            "isolatedModules": true,
+                                                "noEmit": true,
+                                                    "jsx": "react-jsx",
 
-                                                            /* Linting */
-                                                                "strict": true,
-                                                                    "noUnusedLocals": true,
-                                                                        "noUnusedParameters": true,
-                                                                            "noFallthroughCasesInSwitch": true
-                                                                              },
-                                                                                "include": ["src"],
-                                                                                  "references": [{ "path": "./tsconfig.node.json" }]
-                                                                                  }
+                                                        /* Linting */
+                                                            "strict": true,
+                                                                "noUnusedLocals": true,
+                                                                    "noUnusedParameters": true,
+                                                                        "noFallthroughCasesInSwitch": true,
 
+                                                                            // 👇 यहाँ नए बदलाव शुरू होते हैं
+                                                                                "baseUrl": "./", // client फोल्डर को बेस URL के रूप में सेट करें
+                                                                                    "paths": {
+                                                                                          "shared/*": ["../shared/*"] // shared/* इम्पोर्ट्स को frontend/shared/* पर मैप करें
+                                                                                              }
+                                                                                                  // 👆 यहाँ नए बदलाव खत्म होते हैं
+                                                                                                    },
+                                                                                                      "include": ["src"],
+                                                                                                        "references": [{ "path": "./tsconfig.node.json" }]
+                                                                                                        }
+                                                                                                        
