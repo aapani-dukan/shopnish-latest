@@ -1,33 +1,27 @@
-// shopnish-separate/frontend/client/tsconfig.json
 {
-  "extends": "../../tsconfig.json", // ✅ अब दो स्तर ऊपर रूट tsconfig.json को एक्सटेंड करेगा
-    "compilerOptions": {
-        "target": "ES2020",
-            "useDefineForClassFields": true,
-                "lib": ["ES2020", "DOM", "DOM.Iterable"],
-                    "module": "ESNext",
-                        "skipLibCheck": true,
-                            "moduleResolution": "bundler",
-                                "allowImportingTsExtensions": true,
-                                    "resolveJsonModule": true,
-                                        "isolatedModules": true,
-                                            "noEmit": true,
-                                                "jsx": "react-jsx",
-                                                    "strict": true,
-                                                        "noUnusedLocals": true,
-                                                            "noUnusedParameters": true,
-                                                                "noFallthroughCasesInSwitch": true,
+      // "extends": "../../tsconfig.json", // ❌ यह लाइन हटा दें
+        "compilerOptions": {
+            "target": "es2022",
+                "useDefineForClassFields": true,
+                    "lib": ["DOM", "DOM.Iterable", "es2022"],
+                        "module": "esnext",
+                            "skipLibCheck": true,
 
-                                                                    // ✅ पाथ्स अब frontend/client फोल्डर के अंदर से हल होंगे
-                                                                        "baseUrl": "./", // client फोल्डर के संदर्भ में
-                                                                            "paths": {
-                                                                                  "@/*": ["./src/*"],
-                                                                                        // shared अब frontend/client से ../../backend/shared तक होगा
-                                                                                              "shared/*": ["../../backend/shared/*"] // ✅ updated path to shared
-                                                                                                  }
-                                                                                                    },
-                                                                                                      "include": ["src"], // ✅ src/ फोल्डर को शामिल करेगा (client/src)
-                                                                                                        "references": [{ "path": "./tsconfig.node.json" }], // यदि client/tsconfig.node.json मौजूद है
-                                                                                                          "exclude": ["node_modules", "dist"]
-                                                                                                          }
-                                                                                                          
+                                /* Bundler mode */
+                                    "moduleResolution": "bundler",
+                                        "allowImportingTsExtensions": true,
+                                            "resolveJsonModule": true,
+                                                "isolatedModules": true,
+                                                    "noEmit": true,
+                                                        "jsx": "react-jsx",
+
+                                                            /* Linting */
+                                                                "strict": true,
+                                                                    "noUnusedLocals": true,
+                                                                        "noUnusedParameters": true,
+                                                                            "noFallthroughCasesInSwitch": true
+                                                                              },
+                                                                                "include": ["src"],
+                                                                                  "references": [{ "path": "./tsconfig.node.json" }]
+                                                                                  }
+
