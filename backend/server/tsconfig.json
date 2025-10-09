@@ -1,28 +1,31 @@
+// backend/server/tsconfig.json (संशोधित)
 {
-
-  "extends": "../../tsconfig.json", // ✅ दो स्तर ऊपर रूट tsconfig.json को एक्सटेंड करेगा
+  // "extends": "../../tsconfig.json", // ❌ यह लाइन हटा दें या टिप्पणी करें
     "compilerOptions": {
         "composite": true,
-            "tsBuildInfoFile": "../../node_modules/.tsbuildinfo/tsconfig.backend.tsbuildinfo", // ✅ पाथ एडजस्ट किया गया
-                "target": "es2022",
-                    "module": "nodenext",
-                        "moduleResolution": "nodenext",
-                            "allowSyntheticDefaultImports": true,
-                                "strict": true,
-                                    "noEmit": false,
-                                        "esModuleInterop": true,
-                                            "skipLibCheck": true,
-                                                "forceConsistentCasingInFileNames": true,
-                                                    "types": ["node"],
-                                                        "lib": ["es2022"],
-                                                            "outDir": "./dist", // ✅ आउटपुट अब backend/server/dist में
-                                                                "baseUrl": "./", // server फोल्डर के संदर्भ में
-                                                                    "paths": {
-                                                                          // ✅ shared फोल्डर अब backend के रूट में है, इसलिए यहाँ से एक स्तर ऊपर
-                                                                                "@shared/*": ["../shared/*"]
-                                                                                    }
-                                                                                      },
-                                                                                        "include": ["**/*.ts", "**/*.tsx"], // ✅ server/ फोल्डर के अंदर सभी .ts/.tsx फाइलों को शामिल करें
-                                                                                          "exclude": ["node_modules", "dist"]           }
-
-                                                                                        
+            // tsbuildinfofile का पाथ एडजस्ट करें यदि आप इसे रखना चाहते हैं
+                // ध्यान दें: यदि आप monorepo के बाहर deploy कर रहे हैं तो यह आवश्यक नहीं हो सकता है
+                    // "tsbuildinfofile": "../../node_modules/.tsbuildinfo/tsconfig.backend.tsbuildinfo", 
+                        
+                            "target": "es2022",
+                                "module": "nodenext", // CommonJS या ESNext चुनें जो आपके रनटाइम के लिए उपयुक्त हो
+                                    "moduleResolution": "nodenext", // या "node"
+                                        "allowSyntheticDefaultImports": true,
+                                            "strict": true,
+                                                "noEmit": false, // यह esbuild के साथ conflicts कर सकता है यदि esbuild ही emit कर रहा है
+                                                    "esModuleInterop": true,
+                                                        "skipLibCheck": true,
+                                                            "forceConsistentCasingInFileNames": true,
+                                                                "types": ["node"],
+                                                                    "lib": ["es2022"],
+                                                                        "outDir": "../dist/server", // ✅ आउटपुट अब backend/dist/server में जाएगा
+                                                                            "baseUrl": ".", // server फोल्डर के संदर्भ में
+                                                                                "paths": {
+                                                                                      // ✅ shared फोल्डर अब backend के रूट में है, इसलिए यहाँ से एक स्तर ऊपर
+                                                                                            "shared/*": ["../shared/*"] 
+                                                                                                }
+                                                                                                  },
+                                                                                                    "include": ["**/*.ts", "**/*.tsx"], // ✅ server/ फोल्डर के अंदर सभी .ts/.tsx फाइलों को शामिल करें
+                                                                                                      "exclude": ["node_modules", "dist"]           
+                                                                                                      }
+                                                                                                      
