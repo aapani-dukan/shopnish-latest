@@ -1,14 +1,17 @@
-// client/src/lib/api.ts
 import axios from "axios";
 import { auth } from "./firebase";
 
 const api = axios.create({
-  baseURL: "https://shopnish-00ug.onrender.com", // ✅ live backend URL
-  withCredentials: true,
-});
+  // 🔴 बदलाव यहाँ: सीधे Render URL का उपयोग करने के बजाय
+    //    baseURL को खाली छोड़ें या '/' पर सेट करें ताकि यह Vercel प्रॉक्सी का उपयोग करे।
+      baseURL: "/api", 
+        // हमने vercel.json में नियम सेट किया है: /api/(.*) -> https://shopnish-seprate.onrender.com/api/$1
 
-api.interceptors.request.use(
-  async (config) => {
+          withCredentials: true,
+          });
+
+          api.interceptors.request.use(
+            async (config) => {
     const user = auth.currentUser;
     if (user) {
       try {
