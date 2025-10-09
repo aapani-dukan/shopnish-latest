@@ -23,7 +23,8 @@ let server: Server;
 // CLIENT_URL को सीधे environment variable से पढ़ें, क्योंकि यह अब production के लिए ही होगा
 // Production में, यह Frontend का URL होगा
 // Development में, यह Vite Dev Server का URL होगा
-const clientURL = process.env.CLIENT_URL || "http://localhost:5173"; // Fallback for dev or missing env var
+const clientURL = process.env.CLIENT_URL || "http://shopnish.vercel.app"; // fallback
+
 
 app.use(
   cors({
