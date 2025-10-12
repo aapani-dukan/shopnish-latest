@@ -61,18 +61,18 @@ const statusText = (status: string) => {
   }
 };
 
-const nextStatus = (status: string) => {
-  switch (status) {
-    case "ready_for_pickup":
-      return "picked_up";
-    case "picked_up":
-      return "out_for_delivery";
-    case "out_for_delivery":
-      return "delivered";
-    default:
-      return null;
+const nextStatus = (current: string) => {
+  switch (current) {
+    case "pending": return "accepted";
+    case "accepted": return "picked_up";
+    case "picked_up": return "out_for_delivery";
+    
+    case "out_for_delivery": return null; // <--- यह सबसे महत्वपूर्ण बदलाव है।
+    
+    default: return null;
   }
 };
+
 
 const nextStatusLabel = (status: string) => {
   switch (status) {
