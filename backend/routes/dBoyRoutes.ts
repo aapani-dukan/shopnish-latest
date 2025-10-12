@@ -14,7 +14,7 @@ import { eq, or, and, isNull,desc,not } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
-
+import { sendWhatsAppOTP } from '../util/msg91.ts';
 const router = Router();
 
 // ✅ Delivery Boy Registration Route
@@ -240,7 +240,18 @@ router.post("/accept", requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     if (existing.deliveryStatus !== 'pending') {
       return res.status(409).json({ message: "Order is not available for acceptance." });
     }
+const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
+const [updated] = await db
+  .update(orders)
+    .set({
+        deliveryBoyId: deliveryBoy.id,
+            deliveryStatus: "accepted",
+                deliveryOtp,
+                    deliveryAcceptedAt: new Date(),
+                      })
+                        .where(eq(orders.id, orderId))
+                          .returning();
     const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     const [updated] = await db
@@ -339,7 +350,15 @@ router.patch('/orders/:orderId/status', requireDeliveryBoyAuth, async (req: Auth
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found." });
     }
-
+// WhatsApp OTP भेजें
+if (fullUpdatedOrder.customer?.phone) {
+  await sendWhatsAppOTP(
+      fullUpdatedOrder.customer.phone,
+          deliveryOtp,
+              orderId,
+                  fullUpdatedOrder.customer.name
+                    );
+                    } 
     const fullUpdatedOrder = await db.query.orders.findFirst({
         where: eq(orders.id, orderId),
         with: {
@@ -438,6 +457,11 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
     res.status(500).json({ message: "Failed to update delivery location." });
   }
 });
+
+if (order.deliveryOtp !== otp) {
+    return res.status(401).json({ message: "Invalid OTP." });
+    }
+}
 
 // ✅ POST Complete Delivery with OTP
 router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
