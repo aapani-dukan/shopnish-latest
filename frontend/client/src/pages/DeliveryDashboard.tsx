@@ -302,34 +302,71 @@ export default function DeliveryDashboard() {
       toast({ title: "OTP त्रुटि", description: error.message || "OTP जमा करने में विफल।", variant: "destructive" });
     },
   });
+// ... (deliverydashboard.tsx के अंदर) ...
 
-  const handleStatusProgress = (order: any) => {
-    console.log("🔍 Checking order:", order.id, "Current status:", order.status);
-    // ✅ FIX: status को छोटे अक्षरों में बदलें और खाली जगह हटा दें
-    const curStatus = (order.status ?? "").toLowerCase().trim();
-    console.log("🔍 Trimmed and lowercased status:", curStatus);
-    // अब यह जाँच किसी भी केस या अतिरिक्त खाली जगह के साथ काम करेगी
-    if (curStatus === "out_for_delivery") {
-      console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
-      setSelectedOrder(order);
-      setOtpDialogOpen(true);
-      
-      return;
+// ग्राहक को OTP भेजने के लिए नया म्यूटेशन
+const sendotptocustomermutation = usemutation({
+  mutationfn: async (orderid: number) => {
+    const token = await getvalidtoken();
+    if (!token) throw new error("अमान्य या पुराना टोकन");
+    const api_base = import.meta.env.vite_api_base_url || "https://shopnish-00ug.onrender.com"; // ✅ सुनिश्चित करें कि यह आपका Backend URL है
+    const response = await fetch(`${api_base}/api/delivery/send-otp-to-customer`, { // ✅ यह आपके Backend का नया API रूट है
+      method: "post",
+      headers: { "content-type": "application/json", authorization: `bearer ${token}` },
+      body: json.stringify({ orderid }), // Backend को orderId चाहिए
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new error(errorData.message || "ग्राहक को OTP भेजने में विफल");
     }
-    const next = nextStatus(curStatus);
-    if (next) 
-      console.log("➡️ Status is not 'out_for_delivery'. Updating to next status:", next);
-      updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
+    return response.json();
+  },
+  onsuccess: () => {
+    toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
+    queryclient.invalidatequeries({ querykey: ["deliveryorders"] }); // ताकि DB में OTP स्टेटस अपडेट दिखे (यदि आप दिखा रहे हैं)
+  },
+  onerror: (error: any) => {
+    console.error("❌ Failed to send OTP:", error);
+    toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
+  },
+});
+
+
+
+  const handlestatusprogress = (order: any) => {
+  console.log("🔍 checking order:", order.id, "current status:", order.status);
+  const curstatus = (order.status ?? "").tolowercase().trim();
+  console.log("🔍 trimmed and lowercased status:", curstatus);
+
+  // OTP डायलॉग तभी खुलेगा जब स्टेटस 'out_for_delivery' हो
+  if (curstatus === "out_for_delivery") {
+    console.log("✅ status is 'out_for_delivery'. opening otp dialog.");
+    setselectedorder(order);
+    setotpdialogopen(true);
+    return;
+  }
+
+  const next = nextstatus(curstatus); // अगला स्टेटस क्या है, जैसे 'picked_up' के बाद 'out_for_delivery'
+  if (next) {
+    console.log("➡️ status is not 'out_for_delivery'. updating to next status:", next);
+
+    // ✅ यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
+    if (next === "out_for_delivery") {
+      console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
+      sendotptocustomermutation.mutate(order.id); // OTP भेजने के लिए कॉल करें
+    }
+
+    updatestatusmutation.mutate({ orderid: order.id, newstatus: next });
+  }
 };
-
-
-  const handleOtpConfirmation = () => {
-    if (!selectedOrder || otp.trim().length !== 4) {
-      toast({ title: "OTP दर्ज करें", description: "4-अंकों का OTP आवश्यक है।", variant: "destructive" });
-      return;
-    }
-    handleOtpSubmitMutation.mutate({ orderId: selectedOrder.id, otp });
-  };
+const handleotpconfirmation = () => {
+    // ✅ 4-अंकों के बजाय 6-अंकों का OTP होना चाहिए
+  if (!selectedorder || otp.trim().length !== 6) { 
+    toast({ title: "OTP दर्ज करें", description: "6-अंकों का OTP आवश्यक है।", variant: "destructive" });
+    return;
+  }
+  handleotpsubmitmutation.mutate({ orderid: selectedorder.id, otp });
+};
 
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
 
