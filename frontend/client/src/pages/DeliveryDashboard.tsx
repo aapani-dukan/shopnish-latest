@@ -14,14 +14,14 @@ import {
 // helper components & hooks
 import DeliveryOtpDialog from "./DeliveryOtpDialog";
 import DeliveryOrdersList from "./DeliveryOrdersList";
-import { useAuth } from "/hooks/useAuth";
-import { useSocket } from "/hooks/useSocket";
-import { apiRequest } from "/lib/queryClient";
-import api from "/lib/api";
-import { Card, CardHeader, CardTitle, CardContent } from "/components/ui/card";
-import { Badge } from "/components/ui/badge";
+import { useAuth } from "../hooks/useAuth";
+import { useSocket } from "../hooks/useSocket";
+import { apiRequest } from "../lib/queryClient";
+import api from "../lib/api";
+import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
 import { Button } from "/components/ui/button";
-import { useToast } from "/hooks/use-toast";
+import { useToast } from "../hooks/use-toast";
 
 // --- utility functions ---
 const statusColor = (status: string) => {
