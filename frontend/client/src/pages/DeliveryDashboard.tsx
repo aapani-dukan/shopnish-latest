@@ -9,7 +9,12 @@ import {
   CheckCircle,
   Navigation,
   Loader2,
+  Calendar, // नया: डेट पिकर के लिए
+  Zap,     // नया: सक्रिय ऑर्डर के लिए
 } from "lucide-react";
+
+// डेट फॉर्मेटिंग के लिए
+import { format } from "date-fns"; 
 
 // helper components & hooks
 import DeliveryOtpDialog from "./DeliveryOtpDialog";
@@ -22,21 +27,29 @@ import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast";
+import { Label } from "../components/ui/label"; // Label कंपोनेंट
+import { Input } from "../components/ui/input"; // Input कंपोनेंट (डेट पिकर के लिए)
+
 
 // --- utility functions ---
+// **COLORING IMPROVEMENT:**
 const statusColor = (status: string) => {
   switch (status) {
-    case "ready_for_pickup":
-    case "accepted":
-      return "bg-yellow-500";
+    case "pending": // Available / New Order
+      return "bg-amber-600 hover:bg-amber-700";
+    case "accepted": // Assigned / In Progress
+      return "bg-blue-600 hover:bg-blue-700";
     case "picked_up":
-      return "bg-blue-500";
+      return "bg-indigo-600 hover:bg-indigo-700";
     case "out_for_delivery":
-      return "bg-purple-500";
+      return "bg-purple-600 hover:bg-purple-700";
     case "delivered":
-      return "bg-green-500";
+      return "bg-green-600 hover:bg-green-700";
+    case "rejected":
+    case "cancelled":
+      return "bg-red-500 hover:bg-red-600";
     default:
-      return "bg-gray-500";
+      return "bg-gray-500 hover:bg-gray-600";
   }
 };
 
@@ -45,7 +58,7 @@ const statusText = (status: string) => {
     case "pending":
       return "लंबित";
     case "accepted":
-      return "विक्रेता ने स्वीकार किया";
+      return "स्वीकृत (असाइन)";
     case "preparing":
       return "तैयार हो रहा है";
     case "ready_for_pickup":
@@ -56,6 +69,10 @@ const statusText = (status: string) => {
       return "डिलीवरी के लिए निकला";
     case "delivered":
       return "डिलीवर हो गया";
+    case "rejected":
+      return "अस्वीकृत";
+    case "cancelled":
+      return "रद्द";
     default:
       return status || "अज्ञात";
   }
@@ -66,9 +83,7 @@ const nextStatus = (current: string) => {
     case "pending": return "accepted";
     case "accepted": return "picked_up";
     case "picked_up": return "out_for_delivery";
-    
-    case "out_for_delivery": return null; // <--- यह सबसे महत्वपूर्ण बदलाव है।
-    
+    case "out_for_delivery": return null; // <--- यह महत्वपूर्ण बदलाव है।
     default: return null;
   }
 };
@@ -81,7 +96,7 @@ const nextStatusLabel = (status: string) => {
     case "picked_up":
       return "डिलीवरी के लिए निकला";
     case "out_for_delivery":
-      return "डिलीवरी पूरी करें";
+      return "OTP सत्यापन करें";
     default:
       return "";
   }
@@ -91,28 +106,38 @@ const nextStatusLabel = (status: string) => {
 export default function DeliveryDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, setUser, auth, isLoadingAuth, isAuthenticated } = useAuth();
+  const { user, auth, isLoadingAuth, isAuthenticated } = useAuth();
   const rawSocket = useSocket() as any;
   const socket = rawSocket?.socket ?? rawSocket;
 
   const [selectedOrder, setSelectedOrder] = useState(null);
   const [otp, setOtp] = useState("");
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
-  const [showCompletedOrders, setShowCompletedOrders] = useState(false);
-
+  
+  // *** नया स्टेट: एक्टिव टैब (0: Assigned, 1: Available, 2: History) ***
+  const [activeTab, setActiveTab] = useState(0); 
+  
+  // *** नया स्टेट: हिस्ट्री फ़िल्टर के लिए डेट पिकर ***
+  const [dateFilter, setDateFilter] = useState<Date | null>(() => {
+    const fiveDaysAgo = new Date();
+    fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
+    return fiveDaysAgo; // डिफ़ॉल्ट रूप से 5 दिन पहले की तारीख
+  });
+  
   useEffect(() => {
     if (!user || !auth?.currentUser) return;
     try {
+      // सुनिश्चित करें कि deliveryBoyId सही ढंग से सेट है
       const deliveryBoyId = user?.deliveryBoyId;
       if (deliveryBoyId !== undefined) {
         const deliveryBoyUser = { ...user, deliveryBoyId };
         sessionStorage.setItem("deliveryBoyUser", JSON.stringify(deliveryBoyUser));
-        setUser(deliveryBoyUser);
+        // setuser(deliveryBoyUser); // setuser की यहाँ जरूरत नहीं होनी चाहिए, useAuth से आता है
       }
     } catch (err) {
       console.error("delivery boy session store error:", err);
     }
-  }, [user, setUser, auth?.currentUser]);
+  }, [user, auth?.currentUser]); // Removed setuser from dependencies as it may cause infinite loop
 
   const getValidToken = async () => {
     if (!auth?.currentUser) return null;
@@ -181,7 +206,7 @@ export default function DeliveryDashboard() {
     };
   }, [socket, user, queryClient, isAuthenticated]);
 
-  // GPS ट्रैकिंग लॉजिक
+  // gps ट्रैकिंग लॉजिक
   useEffect(() => {
     if (!socket || !user || isLoading) return;
 
@@ -205,7 +230,7 @@ export default function DeliveryDashboard() {
           lng: longitude,
           timestamp: new Date().toISOString()
         });
-        console.log(`Emit: ${latitude}, ${longitude}`);
+        console.log(`EMIT: ${latitude}, ${longitude}`);
       };
 
       watchId = navigator.geolocation.watchPosition(
@@ -223,7 +248,7 @@ export default function DeliveryDashboard() {
           if (error.code === error.PERMISSION_DENIED) {
             toast({
               title: "GPS अनुमति आवश्यक",
-              description: "रियल-टाइम ट्रैकिंग के लिए स्थान (location) पहुँच की अनुमति दें।",
+              description: "रियल-टाइम ट्रैकिंग के लिए स्थान (Location) पहुँच की अनुमति दें।",
               variant: "destructive",
             });
           }
@@ -316,6 +341,7 @@ export default function DeliveryDashboard() {
     },
   });
 
+  // *** OTP भेजने का लॉजिक (जैसा कि हमने अंत में तय किया) ***
   const handleStatusProgress = (order: any) => {
     console.log("🔍 Checking order:", order.id, "Current status:", order.status);
     const curStatus = (order.status ?? "").toLowerCase().trim();
@@ -326,7 +352,7 @@ export default function DeliveryDashboard() {
       console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
       setSelectedOrder(order);
       setOtpDialogOpen(true);
-      
+      // 'return;' हटा दिया गया है
     }
 
     const next = nextStatus(curStatus);
@@ -334,12 +360,17 @@ export default function DeliveryDashboard() {
       console.log("➡️ Status is not 'out_for_delivery'. Updating to next status:", next);
 
       // यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
-      if (next === "out_for_delivery") {
+      // यह सुनिश्चित करने के लिए कि यह केवल तभी चलता है जब स्टेटस बदल रहा हो।
+      if (next === "out_for_delivery" && curStatus !== "out_for_delivery") {
         console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
         sendOtpToCustomerMutation.mutate(order.id);
       }
 
       updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
+    } else {
+        // 'out_for_delivery' के बाद 'nextStatus' null लौटाता है, तो यहाँ कुछ नहीं होगा,
+        // जो सही व्यवहार है क्योंकि 'delivered' केवल OTP सत्यापन के बाद होता है।
+        console.log(`🤷 No next status defined for current status: ${curStatus}. This is expected for 'out_for_delivery' status.`);
     }
   };
 
@@ -354,35 +385,53 @@ export default function DeliveryDashboard() {
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
 
   const myDeliveryBoyId = user?.deliveryBoyId;
-  const { assignedOrders, availableOrders, completedOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
+  
+  // ** UPDATED useMemo FOR FILTERING **
+  const { assignedOrders, availableOrders, historyOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
     useMemo(() => {
       const available = orders.filter((o: any) =>
-        (o.deliveryStatus ?? "").toLowerCase() === "pending" && (o.status ?? "").toLowerCase() !== "rejected"
+        (o.deliveryStatus ?? "").toLowerCase() === "pending" && 
+        (o.status ?? "").toLowerCase() !== "rejected" &&
+        (o.status ?? "").toLowerCase() !== "cancelled"
       );
 
       const assigned = orders.filter((o: any) =>
-        (o.deliveryStatus ?? "").toLowerCase() === "accepted"
+        (o.deliveryStatus ?? "").toLowerCase() === "accepted" && 
+        (o.status ?? "").toLowerCase() !== "delivered" && // Delivered orders should not be in assigned
+        (o.status ?? "").toLowerCase() !== "rejected" &&
+        (o.status ?? "").toLowerCase() !== "cancelled"
       );
 
-      const completed = orders.filter((o: any) =>
-        (o.status ?? "").toLowerCase() === "delivered" && (o.deliveryStatus ?? "").toLowerCase() === "delivered"
-      );
+      const history = orders.filter((o: any) => {
+        const status = (o.status ?? "").toLowerCase();
+        // केवल Delivered, Rejected, या Cancelled ऑर्डर
+        const isCompleted = status === "delivered" || status === "rejected" || status === "cancelled";
+        
+        // Date फ़िल्टर लागू करें (o.createdAt फ़ील्ड की आवश्यकता है)
+        if (isCompleted && dateFilter && o.createdAt) { 
+            const orderDate = new Date(o.createdAt);
+            // orderDate 'dateFilter' (या उसके बाद) से बड़ा होना चाहिए
+            return orderDate >= dateFilter; 
+        }
 
+        return isCompleted; // यदि dateFilter null है या createdAt नहीं है, तो सभी दिखाएँ
+      });
+      
       const total = orders.length;
       const pending = available.length;
-      const delivered = completed.length;
+      const delivered = orders.filter((o: any) => (o.status ?? "").toLowerCase() === "delivered").length;
       const outForDelivery = orders.filter((o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery").length;
 
       return {
         assignedOrders: assigned,
         availableOrders: available,
-        completedOrders: completed,
+        historyOrders: history, // नया फ़ील्ड
         totalOrdersCount: total,
         pendingCount: pending,
         deliveredCount: delivered,
         outForDeliveryCount: outForDelivery,
       };
-    }, [orders, myDeliveryBoyId]);
+    }, [orders, dateFilter, myDeliveryBoyId]); // dateFilter को निर्भरता (dependency) में जोड़ा गया
 
   if (isLoadingAuth || !isAuthenticated || !user || !socket || isLoading) {
     return (
@@ -404,7 +453,7 @@ export default function DeliveryDashboard() {
             </div>
             <div>
               <h1 className="text-xl font-bold">डिलीवरी डैशबोर्ड</h1>
-              <p className="text-sm text-gray-600">फिर से स्वागत है, डिलीवरी बॉय!</p>
+              <p className="text-sm text-gray-600">फिर से स्वागत है, {user?.name ?? 'डिलीवरी बॉय'}!</p>
             </div>
           </div>
           <div className="flex space-x-2">
@@ -429,10 +478,10 @@ export default function DeliveryDashboard() {
         </Card>
         <Card>
           <CardContent className="p-6 flex items-center space-x-3">
-            <Clock className="w-8 h-8 text-yellow-600" />
+            <Clock className="w-8 h-8 text-amber-600" /> {/* Changed to amber for pending */}
             <div>
               <p className="text-2xl font-bold">{pendingCount}</p>
-              <p className="text-sm text-gray-600">लंबित</p>
+              <p className="text-sm text-gray-600">लंबित (उपलब्ध)</p>
             </div>
           </CardContent>
         </Card>
@@ -441,7 +490,7 @@ export default function DeliveryDashboard() {
             <CheckCircle className="w-8 h-8 text-green-600" />
             <div>
               <p className="text-2xl font-bold">{deliveredCount}</p>
-              <p className="text-sm text-gray-600">पूरे हुए</p>
+              <p className="text-sm text-gray-600">डिलीवर हुए</p>
             </div>
           </CardContent>
         </Card>
@@ -455,133 +504,150 @@ export default function DeliveryDashboard() {
           </CardContent>
         </Card>
       </section>
+      
+      {/* ---------------------------------------------------- */}
+      {/* *** NEW TAB NAVIGATION & ORDER FILTERING SECTION *** */}
+      {/* ---------------------------------------------------- */}
+     <section className="max-w-6xl mx-auto px-4 pb-4">
+        <div className="flex justify-between items-end mb-4 flex-wrap gap-4">
+            <div className="flex space-x-2 border-b border-gray-200">
+                <Button 
+                    variant={activeTab === 0 ? "default" : "outline"} 
+                    onClick={() => setActiveTab(0)}
+                    className={activeTab === 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "hover:bg-gray-100"}
+                >
+                    <Zap className="w-4 h-4 mr-2" />
+                    आपके असाइन किए गए ({assignedOrders.length})
+                </Button>
+                <Button 
+                    variant={activeTab === 1 ? "default" : "outline"} 
+                    onClick={() => setActiveTab(1)}
+                    className={activeTab === 1 ? "bg-amber-600 text-white hover:bg-amber-700" : "hover:bg-gray-100"}
+                >
+                    <Clock className="w-4 h-4 mr-2" />
+                    उपलब्ध ऑर्डर ({availableOrders.length})
+                </Button>
+                <Button 
+                    variant={activeTab === 2 ? "default" : "outline"} 
+                    onClick={() => setActiveTab(2)}
+                    className={activeTab === 2 ? "bg-green-600 text-white hover:bg-green-700" : "hover:bg-gray-100"}
+                >
+                    <CheckCircle className="w-4 h-4 mr-2" />
+                    डिलीवर किए गए / हिस्ट्री ({historyOrders.length})
+                </Button>
+            </div>
 
-      {/* view completed orders button */}
-      <section className="max-w-6xl mx-auto px-4 pb-4">
-        <Button onClick={() => setShowCompletedOrders(!showCompletedOrders)}>
-          {showCompletedOrders ? "सक्रिय ऑर्डर दिखाएं" : "पूरे हुए ऑर्डर दिखाएं"}
-        </Button>
+            {/* Date Filter for History Tab */}
+            {activeTab === 2 && (
+                <div className="flex items-center space-x-2">
+                    <Label htmlFor="date-filter" className="text-sm text-gray-600 whitespace-nowrap">
+                        से ऑर्डर दिखाएँ:
+                    </Label>
+                    <div className="relative">
+                        <Input
+                            id="date-filter"
+                            type="date"
+                            value={dateFilter ? format(dateFilter, "yyyy-MM-dd") : ""}
+                            onChange={(e) => setDateFilter(e.target.value ? new Date(e.target.value) : null)}
+                            className="pl-8 w-40"
+                        />
+                        <Calendar className="absolute left-2 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                    </div>
+                </div>
+            )}
+        </div>
       </section>
 
       {/* orders list */}
       <section className="max-w-6xl mx-auto px-4 pb-16 space-y-10">
-        {showCompletedOrders ? (
-          // completed orders section
-          <div>
-            <h2 className="text-2xl font-bold mb-4">पूरे हुए ऑर्डर</h2>
-            {completedOrders.length === 0 ? (
-              <Card>
-                <CardContent className="py-12 text-center">
-                  <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                  <h3 className="text-lg font-medium mb-2">कोई पूरे हुए ऑर्डर नहीं</h3>
-                  <p className="text-gray-600">अभी तक आपने कोई ऑर्डर डिलीवर नहीं किया है।</p>
-                </CardContent>
-              </Card>
-            ) : (
-              <DeliveryOrdersList
-                orders={completedOrders}
-                onAcceptOrder={(id) => acceptOrderMutation.mutate(id)}
-                onUpdateStatus={(order) => handleStatusProgress(order)}
+        <h2 className="text-2xl font-bold mb-4">
+            {activeTab === 0 && "आपके असाइन किए गए ऑर्डर"}
+            {activeTab === 1 && "उपलब्ध पिकअप के लिए ऑर्डर"}
+            {activeTab === 2 && `पूरे हुए/कैंसल ऑर्डर (शुरुआत: ${dateFilter ? format(dateFilter, "dd MMM yyyy") : 'सभी'})`}
+        </h2>
+        
+        {/* Render List based on Active Tab */}
+        {activeTab === 0 && (
+            <OrdersListView 
+                orders={assignedOrders} 
+                title="कोई असाइन किए गए ऑर्डर नहीं" 
+                subtitle="नए ऑर्डर स्वीकार करें या पुराने ऑर्डर डिलीवर करें।"
+                // Props for DeliveryOrdersList
+                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
+                onUpdateStatus={(order: any) => handleStatusProgress(order)}
                 acceptLoading={acceptOrderMutation.isPending}
                 updateLoading={updateStatusMutation.isPending}
-                Button={Button}
-                Card={Card}
-                CardContent={CardContent}
-                CardHeader={CardHeader}
-                CardTitle={CardTitle}
-                Badge={Badge}
-                statusColor={statusColor}
-                statusText={statusText}
-                nextStatus={nextStatus}
-                nextStatusLabel={nextStatusLabel}
-              />
-            )}
-          </div>
-        ) : (
-          <>
-            {/* available orders section */}
-            <div>
-              <h2 className="text-2xl font-bold mb-4">उपलब्ध ऑर्डर</h2>
-              {availableOrders.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">कोई उपलब्ध ऑर्डर नहीं</h3>
-                    <p className="text-gray-600">नए ऑर्डर के लिए बाद में जाँच करें।</p>
-                  </CardContent>
-                </Card>
-              ) : (
-                <DeliveryOrdersList
-                  orders={availableOrders}
-                  onAcceptOrder={(id) => acceptOrderMutation.mutate(id)}
-                  onUpdateStatus={(order) => handleStatusProgress(order)}
-                  acceptLoading={acceptOrderMutation.isPending}
-                  updateLoading={updateStatusMutation.isPending}
-                  Button={Button}
-                  Card={Card}
-                  CardContent={CardContent}
-                  CardHeader={CardHeader}
-                  CardTitle={CardTitle}
-                  Badge={Badge}
-                  statusColor={statusColor}
-                  statusText={statusText}
-                  nextStatus={nextStatus}
-                  nextStatusLabel={nextStatusLabel}
-                />
-              )}
-            </div>
-
-            {/* my orders section */}
-            <div>
-              <h2 className="text-2xl font-bold mb-4">आपके असाइन किए गए ऑर्डर</h2>
-              {assignedOrders.length === 0 ? (
-                <Card>
-                  <CardContent className="py-12 text-center">
-                    <Package className="mx-auto h-12 w-12 text-pink-400 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">कोई असाइन किए गए ऑर्डर नहीं</h3>
-                    <p className="text-gray-600">आपको कोई नया ऑर्डर असाइन नहीं ककिया है </p>
-            </CardContent>
-                </Card>
-              ) : (
-                <DeliveryOrdersList
-                  orders={assignedOrders}
-                  onAcceptOrder={(id) => acceptOrderMutation.mutate(id)}
-                  onUpdateStatus={(order) => handleStatusProgress(order)}
-                  acceptLoading={acceptOrderMutation.isPending}
-                  updateLoading={updateStatusMutation.isPending}
-                  Button={Button}
-                  Card={Card}
-                  CardContent={CardContent}
-                  CardHeader={CardHeader}
-                  CardTitle={CardTitle}
-                  Badge={Badge}
-                  statusColor={statusColor}
-                  statusText={statusText}
-                  nextStatus={nextStatus}
-                  nextStatusLabel={nextStatusLabel}
-                />
-              )}
-            </div>
-          </>
+                Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
+                statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+            />
+        )}
+        
+        {activeTab === 1 && (
+            <OrdersListView 
+                orders={availableOrders} 
+                title="कोई उपलब्ध ऑर्डर नहीं" 
+                subtitle="नए ऑर्डर के लिए बाद में जाँच करें।"
+                // Props for DeliveryOrdersList
+                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
+                onUpdateStatus={(order: any) => handleStatusProgress(order)} // Available orders should not be updated beyond accepted here
+                acceptLoading={acceptOrderMutation.isPending}
+                updateLoading={updateStatusMutation.isPending}
+                Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
+                statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+            />
+        )}
+        
+        {activeTab === 2 && (
+            <OrdersListView 
+                orders={historyOrders} 
+                title="कोई इतिहास ऑर्डर नहीं" 
+                subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ ऑर्डर नहीं मिला।`}
+                // History tab में, हम Accept या Update बटन को छुपा सकते हैं, 
+                // इसलिए हम accept/update handlers को null पास कर सकते हैं या no-op फ़ंक्शन।
+                onAcceptOrder={(() => {}) as any} // No-op for history
+                onUpdateStatus={(() => {}) as any} // No-op for history
+                acceptLoading={false} 
+                updateLoading={false}
+                Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
+                statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+            />
         )}
       </section>
 
       {/* OTP Dialog */}
-      {otpDialogOpen && selectedOrder && (
-        <DeliveryOtpDialog
-          isOpen={otpDialogOpen}
-          onOpenChange={setOtpDialogOpen}
-          order={selectedOrder}
-          otp={otp}
-          onOtpChange={setOtp}
-          onConfirm={handleOtpConfirmation}
-          isSubmitting={handleOtpSubmitMutation.isPending}
-          error={handleOtpSubmitMutation.error?.message || null}
-          // If you want a "Resend OTP" button in the dialog, you'll need to pass these:
-          // onSendOtp={(orderId) => sendOtpToCustomerMutation.mutate(orderId)}
-          // sendOtpLoading={sendOtpToCustomerMutation.isPending}
-        />
-      )}
+      <DeliveryOtpDialog
+        open={otpDialogOpen}
+        onOpenChange={setOtpDialogOpen}
+        otp={otp}
+        setOtp={setOtp}
+        onConfirm={handleOtpConfirmation}
+        isLoading={handleOtpSubmitMutation.isPending}
+        orderNumber={selectedOrder?.orderNumber}
+      />
     </div>
-);
+  );
 }
+
+// Helper Component for List View (कोड छोटा करने के लिए)
+const OrdersListView: React.FC<any> = ({ orders, title, subtitle, handleStatusProgress, ...props }) => (
+    <>
+        {orders.length === 0 ? (
+            <Card>
+                <CardContent className="py-12 text-center">
+                    <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+                    <h3 className="text-lg font-medium mb-2">{title}</h3>
+                    <p className="text-gray-600">{subtitle}</p>
+                </CardContent>
+            </Card>
+        ) : (
+            <DeliveryOrdersList
+                orders={orders}
+                onAcceptOrder={props.onAcceptOrder} // Props से सीधे पास करें
+                onUpdateStatus={props.onUpdateStatus} // Props से सीधे पास करें
+                acceptLoading={props.acceptLoading}
+                updateLoading={props.updateLoading}
+                {...props}
+            />
+        )}
+    </>
+);
