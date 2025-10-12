@@ -539,8 +539,8 @@ export default function DeliveryDashboard() {
                   <CardContent className="py-12 text-center">
                     <Package className="mx-auto h-12 w-12 text-pink-400 mb-4" />
                     <h3 className="text-lg font-medium mb-2">कोई असाइन किए गए ऑर्डर नहीं</h3>
-                         <p className="text-gray-600">आपको कोई नया ऑर्डर असाइन नहीं किया गया है।</p>
-                  </CardContent>
+                    <p className="text-gray-600">आपको कोई नया ऑर्डर असाइन नहीं ककिया है </p>
+            </CardContent>
                 </Card>
               ) : (
                 <DeliveryOrdersList
@@ -583,5 +583,5 @@ export default function DeliveryDashboard() {
         />
       )}
     </div>
-  );
+);
 }
