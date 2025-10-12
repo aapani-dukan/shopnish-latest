@@ -305,32 +305,51 @@ export default function DeliveryDashboard() {
 // ... (deliverydashboard.tsx के अंदर) ...
 
 // ग्राहक को OTP भेजने के लिए नया म्यूटेशन
-const sendotptocustomermutation = usemutation({
-  mutationfn: async (orderid: number) => {
-    const token = await getvalidtoken();
-    if (!token) throw new error("अमान्य या पुराना टोकन");
-    const api_base = import.meta.env.vite_api_base_url || "https://shopnish-00ug.onrender.com"; // ✅ सुनिश्चित करें कि यह आपका Backend URL है
-    const response = await fetch(`${api_base}/api/delivery/send-otp-to-customer`, { // ✅ यह आपके Backend का नया API रूट है
-      method: "post",
-      headers: { "content-type": "application/json", authorization: `bearer ${token}` },
-      body: json.stringify({ orderid }), // Backend को orderId चाहिए
-    });
+
+const sendOtpToCustomerMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    const token = await getValidToken();
+    if (!token) throw new Error("अमान्य या पुराना टोकन");
+
+    const API_BASE =
+      import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+
+    const response = await fetch(
+      `${API_BASE}/api/delivery/send-otp-to-customer`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      }
+    );
+
     if (!response.ok) {
       const errorData = await response.json();
-      throw new error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
     }
+
     return response.json();
   },
-  onsuccess: () => {
-    toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
-    queryclient.invalidatequeries({ querykey: ["deliveryorders"] }); // ताकि DB में OTP स्टेटस अपडेट दिखे (यदि आप दिखा रहे हैं)
+  onSuccess: () => {
+    toast({
+      title: "OTP भेजा गया",
+      description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
+      variant: "success",
+    });
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
   },
-  onerror: (error: any) => {
+  onError: (error: any) => {
     console.error("❌ Failed to send OTP:", error);
-    toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
+    toast({
+      title: "OTP भेजने में विफल",
+      description: error.message || "कृपया पुनः प्रयास करें।",
+      variant: "destructive",
+    });
   },
 });
-
 
 
   const handlestatusprogress = (order: any) => {
@@ -353,7 +372,7 @@ const sendotptocustomermutation = usemutation({
     // ✅ यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
     if (next === "out_for_delivery") {
       console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
-      sendotptocustomermutation.mutate(order.id); // OTP भेजने के लिए कॉल करें
+      sendOtpToCustomerMutation.mutate(order.id);
     }
 
     updatestatusmutation.mutate({ orderid: order.id, newstatus: next });
