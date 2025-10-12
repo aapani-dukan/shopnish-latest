@@ -20,7 +20,7 @@ import { apiRequest } from "../lib/queryClient";
 import api from "../lib/api";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
-import { Button } from "/components/ui/button";
+import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast";
 
 // --- utility functions ---
