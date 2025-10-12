@@ -1,7 +1,6 @@
-// ✅ Updated Front-end File: deliverydashboard.tsx
-
 import React, { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+
 import {
   User,
   LogOut,
@@ -12,19 +11,19 @@ import {
   Loader2,
 } from "lucide-react";
 
-// Helper components & hooks
+// helper components & hooks
 import DeliveryOtpDialog from "./DeliveryOtpDialog";
 import DeliveryOrdersList from "./DeliveryOrdersList";
-import { useAuth } from "@/hooks/useAuth";
-import { useSocket } from "@/hooks/useSocket";
-import { apiRequest } from "@/lib/queryClient";
-import api from "@/lib/api";
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "/hooks/useAuth";
+import { useSocket } from "/hooks/useSocket";
+import { apiRequest } from "/lib/queryClient";
+import api from "/lib/api";
+import { Card, CardHeader, CardTitle, CardContent } from "/components/ui/card";
+import { Badge } from "/components/ui/badge";
+import { Button } from "/components/ui/button";
+import { useToast } from "/hooks/use-toast";
 
-// --- Utility Functions ---
+// --- utility functions ---
 const statusColor = (status: string) => {
   switch (status) {
     case "ready_for_pickup":
@@ -46,17 +45,17 @@ const statusText = (status: string) => {
     case "pending":
       return "लंबित";
     case "accepted":
-      return "विक्रेता ने स्वीकार किया"; // Seller Accepted
+      return "विक्रेता ने स्वीकार किया";
     case "preparing":
-      return "तैयार हो रहा है"; // Preparing
+      return "तैयार हो रहा है";
     case "ready_for_pickup":
-      return "पिकअप के लिए तैयार"; // Ready for Pickup
+      return "पिकअप के लिए तैयार";
     case "picked_up":
-      return "पिकअप हो गया"; // Picked Up
+      return "पिकअप हो गया";
     case "out_for_delivery":
-      return "डिलीवरी के लिए निकला"; // Out for Delivery
+      return "डिलीवरी के लिए निकला";
     case "delivered":
-      return "डिलीवर हो गया"; // Delivered
+      return "डिलीवर हो गया";
     default:
       return status || "अज्ञात";
   }
@@ -88,7 +87,7 @@ const nextStatusLabel = (status: string) => {
   }
 };
 
-// --- Main Component ---
+// --- main component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -111,7 +110,7 @@ export default function DeliveryDashboard() {
         setUser(deliveryBoyUser);
       }
     } catch (err) {
-      console.error("Delivery boy session store error:", err);
+      console.error("delivery boy session store error:", err);
     }
   }, [user, setUser, auth?.currentUser]);
 
@@ -130,8 +129,8 @@ export default function DeliveryDashboard() {
     queryFn: async () => {
       try {
         const [availableRes, myRes] = await Promise.allSettled([
-          apiRequest("GET", "/api/delivery/orders/available"),
-          apiRequest("GET", "/api/delivery/orders/my"),
+          apiRequest("get", "/api/delivery/orders/available"),
+          apiRequest("get", "/api/delivery/orders/my"),
         ]);
         const availableOrders =
           availableRes.status === "fulfilled" && Array.isArray((availableRes.value as any).orders)
@@ -181,85 +180,73 @@ export default function DeliveryDashboard() {
       }
     };
   }, [socket, user, queryClient, isAuthenticated]);
-    // ✅ नया: GPS ट्रैकिंग लॉजिक
-    useEffect(() => {
-        if (!socket || !user || isLoading) return;
-        
-        let watchId: number | null = null;
-        let intervalId: NodeJS.Timeout | null = null;
-        
-        // वह ऑर्डर खोजें जो वर्तमान में डिलीवरी बॉय को असाइन है और सक्रिय है
-        const activeOrder = orders.find((o: any) => 
-            (o.deliveryStatus ?? "").toLowerCase() === "accepted" && 
-            (o.status === "picked_up" || o.status === "out_for_delivery")
-        );
 
-        if (activeOrder && navigator.geolocation) {
-            console.log(`📡 Starting GPS tracking for Order ${activeOrder.id}`);
-        
-    const sendLocation = (position: GeolocationPosition) => {
-    const { latitude, longitude } = position.coords;
+  // GPS ट्रैकिंग लॉजिक
+  useEffect(() => {
+    if (!socket || !user || isLoading) return;
 
-    // 🛑 FIX 1: इवेंट नाम को 'deliveryboy:location_update' में बदलें
-    socket.emit("deliveryboy:location_update", { 
-        orderId: activeOrder.id,
-        lat: latitude,
-        lng: longitude,
-        timestamp: new Date().toISOString()
-    });
-    console.log(`Emit: ${latitude}, ${longitude}`);
-};
-          
-            
+    let watchId: number | null = null;
+    let intervalId: NodeJS.Timeout | null = null;
 
-            // 1. GPS Location प्राप्त करने की प्रक्रिया शुरू करें
-            watchId = navigator.geolocation.watchPosition(
-                // Success callback: location मिलने पर
-                (position) => {
-                    // पहले तुरंत भेजें
-                    sendLocation(position); 
+    const activeOrder = orders.find((o: any) =>
+      (o.deliveryStatus ?? "").toLowerCase() === "accepted" &&
+      (o.status === "picked_up" || o.status === "out_for_delivery")
+    );
 
-                    // Interval सेट करें ताकि यह हर 10 सेकंड में सुनिश्चित रूप से भेजे
-                    if (!intervalId) {
-                        intervalId = setInterval(() => {
-                            // watchPosition से प्राप्त latest position को भेजें
-                            // (या, अगर आप चाहें तो हर बार getCurrentPosition कॉल कर सकते हैं, 
-                            // लेकिन watchPosition बेहतर है)
-                            // हम यहाँ सीधे sendLocation को setInterval के अंदर नहीं डालते हैं 
-                            // ताकि sendLocation हमेशा latest position का उपयोग करे
-                        }, 10000); // 10 seconds
-                    }
-                },
-                // Error callback
-                (error) => {
-                    console.error("❌ Geolocation Error:", error.message);
-                    if (error.code === error.PERMISSION_DENIED) {
-                        toast({
-                            title: "GPS अनुमति आवश्यक",
-                            description: "रियल-टाइम ट्रैकिंग के लिए स्थान (Location) पहुँच की अनुमति दें।",
-                            variant: "destructive",
-                        });
-                    }
-                },
-                {
-                    enableHighAccuracy: true,
-                    timeout: 5000,
-                    maximumAge: 0,
-                }
-            );
+    if (activeOrder && navigator.geolocation) {
+      console.log(`📡 Starting GPS tracking for order ${activeOrder.id}`);
+
+      const sendLocation = (position: GeolocationPosition) => {
+        const { latitude, longitude } = position.coords;
+
+        socket.emit("deliveryboy:location_update", {
+          orderId: activeOrder.id,
+          lat: latitude,
+          lng: longitude,
+          timestamp: new Date().toISOString()
+        });
+        console.log(`Emit: ${latitude}, ${longitude}`);
+      };
+
+      watchId = navigator.geolocation.watchPosition(
+        (position) => {
+          sendLocation(position);
+
+          if (!intervalId) {
+            intervalId = setInterval(() => {
+              // (previous logic for latest position)
+            }, 10000);
+          }
+        },
+        (error) => {
+          console.error("❌ Geolocation error:", error.message);
+          if (error.code === error.PERMISSION_DENIED) {
+            toast({
+              title: "GPS अनुमति आवश्यक",
+              description: "रियल-टाइम ट्रैकिंग के लिए स्थान (location) पहुँच की अनुमति दें।",
+              variant: "destructive",
+            });
+          }
+        },
+        {
+          enableHighAccuracy: true,
+          timeout: 5000,
+          maximumAge: 0,
         }
+      );
+    }
 
-        // Cleanup function
-        return () => {
-            if (watchId !== null) {
-                navigator.geolocation.clearWatch(watchId);
-                console.log("🛑 GPS tracking stopped.");
-            }
-            if (intervalId !== null) {
-                clearInterval(intervalId);
-            }
-        };
-    }, [orders, socket, user, isLoading]); // orders array बदलने पर यह useEffect फिर से चलेगा
+    return () => {
+      if (watchId !== null) {
+        navigator.geolocation.clearWatch(watchId);
+        console.log("🛑 GPS tracking stopped.");
+      }
+      if (intervalId !== null) {
+        clearInterval(intervalId);
+      }
+    };
+  }, [orders, socket, user, isLoading]);
+
   const acceptOrderMutation = useMutation({
     mutationFn: (orderId: number) => api.post("/api/delivery/accept", { orderId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] }),
@@ -284,7 +271,7 @@ export default function DeliveryDashboard() {
         body: JSON.stringify({ otp }),
       });
       if (response.status === 401) {
-        throw new Error("OTP गलत है।"); // ✅ OTP गलत होने पर विशेष त्रुटि
+        throw new Error("OTP गलत है।");
       }
       if (!response.ok) throw new Error("डिलीवरी पूरी करने में विफल");
       return response.json();
@@ -297,161 +284,93 @@ export default function DeliveryDashboard() {
       setSelectedOrder(null);
     },
     onError: (error: any) => {
-      // ✅ अब त्रुटि को सीधे डायलॉग में दिखाया जाएगा
       console.error("❌ Mutation failed with error:", error);
       toast({ title: "OTP त्रुटि", description: error.message || "OTP जमा करने में विफल।", variant: "destructive" });
     },
   });
 
-const sendOtpToCustomerMutation = useMutation({
-  mutationFn: async (orderId: number) => {
-    const token = await getValidToken();
-    if (!token) throw new Error("अमान्य या पुराना टोकन");
-
-    const API_BASE =
-      import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-
-    const response = await fetch(
-      `${API_BASE}/api/delivery/send-otp-to-customer`,
-      {
+  // ग्राहक को OTP भेजने के लिए म्यूटेशन
+  const sendOtpToCustomerMutation = useMutation({
+    mutationFn: async (orderId: number) => {
+      const token = await getValidToken();
+      if (!token) throw new Error("अमान्य या पुराना टोकन");
+      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+      const response = await fetch(`${API_BASE}/api/delivery/send-otp-to-customer`, {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId }),
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
       }
-    );
+      return response.json();
+    },
+    onSuccess: () => {
+      toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
+      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+    },
+    onError: (error: any) => {
+      console.error("❌ Failed to send OTP:", error);
+      toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
+    },
+  });
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+  const handleStatusProgress = (order: any) => {
+    console.log("🔍 Checking order:", order.id, "Current status:", order.status);
+    const curStatus = (order.status ?? "").toLowerCase().trim();
+    console.log("🔍 Trimmed and lowercased status:", curStatus);
+
+    // OTP डायलॉग तभी खुलेगा जब स्टेटस 'out_for_delivery' हो
+    if (curStatus === "out_for_delivery") {
+      console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
+      setSelectedOrder(order);
+      setOtpDialogOpen(true);
+      return;
     }
 
-    return response.json();
-  },
-  onSuccess: () => {
-    toast({
-      title: "OTP भेजा गया",
-      description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
-      variant: "success",
-    });
-    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
-  },
-  onError: (error: any) => {
-    console.error("❌ Failed to send OTP:", error);
-    toast({
-      title: "OTP भेजने में विफल",
-      description: error.message || "कृपया पुनः प्रयास करें।",
-      variant: "destructive",
-    });
-  },
-});
+    const next = nextStatus(curStatus);
+    if (next) {
+      console.log("➡️ Status is not 'out_for_delivery'. Updating to next status:", next);
 
-
-  const handlestatusprogress = (order: any) => {
-  console.log("🔍 checking order:", order.id, "current status:", order.status);
-  const curstatus = (order.status ?? "").tolowercase().trim();
-  console.log("🔍 trimmed and lowercased status:", curstatus);
-
-  // OTP डायलॉग तभी खुलेगा जब स्टेटस 'out_for_delivery' हो
-  if (curstatus === "out_for_delivery") {
-    console.log("✅ status is 'out_for_delivery'. opening otp dialog.");
-    setselectedorder(order);
-    setotpdialogopen(true);
-    return;
-  }
-
-  const next = nextstatus(curstatus); // अगला स्टेटस क्या है, जैसे 'picked_up' के बाद 'out_for_delivery'
-  if (next) {
-    console.log("➡️ status is not 'out_for_delivery'. updating to next status:", next);
-
-    // ✅ यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
-    if (next === "out_for_delivery") {
-      console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
-      sendOtpToCustomerMutation.mutate(order.id)
-        const sendOtpToCustomerMutation = useMutation({
-  mutationFn: async (orderId: number) => {
-    const token = await getValidToken();
-    if (!token) throw new Error("अमान्य या पुराना टोकन");
-
-    const API_BASE =
-      import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
-
-    const response = await fetch(
-      `${API_BASE}/api/delivery/send-otp-to-customer`,
-      {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ orderId }),
+      // यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
+      if (next === "out_for_delivery") {
+        console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
+        sendOtpToCustomerMutation.mutate(order.id);
       }
-    );
 
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+      updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
     }
+  };
 
-    return response.json();
-  },
-  onSuccess: () => {
-    toast({
-      title: "OTP भेजा गया",
-      description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
-      variant: "success",
-    });
-    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
-  },
-  onError: (error: any) => {
-    console.error("❌ Failed to send OTP:", error);
-    toast({
-      title: "OTP भेजने में विफल",
-      description: error.message || "कृपया पुनः प्रयास करें।",
-      variant: "destructive",
-    });
-  },
-});
->>>>>>> 6c20a87f (Added WhatsApp OTP integration and fixed useMutation error)
+  const handleOtpConfirmation = () => {
+    if (!selectedOrder || otp.trim().length !== 6) {
+      toast({ title: "OTP दर्ज करें", description: "6-अंकों का OTP आवश्यक है।", variant: "destructive" });
+      return;
     }
-
-    updatestatusmutation.mutate({ orderid: order.id, newstatus: next });
-  }
-};
-const handleotpconfirmation = () => {
-    // ✅ 4-अंकों के बजाय 6-अंकों का OTP होना चाहिए
-  if (!selectedorder || otp.trim().length !== 6) { 
-    toast({ title: "OTP दर्ज करें", description: "6-अंकों का OTP आवश्यक है।", variant: "destructive" });
-    return;
-  }
-  sendOtpToCustomerMutation.mutate(order.id);
-};
+    handleOtpSubmitMutation.mutate({ orderId: selectedOrder.id, otp });
+  };
 
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
 
   const myDeliveryBoyId = user?.deliveryBoyId;
   const { assignedOrders, availableOrders, completedOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
     useMemo(() => {
-      // ✅ FIX: Filter 'available' orders based on deliveryStatus === 'pending' AND status !== 'rejected'
       const available = orders.filter((o: any) =>
         (o.deliveryStatus ?? "").toLowerCase() === "pending" && (o.status ?? "").toLowerCase() !== "rejected"
       );
-      
-      // ✅ FIX: Filter 'assigned' orders based on deliveryStatus === 'accepted'
+
       const assigned = orders.filter((o: any) =>
         (o.deliveryStatus ?? "").toLowerCase() === "accepted"
       );
 
-      // ✅ NEW: Filter completed orders for the new section
       const completed = orders.filter((o: any) =>
         (o.status ?? "").toLowerCase() === "delivered" && (o.deliveryStatus ?? "").toLowerCase() === "delivered"
       );
 
       const total = orders.length;
       const pending = available.length;
-      const delivered = completed.length; // Use the new 'completed' array for this count
+      const delivered = completed.length;
       const outForDelivery = orders.filter((o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery").length;
 
       return {
@@ -472,10 +391,9 @@ const handleotpconfirmation = () => {
         <p className="text-gray-500 mt-2">Connecting to server...</p>
       </div>
     );
-  
   }
 
-  // --- Main Render ---
+  // --- main render ---
   return (
     <div className="min-h-screen bg-gray-50 font-inter text-gray-800">
       <header className="bg-white shadow-sm border-b rounded-b-lg">
@@ -498,7 +416,7 @@ const handleotpconfirmation = () => {
         </div>
       </header>
 
-      {/* Summary Cards */}
+      {/* summary cards */}
       <section className="max-w-6xl mx-auto px-4 py-8 grid grid-cols-1 md:grid-cols-4 gap-6">
         <Card>
           <CardContent className="p-6 flex items-center space-x-3">
@@ -537,18 +455,18 @@ const handleotpconfirmation = () => {
           </CardContent>
         </Card>
       </section>
-      
-      {/* View Completed Orders Button */}
+
+      {/* view completed orders button */}
       <section className="max-w-6xl mx-auto px-4 pb-4">
         <Button onClick={() => setShowCompletedOrders(!showCompletedOrders)}>
           {showCompletedOrders ? "सक्रिय ऑर्डर दिखाएं" : "पूरे हुए ऑर्डर दिखाएं"}
         </Button>
       </section>
 
-      {/* Orders List */}
+      {/* orders list */}
       <section className="max-w-6xl mx-auto px-4 pb-16 space-y-10">
         {showCompletedOrders ? (
-          // Completed Orders Section
+          // completed orders section
           <div>
             <h2 className="text-2xl font-bold mb-4">पूरे हुए ऑर्डर</h2>
             {completedOrders.length === 0 ? (
@@ -581,7 +499,7 @@ const handleotpconfirmation = () => {
           </div>
         ) : (
           <>
-            {/* Available Orders Section */}
+            {/* available orders section */}
             <div>
               <h2 className="text-2xl font-bold mb-4">उपलब्ध ऑर्डर</h2>
               {availableOrders.length === 0 ? (
@@ -613,15 +531,15 @@ const handleotpconfirmation = () => {
               )}
             </div>
 
-            {/* My Orders Section */}
+            {/* my orders section */}
             <div>
-              <h2 className="text-2xl font-bold mb-4">मेरे ऑर्डर</h2>
+              <h2 className="text-2xl font-bold mb-4">आपके असाइन किए गए ऑर्डर</h2>
               {assignedOrders.length === 0 ? (
                 <Card>
                   <CardContent className="py-12 text-center">
                     <Package className="mx-auto h-12 w-12 text-pink-400 mb-4" />
-                    <h3 className="text-lg font-medium mb-2">कोई असाइन ऑर्डर नहीं</h3>
-                    <p className="text-gray-600">आपको अभी तक कोई ऑर्डर असाइन नहीं किया गया है।</p>
+                    <h3 className="text-lg font-medium mb-2">कोई असाइन किए गए ऑर्डर नहीं</h3>
+                         <p className="text-gray-600">आपको कोई नया ऑर्डर असाइन नहीं किया गया है।</p>
                   </CardContent>
                 </Card>
               ) : (
@@ -649,16 +567,21 @@ const handleotpconfirmation = () => {
       </section>
 
       {/* OTP Dialog */}
-       {otpDialogOpen && selectedOrder && (
+      {otpDialogOpen && selectedOrder && (
         <DeliveryOtpDialog
           isOpen={otpDialogOpen}
           onOpenChange={setOtpDialogOpen}
           order={selectedOrder}
+          otp={otp}
+          onOtpChange={setOtp}
           onConfirm={handleOtpConfirmation}
           isSubmitting={handleOtpSubmitMutation.isPending}
           error={handleOtpSubmitMutation.error?.message || null}
+          // If you want a "Resend OTP" button in the dialog, you'll need to pass these:
+          // onSendOtp={(orderId) => sendOtpToCustomerMutation.mutate(orderId)}
+          // sendOtpLoading={sendOtpToCustomerMutation.isPending}
         />
       )}
     </div>
   );
-}   
+}
