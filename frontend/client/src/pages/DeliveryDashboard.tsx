@@ -326,7 +326,7 @@ export default function DeliveryDashboard() {
       console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
       setSelectedOrder(order);
       setOtpDialogOpen(true);
-      return;
+      
     }
 
     const next = nextStatus(curStatus);
