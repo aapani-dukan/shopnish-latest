@@ -1,4 +1,4 @@
-import { Router, Response, NextFunction } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../server/db';
 import {
   deliveryBoys,
@@ -8,13 +8,18 @@ import {
   deliveryAddresses,
   approvalStatusEnum,
   orderStatusEnum,
-  users
+  users,
+  customers // ✅ customer स्कीमा इंपोर्ट करें ताकि हम ग्राहक का फोन नंबर पा सकें
 } from '../shared/backend/schema';
-import { eq, or, and, isNull,desc,not } from 'drizzle-orm';
+import { eq, or, and, isNull, desc, not } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
-import { sendWhatsAppOTP } from '../util/msg91.ts';
+
+// ✅ आपके द्वारा बनाई गई फ़ाइलें इंपोर्ट करें
+import { sendWhatsAppOTP } from '../server/util/msg91'; 
+import { generateOTP } from '../server/util/otp'; 
+
 const router = Router();
 
 // ✅ Delivery Boy Registration Route
@@ -141,7 +146,7 @@ router.get('/orders/available', requireDeliveryBoyAuth, async (req: Authenticate
                 id: true,
                 businessName: true,
                 businessAddress: true,
-                businessPhone: true, // ✅ फ़ोन नंबर
+                businessPhone: true,
                 city: true,
                 pincode: true,
               }
@@ -176,31 +181,27 @@ router.get('/orders/my', requireDeliveryBoyAuth, async (req: AuthenticatedReques
         eq(orders.deliveryBoyId, deliveryBoyId),
         eq(orders.deliveryStatus, 'accepted')
       ),
-  
-
-with: {
-  items: {
-    with: {
-      product: {
-        with: {
-          seller: { 
-            columns: {
-              id: true,
-              businessName: true,
-              businessAddress: true,
-              businessPhone: true,
-              city: true,
-              pincode: true,
+      with: {
+        items: {
+          with: {
+            product: {
+              with: {
+                seller: { 
+                  columns: {
+                    id: true,
+                    businessName: true,
+                    businessAddress: true,
+                    businessPhone: true,
+                    city: true,
+                    pincode: true,
+                  }
+                }
+              }
             }
           }
-        }
-      }
-    }
-  },
-  
-  deliveryAddress: true,
-},
-      
+        },
+        deliveryAddress: true,
+      },
       orderBy: (o, { desc }) => [desc(o.createdAt)],
     });
 
@@ -211,7 +212,6 @@ with: {
     res.status(500).json({ message: "Failed to fetch my orders." });
   }
 });
-
 // ✅ POST Accept Order
 router.post("/accept", requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
@@ -240,32 +240,18 @@ router.post("/accept", requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     if (existing.deliveryStatus !== 'pending') {
       return res.status(409).json({ message: "Order is not available for acceptance." });
     }
-const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
-
-const [updated] = await db
-  .update(orders)
-    .set({
-        deliveryBoyId: deliveryBoy.id,
-            deliveryStatus: "accepted",
-                deliveryOtp,
-                    deliveryAcceptedAt: new Date(),
-                      })
-                        .where(eq(orders.id, orderId))
-                          .returning();
-    const deliveryOtp = Math.floor(1000 + Math.random() * 9000).toString();
 
     const [updated] = await db
       .update(orders)
       .set({
         deliveryBoyId: deliveryBoy.id,
         deliveryStatus: "accepted",
-        deliveryOtp,
+        // deliveryOtp और deliveryOtpSentAt यहाँ सेट नहीं किए जाएंगे
         deliveryAcceptedAt: new Date(),
       })
       .where(eq(orders.id, orderId))
       .returning();
-    const { deliveryOtp: _, ...orderWithoutOtp } = updated; 
-
+    
     const fullUpdatedOrder = await db.query.orders.findFirst({
         where: eq(orders.id, orderId),
         with: {
@@ -273,7 +259,6 @@ const [updated] = await db
             deliveryBoy: {
                 columns: { id: true, name: true, phone: true }
             },
-            // sellerId यहाँ से नहीं मिल सकता, इसलिए हमें items टेबल से sellerId पता करना होगा
             items: { columns: { sellerId: true } } 
         }
     });
@@ -282,15 +267,14 @@ const [updated] = await db
         return res.status(404).json({ message: "Order not found after update." });
     }
     
-    // ✅ IDs निकालें
     const io = getIO();
     const customerId = fullUpdatedOrder.customerId;
-    const sellerId = fullUpdatedOrder.items?.[0]?.sellerId; // मान लें कि एक ही सेलर का ऑर्डर है
+    const sellerId = fullUpdatedOrder.items?.[0]?.sellerId; 
 
-    // I. ब्रॉडकास्ट रूम से ऑर्डर हटाएँ (सभी डिलीवरी बॉय की लिस्ट अपडेट करें)
+    // I. ब्रॉडकास्ट रूम से ऑर्डर हटाएँ
     io.to('unassigned-orders').emit("order:removed-from-unassigned", fullUpdatedOrder.id);
     
-    // II. केवल एक्सेप्ट करने वाले डिलीवरी बॉय को भेजें (उसके 'my orders' में दिखाने के लिए)
+    // II. केवल एक्सेप्ट करने वाले डिलीवरी बॉय को भेजें
     io.to(`deliveryboy:${deliveryBoy.id}`).emit("order:accepted", fullUpdatedOrder);
 
     // III. सेलर और एडमिन को भेजें
@@ -302,7 +286,7 @@ const [updated] = await db
     // IV. कस्टमर को भेजें
     io.to(`user:${customerId}`).emit("order-status-update", fullUpdatedOrder);
     
-    return res.json({ message: "Order accepted", order: orderWithoutOtp });
+    return res.json({ message: "Order accepted", order: fullUpdatedOrder });
 
   } catch (err) {
     console.error("POST /delivery/accept error:", err);
@@ -350,15 +334,7 @@ router.patch('/orders/:orderId/status', requireDeliveryBoyAuth, async (req: Auth
     if (!updatedOrder) {
       return res.status(404).json({ message: "Order not found." });
     }
-// WhatsApp OTP भेजें
-if (fullUpdatedOrder.customer?.phone) {
-  await sendWhatsAppOTP(
-      fullUpdatedOrder.customer.phone,
-          deliveryOtp,
-              orderId,
-                  fullUpdatedOrder.customer.name
-                    );
-                    } 
+   
     const fullUpdatedOrder = await db.query.orders.findFirst({
         where: eq(orders.id, orderId),
         with: {
@@ -392,11 +368,8 @@ if (fullUpdatedOrder.customer?.phone) {
 
     res.status(200).json({
       message: "Order status updated successfully.",
-      order: fullUpdatedOrder, // return में भी full order भेजें
+      order: fullUpdatedOrder, 
     });
-
-    // ❌ यह पुरानी line हटा दें
-    // getIO().emit("order:update", { type: "status-change", data: updatedOrder });
 
   } catch (error: any) {
     console.error("Failed to update order status:", error);
@@ -414,7 +387,6 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
       return res.status(400).json({ message: "Missing required fields (orderId, latitude, longitude)." });
     }
 
-    // 🧠 Delivery Boy Profile
     const deliveryBoy = await db.query.deliveryBoys.findFirst({
       where: eq(deliveryBoys.firebaseUid, firebaseUid),
     });
@@ -423,7 +395,6 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
       return res.status(404).json({ message: "Delivery Boy profile not found." });
     }
 
-    // 🧾 Order Check
     const order = await db.query.orders.findFirst({
       where: eq(orders.id, orderId),
       columns: { id: true, customerId: true }
@@ -433,7 +404,6 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
       return res.status(404).json({ message: "Order not found." });
     }
 
-    // 📍 Update delivery location in DB
     await db.update(orders)
       .set({
         deliveryLat: latitude,
@@ -442,7 +412,6 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
       })
       .where(eq(orders.id, orderId));
 
-    // 📡 Emit location update to customer in real-time
     const io = getIO();
     io.to(`user:${order.customerId}`).emit("delivery-location-update", {
       orderId,
@@ -458,12 +427,80 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
   }
 });
 
-if (order.deliveryOtp !== otp) {
-    return res.status(401).json({ message: "Invalid OTP." });
-    }
-}
 
-// ✅ POST Complete Delivery with OTP
+// ✅ POST: Send OTP to Customer (नया रूट)
+router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const deliveryBoyId = req.user?.deliveryBoyId;
+    const { orderId } = req.body;
+
+    if (!orderId || !deliveryBoyId) {
+      return res.status(400).json({ message: "Order ID and Delivery Boy ID are required." });
+    }
+
+    const order = await db.query.orders.findFirst({
+      where: eq(orders.id, orderId),
+      with: {
+        customer: {
+          columns: {
+            id: true,
+            phone: true,
+            name: true,
+          }
+        },
+      },
+    });
+
+    if (!order || order.deliveryBoyId !== deliveryBoyId) {
+      return res.status(404).json({ message: "Order not found or you are not assigned to this order." });
+    }
+
+    const customer = order.customer;
+    if (!customer || !customer.phone || !customer.name) {
+      return res.status(400).json({ message: "Customer phone number or name not available for this order." });
+    }
+
+    // 1. OTP जेनरेट करें
+    const otp = generateOTP(6); 
+
+    // 2. OTP को Drizzle DB में सहेजें (या अपडेट करें)
+    const [updatedOrder] = await db.update(orders)
+      .set({
+        deliveryOtp: otp,
+        deliveryOtpSentAt: new Date(), 
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+
+    if (!updatedOrder) {
+        return res.status(500).json({ message: "Failed to save OTP in database." });
+    }
+
+    // 3. WhatsApp OTP भेजें
+    const msg91Response = await sendWhatsAppOTP(
+      customer.phone,
+      otp,
+      orderId,
+      customer.name
+    );
+
+    if (msg91Response) {
+      return res.status(200).json({ success: true, message: "OTP sent successfully to customer via WhatsApp." });
+    } else {
+      console.error("❌ Failed to send WhatsApp, marking order for retry.");
+      // यदि WhatsApp भेजने में विफल रहा, तो DB से OTP को हटाना बेहतर हो सकता है
+      await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
+      return res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
+    }
+
+  } catch (error: any) {
+    console.error("❌ Error in /send-otp-to-customer:", error);
+    return res.status(500).json({ message: "Failed to send OTP to customer. Server error." });
+  }
+});
+
+
+// ✅ POST Complete Delivery with OTP (यहां OTP सत्यापन होगा)
 router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
@@ -484,40 +521,58 @@ router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async 
 
     const order = await db.query.orders.findFirst({
       where: eq(orders.id, orderId),
+      columns: { deliveryOtp: true, deliveryOtpSentAt: true, deliveryBoyId: true } // ✅ SentAt फ़ील्ड को भी प्राप्त करें
     });
 
     if (!order) {
       return res.status(404).json({ message: "Order not found." });
     }
 
-    if (order.deliveryBoyId !== deliveryBoy.id) {
+    if (order.deliveryBoyId !== deliveryBoy.id) { // डिलीवरी बॉय ID का सत्यापन
       return res.status(403).json({ message: "Forbidden: You are not assigned to this order." });
     }
+    
+    // 1. OTP की समय सीमा (Expiry) की जाँच करें (10 मिनट)
+    const sentTime = order.deliveryOtpSentAt ? order.deliveryOtpSentAt.getTime() : 0;
+    const expiryTime = sentTime + 10 * 60 * 1000; // 10 मिनट
+    if (Date.now() > expiryTime) {
+         // Expired होने पर OTP को DB से null करें
+        await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
+        return res.status(401).json({ message: "OTP has expired. Please request a new one." });
+    }
 
-    if (order.deliveryOtp !== otp) {
+    // 2. OTP की तुलना करें
+    if (!order.deliveryOtp || order.deliveryOtp !== otp) {
       return res.status(401).json({ message: "Invalid OTP." });
     }
 
+    // 3. यदि OTP मान्य है, तो डिलीवरी की स्थिति अपडेट करें और OTP को null करें
     const [updatedOrder] = await db.update(orders)
       .set({
         status: 'delivered',
         deliveryStatus: 'delivered',
-        deliveryOtp: null,
+        deliveryOtp: null, // ✅ सफल होने पर OTP हटा दें
+        deliveryOtpSentAt: null, // ✅ सफल होने पर SentAt टाइमस्टैम्प हटा दें
+        deliveredAt: new Date(), // आपके स्कीमा में 'deliveredAt' फ़ील्ड होने पर
       })
-      .where(eq(orders.id, orderId)) // किस ऑर्डर को अपडेट करना है
-  .returning(); 
-      const fullUpdatedOrder = await db.query.orders.findFirst({
-    where: eq(orders.id, updatedOrder.id),
-    with: {
-        customer: true, 
-        deliveryBoy: {
-            columns: { id: true, name: true, phone: true }
-        },
-        items: { columns: { sellerId: true } }
-    }
-});
+      .where(eq(orders.id, orderId))
+      .returning();
+      
+    // अपडेटेड ऑर्डर का पूरा डेटा प्राप्त करें
+    const fullUpdatedOrder = await db.query.orders.findFirst({
+        where: eq(orders.id, updatedOrder.id),
+        with: {
+            customer: true, 
+            deliveryBoy: {
+                columns: { id: true, name: true, phone: true }
+            },
+            items: { columns: { sellerId: true } }
+        }
+    });
     
-    if (!fullUpdatedOrder) { /* handle error */ }
+    if (!fullUpdatedOrder) { 
+      return res.status(500).json({ message: "Failed to retrieve updated order details." });
+    }
 
     const io = getIO();
     const customerId = fullUpdatedOrder.customerId;
@@ -534,12 +589,10 @@ router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async 
 
     // III. कस्टमर को भेजें
     io.to(`user:${customerId}`).emit("order-status-update", fullUpdatedOrder);
-
     
-
     return res.status(200).json({
       message: "Delivery completed successfully.",
-      order: updatedOrder,
+      order: fullUpdatedOrder,
     });
 
   } catch (error: any) {
