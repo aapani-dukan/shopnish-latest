@@ -302,9 +302,6 @@ export default function DeliveryDashboard() {
       toast({ title: "OTP त्रुटि", description: error.message || "OTP जमा करने में विफल।", variant: "destructive" });
     },
   });
-// ... (deliverydashboard.tsx के अंदर) ...
-
-// ग्राहक को OTP भेजने के लिए नया म्यूटेशन
 
 const sendOtpToCustomerMutation = useMutation({
   mutationFn: async (orderId: number) => {
@@ -372,7 +369,52 @@ const sendOtpToCustomerMutation = useMutation({
     // ✅ यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
     if (next === "out_for_delivery") {
       console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
-      sendOtpToCustomerMutation.mutate(order.id);
+      sendOtpToCustomerMutation.mutate(order.id)
+        const sendOtpToCustomerMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    const token = await getValidToken();
+    if (!token) throw new Error("अमान्य या पुराना टोकन");
+
+    const API_BASE =
+      import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+
+    const response = await fetch(
+      `${API_BASE}/api/delivery/send-otp-to-customer`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ orderId }),
+      }
+    );
+
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+    }
+
+    return response.json();
+  },
+  onSuccess: () => {
+    toast({
+      title: "OTP भेजा गया",
+      description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
+      variant: "success",
+    });
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+  },
+  onError: (error: any) => {
+    console.error("❌ Failed to send OTP:", error);
+    toast({
+      title: "OTP भेजने में विफल",
+      description: error.message || "कृपया पुनः प्रयास करें।",
+      variant: "destructive",
+    });
+  },
+});
+>>>>>>> 6c20a87f (Added WhatsApp OTP integration and fixed useMutation error)
     }
 
     updatestatusmutation.mutate({ orderid: order.id, newstatus: next });
@@ -384,7 +426,7 @@ const handleotpconfirmation = () => {
     toast({ title: "OTP दर्ज करें", description: "6-अंकों का OTP आवश्यक है।", variant: "destructive" });
     return;
   }
-  handleotpsubmitmutation.mutate({ orderid: selectedorder.id, otp });
+  sendOtpToCustomerMutation.mutate(order.id);
 };
 
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
