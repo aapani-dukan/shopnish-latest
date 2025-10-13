@@ -602,7 +602,7 @@ export default function DeliveryDashboard() {
                 orders={assignedOrders} 
                 title="कोई असाइन किए गए ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर स्वीकार करें या पुराने ऑर्डर डिलीवर करें।"
-                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
+                myDeliveryBoyId={myDeliveryBoyId} 
                 // Props for DeliveryOrdersList
                 onAcceptOrder={(() => {}) as any} 
                 onUpdateStatus={(order: any) => handleStatusProgress(order)}
@@ -618,7 +618,7 @@ export default function DeliveryDashboard() {
                 orders={availableOrders} 
                 title="कोई उपलब्ध ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर के लिए बाद में जाँच करें।"
-                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
+                myDeliveryBoyId={myDeliveryBoyId} 
                 // Props for DeliveryOrdersList
                 onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
                 onUpdateStatus={(() => {}) as any}
@@ -634,7 +634,7 @@ export default function DeliveryDashboard() {
                 orders={historyOrders} 
                 title="कोई इतिहास ऑर्डर नहीं" 
                 subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ ऑर्डर नहीं मिला।`}
-                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
+                myDeliveryBoyId={myDeliveryBoyId} 
                 // History tab में, हम Accept या Update बटन को छुपा सकते हैं
                 onAcceptOrder={(() => {}) as any} 
                 onUpdateStatus={(() => {}) as any}
