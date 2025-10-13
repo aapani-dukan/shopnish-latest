@@ -401,7 +401,7 @@ export default function DeliveryDashboard() {
       // और जो 'pending' या 'ready_for_pickup' स्टेटस में हैं।
       const available = allOrders.filter((o: any) => {
         const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.delivery_status ?? "").toLowerCase();
+        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase();
 
         return (
           o.deliveryBoyId === null && // <-- महत्वपूर्ण: किसी को असाइन नहीं किया गया है
@@ -416,10 +416,10 @@ export default function DeliveryDashboard() {
       // और जो अभी 'delivered', 'rejected' या 'cancelled' नहीं हुए हैं।
       const assigned = allOrders.filter((o: any) => {
         const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.delivery_status ?? "").toLowerCase(); 
+        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase(); 
         
         return (
-          Number(o.delivery_boy_id) === Number(myDeliveryBoyId) && // <-- महत्वपूर्ण: वर्तमान DB को असाइन होना चाहिए
+          Number(o.deliveryBoyId) === Number(myDeliveryBoyId) && // <-- महत्वपूर्ण: वर्तमान DB को असाइन होना चाहिए
           deliveryStatus === "accepted" && 
           status !== "delivered" && 
           status !== "rejected" &&
