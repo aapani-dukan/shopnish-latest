@@ -110,9 +110,9 @@ router.get(
       let deliveryBoyId = null;
       if (user.role === "delivery-boy") { // केवल तभी fetch करें जब रोल delivery-boy हो
         const [deliveryBoyRecord] = await db
-          .select({ id: deliveryBoysPgTable.id }) // deliveryBoysPgTable से deliveryBoy की ID fetch करें
-          .from(deliveryBoysPgTable)
-          .where(eq(deliveryBoysPgTable.userId, user.id)); // user.id से मैच करें
+          .select({ id: deliveryBoys.id }) // deliveryBoysPgTable से deliveryBoy की ID fetch करें
+          .from(deliveryBoys)
+          .where(eq(deliveryBoys.userId, user.id)); // user.id से मैच करें
 
         if (deliveryBoyRecord) {
           deliveryBoyId = deliveryBoyRecord.id;
