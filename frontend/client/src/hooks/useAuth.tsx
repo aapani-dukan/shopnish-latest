@@ -127,7 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: dbUserData.role || "customer",
         idToken,
         sellerProfile: dbUserData.sellerProfile || null,
-deliveryBoyId: dbuserdata.deliveryBoyId || null, 
+deliveryBoyId: backenduser.deliveryBoyId || null, 
       };
       setUser(newUserData);
       setIsAuthenticated(true);
