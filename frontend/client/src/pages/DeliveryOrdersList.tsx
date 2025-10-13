@@ -303,9 +303,9 @@ const OrderCard: React.FC<
                 {order.items?.length || 0} आइटम • ₹{order.total ?? 0}
               </p>
             </div>
-            <ui.Badge className={`${statusColor(mainStatus)} text-white`}>
-              {statusText(mainStatus)}
-            </ui.Badge>
+            <ui.Badge className={`${statusColor(mainStatus)} text-white px-3 py-1 rounded-full text-xs font-semibold`}>
+  {statusText(mainStatus)}
+</ui.Badge>
           </div>
         </ui.CardHeader>
         <ui.CardContent>
