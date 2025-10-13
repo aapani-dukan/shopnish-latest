@@ -5,6 +5,7 @@ import {
   userRoleEnum,
   approvalStatusEnum,
   sellersPgTable,
+  deliveryBoys,
 } from "../shared/backend/schema.ts";
 import { AuthenticatedRequest } from "./middleware/verifyToken.ts";
 import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware.ts";
@@ -105,8 +106,20 @@ router.get(
 
         if (record) sellerInfo = record;
       }
+    // ✅ FIX: यहाँ deliveryBoyId को fetch करें और रिस्पॉन्स में जोड़ें
+      let deliveryBoyId = null;
+      if (user.role === "delivery-boy") { // केवल तभी fetch करें जब रोल delivery-boy हो
+        const [deliveryBoyRecord] = await db
+          .select({ id: deliveryBoysPgTable.id }) // deliveryBoysPgTable से deliveryBoy की ID fetch करें
+          .from(deliveryBoysPgTable)
+          .where(eq(deliveryBoysPgTable.userId, user.id)); // user.id से मैच करें
 
-      res.status(200).json({ ...user, sellerProfile: sellerInfo || null });
+        if (deliveryBoyRecord) {
+          deliveryBoyId = deliveryBoyRecord.id;
+        }
+      }
+      res.status(200).json({ ...user, sellerProfile: sellerInfo || null ,
+deliveryBoyId: deliveryBoyId });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Internal error." });
