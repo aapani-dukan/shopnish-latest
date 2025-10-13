@@ -39,6 +39,7 @@ export interface User {
   name: string | null;
   role: "customer" | "seller" | "admin" | "delivery";
   sellerProfile?: SellerInfo | null;
+deliveryBoyId?: number | null; 
   idToken?: string;
 }
 
@@ -126,6 +127,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         role: dbUserData.role || "customer",
         idToken,
         sellerProfile: dbUserData.sellerProfile || null,
+deliveryBoyId: dbuserdata.deliveryBoyId || null, 
       };
       setUser(newUserData);
       setIsAuthenticated(true);
@@ -293,6 +295,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           name: backendUser.name,
           role: backendUser.role,
           sellerProfile: backendUser.sellerProfile || null,
+deliveryBoyId: backenduser.deliveryBoyId || null, 
         };
         setUser(newUserData);
         setIsAuthenticated(true);
