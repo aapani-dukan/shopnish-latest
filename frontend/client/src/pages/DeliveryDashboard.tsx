@@ -374,8 +374,8 @@ export default function DeliveryDashboard() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         <p className="text-gray-500 mt-2">Connecting to server...</p>
-      </div>
-    );
+      </div>)
+    
   // --- Main Render Part (DeliveryDashboard return JSX) ---
 return (
   <div className="min-h-screen bg-gray-50 font-inter text-gray-800">
@@ -552,8 +552,7 @@ return (
       isLoading={handleOtpSubmitMutation.isPending}
       orderNumber={selectedOrder?.orderNumber}
     />
-  </div>
-);
+ ) </div>
 
 // --- Helper Component for Orders List ---
 const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
