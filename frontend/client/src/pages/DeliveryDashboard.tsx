@@ -80,7 +80,7 @@ const statusText = (status: string) => {
 
 const nextStatus = (current: string) => {
   switch (current) {
-    case "pending": return "accepted";
+    case "pending": return "accepted"; // pending order को accept करने के लिए
     case "accepted": return "picked_up";
     case "picked_up": return "out_for_delivery";
     case "out_for_delivery": return null; // <--- यह महत्वपूर्ण बदलाव है।
@@ -356,11 +356,19 @@ export default function DeliveryDashboard() {
     }
 
     const next = nextStatus(curStatus);
-    if (next) {
-      console.log("➡️ Status is not 'out_for_delivery'. Updating to next status:", next);
+    
+    // *** महत्वपूर्ण बदलाव यहाँ: 'accepted' के लिए updateStatusMutation को बायपास करें ***
+    if (next === "accepted") {
+        console.log(`⚠️ Status is 'pending'. Order should be accepted via 'onAcceptOrder' prop.`);
+        // इस स्थिति में कोई स्टेटस अपडेट नहीं किया जाना चाहिए।
+        // क्योंकि 'availableOrders' टैब में 'Accept Order' बटन 'acceptOrderMutation' का उपयोग करता है।
+        return; 
+    }
+
+    if (next) { // यदि 'next' अभी भी valid (e.g., picked_up, out_for_delivery)
+      console.log(`➡️ Status is not 'out_for_delivery'. Updating to next status: ${next}`);
 
       // यदि अगला स्टेटस 'out_for_delivery' है, तो OTP भेजें
-      // यह सुनिश्चित करने के लिए कि यह केवल तभी चलता है जब स्टेटस बदल रहा हो।
       if (next === "out_for_delivery" && curStatus !== "out_for_delivery") {
         console.log(`➡️ Detected transition to 'out_for_delivery'. Sending OTP for order ${order.id}.`);
         sendOtpToCustomerMutation.mutate(order.id);
@@ -368,8 +376,6 @@ export default function DeliveryDashboard() {
 
       updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
     } else {
-        // 'out_for_delivery' के बाद 'nextStatus' null लौटाता है, तो यहाँ कुछ नहीं होगा,
-        // जो सही व्यवहार है क्योंकि 'delivered' केवल OTP सत्यापन के बाद होता है।
         console.log(`🤷 No next status defined for current status: ${curStatus}. This is expected for 'out_for_delivery' status.`);
     }
   };
@@ -508,7 +514,7 @@ export default function DeliveryDashboard() {
       {/* ---------------------------------------------------- */}
       {/* *** NEW TAB NAVIGATION & ORDER FILTERING SECTION *** */}
       {/* ---------------------------------------------------- */}
-     <section className="max-w-6xl mx-auto px-4 pb-4">
+      <section className="max-w-6xl mx-auto px-4 pb-4">
         <div className="flex justify-between items-end mb-4 flex-wrap gap-4">
             <div className="flex space-x-2 border-b border-gray-200">
                 <Button 
@@ -536,7 +542,7 @@ export default function DeliveryDashboard() {
                     डिलीवर किए गए / हिस्ट्री ({historyOrders.length})
                 </Button>
             </div>
-
+            
             {/* Date Filter for History Tab */}
             {activeTab === 2 && (
                 <div className="flex items-center space-x-2">
@@ -573,9 +579,9 @@ export default function DeliveryDashboard() {
                 title="कोई असाइन किए गए ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर स्वीकार करें या पुराने ऑर्डर डिलीवर करें।"
                 // Props for DeliveryOrdersList
-                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
-                onUpdateStatus={(order: any) => handleStatusProgress(order)}
-                acceptLoading={acceptOrderMutation.isPending}
+                onAcceptOrder={(() => {}) as any} // असाइन किए गए ऑर्डरों को स्वीकार करने की जरूरत नहीं है
+                onUpdateStatus={(order: any) => handleStatusProgress(order)} // handleStatusProgress को कॉल करें
+                acceptLoading={false} // यहां स्वीकार नहीं हो रहा है
                 updateLoading={updateStatusMutation.isPending}
                 Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
                 statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
@@ -588,10 +594,10 @@ export default function DeliveryDashboard() {
                 title="कोई उपलब्ध ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर के लिए बाद में जाँच करें।"
                 // Props for DeliveryOrdersList
-                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
-                onUpdateStatus={(order: any) => handleStatusProgress(order)} // Available orders should not be updated beyond accepted here
+                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)} // उपलब्ध ऑर्डरों के लिए acceptOrderMutation को कॉल करें
+                onUpdateStatus={(() => {}) as any} // उपलब्ध ऑर्डरों के लिए कोई अपडेट स्टेटस बटन नहीं
                 acceptLoading={acceptOrderMutation.isPending}
-                updateLoading={updateStatusMutation.isPending}
+                updateLoading={false} 
                 Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
                 statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
             />
@@ -603,9 +609,9 @@ export default function DeliveryDashboard() {
                 title="कोई इतिहास ऑर्डर नहीं" 
                 subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ ऑर्डर नहीं मिला।`}
                 // History tab में, हम Accept या Update बटन को छुपा सकते हैं, 
-                // इसलिए हम accept/update handlers को null पास कर सकते हैं या no-op फ़ंक्शन।
-                onAcceptOrder={(() => {}) as any} // No-op for history
-                onUpdateStatus={(() => {}) as any} // No-op for history
+                // इसलिए हम accept/update handlers को no-op फ़ंक्शन पास कर सकते हैं।
+                onAcceptOrder={(() => {}) as any} 
+                onUpdateStatus={(() => {}) as any}
                 acceptLoading={false} 
                 updateLoading={false}
                 Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
@@ -629,7 +635,7 @@ export default function DeliveryDashboard() {
 }
 
 // Helper Component for List View (कोड छोटा करने के लिए)
-const OrdersListView: React.FC<any> = ({ orders, title, subtitle, handleStatusProgress, ...props }) => (
+const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
     <>
         {orders.length === 0 ? (
             <Card>
@@ -642,11 +648,14 @@ const OrdersListView: React.FC<any> = ({ orders, title, subtitle, handleStatusPr
         ) : (
             <DeliveryOrdersList
                 orders={orders}
-                onAcceptOrder={props.onAcceptOrder} // Props से सीधे पास करें
-                onUpdateStatus={props.onUpdateStatus} // Props से सीधे पास करें
+                onAcceptOrder={props.onAcceptOrder} 
+                onUpdateStatus={props.onUpdateStatus} 
                 acceptLoading={props.acceptLoading}
                 updateLoading={props.updateLoading}
-                {...props}
+                // बाकी UI कंपोनेंट्स और यूटिलिटी फ़ंक्शंस सीधे props से पास हो जाते हैं
+                Button={props.Button} Card={props.Card} CardContent={props.CardContent} CardHeader={props.CardHeader} 
+                CardTitle={props.CardTitle} Badge={props.Badge} statusColor={props.statusColor} 
+                statusText={props.statusText} nextStatus={props.nextStatus} nextStatusLabel={props.nextStatusLabel}
             />
         )}
     </>
