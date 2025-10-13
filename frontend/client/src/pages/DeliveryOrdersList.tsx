@@ -1,5 +1,5 @@
 import React from "react";
-import { Navigation, Phone, MapPin } from "lucide-react";
+import { Navigation, Phone, MapPin, Loader2 } from "lucide-react"; // Loader2 भी जोड़ें यदि वह बटन में उपयोग होता है
 
 // --- TypeScript Type Definitions ---
 export interface Address {
@@ -50,7 +50,7 @@ export interface Order {
   status?: string;
   deliveryAddress?: any;
   seller?: any;
-  sellerDetails?: any;
+  sellerDetails?: any; // Drizzle से आने वाले sellerDetails के लिए
   deliveryBoyId?: number;
 }
 
@@ -73,38 +73,42 @@ export interface DeliveryOrdersListProps extends UIComponents {
   nextStatusLabel: (status: string) => string;
   acceptLoading: boolean;
   updateLoading: boolean;
+  myDeliveryBoyId: number | undefined; // <-- myDeliveryBoyId को यहां जोड़ा गया
 }
 
 // --- Normalizers ---
 const normalizeDeliveryAddress = (raw: any): Address | null => {
   if (!raw) return null;
 
-  if (raw.fullName || raw.phone || raw.address) {
-    return {
-      fullName: raw.fullName,
-      phone: raw.phone || raw.phoneNumber,
-      address: raw.address || raw.addressLine1,
-      city: raw.city,
-      pincode: raw.pincode || raw.postalCode,
-      landmark: raw.landmark,
-      phoneNumber: raw.phoneNumber,
-      addressLine1: raw.addressLine1,
-      state: raw.state,
-    };
-  }
-
+  // यदि raw एक स्ट्रिंग है, तो इसे JSON के रूप में पार्स करने का प्रयास करें
   if (typeof raw === "string") {
     try {
       const parsed = JSON.parse(raw);
-      return normalizeDeliveryAddress(parsed);
+      return normalizeDeliveryAddress(parsed); // पार्स किए गए ऑब्जेक्ट के साथ रिकर्सिवली कॉल करें
     } catch {
+      // JSON पार्सिंग विफल होने पर null लौटाएं
       return null;
     }
   }
 
-  return null;
-};
+  // सुनिश्चित करें कि डिटेल्स मौजूद हों
+  if (!raw.fullName && !raw.phone && !raw.address && !raw.addressLine1) {
+    return null;
+  }
 
+  return {
+    fullName: raw.fullName,
+    phone: raw.phone || raw.phoneNumber,
+    address: raw.address || raw.addressLine1,
+    addressLine1: raw.addressLine1, // मूल addressLine1 को रखें
+    city: raw.city,
+    state: raw.state,
+    pincode: raw.pincode || raw.postalCode,
+    postalCode: raw.postalCode, // मूल postalCode को रखें
+    landmark: raw.landmark,
+    phoneNumber: raw.phoneNumber, // मूल phoneNumber को रखें
+  };
+};
 
 const normalizeSeller = (order: Order): Seller | null => {
   let rawSellerData = null;
@@ -114,35 +118,34 @@ const normalizeSeller = (order: Order): Seller | null => {
     rawSellerData = order.items[0]?.product?.seller;
   }
   
-  // 2. पुराने/सीधे पाथ को फॉलबैक के तौर पर रखें (यदि बैकएंड भविष्य में बदलता है)
+  // 2. sellerDetails को भी देखें (यदि मौजूद है)
+  if (!rawSellerData && order.sellerDetails) {
+    rawSellerData = order.sellerDetails;
+  }
+
+  // 3. पुराने/सीधे पाथ को फॉलबैक के तौर पर रखें
   if (!rawSellerData && order.seller) {
     rawSellerData = order.seller;
   }
   
-  // 3. यदि कोई विक्रेता डेटा नहीं मिला, तो बाहर निकलें।
+  // 4. यदि कोई विक्रेता डेटा नहीं मिला, तो बाहर निकलें।
   if (!rawSellerData) {
     return null;
   }
 
-  // 4. ✅ विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
+  // 5. ✅ विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
   return {
     id: rawSellerData.id ?? undefined,
-    // businessName को name और businessName दोनों से लें
     name: rawSellerData.name ?? rawSellerData.businessName, 
     businessName: rawSellerData.businessName ?? rawSellerData.name,
-    
-    // ✅ BACKEND FIELD NAMES (businessPhone, businessAddress) को map करें
     phone: rawSellerData.businessPhone ?? rawSellerData.phone ?? rawSellerData.phoneNumber,
     email: rawSellerData.email ?? null,
-    
-    // ✅ address को businessAddress से map करें
     address: rawSellerData.businessAddress ?? rawSellerData.address ?? rawSellerData.addressLine1,
     city: rawSellerData.city,
     pincode: rawSellerData.pincode ?? rawSellerData.postalCode,
     landmark: rawSellerData.landmark,
   };
 };
-
 
 // --- AddressBlock ---
 const AddressBlock: React.FC<{
@@ -183,6 +186,7 @@ const AddressBlock: React.FC<{
 
   const handleNavigate = () => {
     const query = encodeURIComponent(`${addressLine} ${city} ${pincode}`);
+    // ✅ Google Maps के लिए सही URL
     window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
   };
 
@@ -262,13 +266,15 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
   </div>
 );
 
+// --- OrderCardProps (नए myDeliveryBoyId प्रॉप के साथ) ---
+interface OrderCardProps extends Omit<DeliveryOrdersListProps, "orders"> {
+  order: Order;
+  isLoading: boolean;
+  myDeliveryBoyId: number | undefined; // <--- myDeliveryBoyId को यहां जोड़ा गया
+}
+
 // --- OrderCard ---
-const OrderCard: React.FC<
-  Omit<DeliveryOrdersListProps, "orders" | "acceptLoading" | "updateLoading"> & {
-    order: Order;
-    isLoading: boolean;
-  }
-> = React.memo(
+const OrderCard: React.FC<OrderCardProps> = React.memo( // OrderCardProps का उपयोग करें
   ({
     order,
     onAcceptOrder,
@@ -278,18 +284,45 @@ const OrderCard: React.FC<
     nextStatus,
     nextStatusLabel,
     isLoading,
+    myDeliveryBoyId, // <--- इसे यहाँ स्वीकार करें
     ...ui
   }) => {
     if (!order) return null;
 
-    const mainStatus = order.status || "";
-    const deliveryStatus = order.deliveryStatus || "";
-    const canAccept = deliveryStatus === "pending";
+    const mainStatus = (order.status ?? "").toLowerCase(); // सुरक्षा के लिए .toLowerCase()
+    const deliveryStatus = (order.deliveryStatus ?? "").toLowerCase(); // सुरक्षा के लिए .toLowerCase()
+
+    // ✅ 'Accept Order' बटन के लिए लॉजिक
+    const canAccept = 
+        order.deliveryBoyId === null &&                               // किसी को असाइन नहीं
+        deliveryStatus === "pending" &&
+        (mainStatus === "pending" || mainStatus === "ready_for_pickup"); // मुख्य स्टेटस भी जांचें
+
+    // ✅ 'Next Status' बटन के लिए लॉजिक
+    const hasNextAction = 
+        Number(order.deliveryBoyId) === Number(myDeliveryBoyId) &&    // वर्तमान DB को असाइन
+        deliveryStatus === "accepted" &&                              // DB द्वारा स्वीकार किया गया
+        !!nextStatus(mainStatus);                                     // अगला स्टेटस मौजूद है
+
+
+    // --- डिबगिंग लॉग्स ---
+    console.log("--- OrderCard Debug ---");
+    console.log("Order ID:", order.id);
+    console.log("Raw order.status:", order.status);
+    console.log("Processed mainStatus:", mainStatus);
+    console.log("Raw order.deliveryStatus:", order.deliveryStatus);
+    console.log("Processed deliveryStatus:", deliveryStatus);
+    console.log("Order deliveryBoyId:", order.deliveryBoyId);
+    console.log("Current user's myDeliveryBoyId:", myDeliveryBoyId);
+    console.log("Next status from nextStatus func:", nextStatus(mainStatus));
+    console.log("canAccept (button visibility):", canAccept);
+    console.log("hasNextAction (button visibility):", hasNextAction);
+    console.log("Text for badge:", statusText(mainStatus)); // <--- टेक्स्ट आउटपुट देखें
+    console.log("--- End OrderCard Debug ---");
+
 
     const normalizedAddress = normalizeDeliveryAddress(order.deliveryAddress);
     const normalizedSeller = normalizeSeller(order);
-
-    const hasNextAction = !!nextStatus(mainStatus);
 
     return (
       <ui.Card>
@@ -304,8 +337,8 @@ const OrderCard: React.FC<
               </p>
             </div>
             <ui.Badge className={`${statusColor(mainStatus)} text-white px-3 py-1 rounded-full text-xs font-semibold`}>
-  {statusText(mainStatus)}
-</ui.Badge>
+              {statusText(mainStatus)} {/* <--- टेक्स्ट यहां दिखना चाहिए */}
+            </ui.Badge>
           </div>
         </ui.CardHeader>
         <ui.CardContent>
@@ -324,13 +357,14 @@ const OrderCard: React.FC<
 
           <OrderItems items={order.items ?? []} />
 
-          <div className="mt-6 pt-4 border-t">
+          <div className="mt-6 pt-4 border-t flex flex-wrap gap-2"> {/* flex-wrap gap-2 जोड़ा गया */}
             {canAccept && (
               <ui.Button
                 size="sm"
                 onClick={() => onAcceptOrder(order.id)}
                 disabled={isLoading}
               >
+                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {/* Loader2 जोड़ा गया */}
                 ऑर्डर स्वीकार करें
               </ui.Button>
             )}
@@ -341,6 +375,7 @@ const OrderCard: React.FC<
                 onClick={() => onUpdateStatus(order)}
                 disabled={isLoading}
               >
+                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />} {/* Loader2 जोड़ा गया */}
                 {nextStatusLabel(mainStatus)}
               </ui.Button>
             )}
@@ -354,6 +389,7 @@ const OrderCard: React.FC<
 // --- DeliveryOrdersList ---
 const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
   orders,
+  myDeliveryBoyId, // <--- myDeliveryBoyId को यहां स्वीकार करें
   ...props
 }) => {
   return (
@@ -366,6 +402,7 @@ const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
           key={order.id}
           order={order}
           isLoading={props.acceptLoading || props.updateLoading}
+          myDeliveryBoyId={myDeliveryBoyId} // <--- myDeliveryBoyId को OrderCard में पास करें
           {...props}
         />
       ))}
