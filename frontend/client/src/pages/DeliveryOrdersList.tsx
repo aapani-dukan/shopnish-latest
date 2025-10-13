@@ -222,6 +222,7 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 );
 
 // --- OrderCard ---
+
 interface OrderCardProps extends Omit<DeliveryOrdersListProps, "orders"> {
   order: Order;
   isLoading: boolean;
@@ -233,11 +234,11 @@ const OrderCard: React.FC<OrderCardProps> = React.memo(
     order,
     onAcceptOrder,
     onUpdateStatus,
-    statusColor,
-    statusText,
-    nextStatus,
-    nextStatusLabel,
-    isLoading,
+    statusColor, // अब यह getStatusColor होना चाहिए
+    statusText,  // अब यह getStatusText होना चाहिए
+    nextStatus,  // अब यह getNextStatus होना चाहिए
+    nextStatusLabel, // अब यह getNextStatusLabel होना चाहिए
+    isLoading, // यह acceptLoading || updateLoading है
     myDeliveryBoyId,
     ...ui
   }) => {
@@ -245,17 +246,31 @@ const OrderCard: React.FC<OrderCardProps> = React.memo(
 
     const mainStatus = (order.status ?? "").toLowerCase();
     const deliveryStatus = (order.deliveryStatus ?? "").toLowerCase();
-    const isMine = myDeliveryBoyId && Number(order.deliveryBoyId) === Number(myDeliveryBoyId);
+    const myDeliveryBoyIdNum = myDeliveryBoyId ? Number(myDeliveryBoyId) : null;
+    const orderDeliveryBoyIdNum = order.deliveryBoyId ? Number(order.deliveryBoyId) : null;
 
-    // ✅ Accept order logic (more flexible)
-    const canAccept =
-      order.deliveryBoyId == null &&
+    // क्या यह ऑर्डर मुझे असाइन किया गया है?
+    const isMine = myDeliveryBoyIdNum !== null && orderDeliveryBoyIdNum === myDeliveryBoyIdNum;
+
+
+    const canAcceptOrder =
+      !isMine &&
+      orderDeliveryBoyIdNum === null &&
       deliveryStatus === "pending" &&
       (mainStatus === "pending" || mainStatus === "ready_for_pickup");
 
-    // ✅ Next status logic
-    const next = nextStatus(mainStatus);
-    const hasNextAction = isMine && deliveryStatus === "accepted" && next != null;
+    // ✅ "स्टेटस अपडेट करें" बटन कब दिखाएं:
+    
+    const canUpdateOrder =
+      isMine &&
+      deliveryStatus === "accepted" &&
+      (mainStatus === "ready_for_pickup" ||
+       mainStatus === "picked_up" ||
+       mainStatus === "out_for_delivery");
+    
+    // अगले एक्शन का लेबल
+    const nextActionLabel = nextStatusLabel(mainStatus);
+
 
     const normalizedAddress = normalizeDeliveryAddress(order.deliveryAddress);
     const normalizedSeller = normalizeSeller(order);
@@ -287,17 +302,22 @@ const OrderCard: React.FC<OrderCardProps> = React.memo(
           <OrderItems items={order.items ?? []} />
 
           <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
-            {canAccept ? (
+            
+            {canAcceptOrder && (
               <ui.Button size="sm" onClick={() => onAcceptOrder(order.id)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 ऑर्डर स्वीकार करें
               </ui.Button>
-            ) : hasNextAction ? (
+            )}
+ 
+            {canUpdateOrder && nextActionLabel && (
               <ui.Button size="sm" onClick={() => onUpdateStatus(order)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                {nextStatusLabel(mainStatus)}
+                {nextActionLabel}
               </ui.Button>
-            ) : null}
+            )}
+            
+            
           </div>
         </ui.CardContent>
       </ui.Card>
@@ -327,4 +347,4 @@ const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
   </div>
 );
 
-export default React.memo(DeliveryOrdersList); 
+export default React.memo(DeliveryOrdersList);

@@ -29,50 +29,59 @@ import { Label } from "../components/ui/label";
 import { Input } from "../components/ui/input"; 
 
 // --- Utility Functions ---
+// DeliveryDashboard.tsx (आपके मौजूदा फंक्शन्स की जगह)
+
+// --- स्टेटस यूटिलिटी फंक्शन्स ---
 const getStatusColor = (status: string) => {
   switch (status) {
-    case "pending": return "bg-amber-600 hover:bg-amber-700";
-    case "accepted": return "bg-blue-600 hover:bg-blue-700";
-    case "picked_up": return "bg-indigo-600 hover:bg-indigo-700";
+    case "pending":          return "bg-amber-600 hover:bg-amber-700"; // उपलब्ध ऑर्डरों के लिए
+    case "accepted":         return "bg-blue-600 hover:bg-blue-700";  // मेरे असाइन किए गए ऑर्डरों के लिए
+    case "ready_for_pickup": return "bg-yellow-500 hover:bg-yellow-600"; // जब सेलर ने तैयार किया हो
+    case "picked_up":        return "bg-indigo-600 hover:bg-indigo-700";
     case "out_for_delivery": return "bg-purple-600 hover:bg-purple-700";
-    case "delivered": return "bg-green-600 hover:bg-green-700";
+    case "delivered":        return "bg-green-600 hover:bg-green-700";
     case "rejected":
-    case "cancelled": return "bg-red-500 hover:bg-red-600";
-    default: return "bg-gray-500 hover:bg-gray-600";
+    case "cancelled":        return "bg-red-500 hover:bg-red-600";
+    default:                 return "bg-gray-500 hover:bg-gray-600";
   }
 };
 
 const getStatusText = (status: string) => {
   switch (status) {
-    case "pending": return "लंबित";
-    case "accepted": return "स्वीकृत (असाइन)";
-    case "preparing": return "तैयार हो रहा है";
+    case "pending":          return "लंबित (उपलब्ध)"; // अब डिलीवरी बॉय के लिए यह उपलब्ध है
+    case "accepted":         return "स्वीकृत (असाइन)"; // डिलीवरी बॉय ने स्वीकार किया
+    case "preparing":        return "तैयार हो रहा है";
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
-    case "picked_up": return "पिकअप हो गया";
+    case "picked_up":        return "पिकअप हो गया";
     case "out_for_delivery": return "डिलीवरी के लिए निकला";
-    case "delivered": return "डिलीवर हो गया";
-    case "rejected": return "अस्वीकृत";
-    case "cancelled": return "रद्द";
-    default: return status || "अज्ञात";
+    case "delivered":        return "डिलीवर हो गया";
+    case "rejected":         return "अस्वीकृत";
+    case "cancelled":        return "रद्द";
+    default:                 return status || "अज्ञात";
   }
 };
 
 const getNextStatus = (current: string) => {
   switch (current) {
-    case "pending": return "accepted";
-    case "accepted": return "picked_up";
-    case "picked_up": return "out_for_delivery";
-    case "out_for_delivery": return null;
-    default: return null;
+    // डिलीवरी बॉय के फ्लो के अनुसार:
+    // "ready_for_pickup" के बाद "picked_up"
+    case "ready_for_pickup":  return "picked_up";
+    // "picked_up" के बाद "out_for_delivery"
+    case "picked_up":         return "out_for_delivery";
+    // "out_for_delivery" के बाद OTP सत्यापन होगा, और फिर API कॉल से "delivered" में अपडेट होगा।
+    // इसलिए, इस फंक्शन को यहाँ 'delivered' नहीं लौटाना चाहिए, बल्कि `null` लौटाना चाहिए ताकि OTP डायलॉग ट्रिगर हो।
+    case "out_for_delivery":  return null; 
+    default:                  return null; // अन्य स्टेटस के लिए कोई अगला एक्शन नहीं
   }
 };
 
 const getNextStatusLabel = (status: string) => {
   switch (status) {
-    case "ready_for_pickup": return "पिकअप हो गया";
-    case "picked_up": return "डिलीवरी के लिए निकला";
-    case "out_for_delivery": return "OTP सत्यापन करें";
-    default: return "";
+    // डिलीवरी बॉय के फ्लो के अनुसार:
+    case "ready_for_pickup":  return "पिकअप करें"; // ऑर्डर को पिकअप करने के लिए
+    case "picked_up":         return "डिलीवरी के लिए निकले"; // पिकअप के बाद डिलीवरी के लिए निकलना
+    case "out_for_delivery":  return "डिलीवरी पूरी करें (OTP)"; // OTP सत्यापन के साथ डिलीवरी पूरी करना
+    default:                  return "";
   }
 };
 
