@@ -588,6 +588,7 @@ export default function DeliveryDashboard() {
       </section>
 
       {/* orders list */}
+      {/* orders list */}
       <section className="max-w-6xl mx-auto px-4 pb-16 space-y-10">
         <h2 className="text-2xl font-bold mb-4">
             {activeTab === 0 && "आपके असाइन किए गए ऑर्डर"}
@@ -601,10 +602,11 @@ export default function DeliveryDashboard() {
                 orders={assignedOrders} 
                 title="कोई असाइन किए गए ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर स्वीकार करें या पुराने ऑर्डर डिलीवर करें।"
+                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
                 // Props for DeliveryOrdersList
-                onAcceptOrder={(() => {}) as any} // असाइन किए गए ऑर्डरों को स्वीकार करने की जरूरत नहीं है
-                onUpdateStatus={(order: any) => handleStatusProgress(order)} // handleStatusProgress को कॉल करें
-                acceptLoading={false} // यहां स्वीकार नहीं हो रहा है
+                onAcceptOrder={(() => {}) as any} 
+                onUpdateStatus={(order: any) => handleStatusProgress(order)}
+                acceptLoading={false}
                 updateLoading={updateStatusMutation.isPending}
                 Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
                 statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
@@ -616,9 +618,10 @@ export default function DeliveryDashboard() {
                 orders={availableOrders} 
                 title="कोई उपलब्ध ऑर्डर नहीं" 
                 subtitle="नए ऑर्डर के लिए बाद में जाँच करें।"
+                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
                 // Props for DeliveryOrdersList
-                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)} // उपलब्ध ऑर्डरों के लिए acceptOrderMutation को कॉल करें
-                onUpdateStatus={(() => {}) as any} // उपलब्ध ऑर्डरों के लिए कोई अपडेट स्टेटस बटन नहीं
+                onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
+                onUpdateStatus={(() => {}) as any}
                 acceptLoading={acceptOrderMutation.isPending}
                 updateLoading={false} 
                 Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
@@ -631,8 +634,8 @@ export default function DeliveryDashboard() {
                 orders={historyOrders} 
                 title="कोई इतिहास ऑर्डर नहीं" 
                 subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ ऑर्डर नहीं मिला।`}
-                // History tab में, हम Accept या Update बटन को छुपा सकते हैं, 
-                // इसलिए हम accept/update handlers को no-op फ़ंक्शन पास कर सकते हैं।
+                myDeliveryBoyId={myDeliveryBoyId} {/* ✅ FIX: myDeliveryBoyId जोड़ा गया */}
+                // History tab में, हम Accept या Update बटन को छुपा सकते हैं
                 onAcceptOrder={(() => {}) as any} 
                 onUpdateStatus={(() => {}) as any}
                 acceptLoading={false} 
@@ -642,6 +645,7 @@ export default function DeliveryDashboard() {
             />
         )}
       </section>
+
 
       {/* OTP Dialog */}
       <DeliveryOtpDialog
