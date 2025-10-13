@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 import {
-  User as UserIcon, // 'User' आइकन को 'UserIcon' के रूप में इम्पोर्ट करें ताकि 'user' वेरिएबल से टकराव न हो
+  User as UserIcon, 
   LogOut,
   Package,
   Clock,
@@ -13,10 +13,8 @@ import {
   Zap,
 } from "lucide-react";
 
-// डेट फॉर्मेटिंग के लिए
 import { format } from "date-fns"; 
 
-// helper components & hooks
 import DeliveryOtpDialog from "./DeliveryOtpDialog"; 
 import DeliveryOrdersList from "./DeliveryOrdersList"; 
 import { useAuth } from "../hooks/useAuth"; 
@@ -101,8 +99,7 @@ export default function DeliveryDashboard() {
     try {
       const deliveryBoyId = user?.deliveryBoyId;
       if (deliveryBoyId !== undefined) {
-        const deliveryBoyUser = { ...user, deliveryBoyId };
-        sessionStorage.setItem("deliveryBoyUser", JSON.stringify(deliveryBoyUser));
+        sessionStorage.setItem("deliveryBoyUser", JSON.stringify({ ...user, deliveryBoyId }));
       }
     } catch (err) {
       console.error("Delivery boy session store error:", err);
@@ -118,6 +115,12 @@ export default function DeliveryDashboard() {
       return null;
     }
   };
+
+  // ✅ Fix: myDeliveryBoyId को यहाँ user से सीधे प्राप्त करें
+  // यह सुनिश्चित करता है कि जब user अपडेट हो तो myDeliveryBoyId भी अपडेट हो।
+  const myDeliveryBoyId = user?.deliveryBoyId; 
+  console.log("DEBUG: myDeliveryBoyId from user object (before useQuery):", myDeliveryBoyId); 
+
 
   const { data: orders = [], isLoading } = useQuery({
     queryKey: ["deliveryOrders"],
@@ -155,7 +158,8 @@ export default function DeliveryDashboard() {
         return [];
       }
     },
-    enabled: isAuthenticated && !!user,
+    // ✅ Fix: useQuery को तभी इनेबल करें जब user और myDeliveryBoyId दोनों उपलब्ध हों
+    enabled: isAuthenticated && !!user && myDeliveryBoyId !== undefined && myDeliveryBoyId !== null,
   });
 
   useEffect(() => {
@@ -178,12 +182,12 @@ export default function DeliveryDashboard() {
 
   // GPS tracking
   useEffect(() => {
-    if (!socket || !user || isLoading) return;
+    if (!socket || !user || isLoading || myDeliveryBoyId === undefined || myDeliveryBoyId === null) return; // ✅ myDeliveryBoyId की जांच करें
 
     let watchId: number | null = null;
-    // let intervalId: NodeJS.Timeout | null = null; // Node.js.Timeout frontend में उपलब्ध नहीं होता
 
     const activeOrder = orders.find((o: any) =>
+      Number(o.deliveryBoyId) === Number(myDeliveryBoyId) && // ✅ सुनिश्चित करें कि ID मैच हो रहा है
       (o.deliveryStatus ?? "").toLowerCase() === "accepted" &&
       (o.status === "picked_up" || o.status === "out_for_delivery")
     );
@@ -219,11 +223,10 @@ export default function DeliveryDashboard() {
 
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      // if (intervalId !== null) clearInterval(intervalId); // अगर इस्तेमाल कर रहे हों तो
     };
-  }, [orders, socket, user, isLoading, toast]); // toast को dependencies array में जोड़ा
+  }, [orders, socket, user, isLoading, toast, myDeliveryBoyId]); // ✅ myDeliveryBoyId को dependencies array में जोड़ा
 
-  // Mutations
+  // Mutations (बिना बदलाव)
   const acceptOrderMutation = useMutation({
     mutationFn: (orderId: number) => api.post("/api/delivery/accept", { orderId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] }),
@@ -319,16 +322,14 @@ export default function DeliveryDashboard() {
 
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
 
-  const myDeliveryBoyId = user?.deliveryBoyId; 
-  console.log("DEBUG: myDeliveryBoyId from user object:", myDeliveryBoyId); 
-
   const { assignedOrders, availableOrders, historyOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
     useMemo(() => {
       const allOrders = orders || [];
-      const myId = Number(myDeliveryBoyId); 
+      // ✅ Fix: myId को तभी सेट करें जब myDeliveryBoyId वास्तव में उपलब्ध हो
+      const myId = myDeliveryBoyId !== undefined && myDeliveryBoyId !== null ? Number(myDeliveryBoyId) : null; 
 
       console.log("--- useMemo Debug Start ---");
-      console.log("myDeliveryBoyId (as Number):", myId);
+      console.log("myDeliveryBoyId (as Number for comparison):", myId); // ✅ देखें कि यह NaN नहीं है
       console.log("Total Orders from API:", allOrders.length, allOrders); 
 
       const available = allOrders.filter((o: any) => {
@@ -351,7 +352,9 @@ export default function DeliveryDashboard() {
         
         const orderDeliveryBoyId = o.deliveryBoyId !== null && o.deliveryBoyId !== undefined ? Number(o.deliveryBoyId) : null;
         
+        // ✅ Fix: सुनिश्चित करें कि myId null नहीं है, और फिर तुलना करें
         const isAssigned = (
+          myId !== null && // ✅ यहाँ जाँच करें
           orderDeliveryBoyId === myId && 
           deliveryStatus === "accepted" && 
           status !== "delivered" && 
@@ -359,10 +362,10 @@ export default function DeliveryDashboard() {
           status !== "cancelled"
         );
 
-        // ✅ विस्तृत डिबग लॉग - इसे अनकमेंट करें यदि 'assignedOrders' अभी भी 0 हैं
-        // if (orderDeliveryBoyId === myId && myId === 24) { 
+        // ✅ इन विस्तृत डिबग लॉग्स को अनकमेंट करें यदि 'assignedOrders' अभी भी 0 हैं
+        // if (orderDeliveryBoyId !== null && myId !== null && orderDeliveryBoyId === myId) { 
         //     console.log(`--- Order ID: ${o.id} Debug (Assigned) ---`);
-        //     console.log(`  - myDeliveryBoyId (as Number): ${myId}`);
+        //     console.log(`  - myDeliveryBoyId (as Number for comparison): ${myId}`);
         //     console.log(`  - order.deliveryBoyId (from API): ${o.deliveryBoyId} (as Number: ${orderDeliveryBoyId})`);
         //     console.log(`  - ID Match (orderDeliveryBoyId === myId): ${orderDeliveryBoyId === myId}`);
         //     console.log(`  - order.deliveryStatus (from API): '${o.deliveryStatus}' (as Lowercase: '${deliveryStatus}')`);
@@ -404,7 +407,7 @@ export default function DeliveryDashboard() {
         deliveredCount: delivered,
         outForDeliveryCount: outForDelivery,
       };
-    }, [orders, dateFilter, myDeliveryBoyId]);
+    }, [orders, dateFilter, myDeliveryBoyId]); // ✅ myDeliveryBoyId को निर्भरता के रूप में जोड़ा
 
   if (isLoadingAuth || !isAuthenticated || !user || !socket || isLoading) {
     return (
@@ -498,7 +501,7 @@ export default function DeliveryDashboard() {
               उपलब्ध ऑर्डर ({availableOrders.length})
             </Button>
             <Button 
-            variant={activeTab === 2 ? "default" : "outline"} 
+              variant={activeTab === 2 ? "default" : "outline"} 
               onClick={() => setActiveTab(2)}
               className={activeTab === 2 ? "bg-green-600 text-white hover:bg-green-700" : "hover:bg-gray-100"}
             >
@@ -592,8 +595,7 @@ export default function DeliveryDashboard() {
       />
     </div>
   ); 
-} // ✅ यहाँ 'DeliveryDashboard' फंक्शन बंद होता है
-
+} 
 
 // --- Helper Component for Orders List ---
 const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
@@ -619,4 +621,4 @@ const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) =>
       />
     )}
   </>
-); // ✅ यहाँ 'OrdersListView' फंक्शन बंद होता हैं |
+);
