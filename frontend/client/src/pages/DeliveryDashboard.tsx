@@ -2,37 +2,36 @@ import React, { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 
 import {
-  User,
+  User as UserIcon, // 'User' आइकन को 'UserIcon' के रूप में इम्पोर्ट करें ताकि 'user' वेरिएबल से टकराव न हो
   LogOut,
   Package,
   Clock,
   CheckCircle,
   Navigation,
   Loader2,
-  Calendar, // नया: डेट पिकर के लिए
-  Zap,     // नया: सक्रिय ऑर्डर के लिए
+  Calendar,
+  Zap,
 } from "lucide-react";
 
 // डेट फॉर्मेटिंग के लिए
 import { format } from "date-fns"; 
 
 // helper components & hooks
-import DeliveryOtpDialog from "./DeliveryOtpDialog";
-import DeliveryOrdersList from "./DeliveryOrdersList";
-import { useAuth } from "../hooks/useAuth";
-import { useSocket } from "../hooks/useSocket";
-import { apiRequest } from "../lib/queryClient";
+import DeliveryOtpDialog from "./DeliveryOtpDialog"; // Compoment नाम PascalCase
+import DeliveryOrdersList from "./DeliveryOrdersList"; // Compoment नाम PascalCase
+import { useAuth } from "../hooks/useAuth"; // Hook नाम PascalCase
+import { useSocket } from "../hooks/useSocket"; // Hook नाम PascalCase
+import { apiRequest } from "../lib/queryClient"; // Function नाम camelCase
 import api from "../lib/api";
-import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card";
-import { Badge } from "../components/ui/badge";
-import { Button } from "../components/ui/button";
-import { useToast } from "../hooks/use-toast";
-import { Label } from "../components/ui/label"; // Label कंपोनेंट
-import { Input } from "../components/ui/input"; // Input कंपोनेंट (डेट पिकर के लिए)
+import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card"; // Compoment नाम PascalCase
+import { Badge } from "../components/ui/badge"; // Compoment नाम PascalCase
+import { Button } from "../components/ui/button"; // Compoment नाम PascalCase
+import { useToast } from "../hooks/use-toast"; // Hook नाम PascalCase
+import { Label } from "../components/ui/label"; // Compoment नाम PascalCase
+import { Input } from "../components/ui/input"; // Compoment नाम PascalCase
 
-
-// --- utility functions ---
-const statusColor = (status: string) => {
+// --- Utility Functions ---
+const getStatusColor = (status: string) => {
   switch (status) {
     case "pending": return "bg-amber-600 hover:bg-amber-700";
     case "accepted": return "bg-blue-600 hover:bg-blue-700";
@@ -45,7 +44,7 @@ const statusColor = (status: string) => {
   }
 };
 
-const statusText = (status: string) => {
+const getStatusText = (status: string) => {
   switch (status) {
     case "pending": return "लंबित";
     case "accepted": return "स्वीकृत (असाइन)";
@@ -60,7 +59,7 @@ const statusText = (status: string) => {
   }
 };
 
-const nextStatus = (current: string) => {
+const getNextStatus = (current: string) => {
   switch (current) {
     case "pending": return "accepted";
     case "accepted": return "picked_up";
@@ -70,7 +69,7 @@ const nextStatus = (current: string) => {
   }
 };
 
-const nextStatusLabel = (status: string) => {
+const getNextStatusLabel = (status: string) => {
   switch (status) {
     case "ready_for_pickup": return "पिकअप हो गया";
     case "picked_up": return "डिलीवरी के लिए निकला";
@@ -79,7 +78,7 @@ const nextStatusLabel = (status: string) => {
   }
 };
 
-// --- main component ---
+// --- Main Component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -106,7 +105,7 @@ export default function DeliveryDashboard() {
         sessionStorage.setItem("deliveryBoyUser", JSON.stringify(deliveryBoyUser));
       }
     } catch (err) {
-      console.error("delivery boy session store error:", err);
+      console.error("Delivery boy session store error:", err);
     }
   }, [user, auth?.currentUser]);
 
@@ -177,12 +176,12 @@ export default function DeliveryDashboard() {
     };
   }, [socket, user, queryClient, isAuthenticated]);
 
-  // gps tracking
+  // GPS tracking
   useEffect(() => {
     if (!socket || !user || isLoading) return;
 
     let watchId: number | null = null;
-    let intervalId: NodeJS.Timeout | null = null;
+    // let intervalId: NodeJS.Timeout | null = null; // Node.js.Timeout frontend में उपलब्ध नहीं होता
 
     const activeOrder = orders.find((o: any) =>
       (o.deliveryStatus ?? "").toLowerCase() === "accepted" &&
@@ -194,7 +193,7 @@ export default function DeliveryDashboard() {
 
       const sendLocation = (position: GeolocationPosition) => {
         const { latitude, longitude } = position.coords;
-        socket.emit("deliveryboy:location_update", {
+        socket.emit("deliveryBoy:location_update", {
           orderId: activeOrder.id,
           lat: latitude,
           lng: longitude,
@@ -209,7 +208,7 @@ export default function DeliveryDashboard() {
           if (error.code === error.PERMISSION_DENIED) {
             toast({
               title: "GPS अनुमति आवश्यक",
-              description: "रियल-टाइम ट्रैकिंग के लिए स्थान (Location) पहुँच की अनुमति दें।",
+              description: "रियल-टाइम ट्रैकिंग के लिए स्थान (location) पहुँच की अनुमति दें।",
               variant: "destructive",
             });
           }
@@ -220,11 +219,11 @@ export default function DeliveryDashboard() {
 
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
-      if (intervalId !== null) clearInterval(intervalId);
+      // if (intervalId !== null) clearInterval(intervalId); // अगर इस्तेमाल कर रहे हों तो
     };
-  }, [orders, socket, user, isLoading]);
+  }, [orders, socket, user, isLoading, toast]); // toast को dependencies array में जोड़ा
 
-  // mutations
+  // Mutations
   const acceptOrderMutation = useMutation({
     mutationFn: (orderId: number) => api.post("/api/delivery/accept", { orderId }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] }),
@@ -242,8 +241,8 @@ export default function DeliveryDashboard() {
     mutationFn: async ({ orderId, otp }: { orderId: number; otp: string }) => {
       const token = await getValidToken();
       if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-delivery`, {
+      const api_base = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+      const response = await fetch(`${api_base}/api/delivery/orders/${orderId}/complete-delivery`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ otp }),
@@ -268,8 +267,8 @@ export default function DeliveryDashboard() {
     mutationFn: async (orderId: number) => {
       const token = await getValidToken();
       if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/send-otp-to-customer`, {
+      const api_base = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+      const response = await fetch(`${api_base}/api/delivery/send-otp-to-customer`, {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
         body: JSON.stringify({ orderId }),
@@ -290,19 +289,20 @@ export default function DeliveryDashboard() {
   });
 
   const handleStatusProgress = (order: any) => {
-    const curStatus = (order.status ?? "").toLowerCase().trim();
+    const currentStatus = (order.status ?? "").toLowerCase().trim();
 
-    if (curStatus === "out_for_delivery") {
+    if (currentStatus === "out_for_delivery") {
       setSelectedOrder(order);
       setOtpDialogOpen(true);
+      return; // OTP dialog खोलने के बाद आगे स्टेटस अपडेट नहीं करना
     }
 
-    const next = nextStatus(curStatus);
+    const next = getNextStatus(currentStatus);
 
-    if (next === "accepted") return; // handled separately via Accept button
+    if (next === "accepted") return; // "accepted" को अलग से हैंडल किया जाता है (accept button)
 
     if (next) {
-      if (next === "out_for_delivery" && curStatus !== "out_for_delivery") {
+      if (next === "out_for_delivery" && currentStatus !== "out_for_delivery") {
         sendOtpToCustomerMutation.mutate(order.id);
       }
       updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
@@ -319,27 +319,64 @@ export default function DeliveryDashboard() {
 
   const handleLogout = () => auth?.signOut().then(() => window.location.reload());
 
-  const myDeliveryBoyId = user?.deliveryBoyId;
+  // ✅ सुनिश्चित करें कि यह 'user' ऑब्जेक्ट से सही ढंग से आता है
+  // आपके API रिस्पॉन्स में deliveryBoyId एक number है।
+  const myDeliveryBoyId = user?.deliveryBoyId; 
+  console.log("DEBUG: myDeliveryBoyId from user object:", myDeliveryBoyId); // ✅ इस लॉग की वैल्यू हमेशा देखें
 
   const { assignedOrders, availableOrders, historyOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
     useMemo(() => {
       const allOrders = orders || [];
+      const myId = Number(myDeliveryBoyId); // सुनिश्चित करें कि यह एक वैध संख्या है (e.g., 24)
+
+      console.log("--- useMemo Debug Start ---");
+      console.log("myDeliveryBoyId (as Number):", myId);
+      console.log("Total Orders from API:", allOrders.length, allOrders); // ✅ सभी ऑर्डर देखें
+
       const available = allOrders.filter((o: any) => {
         const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase();
-        return o.deliveryBoyId === null && deliveryStatus === "pending" &&
-               (status === "pending" || status === "ready_for_pickup") &&
-               status !== "rejected" && status !== "cancelled";
+        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase(); // API रिस्पॉन्स में camelCase
+        
+        const isAvailable = (
+            o.deliveryBoyId === null && // API रिस्पॉन्स में camelCase
+            deliveryStatus === "pending" && 
+            (status === "pending" || status === "ready_for_pickup") && 
+            status !== "rejected" && 
+            status !== "cancelled"
+        );
+        return isAvailable;
       });
 
       const assigned = allOrders.filter((o: any) => {
         const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase(); 
-        return Number(o.deliveryBoyId) === Number(myDeliveryBoyId) &&
-               deliveryStatus === "accepted" &&
-               status !== "delivered" &&
-               status !== "rejected" &&
-               status !== "cancelled";
+        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase(); // API रिस्पॉन्स में camelCase
+        
+        // 🚀 IMPROVEMENT: Number() का उपयोग करने से पहले null/undefined की जांच करें
+        const orderDeliveryBoyId = o.deliveryBoyId !== null && o.deliveryBoyId !== undefined ? Number(o.deliveryBoyId) : null;
+        
+        const isAssigned = (
+          orderDeliveryBoyId === myId && // तुलना: (e.g., 24 === 24)
+          deliveryStatus === "accepted" && 
+          status !== "delivered" && 
+          status !== "rejected" &&
+          status !== "cancelled"
+        );
+
+        // ✅ विस्तृत डिबग लॉग - इसे अनकमेंट करें यदि 'assignedOrders' अभी भी 0 हैं
+        // if (orderDeliveryBoyId === myId && myId === 24) { // केवल उन ऑर्डरों के लिए लॉग करें जो आपके ID से मेल खाते हैं
+        //     console.log(`--- Order ID: ${o.id} Debug (Assigned) ---`);
+        //     console.log(`  - myDeliveryBoyId (as Number): ${myId}`);
+        //     console.log(`  - order.deliveryBoyId (from API): ${o.deliveryBoyId} (as Number: ${orderDeliveryBoyId})`);
+        //     console.log(`  - ID Match (orderDeliveryBoyId === myId): ${orderDeliveryBoyId === myId}`);
+        //     console.log(`  - order.deliveryStatus (from API): '${o.deliveryStatus}' (as Lowercase: '${deliveryStatus}')`);
+        //     console.log(`  - deliveryStatus is 'accepted': ${deliveryStatus === "accepted"}`);
+        //     console.log(`  - order.status (from API): '${o.status}' (as Lowercase: '${status}')`);
+        //     console.log(`  - Main Status NOT delivered/rejected/cancelled: ${status !== "delivered" && status !== "rejected" && status !== "cancelled"}`);
+        //     console.log(`  - Final isAssigned: ${isAssigned}`);
+        //     console.log(`-------------------------------------`);
+        // }
+        
+        return isAssigned;
       });
 
       const history = allOrders.filter((o: any) => {
@@ -358,6 +395,9 @@ export default function DeliveryDashboard() {
       const delivered = history.filter((o: any) => (o.status ?? "").toLowerCase() === "delivered").length;
       const outForDelivery = assigned.filter((o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery").length;
 
+      console.log("Assigned Orders Final Count:", assigned.length, assigned); // ✅ असाइन किए गए ऑर्डर की संख्या और खुद ऑर्डर ऑब्जेक्ट देखें
+      console.log("--- useMemo Debug End ---");
+
       return {
         assignedOrders: assigned,
         availableOrders: available,
@@ -374,7 +414,9 @@ export default function DeliveryDashboard() {
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
         <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
         <p className="text-gray-500 mt-2">Connecting to server...</p>
-      </div>)
+      </div>
+    ); 
+  }
     
   // --- Main Render Part (DeliveryDashboard return JSX) ---
 return (
@@ -383,7 +425,7 @@ return (
       <div className="max-w-6xl mx-auto px-4 py-4 flex items-center justify-between">
         <div className="flex items-center space-x-3">
           <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center">
-            <User className="w-5 h-5 text-white" />
+            <UserIcon className="w-5 h-5 text-white" />
           </div>
           <div>
             <h1 className="text-xl font-bold">डिलीवरी डैशबोर्ड</h1>
@@ -440,6 +482,7 @@ return (
     </section>
 
     {/* Tab Navigation & Date Filter */}
+       {/* Tab Navigation & Date Filter */}
     <section className="max-w-6xl mx-auto px-4 pb-4">
       <div className="flex justify-between items-end mb-4 flex-wrap gap-4">
         <div className="flex space-x-2 border-b border-gray-200">
@@ -469,7 +512,7 @@ return (
           </Button>
         </div>
 
-        {/* Date Filter for History */}
+        {/* Date filter for history */}
         {activeTab === 2 && (
           <div className="flex items-center space-x-2">
             <Label htmlFor="date-filter" className="text-sm text-gray-600 whitespace-nowrap">से ऑर्डर दिखाएँ:</Label>
@@ -477,7 +520,7 @@ return (
               <Input
                 id="date-filter"
                 type="date"
-                value={dateFilter ? format(dateFilter, "yyyy-MM-dd") : ""}
+                value={dateFilter ? format(dateFilter, "yyyy-MM-dd") : ""} // Format fix: yyyy-MM-dd
                 onChange={(e) => setDateFilter(e.target.value ? new Date(e.target.value) : null)}
                 className="pl-8 w-40"
               />
@@ -507,7 +550,7 @@ return (
           acceptLoading={false}
           updateLoading={updateStatusMutation.isPending}
           Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
-          statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+          statusColor={getStatusColor} statusText={getStatusText} nextStatus={getNextStatus} nextStatusLabel={getNextStatusLabel}
         />
       )}
 
@@ -522,7 +565,7 @@ return (
           acceptLoading={acceptOrderMutation.isPending}
           updateLoading={false} 
           Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
-          statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+          statusColor={getStatusColor} statusText={getStatusText} nextStatus={getNextStatus} nextStatusLabel={getNextStatusLabel}
         />
       )}
 
@@ -537,7 +580,7 @@ return (
           acceptLoading={false} 
           updateLoading={false}
           Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
-          statusColor={statusColor} statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
+          statusColor={getStatusColor} statusText={getStatusText} nextStatus={getNextStatus} nextStatusLabel={getNextStatusLabel}
         />
       )}
     </section>
@@ -552,9 +595,11 @@ return (
       isLoading={handleOtpSubmitMutation.isPending}
       orderNumber={selectedOrder?.orderNumber}
     />
- ) </div>
+  </div>
+ ); // ✅ यहाँ मुख्य 'return' बंद होता है
 
 // --- Helper Component for Orders List ---
+// ✅ Component का नाम PascalCase में होना चाहिए
 const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
   <>
     {orders.length === 0 ? (
