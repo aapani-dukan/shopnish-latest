@@ -393,72 +393,85 @@ export default function DeliveryDashboard() {
   const myDeliveryBoyId = user?.deliveryBoyId;
   
   // ** UPDATED useMemo FOR FILTERING **
-  const { assignedOrders, availableOrders, historyOrders, totalOrdersCount, pendingCount, deliveredCount, outForDeliveryCount } =
-    useMemo(() => {
-      const allOrders = orders || []; // सुरक्षा के लिए
+  // ** FINAL STABLE useMemo FOR FILTERING **
+const {
+  assignedOrders,
+  availableOrders,
+  historyOrders,
+  totalOrdersCount,
+  pendingCount,
+  deliveredCount,
+  outForDeliveryCount,
+} = useMemo(() => {
+  const allOrders = orders || [];
 
-      // 1. Available Orders: वे ऑर्डर जो अभी तक किसी को असाइन नहीं हुए हैं
-      // और जो 'pending' या 'ready_for_pickup' स्टेटस में हैं।
-      const available = allOrders.filter((o: any) => {
-        const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase();
+  // ✅ 1. Available Orders
+  const available = allOrders.filter((o: any) => {
+    const status = (o.status ?? "").toLowerCase();
+    const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase();
 
-        return (
-          o.deliveryBoyId === null && // <-- महत्वपूर्ण: किसी को असाइन नहीं किया गया है
-          deliveryStatus === "pending" && 
-          (status === "pending" || status === "ready_for_pickup") && // <-- सुनिश्चित करें कि मुख्य स्टेटस भी सही है
-          status !== "rejected" && 
-          status !== "cancelled"
-        );
-      });
+    return (
+      (!o.deliveryBoyId || Number(o.deliveryBoyId) === 0) && // किसी को असाइन नहीं किया गया
+      (deliveryStatus === "pending" || deliveryStatus === "") &&
+      status !== "rejected" &&
+      status !== "cancelled" &&
+      (status === "pending" || status === "ready_for_pickup")
+    );
+  });
 
-      // 2. Assigned Orders: वे ऑर्डर जो वर्तमान डिलीवरी बॉय को असाइन किए गए हैं
-      // और जो अभी 'delivered', 'rejected' या 'cancelled' नहीं हुए हैं।
-      const assigned = allOrders.filter((o: any) => {
-        const status = (o.status ?? "").toLowerCase();
-        const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase(); 
-        
-        return (
-          Number(o.deliveryBoyId) === Number(myDeliveryBoyId) && // <-- महत्वपूर्ण: वर्तमान DB को असाइन होना चाहिए
-          deliveryStatus === "accepted" && 
-          status !== "delivered" && 
-          status !== "rejected" &&
-          status !== "cancelled"
-        );
-      });
+  // ✅ 2. Assigned Orders
+  const assigned = allOrders.filter((o: any) => {
+    const status = (o.status ?? "").toLowerCase();
+    const deliveryStatus = (o.deliveryStatus ?? "").toLowerCase();
 
-      // 3. History Orders: Delivered, Rejected, or Cancelled (dateFilter के साथ)
-      const history = allOrders.filter((o: any) => {
-        const status = (o.status ?? "").toLowerCase();
-        const isCompleted = status === "delivered" || status === "rejected" || status === "cancelled";
-        
-        if (isCompleted && dateFilter && o.createdAt) { 
-            const orderDate = new Date(o.createdAt);
-            orderDate.setHours(0, 0, 0, 0); // समय को मध्यरात्रि पर रीसेट करें
-            const filterDateMidnight = new Date(dateFilter);
-            filterDateMidnight.setHours(0, 0, 0, 0); // समय को मध्यरात्रि पर रीसेट करें
-            return orderDate >= filterDateMidnight; 
-        }
+    return (
+      Number(o.deliveryBoyId) === Number(myDeliveryBoyId) &&
+      (deliveryStatus === "accepted" ||
+        deliveryStatus === "out_for_delivery" ||
+        deliveryStatus === "picked_up") && // accepted + progress states
+      status !== "delivered" &&
+      status !== "rejected" &&
+      status !== "cancelled"
+    );
+  });
 
-        return isCompleted; 
-      });
-      
-      const total = allOrders.length;
-      const pending = available.length;
-      // काउंट के लिए फ़िल्टर की गई लिस्ट्स का उपयोग करें
-      const delivered = history.filter((o: any) => (o.status ?? "").toLowerCase() === "delivered").length;
-      const outForDelivery = assigned.filter((o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery").length;
+  // ✅ 3. History Orders (Delivered / Rejected / Cancelled)
+  const history = allOrders.filter((o: any) => {
+    const status = (o.status ?? "").toLowerCase();
+    const isCompleted =
+      status === "delivered" || status === "rejected" || status === "cancelled";
 
-      return {
-        assignedOrders: assigned,
-        availableOrders: available,
-        historyOrders: history,
-        totalOrdersCount: total,
-        pendingCount: pending,
-        deliveredCount: delivered,
-        outForDeliveryCount: outForDelivery,
-      };
-    }, [orders, dateFilter, myDeliveryBoyId]); // dependencies सही हैं
+    if (isCompleted && dateFilter && o.createdAt) {
+      const orderDate = new Date(o.createdAt);
+      orderDate.setHours(0, 0, 0, 0);
+      const filterDateMidnight = new Date(dateFilter);
+      filterDateMidnight.setHours(0, 0, 0, 0);
+      return orderDate >= filterDateMidnight;
+    }
+
+    return isCompleted;
+  });
+
+  // ✅ 4. Counts
+  const total = allOrders.length;
+  const pending = available.length;
+  const delivered = history.filter(
+    (o: any) => (o.status ?? "").toLowerCase() === "delivered"
+  ).length;
+  const outForDelivery = assigned.filter(
+    (o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery"
+  ).length;
+
+  return {
+    assignedOrders: assigned,
+    availableOrders: available,
+    historyOrders: history,
+    totalOrdersCount: total,
+    pendingCount: pending,
+    deliveredCount: delivered,
+    outForDeliveryCount: outForDelivery,
+  };
+}, [orders, dateFilter, myDeliveryBoyId]);
 
 
 
