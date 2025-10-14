@@ -801,8 +801,8 @@ const completeWithoutOtpMutation = useMutation({
     isCompletingWithoutOtp={false}
   />
 )}
-// --- Helper Component for Orders List ---
-const OrdersListView: React.FC<{
+// --- Props Type ---
+interface OrdersListViewProps {
   orders: any[];
   title: string;
   subtitle?: string;
@@ -820,27 +820,28 @@ const OrdersListView: React.FC<{
   statusText: (status: string) => string;
   nextStatus: (status: string) => string;
   nextStatusLabel: (status: string) => string;
-}> = (props) => {
-  const {
-    orders,
-    title,
-    subtitle,
-    onAcceptOrder,
-    onUpdateStatus,
-    acceptLoading,
-    updateLoading,
-    Button,
-    Card,
-    CardContent,
-    CardHeader,
-    CardTitle,
-    Badge,
-    statusColor,
-    statusText,
-    nextStatus,
-    nextStatusLabel,
-  } = props;
+}
 
+// --- Helper Component for Orders List ---
+const OrdersListView: React.FC<OrdersListViewProps> = ({
+  orders,
+  title,
+  subtitle,
+  onAcceptOrder,
+  onUpdateStatus,
+  acceptLoading,
+  updateLoading,
+  Button,
+  Card,
+  CardContent,
+  CardHeader,
+  CardTitle,
+  Badge,
+  statusColor,
+  statusText,
+  nextStatus,
+  nextStatusLabel,
+}) => {
   return (
     <>
       {orders.length === 0 ? (
