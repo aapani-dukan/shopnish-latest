@@ -267,6 +267,7 @@ export default function DeliveryDashboard() {
 
   const sendOtpToCustomerMutation = useMutation({
     mutationFn: async (orderId: number) => {
+      console.log("DEBUG: sendOtpToCustomerMutation triggered for Order ID:", orderId); // Debug Log
       const token = await getValidToken();
       if (!token) throw new Error("अमान्य या पुराना टोकन");
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
@@ -282,16 +283,19 @@ export default function DeliveryDashboard() {
       return response.json();
     },
     onSuccess: () => {
+      console.log("DEBUG: sendOtpToCustomerMutation successful!"); // Debug Log
       toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
       queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
     },
     onError: (error: any) => {
+      console.error("DEBUG: sendOtpToCustomerMutation failed:", error); // Debug Log
       toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
     },
   });
 
   const sendManualOtpMutation = useMutation({
     mutationFn: async (orderId: number) => {
+      console.log("DEBUG: sendManualOtpMutation triggered for Order ID:", orderId); // Debug Log
       const token = await getValidToken();
       if (!token) throw new Error("अमान्य या पुराना टोकन");
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
@@ -306,16 +310,19 @@ export default function DeliveryDashboard() {
       return response.json();
     },
     onSuccess: () => {
+      console.log("DEBUG: sendManualOtpMutation successful!"); // Debug Log
       toast({ title: "OTP भेजा गया", description: "ग्राहक को OTP सफलतापूर्वक भेज दिया गया है।", variant: "success" });
       queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
     },
     onError: (error: any) => {
+      console.error("DEBUG: sendManualOtpMutation failed:", error); // Debug Log
       toast({ title: "OTP भेजने में त्रुटि", description: error.message || "OTP भेजने में विफल।", variant: "destructive" });
     },
   });
 
   const completeWithoutOtpMutation = useMutation({
     mutationFn: async (orderId: number) => {
+      console.log("DEBUG: completeWithoutOtpMutation triggered for Order ID:", orderId); // Debug Log
       const token = await getValidToken();
       if (!token) throw new Error("अमान्य या पुराना टोकन");
       const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
@@ -330,47 +337,50 @@ export default function DeliveryDashboard() {
       return response.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+      console.log("DEBUG: completeWithoutOtpMutation successful!"); // Debug Log
       toast({ title: "डिलीवरी पूरी हुई", description: "ऑर्डर बिना OTP के सफलतापूर्वक डिलीवर हो गया है।", variant: "success" });
       setOtpDialogOpen(false);
       setSelectedOrder(null);
     },
     onError: (error: any) => {
+      console.error("DEBUG: completeWithoutOtpMutation failed:", error); // Debug Log
       toast({ title: "त्रुटि", description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।", variant: "destructive" });
     },
   });
   
   const handleStatusProgress = (order: any) => {
-    console.log("🔍 Checking order:", order.id, "current status:", order.status);
+    console.log("handleStatusProgress: Order ID:", order.id, "Current Status:", order.status);
     
     const currentStatus = (order.status ?? "").toLowerCase().trim();
-    console.log("🔍 Trimmed and lowercased status:", currentStatus);
+    console.log("handleStatusProgress: Trimmed and lowercased status:", currentStatus);
 
     if (currentStatus === "out_for_delivery") {
-      console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
+      console.log("handleStatusProgress: Status is 'out_for_delivery'. Opening OTP dialog.");
       setSelectedOrder(order);
       setOtpDialogOpen(true);
       return;
     }
 
     const next = getNextStatus(currentStatus);
-    console.log("➡️ Next expected status:", next);
+    console.log("handleStatusProgress: Next expected status:", next);
 
     if (!next) {
-        console.log("❌ No next status defined for current status. Stopping.");
+        console.log("handleStatusProgress: No next status defined for current status. Stopping.");
         return;
     }
 
     if (next === "out_for_delivery") {
-      console.log(`✉️ Moving to 'out_for_delivery' from '${currentStatus}'. Sending OTP to customer.`);
+      console.log(`handleStatusProgress: Moving to 'out_for_delivery' from '${currentStatus}'. Triggering sendOtpToCustomerMutation.`);
+      // यह mutation OTP भेजेगा और बैकएंड को स्टेटस 'out_for_delivery' में अपडेट करना चाहिए।
       sendOtpToCustomerMutation.mutate(order.id); 
+    } else {
+        console.log(`handleStatusProgress: Updating status for order ${order.id} to '${next}'.`);
+        updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
     }
-    
-    console.log(`🔄 Updating status for order ${order.id} to '${next}'.`);
-    updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
 };
 
-  const handleOtpConfirmation = (otpValue: string) => { // OTP वैल्यू को पैरामीटर के रूप में स्वीकार करें
+  const handleOtpConfirmation = (otpValue: string) => {
+    console.log("handleOtpConfirmation: Confirming OTP for Order ID:", selectedOrder?.id, "OTP entered:", otpValue);
     if (!selectedOrder || otpValue.trim().length !== 4) {
       toast({ title: "OTP दर्ज करें", description: "4-अंकों का OTP आवश्यक है।", variant: "destructive" });
       return;
@@ -379,10 +389,12 @@ export default function DeliveryDashboard() {
   };
 
   const handleSendManualOtp = (orderId: number) => {
+    console.log("handleSendManualOtp: Initiating manual OTP send for Order ID:", orderId);
     sendManualOtpMutation.mutate(orderId);
   };
 
   const handleCompleteWithoutOtp = (orderId: number) => {
+    console.log("handleCompleteWithoutOtp: Attempting to complete delivery without OTP for Order ID:", orderId);
     if (window.confirm("क्या आप वाकई इस ऑर्डर को बिना OTP के डिलीवर करना चाहते हैं? यह केवल विशेष परिस्थितियों के लिए है और ऑडिट के लिए लॉग किया जाएगा।")) {
       completeWithoutOtpMutation.mutate(orderId);
     }
@@ -395,10 +407,6 @@ export default function DeliveryDashboard() {
     useMemo(() => {
       const allOrders = orders || [];
       const myId = myDeliveryBoyId !== undefined && myDeliveryBoyId !== null ? Number(myDeliveryBoyId) : null; 
-
-      // console.log("--- useMemo Debug Start ---"); // हटाया गया
-      // console.log("myDeliveryBoyId (as number for comparison):", myId); // हटाया गया
-      // console.log("Total orders from API:", allOrders.length, allOrders); // हटाया गया
 
       const available = allOrders.filter((o: any) => {
         const status = (o.status ?? "").toLowerCase();
@@ -447,9 +455,6 @@ export default function DeliveryDashboard() {
       const pending = available.length;
       const delivered = history.filter((o: any) => (o.status ?? "").toLowerCase() === "delivered").length;
       const outForDelivery = assigned.filter((o: any) => (o.status ?? "").toLowerCase() === "out_for_delivery").length;
-
-      // console.log("Assigned orders final count:", assigned.length, assigned); // हटाया गया
-      // console.log("--- useMemo Debug End ---"); // हटाया गया
 
       return {
         assignedOrders: assigned,
@@ -680,3 +685,4 @@ const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) =>
     )}
   </>
 );
+    
