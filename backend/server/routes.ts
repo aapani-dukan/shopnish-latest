@@ -29,7 +29,7 @@ import userLoginRouter from "../routes/userRoutes.ts";
 import orderRoutes from "../routes/orderRoutes";
 import { verifyToken } from "./middleware/verifyToken";
 import { categories } from "../shared/backend/schema.ts";
-import whatsappRouter from '../routes/whatsappRouter';
+import whatsappRouter from '../routes/whatsappRoutes.ts';
 import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 const router = Router();
 
