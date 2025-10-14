@@ -75,7 +75,25 @@ const getNextStatusLabel = (status: string) => {
     default:                  return "";
   }
 };
-
+interface OrdersListViewProps {
+  orders: any[];
+  title: string;
+  subtitle?: string;
+  onAcceptOrder?: (orderId: string) => void;
+  onUpdateStatus?: (orderId: string, status: string) => void;
+  acceptLoading?: boolean;
+  updateLoading?: boolean;
+  Button: React.ElementType;
+  Card: React.ElementType;
+  CardContent: React.ElementType;
+  CardHeader: React.ElementType;
+  CardTitle: React.ElementType;
+  Badge: React.ElementType;
+  statusColor: (status: string) => string;
+  statusText: (status: string) => string;
+  nextStatus: (status: string) => string;
+  nextStatusLabel: (status: string) => string;
+}
 // --- Main Component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
@@ -801,28 +819,7 @@ const completeWithoutOtpMutation = useMutation({
     isCompletingWithoutOtp={false}
   />
 )}
-// --- Props Type (must be outside the component) ---
-interface OrdersListViewProps {
-  orders: any[];
-  title: string;
-  subtitle?: string;
-  onAcceptOrder?: (orderId: string) => void;
-  onUpdateStatus?: (orderId: string, status: string) => void;
-  acceptLoading?: boolean;
-  updateLoading?: boolean;
-  Button: React.ElementType;
-  Card: React.ElementType;
-  CardContent: React.ElementType;
-  CardHeader: React.ElementType;
-  CardTitle: React.ElementType;
-  Badge: React.ElementType;
-  statusColor: (status: string) => string;
-  statusText: (status: string) => string;
-  nextStatus: (status: string) => string;
-  nextStatusLabel: (status: string) => string;
-}
-
-// --- Component ---
+// ✅ नीचे component
 const OrdersListView: React.FC<OrdersListViewProps> = ({
   orders,
   title,
