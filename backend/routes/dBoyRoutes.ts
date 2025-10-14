@@ -427,8 +427,7 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
   }
 });
 
-
-// ✅ POST: Send OTP to Customer (नया रूट)
+// ✅ POST: Send OTP to Customer
 router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const deliveryBoyId = req.user?.deliveryBoyId;
@@ -442,11 +441,7 @@ router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: Authent
       where: eq(orders.id, orderId),
       with: {
         customer: {
-          columns: {
-            id: true,
-            phone: true,
-            name: true,
-          }
+          columns: { id: true, phone: true, name: true }
         },
       },
     });
@@ -456,108 +451,151 @@ router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: Authent
     }
 
     const customer = order.customer;
-    if (!customer || !customer.phone || !customer.name) {
-      return res.status(400).json({ message: "Customer phone number or name not available for this order." });
+    if (!customer?.phone || !customer?.name) {
+      return res.status(400).json({ message: "Customer phone number or name not available." });
     }
 
-    // 1. OTP जेनरेट करें
-    const otp = generateOTP(6); 
+    // OTP generate करें
+    const otp = generateOTP(6);
 
-    // 2. OTP को Drizzle DB में सहेजें (या अपडेट करें)
+    // DB में OTP save करें
     const [updatedOrder] = await db.update(orders)
-      .set({
-        deliveryOtp: otp,
-        deliveryOtpSentAt: new Date(), 
-      })
+      .set({ deliveryOtp: otp, deliveryOtpSentAt: new Date() })
       .where(eq(orders.id, orderId))
       .returning();
 
     if (!updatedOrder) {
-        return res.status(500).json({ message: "Failed to save OTP in database." });
+      return res.status(500).json({ message: "Failed to save OTP in database." });
     }
 
-    // 3. WhatsApp OTP भेजें
-    const msg91Response = await sendWhatsAppOTP(
-      customer.phone,
-      otp,
-      orderId,
-      customer.name
-    );
+    // WhatsApp OTP भेजें
+    const msg91Response = await sendWhatsAppOTP(customer.phone, otp, orderId, customer.name);
 
-    if (msg91Response) {
-      return res.status(200).json({ success: true, message: "OTP sent successfully to customer via WhatsApp." });
-    } else {
-      console.error("❌ Failed to send WhatsApp, marking order for retry.");
-      // यदि WhatsApp भेजने में विफल रहा, तो DB से OTP को हटाना बेहतर हो सकता है
+    if (!msg91Response) {
+      console.warn("❌ Failed to send WhatsApp OTP, marking for retry");
       await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
       return res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
     }
 
+    return res.status(200).json({ success: true, message: "OTP sent successfully", customerPhone: customer.phone, customerName: customer.name });
   } catch (error: any) {
     console.error("❌ Error in /send-otp-to-customer:", error);
-    return res.status(500).json({ message: "Failed to send OTP to customer. Server error." });
+    return res.status(500).json({ message: "Failed to send OTP. Server error." });
   }
 });
 
-
-// ✅ POST Complete Delivery with OTP (यहां OTP सत्यापन होगा)
+// ✅ POST: Complete Delivery with OTP
 router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
     const orderId = Number(req.params.orderId);
     const { otp } = req.body;
 
-    if (!orderId || !otp || !firebaseUid) {
-      return res.status(400).json({ message: "Order ID and OTP are required." });
-    }
+    if (!orderId || !otp || !firebaseUid) return res.status(400).json({ message: "Order ID and OTP are required." });
 
-    const deliveryBoy = await db.query.deliveryBoys.findFirst({
-      where: eq(deliveryBoys.firebaseUid, firebaseUid),
-    });
-
-    if (!deliveryBoy) {
-      return res.status(404).json({ message: "Delivery Boy profile not found." });
-    }
+    const deliveryBoy = await db.query.deliveryBoys.findFirst({ where: eq(deliveryBoys.firebaseUid, firebaseUid) });
+    if (!deliveryBoy) return res.status(404).json({ message: "Delivery Boy profile not found." });
 
     const order = await db.query.orders.findFirst({
       where: eq(orders.id, orderId),
-      columns: { deliveryOtp: true, deliveryOtpSentAt: true, deliveryBoyId: true } // ✅ SentAt फ़ील्ड को भी प्राप्त करें
+      columns: { deliveryOtp: true, deliveryOtpSentAt: true, deliveryBoyId: true }
     });
 
-    if (!order) {
-      return res.status(404).json({ message: "Order not found." });
+    if (!order) return res.status(404).json({ message: "Order not found." });
+    if (order.deliveryBoyId !== deliveryBoy.id) return res.status(403).json({ message: "Forbidden: You are not assigned to this order." });
+
+    // OTP expiry check (10 मिनट)
+    const sentTime = order.deliveryOtpSentAt?.getTime() || 0;
+    if (Date.now() > sentTime + 10 * 60 * 1000) {
+      await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
+      return res.status(401).json({ message: "OTP has expired. Please request a new one." });
     }
 
-    if (order.deliveryBoyId !== deliveryBoy.id) { // डिलीवरी बॉय ID का सत्यापन
-      return res.status(403).json({ message: "Forbidden: You are not assigned to this order." });
-    }
-    
-    // 1. OTP की समय सीमा (Expiry) की जाँच करें (10 मिनट)
-    const sentTime = order.deliveryOtpSentAt ? order.deliveryOtpSentAt.getTime() : 0;
-    const expiryTime = sentTime + 10 * 60 * 1000; // 10 मिनट
-    if (Date.now() > expiryTime) {
-         // Expired होने पर OTP को DB से null करें
-        await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
-        return res.status(401).json({ message: "OTP has expired. Please request a new one." });
-    }
+    if (order.deliveryOtp !== otp) return res.status(401).json({ message: "Invalid OTP." });
 
-    // 2. OTP की तुलना करें
-    if (!order.deliveryOtp || order.deliveryOtp !== otp) {
-      return res.status(401).json({ message: "Invalid OTP." });
-    }
-
-    // 3. यदि OTP मान्य है, तो डिलीवरी की स्थिति अपडेट करें और OTP को null करें
+    // OTP valid → delivery complete
     const [updatedOrder] = await db.update(orders)
       .set({
         status: 'delivered',
         deliveryStatus: 'delivered',
-        deliveryOtp: null, // ✅ सफल होने पर OTP हटा दें
-        deliveryOtpSentAt: null, // ✅ सफल होने पर SentAt टाइमस्टैम्प हटा दें
-        deliveredAt: new Date(), // आपके स्कीमा में 'deliveredAt' फ़ील्ड होने पर
+        deliveryOtp: null,
+        deliveryOtpSentAt: null,
+        deliveredAt: new Date(),
       })
       .where(eq(orders.id, orderId))
       .returning();
-      
+
+    const fullUpdatedOrder = await db.query.orders.findFirst({
+      where: eq(orders.id, updatedOrder.id),
+      with: {
+        customer: true,
+        deliveryBoy: { columns: { id: true, name: true, phone: true } },
+        items: { columns: { sellerId: true } }
+      }
+    });
+
+    // WhatsApp Thanks message भेजो
+    if (fullUpdatedOrder?.customer?.phone) {
+      await sendWhatsAppDeliveryThanks(fullUpdatedOrder.customer.phone, fullUpdatedOrder.customer.name, orderId)
+        .catch(() => console.warn("⚠️ Failed to send WhatsApp Thanks message"));
+    }
+
+    return res.status(200).json(fullUpdatedOrder);
+
+  } catch (error: any) {
+    console.error("❌ Error in /complete-delivery:", error);
+    return res.status(500).json({ message: "Failed to complete delivery. Server error." });
+  }
+});
+
+// ✅ POST: Complete Delivery without OTP
+router.post('/orders/:orderId/complete-without-otp', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const firebaseUid = req.user?.firebaseUid;
+    const orderId = Number(req.params.orderId);
+    if (!orderId || !firebaseUid) return res.status(400).json({ message: "Order ID is required." });
+
+    const deliveryBoy = await db.query.deliveryBoys.findFirst({ where: eq(deliveryBoys.firebaseUid, firebaseUid) });
+    if (!deliveryBoy) return res.status(404).json({ message: "Delivery Boy profile not found." });
+
+    const order = await db.query.orders.findFirst({ where: eq(orders.id, orderId), columns: { deliveryBoyId: true } });
+    if (!order || order.deliveryBoyId !== deliveryBoy.id) return res.status(403).json({ message: "Forbidden: You are not assigned to this order." });
+
+    const [updatedOrder] = await db.update(orders)
+      .set({
+        status: 'delivered',
+        deliveryStatus: 'delivered',
+        deliveredAt: new Date(),
+      })
+      .where(eq(orders.id, orderId))
+      .returning();
+
+    const fullUpdatedOrder = await db.query.orders.findFirst({
+      where: eq(orders.id, updatedOrder.id),
+      with: { customer: true, deliveryBoy: { columns: { id: true, name: true, phone: true } } }
+    });
+
+    // WhatsApp Thanks message भेजो
+    if (fullUpdatedOrder?.customer?.phone) {
+      await sendWhatsAppDeliveryThanks(fullUpdatedOrder.customer.phone, fullUpdatedOrder.customer.name, orderId)
+        .catch(() => console.warn("⚠️ Failed to send WhatsApp Thanks message"));
+    }
+
+    return res.status(200).json(fullUpdatedOrder);
+
+  } catch (error: any) {
+    console.error("❌ Error in /complete-without-otp:", error);
+    return res.status(500).json({ message: "Failed to complete delivery. Server error." });
+  }
+});
+
+// ✅ Helper: WhatsApp Delivery Thanks
+async function sendWhatsAppDeliveryThanks(phone: string, name: string, orderId: number) {
+  // आपके WhatsApp API integration logic
+  // msg91 या कोई अन्य provider
+  return sendWhatsAppMessage(phone, `Hello ${name}, आपका ऑर्डर #${orderId} सफलतापूर्वक डिलीवर हो गया है। धन्यवाद!`);
+  }
+
     // अपडेटेड ऑर्डर का पूरा डेटा प्राप्त करें
     const fullUpdatedOrder = await db.query.orders.findFirst({
         where: eq(orders.id, updatedOrder.id),
