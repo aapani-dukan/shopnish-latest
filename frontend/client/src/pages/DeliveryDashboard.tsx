@@ -265,60 +265,92 @@ export default function DeliveryDashboard() {
     },
   });
 
-  const sendOtpToCustomerMutation = useMutation({
-    mutationFn: async (orderId: number) => {
-      console.log("DEBUG: sendOtpToCustomerMutation triggered for Order ID:", orderId); // Debug Log
-      const token = await getValidToken();
-      if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/send-otp-to-customer`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId }),
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      console.log("DEBUG: sendOtpToCustomerMutation successful!"); // Debug Log
-      toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
-      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
-    },
-    onError: (error: any) => {
-      console.error("DEBUG: sendOtpToCustomerMutation failed:", error); // Debug Log
-      toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
-    },
-  });
+  // ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation
+const sendOtpToCustomerMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    console.log("DEBUG: sendOtpToCustomerMutation triggered for Order ID:", orderId);
+    const token = await getValidToken();
+    if (!token) throw new Error("अमान्य या पुराना टोकन");
 
-  const sendManualOtpMutation = useMutation({
-    mutationFn: async (orderId: number) => {
-      console.log("DEBUG: sendManualOtpMutation triggered for Order ID:", orderId); // Debug Log
-      const token = await getValidToken();
-      if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp-manual`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "मैन्युअल OTP भेजने में विफल।");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      console.log("DEBUG: sendManualOtpMutation successful!"); // Debug Log
-      toast({ title: "OTP भेजा गया", description: "ग्राहक को OTP सफलतापूर्वक भेज दिया गया है।", variant: "success" });
-      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
-    },
-    onError: (error: any) => {
-      console.error("DEBUG: sendManualOtpMutation failed:", error); // Debug Log
-      toast({ title: "OTP भेजने में त्रुटि", description: error.message || "OTP भेजने में विफल।", variant: "destructive" });
-    },
-  });
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+    const response = await fetch(`${API_BASE}/api/delivery/send-otp-to-customer`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      body: JSON.stringify({ orderId }),
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+    }
+
+    return response.json();
+  },
+
+  onSuccess: () => {
+    console.log("✅ DEBUG: sendOtpToCustomerMutation successful!");
+    toast({
+      title: "OTP भेजा गया",
+      description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
+      variant: "success",
+    });
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+  },
+
+  onError: (error: any) => {
+    console.error("❌ DEBUG: sendOtpToCustomerMutation failed:", error);
+    toast({
+      title: "OTP भेजने में विफल",
+      description: error.message || "कृपया पुनः प्रयास करें।",
+      variant: "destructive",
+    });
+  },
+});
+
+
+// ✅ मैन्युअल OTP भेजने वाला mutation
+const sendManualOtpMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    console.log("DEBUG: sendManualOtpMutation triggered for Order ID:", orderId);
+    const token = await getValidToken();
+    if (!token) throw new Error("अमान्य या पुराना टोकन");
+
+    const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp-manual`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      const errorData = await response.json().catch(() => ({}));
+      throw new Error(errorData.message || "मैन्युअल OTP भेजने में विफल।");
+    }
+
+    return response.json();
+  },
+
+  onSuccess: () => {
+    console.log("✅ DEBUG: sendManualOtpMutation successful!");
+    toast({
+      title: "OTP भेजा गया",
+      description: "ग्राहक को OTP सफलतापूर्वक भेज दिया गया है।",
+      variant: "success",
+    });
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+  },
+
+  onError: (error: any) => {
+    console.error("❌ DEBUG: sendManualOtpMutation failed:", error);
+    toast({
+      title: "OTP भेजने में त्रुटि",
+      description: error.message || "OTP भेजने में विफल।",
+      variant: "destructive",
+    });
+  },
+});
 
   const completeWithoutOtpMutation = useMutation({
     mutationFn: async (orderId: number) => {
