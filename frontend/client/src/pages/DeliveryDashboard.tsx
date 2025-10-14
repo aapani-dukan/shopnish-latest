@@ -75,25 +75,6 @@ const getNextStatusLabel = (status: string) => {
     default:                  return "";
   }
 };
-interface OrdersListViewProps {
-  orders: any[];
-  title: string;
-  subtitle?: string;
-  onAcceptOrder?: (orderId: string) => void;
-  onUpdateStatus?: (orderId: string, status: string) => void;
-  acceptLoading?: boolean;
-  updateLoading?: boolean;
-  Button: React.ElementType;
-  Card: React.ElementType;
-  CardContent: React.ElementType;
-  CardHeader: React.ElementType;
-  CardTitle: React.ElementType;
-  Badge: React.ElementType;
-  statusColor: (status: string) => string;
-  statusText: (status: string) => string;
-  nextStatus: (status: string) => string;
-  nextStatusLabel: (status: string) => string;
-}
 // --- Main Component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
@@ -819,24 +800,47 @@ const completeWithoutOtpMutation = useMutation({
     isCompletingWithoutOtp={false}
   />
 )}
-// ✅ नीचे component
-const OrdersListView: React.FC<OrdersListViewProps> = ({
-  orders,
-  title,
-  subtitle,
-  onAcceptOrder,
-  onUpdateStatus,
-  acceptLoading,
-  updateLoading,
-  Button,
-  Card,
-  CardContent,
-  CardHeader,
-  CardTitle,
-  Badge,
-  statusColor,
-  statusText,
-  nextStatus,
+
+// --- Helper Component for Orders List ---
+interface OrdersListViewProps {
+  orders: any[];
+  title: string;
+  subtitle?: string;
+  myDeliveryBoyId: number | null | undefined;
+  onAcceptOrder: (orderId: number) => void;
+  onUpdateStatus: (order: any) => void; // Changed from (orderId: string, status: string) to (order: any)
+  acceptLoading: boolean;
+  updateLoading: boolean;
+  Button: React.ElementType;
+  Card: React.ElementType;
+  CardContent: React.ElementType;
+  CardHeader: React.ElementType;
+  CardTitle: React.ElementType;
+  Badge: React.ElementType;
+  statusColor: (status: string) => string;
+  statusText: (status: string) => string;
+  nextStatus: (status: string) => string | null; // Can return null
+  nextStatusLabel: (status: string) => string;
+}
+
+const OrdersListView: React.FC<OrdersListViewProps> = ({ 
+  orders, 
+  title, 
+  subtitle, 
+  myDeliveryBoyId, 
+  onAcceptOrder, 
+  onUpdateStatus, 
+  acceptLoading, 
+  updateLoading, 
+  Button, 
+  Card, 
+  CardContent, 
+  CardHeader, 
+  CardTitle, 
+  Badge, 
+  statusColor, 
+  statusText, 
+  nextStatus, 
   nextStatusLabel,
 }) => {
   return (
@@ -856,16 +860,9 @@ const OrdersListView: React.FC<OrdersListViewProps> = ({
           onUpdateStatus={onUpdateStatus}
           acceptLoading={acceptLoading}
           updateLoading={updateLoading}
-          Button={Button}
-          Card={Card}
-          CardContent={CardContent}
-          CardHeader={CardHeader}
-          CardTitle={CardTitle}
-          Badge={Badge}
-          statusColor={statusColor}
-          statusText={statusText}
-          nextStatus={nextStatus}
-          nextStatusLabel={nextStatusLabel}
+          Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader}
+          CardTitle={CardTitle} Badge={Badge} statusColor={statusColor}
+          statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
         />
       )}
     </>
