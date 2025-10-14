@@ -427,62 +427,7 @@ router.post("/update-location", requireDeliveryBoyAuth, async (req: Authenticate
   }
 });
 
-// ✅ POST: Send OTP to Customer
-router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const deliveryBoyId = req.user?.deliveryBoyId;
-    const { orderId } = req.body;
-
-    if (!orderId || !deliveryBoyId) {
-      return res.status(400).json({ message: "Order ID and Delivery Boy ID are required." });
-    }
-
-    const order = await db.query.orders.findFirst({
-      where: eq(orders.id, orderId),
-      with: {
-        customer: {
-          columns: { id: true, phone: true, name: true }
-        },
-      },
-    });
-
-    if (!order || order.deliveryBoyId !== deliveryBoyId) {
-      return res.status(404).json({ message: "Order not found or you are not assigned to this order." });
-    }
-
-    const customer = order.customer;
-    if (!customer?.phone || !customer?.name) {
-      return res.status(400).json({ message: "Customer phone number or name not available." });
-    }
-
-    // OTP generate करें
-    const otp = generateOTP(6);
-
-    // DB में OTP save करें
-    const [updatedOrder] = await db.update(orders)
-      .set({ deliveryOtp: otp, deliveryOtpSentAt: new Date() })
-      .where(eq(orders.id, orderId))
-      .returning();
-
-    if (!updatedOrder) {
-      return res.status(500).json({ message: "Failed to save OTP in database." });
-    }
-
-    // WhatsApp OTP भेजें
-    const msg91Response = await sendWhatsAppOTP(customer.phone, otp, orderId, customer.name);
-
-    if (!msg91Response) {
-      console.warn("❌ Failed to send WhatsApp OTP, marking for retry");
-      await db.update(orders).set({ deliveryOtp: null, deliveryOtpSentAt: null }).where(eq(orders.id, orderId));
-      return res.status(500).json({ success: false, message: "Failed to send OTP. Please try again." });
-    }
-
-    return res.status(200).json({ success: true, message: "OTP sent successfully", customerPhone: customer.phone, customerName: customer.name });
-  } catch (error: any) {
-    console.error("❌ Error in /send-otp-to-customer:", error);
-    return res.status(500).json({ message: "Failed to send OTP. Server error." });
-  }
-});
+//
 
 // ✅ POST: Complete Delivery with OTP
 router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -534,19 +479,7 @@ router.post('/orders/:orderId/complete-delivery', requireDeliveryBoyAuth, async 
       }
     });
 
-    // WhatsApp Thanks message भेजो
-    if (fullUpdatedOrder?.customer?.phone) {
-      await sendWhatsAppDeliveryThanks(fullUpdatedOrder.customer.phone, fullUpdatedOrder.customer.name, orderId)
-        .catch(() => console.warn("⚠️ Failed to send WhatsApp Thanks message"));
-    }
-
-    return res.status(200).json(fullUpdatedOrder);
-
-  } catch (error: any) {
-    console.error("❌ Error in /complete-delivery:", error);
-    return res.status(500).json({ message: "Failed to complete delivery. Server error." });
-  }
-});
+    
 
 // ✅ POST: Complete Delivery without OTP
 router.post('/orders/:orderId/complete-without-otp', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -575,26 +508,8 @@ router.post('/orders/:orderId/complete-without-otp', requireDeliveryBoyAuth, asy
       with: { customer: true, deliveryBoy: { columns: { id: true, name: true, phone: true } } }
     });
 
-    // WhatsApp Thanks message भेजो
-    if (fullUpdatedOrder?.customer?.phone) {
-      await sendWhatsAppDeliveryThanks(fullUpdatedOrder.customer.phone, fullUpdatedOrder.customer.name, orderId)
-        .catch(() => console.warn("⚠️ Failed to send WhatsApp Thanks message"));
-    }
+    
 
-    return res.status(200).json(fullUpdatedOrder);
-
-  } catch (error: any) {
-    console.error("❌ Error in /complete-without-otp:", error);
-    return res.status(500).json({ message: "Failed to complete delivery. Server error." });
-  }
-});
-
-// ✅ Helper: WhatsApp Delivery Thanks
-async function sendWhatsAppDeliveryThanks(phone: string, name: string, orderId: number) {
-  // आपके WhatsApp API integration logic
-  // msg91 या कोई अन्य provider
-  return sendWhatsAppMessage(phone, `Hello ${name}, आपका ऑर्डर #${orderId} सफलतापूर्वक डिलीवर हो गया है। धन्यवाद!`);
-  }
 
     // अपडेटेड ऑर्डर का पूरा डेटा प्राप्त करें
     const fullUpdatedOrder = await db.query.orders.findFirst({
