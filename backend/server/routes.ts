@@ -29,6 +29,7 @@ import userLoginRouter from "../routes/userRoutes.ts";
 import orderRoutes from "../routes/orderRoutes";
 import { verifyToken } from "./middleware/verifyToken";
 import { categories } from "../shared/backend/schema.ts";
+import whatsappRouter from '../routes/whatsappRouter';
 import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 const router = Router();
 
@@ -271,6 +272,7 @@ router.get("/categories", async (req: Request, res: Response) => {
 
 // ✅ Products
 router.use("/products", productsRouter);
+router.use('/api/whatsapp', whatsappRouter);
 
 // ✅ Delivery Boy
 router.use("/delivery", dBoyRouter);
