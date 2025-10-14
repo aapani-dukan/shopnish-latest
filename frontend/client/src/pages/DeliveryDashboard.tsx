@@ -801,7 +801,7 @@ const completeWithoutOtpMutation = useMutation({
     isCompletingWithoutOtp={false}
   />
 )}
-// --- Props Type ---
+// --- Props Type (must be outside the component) ---
 interface OrdersListViewProps {
   orders: any[];
   title: string;
@@ -822,7 +822,7 @@ interface OrdersListViewProps {
   nextStatusLabel: (status: string) => string;
 }
 
-// --- Helper Component for Orders List ---
+// --- Component ---
 const OrdersListView: React.FC<OrdersListViewProps> = ({
   orders,
   title,
