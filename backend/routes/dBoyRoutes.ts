@@ -267,26 +267,26 @@ router.post("/accept", requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
         return res.status(404).json({ message: "Order not found after update." });
     }
     
-    const io = getIO();
-    const customerId = fullUpdatedOrder.customerId;
-    const sellerId = fullUpdatedOrder.items?.[0]?.sellerId; 
+   const io = getIO();
+const customerId = fullUpdatedOrder.customerId;
+const sellerId = fullUpdatedOrder.items?.[0]?.sellerId;
 
-    // I. ब्रॉडकास्ट रूम से ऑर्डर हटाएँ
-    io.to('unassigned-orders').emit("order:removed-from-unassigned", fullUpdatedOrder.id);
-    
-    // II. केवल एक्सेप्ट करने वाले डिलीवरी बॉय को भेजें
-    io.to(`deliveryboy:${deliveryBoy.id}`).emit("order:accepted", fullUpdatedOrder);
+// I. असाइंड डिलीवरी बॉय को अंतिम अपडेट भेजें
+io.to(`deliveryboy:${deliveryBoy.id}`).emit("order:delivered", fullUpdatedOrder);
 
-    // III. सेलर और एडमिन को भेजें
-    if (sellerId) {
-      io.to(`seller:${sellerId}`).emit("order-updated-for-seller", fullUpdatedOrder);
-    }
-    io.to('admin').emit("order-updated-for-admin", fullUpdatedOrder);
+// II. सेलर और एडमिन को भेजें
+if (sellerId) {
+  io.to(`seller:${sellerId}`).emit("order-updated-for-seller", fullUpdatedOrder);
+}
+io.to('admin').emit("order-updated-for-admin", fullUpdatedOrder);
 
-    // IV. कस्टमर को भेजें
-    io.to(`user:${customerId}`).emit("order-status-update", fullUpdatedOrder);
-    
-    return res.json({ message: "Order accepted", order: fullUpdatedOrder });
+// III. कस्टमर को भेजें
+io.to(`user:${customerId}`).emit("order-status-update", fullUpdatedOrder);
+
+return res.status(200).json({
+  message: "Delivery completed successfully.",
+  order: fullUpdatedOrder,
+}); 
 
   } catch (err) {
     console.error("POST /delivery/accept error:", err);
