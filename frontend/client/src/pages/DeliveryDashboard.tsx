@@ -802,28 +802,74 @@ const completeWithoutOtpMutation = useMutation({
   />
 )}
 // --- Helper Component for Orders List ---
-const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
-  <>
-    {orders.length === 0 ? (
-      <props.Card>
-        <props.CardContent className="py-12 text-center">
-          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium mb-2">{title}</h3>
-          <p className="text-gray-600">{subtitle}</p>
-        </props.CardContent>
-      </props.Card>
-    ) : (
-      <DeliveryOrdersList
-        orders={orders}
-        onAcceptOrder={props.onAcceptOrder}
-        onUpdateStatus={props.onUpdateStatus}
-        acceptLoading={props.acceptLoading}
-        updateLoading={props.updateLoading}
-        Button={props.Button} Card={props.Card} CardContent={props.CardContent} CardHeader={props.CardHeader}
-        CardTitle={props.CardTitle} Badge={props.Badge} statusColor={props.statusColor}
-        statusText={props.statusText} nextStatus={props.nextStatus} nextStatusLabel={props.nextStatusLabel}
-      />
-    )}
-  </>
-);
-    
+const OrdersListView: React.FC<{
+  orders: any[];
+  title: string;
+  subtitle?: string;
+  onAcceptOrder?: (orderId: string) => void;
+  onUpdateStatus?: (orderId: string, status: string) => void;
+  acceptLoading?: boolean;
+  updateLoading?: boolean;
+  Button: React.ElementType;
+  Card: React.ElementType;
+  CardContent: React.ElementType;
+  CardHeader: React.ElementType;
+  CardTitle: React.ElementType;
+  Badge: React.ElementType;
+  statusColor: (status: string) => string;
+  statusText: (status: string) => string;
+  nextStatus: (status: string) => string;
+  nextStatusLabel: (status: string) => string;
+}> = (props) => {
+  const {
+    orders,
+    title,
+    subtitle,
+    onAcceptOrder,
+    onUpdateStatus,
+    acceptLoading,
+    updateLoading,
+    Button,
+    Card,
+    CardContent,
+    CardHeader,
+    CardTitle,
+    Badge,
+    statusColor,
+    statusText,
+    nextStatus,
+    nextStatusLabel,
+  } = props;
+
+  return (
+    <>
+      {orders.length === 0 ? (
+        <Card>
+          <CardContent className="py-12 text-center">
+            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium mb-2">{title}</h3>
+            <p className="text-gray-600">{subtitle}</p>
+          </CardContent>
+        </Card>
+      ) : (
+        <DeliveryOrdersList
+          orders={orders}
+          onAcceptOrder={onAcceptOrder}
+          onUpdateStatus={onUpdateStatus}
+          acceptLoading={acceptLoading}
+          updateLoading={updateLoading}
+          Button={Button}
+          Card={Card}
+          CardContent={CardContent}
+          CardHeader={CardHeader}
+          CardTitle={CardTitle}
+          Badge={Badge}
+          statusColor={statusColor}
+          statusText={statusText}
+          nextStatus={nextStatus}
+          nextStatusLabel={nextStatusLabel}
+        />
+      )}
+    </>
+  );
+};
