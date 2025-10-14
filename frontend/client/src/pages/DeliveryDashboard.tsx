@@ -613,42 +613,48 @@ const handleStatusProgress = (order: any) => {
         )}
       </section>
 
-      {/* OTP Dialog */}
-      <DeliveryOtpDialog
-        open={otpDialogOpen}
-        onOpenChange={setOtpDialogOpen}
-        otp={otp}
-        setOtp={setOtp}
-        onConfirm={handleOtpConfirmation}
-        isLoading={handleOtpSubmitMutation.isPending}
-        orderNumber={selectedOrder?.orderNumber}
-      />
-    </div>
-  ); 
-} 
+      
 
-// --- Helper Component for Orders List ---
+    {/* OTP Dialog */}
+    {otpDialogOpen && selectedOrder && ( // ✅ otpDialogOpen और selectedOrder को सही केस में
+      <DeliveryOtpDialog // ✅ कॉम्पोनेंट का नाम PascalCase में
+        isOpen={otpDialogOpen} // ✅ isOpen और otpDialogOpen को सही केस में
+        onOpenChange={setOtpDialogOpen} // ✅ onOpenChange और setOtpDialogOpen को सही केस में
+        order={selectedOrder} // ✅ order प्रॉप को पूरे selectedOrder ऑब्जेक्ट के साथ पास करें
+        onConfirm={handleOtpConfirmation} // ✅ onConfirm को सही केस में
+        isSubmitting={handleOtpSubmitMutation.isPending} // ✅ isSubmitting को सही केस में
+        error={handleOtpSubmitMutation.error?.message || null}
+      />
+    )}
+  </div>
+);
+
+
+// --- helper component for orders list ---
+// ✅ कॉम्पोनेंट का नाम PascalCase में, React.FC को सही केस में
 const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
   <>
     {orders.length === 0 ? (
-      <Card>
-        <CardContent className="py-12 text-center">
-          <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-          <h3 className="text-lg font-medium mb-2">{title}</h3>
-          <p className="text-gray-600">{subtitle}</p>
-        </CardContent>
-      </Card>
+      <props.Card> {/* ✅ props.Card का उपयोग करें */}
+        <props.CardContent className="py-12 text-center"> {/* ✅ className को सही केस में */}
+          {/* ✅ Package आइकन को सही तरीके से इंपोर्ट करें और इस्तेमाल करें */}
+          {/* अगर Package आइकन Lucide React से है, तो इसे ऊपर इंपोर्ट करना होगा */}
+          {/* <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />  */}
+          <h3 className="text-lg font-medium mb-2">{title}</h3> {/* ✅ className को सही केस में */}
+          <p className="text-gray-600">{subtitle}</p> {/* ✅ className को सही केस में */}
+        </props.CardContent>
+      </props.Card>
     ) : (
-      <DeliveryOrdersList
+      <DeliveryOrdersList // ✅ कॉम्पोनेंट का नाम PascalCase में
         orders={orders}
-        onAcceptOrder={props.onAcceptOrder} 
-        onUpdateStatus={props.onUpdateStatus} 
-        acceptLoading={props.acceptLoading}
-        updateLoading={props.updateLoading}
-        Button={props.Button} Card={props.Card} CardContent={props.CardContent} CardHeader={props.CardHeader} 
-        CardTitle={props.CardTitle} Badge={props.Badge} statusColor={props.statusColor} 
-        statusText={props.statusText} nextStatus={props.nextStatus} nextStatusLabel={props.nextStatusLabel}
+        onAcceptOrder={props.onAcceptOrder} // ✅ PascalCase
+        onUpdateStatus={props.onUpdateStatus} // ✅ PascalCase
+        acceptLoading={props.acceptLoading} // ✅ PascalCase
+        updateLoading={props.updateLoading} // ✅ PascalCase
+        Button={props.Button} Card={props.Card} CardContent={props.CardContent} CardHeader={props.CardHeader} // ✅ PascalCase
+        CardTitle={props.CardTitle} Badge={props.Badge} statusColor={props.statusColor} // ✅ PascalCase
+        statusText={props.statusText} nextStatus={props.nextStatus} nextStatusLabel={props.nextStatusLabel} // ✅ PascalCase
       />
     )}
   </>
-); 
+);
