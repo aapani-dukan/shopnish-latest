@@ -1,6 +1,6 @@
 // client/src/pages/DeliveryOtpDialog.tsx
-import React, { useState, useEffect } from "react"; // ✅ React, useEffect सही केस में
-import { Loader2 } from "lucide-react"; // ✅ Loader2 सही केस में
+import React, { useState, useEffect } from "react";
+import { Loader2 } from "lucide-react";
 
 import {
   Dialog,
@@ -33,11 +33,10 @@ interface DeliveryOtpDialogProps {
   onConfirm: (otp: string) => void;
   isSubmitting: boolean;
   error: string | null;
-  // ✅ नए प्रॉप्स
-  onSendManualOtp: (orderId: number) => void; // मैन्युअल OTP भेजने के लिए
-  isSendingManualOtp: boolean; // मैन्युअल OTP भेजने की लोडिंग स्थिति
-  onCompleteWithoutOtp: (orderId: number) => void; // बिना OTP के डिलीवरी पूरी करने के लिए
-  isCompletingWithoutOtp: boolean; // बिना OTP के डिलीवरी पूरी करने की लोडिंग स्थिति
+  onSendManualOtp: (orderId: number) => void;
+  isSendingManualOtp: boolean;
+  onCompleteWithoutOtp: (orderId: number) => void;
+  isCompletingWithoutOtp: boolean;
 }
 
 // --- Main Component: DeliveryOtpDialog ---
@@ -48,7 +47,6 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
   onConfirm,
   isSubmitting,
   error,
-  // ✅ नए प्रॉप्स डीस्ट्रक्चर करें
   onSendManualOtp,
   isSendingManualOtp,
   onCompleteWithoutOtp,
@@ -56,7 +54,6 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
 }) => {
   const [otp, setOtp] = useState("");
 
-  // जब डायलॉग बंद होता है, तो OTP को रीसेट करें
   useEffect(() => {
     if (!isOpen) {
       setOtp("");
@@ -64,7 +61,8 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
   }, [isOpen]);
 
   const handleConfirm = () => {
-    if (otp.trim().length === 4) { // OTP की लंबाई जांचें
+    console.log("DeliveryOtpDialog: Confirm button clicked. OTP:", otp);
+    if (otp.trim().length === 4) {
       onConfirm(otp);
     }
   };
@@ -96,19 +94,18 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
               value={otp}
               onChange={(e) => setOtp(e.target.value)}
               placeholder="0000"
-              maxLength={4} // ✅ OTP अब 4-अंकों का है
+              maxLength={4}
               className="text-center text-lg tracking-widest"
             />
             {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
           </div>
         </div>
 
-        {/* ✅ यहाँ "OTP दोबारा भेजें" बटन जोड़ें */}
         <Button
           variant="outline"
           onClick={() => onSendManualOtp(order.id)}
-          disabled={isSendingManualOtp || isSubmitting}
-          className="w-full mb-2" // थोड़ा स्टाइल
+          disabled={isSendingManualOtp || isSubmitting || isCompletingWithoutOtp}
+          className="w-full mb-2"
         >
           {isSendingManualOtp ? (
             <>
@@ -124,14 +121,14 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
             type="button"
             variant="outline"
             onClick={() => onOpenChange(false)}
-            disabled={isSubmitting || isSendingManualOtp || isCompletingWithoutOtp} // अन्य बटनों की स्थिति भी देखें
+            disabled={isSubmitting || isSendingManualOtp || isCompletingWithoutOtp}
           >
             रद्द करें
           </Button>
           <Button
             type="submit"
             onClick={handleConfirm}
-            disabled={isSubmitting || otp.trim().length !== 4 || isSendingManualOtp || isCompletingWithoutOtp} // OTP की लंबाई और अन्य बटनों की स्थिति देखें
+            disabled={isSubmitting || otp.trim().length !== 4 || isSendingManualOtp || isCompletingWithoutOtp}
           >
             {isSubmitting ? (
               <>
@@ -143,12 +140,11 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
           </Button>
         </div>
 
-        {/* ✅ यहाँ "बिना OTP के डिलीवर करें" बटन जोड़ें */}
         <Button
           variant="destructive"
           onClick={() => onCompleteWithoutOtp(order.id)}
-          disabled={isCompletingWithoutOtp || isSubmitting || isSendingManualOtp} // अन्य बटनों की स्थिति भी देखें
-          className="w-full mt-4" // थोड़ा स्टाइल
+          disabled={isCompletingWithoutOtp || isSubmitting || isSendingManualOtp}
+          className="w-full mt-4"
         >
           {isCompletingWithoutOtp ? (
             <>
