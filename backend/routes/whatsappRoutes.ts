@@ -3,7 +3,7 @@ import { Router, Response } from "express";
 import { db } from "../server/db";
 import { orders, users } from "../shared/backend/schema";
 import { eq } from "drizzle-orm";
-import { requireDeliveryBoyAuth } from "../server/middlewares/auth";
+import { requireDeliveryBoyAuth } from "../server/middlewares/authMiddlewares";
 import { AuthenticatedRequest } from "../server/types";
 import { generateOTP, sendWhatsAppMessage } from "../server/lib/whatsappHelpers";
 
