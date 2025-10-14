@@ -678,24 +678,129 @@ const completeWithoutOtpMutation = useMutation({
       </section>
 
     {/* OTP Dialog */}
-    {otpDialogOpen && selectedOrder && (
-      <DeliveryOtpDialog
-        isOpen={otpDialogOpen}
-        onOpenChange={setOtpDialogOpen}
-        order={selectedOrder}
-        onConfirm={handleOtpConfirmation}
-        isSubmitting={handleOtpSubmitMutation.isPending}
-        error={handleOtpSubmitMutation.error?.message || null}
-        onSendManualOtp={() => handleSendManualOtp(selectedOrder.id)}
-        isSendingManualOtp={sendManualOtpMutation.isPending}
-        onCompleteWithoutOtp={() => handleCompleteWithoutOtp(selectedOrder.id)}
-        isCompletingWithoutOtp={completeWithoutOtpMutation.isPending}
-      />
-    )}
-  </div>
-);
-}
+    {/* ✅ OTP Dialog (WhatsApp integrated version) */}
+{otpDialogOpen && selectedOrder && (
+  <DeliveryOtpDialog
+    isOpen={otpDialogOpen}
+    onOpenChange={setOtpDialogOpen}
+    order={selectedOrder}
+    onConfirm={async (otp: string) => {
+      try {
+        const response = await fetch(`${API_BASE}/api/whatsapp/verify-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: selectedOrder.id, otp }),
+        });
 
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || "OTP सत्यापन असफल रहा");
+        }
+
+        toast({
+          title: "OTP सफलतापूर्वक सत्यापित ✅",
+          description: "डिलीवरी पूरी हो गई है।",
+          variant: "success",
+        });
+
+        setOtpDialogOpen(false);
+        setSelectedOrder(null);
+        queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+
+        // ✅ WhatsApp Thank-you message भेजो
+        await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: selectedOrder.id,
+            customerPhone: selectedOrder.customerPhone,
+            customerName: selectedOrder.customerName,
+          }),
+        }).catch(() => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका"));
+      } catch (error: any) {
+        toast({
+          title: "OTP त्रुटि",
+          description: error.message || "OTP सत्यापन विफल हुआ।",
+          variant: "destructive",
+        });
+      }
+    }}
+    isSubmitting={handleOtpSubmitMutation?.isPending || false}
+    error={null}
+
+    // ✅ WhatsApp OTP भेजना
+    onSendManualOtp={async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/whatsapp/send-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ orderId: selectedOrder.id }),
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || "OTP भेजने में त्रुटि");
+        }
+
+        toast({
+          title: "OTP भेजा गया 📩",
+          description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
+          variant: "success",
+        });
+      } catch (error: any) {
+        toast({
+          title: "OTP भेजने में विफल",
+          description: error.message || "कृपया पुनः प्रयास करें।",
+          variant: "destructive",
+        });
+      }
+    }}
+    isSendingManualOtp={false}
+
+    // ✅ बिना OTP के डिलीवरी पूरी करना
+    onCompleteWithoutOtp={async () => {
+      try {
+        const response = await fetch(`${API_BASE}/api/delivery/orders/${selectedOrder.id}/complete-without-otp`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+
+        if (!response.ok) {
+          const err = await response.json().catch(() => ({}));
+          throw new Error(err.message || "बिना OTP के डिलीवरी असफल रही");
+        }
+
+        toast({
+          title: "डिलीवरी पूरी हुई ✅",
+          description: "ऑर्डर बिना OTP के डिलीवर कर दिया गया है।",
+          variant: "success",
+        });
+
+        setOtpDialogOpen(false);
+        setSelectedOrder(null);
+        queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+
+        // ✅ WhatsApp Thank-you message भेजो
+        await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            orderId: selectedOrder.id,
+            customerPhone: selectedOrder.customerPhone,
+            customerName: selectedOrder.customerName,
+          }),
+        }).catch(() => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका"));
+      } catch (error: any) {
+        toast({
+          title: "त्रुटि",
+          description: error.message || "बिना OTP के डिलीवरी विफल रही।",
+          variant: "destructive",
+        });
+      }
+    }}
+    isCompletingWithoutOtp={false}
+  />
+)}
 // --- Helper Component for Orders List ---
 const OrdersListView: React.FC<any> = ({ orders, title, subtitle, ...props }) => (
   <>
