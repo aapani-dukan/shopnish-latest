@@ -300,26 +300,47 @@ export default function DeliveryDashboard() {
     },
   });
 
-  const handleStatusProgress = (order: any) => {
+  
+const handleStatusProgress = (order: any) => {
+    console.log("🔍 Checking order:", order.id, "Current status:", order.status);
+    
+    // Status को साफ़ करें और छोटे अक्षरों में बदलें
     const currentStatus = (order.status ?? "").toLowerCase().trim();
+    console.log("🔍 Trimmed and lowercased status:", currentStatus);
 
+    // 1. यदि वर्तमान स्टेटस 'out_for_delivery' है, तो सीधे OTP डायलॉग खोलें।
+    // यह तभी ट्रिगर होगा जब डिलीवरी बॉय ने "डिलीवरी पूरी करें (OTP)" बटन पर क्लिक किया हो।
     if (currentStatus === "out_for_delivery") {
-      setSelectedOrder(order);
-      setOtpDialogOpen(true);
-      return; 
+      console.log("✅ Status is 'out_for_delivery'. Opening OTP dialog.");
+      setSelectedOrder(order); // उस ऑर्डर को सेट करें जिसके लिए OTP चाहिए
+      setOtpDialogOpen(true); // OTP डायलॉग खोलें
+      return; // यहीं से फंक्शन खत्म करें, आगे कोई स्टेटस अपडेट नहीं होगा।
     }
 
-    const next = getNextStatus(currentStatus);
+    // 2. अगला अपेक्षित स्टेटस ज्ञात करें (तुम्हारे getNextStatus फंक्शन का उपयोग करके)
+    const next = getNextStatus(currentStatus); // ✅ तुम्हें यहाँ nextStatus की जगह getNextStatus का उपयोग करना चाहिए
+    console.log("➡️ Next expected status:", next);
 
-    if (next === "accepted") return; 
 
-    if (next) {
-      if (next === "out_for_delivery" && currentStatus !== "out_for_delivery") {
-        sendOtpToCustomerMutation.mutate(order.id);
-      }
-      updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
+    // 3. यदि कोई अगला स्टेटस परिभाषित नहीं है, तो कुछ न करें
+    if (!next) {
+        console.log("❌ No next status defined for current status. Stopping.");
+        return;
     }
-  };
+
+    // 4. यदि अगला स्टेटस 'out_for_delivery' है (यानी currentStatus 'picked_up' है),
+    // तो हमें OTP भेजना होगा, न कि केवल स्टेटस अपडेट करना।
+    if (next === "out_for_delivery") {
+      console.log(`✉️ Moving to 'out_for_delivery' from '${currentStatus}'. Sending OTP to customer.`);
+      // OTP भेजने के बाद, बैकएंड को स्टेटस 'out_for_delivery' में अपडेट कर देना चाहिए।
+      sendOtpToCustomerMutation.mutate(order.id); 
+    }
+    
+  
+
+    console.log(`🔄 Updating status for order ${order.id} to '${next}'.`);
+    updateStatusMutation.mutate({ orderId: order.id, newStatus: next });
+};
 
   const handleOtpConfirmation = () => {
     if (!selectedOrder || otp.trim().length !== 6) {
