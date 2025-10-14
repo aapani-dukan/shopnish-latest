@@ -240,43 +240,70 @@ export default function DeliveryDashboard() {
     onError: () => toast({ title: "त्रुटि", description: "ऑर्डर स्थिति अपडेट करने में विफल", variant: "destructive" }),
   });
 
-  const handleOtpSubmitMutation = useMutation({
-    mutationFn: async ({ orderId, otp }: { orderId: number; otp: string }) => {
-      const token = await getValidToken();
-      if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-delivery`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ otp }),
-      });
-      if (response.status === 401) throw new Error("OTP गलत है।");
-      if (!response.ok) throw new Error("डिलीवरी पूरी करने में विफल");
-      return response.json();
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
-      toast({ title: "डिलीवरी पूरी हुई", description: "ऑर्डर सफलतापूर्वक डिलीवर हो गया है।", variant: "success" });
-      setOtpDialogOpen(false);
-      setSelectedOrder(null);
-    },
-    onError: (error: any) => {
-      toast({ title: "OTP त्रुटि", description: error.message || "OTP जमा करने में विफल।", variant: "destructive" });
-    },
-  });
+  
+// ✅ Unified Delivery Mutations (Production Ready)
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
 
-  // ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation
-const sendOtpToCustomerMutation = useMutation({
-  mutationFn: async (orderId: number) => {
-    console.log("DEBUG: sendOtpToCustomerMutation triggered for Order ID:", orderId);
+// ✅ OTP Submit + Complete Delivery
+const handleOtpSubmitMutation = useMutation({
+  mutationFn: async ({ orderId, otp }: { orderId: number; otp: string }) => {
     const token = await getValidToken();
     if (!token) throw new Error("अमान्य या पुराना टोकन");
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
-    const response = await fetch(`${API_BASE}/api/delivery/send-otp-to-customer`, {
+    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-delivery`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ orderId }),
+      body: JSON.stringify({ otp }),
+    });
+
+    if (response.status === 401) throw new Error("OTP गलत है।");
+    if (!response.ok) throw new Error("डिलीवरी पूरी करने में विफल");
+
+    const data = await response.json();
+
+    // ✅ Delivery सफल होने के बाद WhatsApp पर "Thanks" मैसेज भेजो
+    await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId,
+        customerPhone: data?.customerPhone,
+        customerName: data?.customerName,
+      }),
+    }).catch(() => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या"));
+
+    return data;
+  },
+
+  onSuccess: () => {
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+    toast({
+      title: "डिलीवरी पूरी हुई",
+      description: "ऑर्डर सफलतापूर्वक डिलीवर हो गया है।",
+      variant: "success",
+    });
+    setOtpDialogOpen(false);
+    setSelectedOrder(null);
+  },
+
+  onError: (error: any) => {
+    toast({
+      title: "OTP त्रुटि",
+      description: error.message || "OTP जमा करने में विफल।",
+      variant: "destructive",
+    });
+  },
+});
+
+// ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation
+const sendOtpToCustomerMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    const token = await getValidToken();
+    if (!token) throw new Error("अमान्य या पुराना टोकन");
+
+    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
@@ -288,7 +315,6 @@ const sendOtpToCustomerMutation = useMutation({
   },
 
   onSuccess: () => {
-    console.log("✅ DEBUG: sendOtpToCustomerMutation successful!");
     toast({
       title: "OTP भेजा गया",
       description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
@@ -298,7 +324,6 @@ const sendOtpToCustomerMutation = useMutation({
   },
 
   onError: (error: any) => {
-    console.error("❌ DEBUG: sendOtpToCustomerMutation failed:", error);
     toast({
       title: "OTP भेजने में विफल",
       description: error.message || "कृपया पुनः प्रयास करें।",
@@ -307,78 +332,57 @@ const sendOtpToCustomerMutation = useMutation({
   },
 });
 
-
-// ✅ मैन्युअल OTP भेजने वाला mutation
-const sendManualOtpMutation = useMutation({
+// ✅ बिना OTP के डिलीवरी पूरी करने वाला mutation
+const completeWithoutOtpMutation = useMutation({
   mutationFn: async (orderId: number) => {
-    console.log("DEBUG: sendManualOtpMutation triggered for Order ID:", orderId);
     const token = await getValidToken();
     if (!token) throw new Error("अमान्य या पुराना टोकन");
 
-    const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
-    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp-manual`, {
+    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-without-otp`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
     });
 
     if (!response.ok) {
       const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "मैन्युअल OTP भेजने में विफल।");
+      throw new Error(errorData.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
     }
 
-    return response.json();
+    const data = await response.json();
+
+    // ✅ WhatsApp Thanks Message भेजो
+    await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        orderId,
+        customerPhone: data?.customerPhone,
+        customerName: data?.customerName,
+      }),
+    }).catch(() => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या"));
+
+    return data;
   },
 
   onSuccess: () => {
-    console.log("✅ DEBUG: sendManualOtpMutation successful!");
     toast({
-      title: "OTP भेजा गया",
-      description: "ग्राहक को OTP सफलतापूर्वक भेज दिया गया है।",
+      title: "डिलीवरी पूरी हुई",
+      description: "ऑर्डर बिना OTP के सफलतापूर्वक डिलीवर हो गया है।",
       variant: "success",
     });
-    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
+    setOtpDialogOpen(false);
+    setSelectedOrder(null);
   },
 
   onError: (error: any) => {
-    console.error("❌ DEBUG: sendManualOtpMutation failed:", error);
     toast({
-      title: "OTP भेजने में त्रुटि",
-      description: error.message || "OTP भेजने में विफल।",
+      title: "त्रुटि",
+      description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।",
       variant: "destructive",
     });
   },
 });
-
-  const completeWithoutOtpMutation = useMutation({
-    mutationFn: async (orderId: number) => {
-      console.log("DEBUG: completeWithoutOtpMutation triggered for Order ID:", orderId); // Debug Log
-      const token = await getValidToken();
-      if (!token) throw new Error("अमान्य या पुराना टोकन");
-      const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
-      const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-without-otp`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
-      }
-      return response.json();
-    },
-    onSuccess: () => {
-      console.log("DEBUG: completeWithoutOtpMutation successful!"); // Debug Log
-      toast({ title: "डिलीवरी पूरी हुई", description: "ऑर्डर बिना OTP के सफलतापूर्वक डिलीवर हो गया है।", variant: "success" });
-      setOtpDialogOpen(false);
-      setSelectedOrder(null);
-    },
-    onError: (error: any) => {
-      console.error("DEBUG: completeWithoutOtpMutation failed:", error); // Debug Log
-      toast({ title: "त्रुटि", description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।", variant: "destructive" });
-    },
-  });
+  
   
   const handleStatusProgress = (order: any) => {
     console.log("handleStatusProgress: Order ID:", order.id, "Current Status:", order.status);
