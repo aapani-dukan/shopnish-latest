@@ -1,129 +1,166 @@
-// client/src/pages/deliveryotpdialog.tsx
-import React, { useState } from "react"; // ✅ React और useState को सही केस में (PascalCase)
-import { Loader2 } from "lucide-react"; // ✅ Loader2 को सही केस में (PascalCase)
+// client/src/pages/DeliveryOtpDialog.tsx
+import React, { useState, useEffect } from "react"; // ✅ React, useEffect सही केस में
+import { Loader2 } from "lucide-react"; // ✅ Loader2 सही केस में
 
-// ✅ Shadcn UI कॉम्पोनेंट्स को सही केस और सही पाथ से इंपोर्ट किया गया
-// (यह मानते हुए कि तुमने Shadcn UI को `cn` कमांड से स्थापित किया है)
 import {
-  Dialog,           // ✅ Dialog (root component, PascalCase)
-  DialogContent,    // ✅ DialogContent (PascalCase)
-  DialogHeader,     // ✅ DialogHeader (PascalCase)
-  DialogTitle,      // ✅ DialogTitle (PascalCase)
-  DialogDescription // ✅ DialogDescription (PascalCase) - इसे भी जोड़ा गया है
-} from "../components/ui/dialog"; // सुनिश्चित करें कि यह पाथ सही है
-
-import { Button } from "../components/ui/button"; // ✅ Button (PascalCase)
-import { Input } from "../components/ui/input";   // ✅ Input (PascalCase)
-import { Label } from "../components/ui/label";   // ✅ Label (PascalCase) - यह Radix Label के बजाय Shadcn Label है
-
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription
+} from "../components/ui/dialog";
+import { Button } from "../components/ui/button";
+import { Input } from "../components/ui/input";
+import { Label } from "../components/ui/label";
 
 // --- TypeScript Type Definitions ---
-export interface Order { // ✅ PascalCase
+export interface Order {
   id: number;
-  orderNumber?: string; // ✅ PascalCase
+  orderNumber?: string;
   total?: string;
-  deliveryAddress?: { // ✅ PascalCase
-    fullName?: string; // ✅ PascalCase
+  deliveryAddress?: {
+    fullName?: string;
     address?: string;
     phone?: string;
   };
 }
 
 // --- Component Props ---
-interface DeliveryOtpDialogProps { // ✅ PascalCase
-  isOpen: boolean; // ✅ PascalCase
-  onOpenChange: (open: boolean) => void; // ✅ PascalCase (प्रॉप नाम)
+interface DeliveryOtpDialogProps {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
   order: Order;
-  onConfirm: (otp: string) => void; // ✅ PascalCase (प्रॉप नाम)
-  isSubmitting: boolean; // ✅ PascalCase (प्रॉप नाम)
+  onConfirm: (otp: string) => void;
+  isSubmitting: boolean;
   error: string | null;
+  // ✅ नए प्रॉप्स
+  onSendManualOtp: (orderId: number) => void; // मैन्युअल OTP भेजने के लिए
+  isSendingManualOtp: boolean; // मैन्युअल OTP भेजने की लोडिंग स्थिति
+  onCompleteWithoutOtp: (orderId: number) => void; // बिना OTP के डिलीवरी पूरी करने के लिए
+  isCompletingWithoutOtp: boolean; // बिना OTP के डिलीवरी पूरी करने की लोडिंग स्थिति
 }
 
 // --- Main Component: DeliveryOtpDialog ---
-const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({ // ✅ PascalCase (कॉम्पोनेंट नाम)
-  isOpen,         // ✅ PascalCase (डीस्ट्रक्चर्ड प्रॉप)
-  onOpenChange,   // ✅ PascalCase (डीस्ट्रक्चर्ड प्रॉप)
+const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
+  isOpen,
+  onOpenChange,
   order,
-  onConfirm,      // ✅ PascalCase (डीस्ट्रक्चर्ड प्रॉप)
-  isSubmitting,   // ✅ PascalCase (डीस्ट्रक्चर्ड प्रॉप)
+  onConfirm,
+  isSubmitting,
   error,
+  // ✅ नए प्रॉप्स डीस्ट्रक्चर करें
+  onSendManualOtp,
+  isSendingManualOtp,
+  onCompleteWithoutOtp,
+  isCompletingWithoutOtp,
 }) => {
-  const [otp, setOtp] = useState(""); // ✅ useState और setOtp को सही केस में
+  const [otp, setOtp] = useState("");
 
   // जब डायलॉग बंद होता है, तो OTP को रीसेट करें
-  React.useEffect(() => {
+  useEffect(() => {
     if (!isOpen) {
       setOtp("");
     }
   }, [isOpen]);
 
-  const handleConfirm = () => { // ✅ camelCase (फंक्शन नाम)
+  const handleConfirm = () => {
     if (otp.trim().length === 4) { // OTP की लंबाई जांचें
       onConfirm(otp);
     }
   };
 
   return (
-    // ✅ Shadcn UI के Dialog कॉम्पोनेंट का उपयोग करें
-    <Dialog open={isOpen} onOpenChange={onOpenChange}> {/* ✅ Dialog कॉम्पोनेंट, open और onOpenChange प्रॉप्स सही केस में */}
-      <DialogContent className="sm:max-w-[425px]"> {/* ✅ DialogContent कॉम्पोनेंट, className सही केस में */}
-        <DialogHeader> {/* ✅ DialogHeader कॉम्पोनेंट */}
-          <DialogTitle>डिलीवरी पूरी करें</DialogTitle> {/* ✅ DialogTitle कॉम्पोनेंट */}
+    <Dialog open={isOpen} onOpenChange={onOpenChange}>
+      <DialogContent className="sm:max-w-[425px]">
+        <DialogHeader>
+          <DialogTitle>डिलीवरी पूरी करें</DialogTitle>
           <DialogDescription>
             डिलीवरी की पुष्टि करने के लिए ग्राहक से 4-अंकों का OTP माँगें।
           </DialogDescription>
         </DialogHeader>
 
         {order && (
-          <div className="p-4 bg-blue-50 rounded-lg mb-4"> {/* ✅ className सही केस में */}
+          <div className="p-4 bg-blue-50 rounded-lg mb-4">
             <p className="font-medium">ऑर्डर #{order.orderNumber}</p>
             <p className="text-sm text-gray-600">{order.deliveryAddress?.fullName}</p>
             <p className="text-sm text-gray-600">कुल: ₹{order.total}</p>
           </div>
         )}
 
-        <div className="grid gap-4 py-4"> {/* ✅ className सही केस में */}
-          <div className="grid gap-2"> {/* ✅ className सही केस में */}
-            <Label htmlFor="otp">OTP दर्ज करें</Label> {/* ✅ Label कॉम्पोनेंट, htmlFor सही है */}
-            <Input // ✅ Input कॉम्पोनेंट
+        <div className="grid gap-4 py-4">
+          <div className="grid gap-2">
+            <Label htmlFor="otp">OTP दर्ज करें</Label>
+            <Input
               id="otp"
               type="text"
               value={otp}
-              onChange={(e) => setOtp(e.target.value)} // ✅ onChange और setOtp को सही केस में
+              onChange={(e) => setOtp(e.target.value)}
               placeholder="0000"
-              maxLength={4}
-              className="text-center text-lg tracking-widest" // ✅ className सही केस में
+              maxLength={4} // ✅ OTP अब 4-अंकों का है
+              className="text-center text-lg tracking-widest"
             />
             {error && <p className="text-sm text-red-500 mt-2">{error}</p>}
           </div>
         </div>
 
-        <div className="flex justify-end space-x-2"> {/* ✅ className सही केस में */}
-          <Button // ✅ Button कॉम्पोनेंट
+        {/* ✅ यहाँ "OTP दोबारा भेजें" बटन जोड़ें */}
+        <Button
+          variant="outline"
+          onClick={() => onSendManualOtp(order.id)}
+          disabled={isSendingManualOtp || isSubmitting}
+          className="w-full mb-2" // थोड़ा स्टाइल
+        >
+          {isSendingManualOtp ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> OTP भेजा जा रहा है...
+            </>
+          ) : (
+            "OTP दोबारा भेजें"
+          )}
+        </Button>
+
+        <div className="flex justify-end space-x-2">
+          <Button
             type="button"
             variant="outline"
-            onClick={() => onOpenChange(false)} // ✅ onClick और onOpenChange को सही केस में
-            disabled={isSubmitting}
+            onClick={() => onOpenChange(false)}
+            disabled={isSubmitting || isSendingManualOtp || isCompletingWithoutOtp} // अन्य बटनों की स्थिति भी देखें
           >
             रद्द करें
           </Button>
-          <Button // ✅ Button कॉम्पोनेंट
+          <Button
             type="submit"
-            onClick={handleConfirm} // ✅ onClick और handleConfirm को सही केस में
-            disabled={isSubmitting || otp.trim().length !== 4}
+            onClick={handleConfirm}
+            disabled={isSubmitting || otp.trim().length !== 4 || isSendingManualOtp || isCompletingWithoutOtp} // OTP की लंबाई और अन्य बटनों की स्थिति देखें
           >
             {isSubmitting ? (
               <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> सत्यापित हो रहा है... {/* ✅ Loader2 सही केस में */}
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> सत्यापित हो रहा है...
               </>
             ) : (
               "पुष्टि करें"
             )}
           </Button>
         </div>
+
+        {/* ✅ यहाँ "बिना OTP के डिलीवर करें" बटन जोड़ें */}
+        <Button
+          variant="destructive"
+          onClick={() => onCompleteWithoutOtp(order.id)}
+          disabled={isCompletingWithoutOtp || isSubmitting || isSendingManualOtp} // अन्य बटनों की स्थिति भी देखें
+          className="w-full mt-4" // थोड़ा स्टाइल
+        >
+          {isCompletingWithoutOtp ? (
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" /> डिलीवर किया जा रहा है...
+            </>
+          ) : (
+            "बिना OTP के डिलीवर करें"
+          )}
+        </Button>
       </DialogContent>
     </Dialog>
   );
 };
 
-export default DeliveryOtpDialog; // ✅ PascalCase
+export default DeliveryOtpDialog;
