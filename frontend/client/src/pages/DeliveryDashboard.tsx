@@ -241,7 +241,7 @@ export default function DeliveryDashboard() {
 
   
 // ✅ Unified Delivery Mutations (Production Ready)
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
 
 // ✅ OTP Submit + Complete Delivery
 const handleOtpSubmitMutation = useMutation({
