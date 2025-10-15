@@ -105,11 +105,17 @@ export default function DeliveryDashboard() {
   }, [user, auth?.currentUser]);
 
   const getValidToken = async () => {
-    if (!auth?.currentUser) return null;
+    if (!auth?.currentUser) {
+        console.error("DEBUG: getValidToken - auth.currentUser is null or undefined. User might be logged out.");
+        return null;
+    }
     try {
-      return await auth.currentUser.getIdToken(true);
-    } catch (err) {
-      console.error("टोकन लाने में त्रुटि:", err);
+      const token = await auth.currentUser.getIdToken(true);
+      console.log("DEBUG: Token fetched successfully (first 20 chars):", token?.substring(0, 20), "...");
+      return token;
+    } catch (err: any) { // err को 'any' टाइप करें
+      // 🔥 Firebase error code को लॉग करें
+      console.error("DEBUG: ❌ Error fetching ID token:", err.message, "Code:", err.code); 
       return null;
     }
   };
