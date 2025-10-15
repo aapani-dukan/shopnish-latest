@@ -1,9 +1,11 @@
 import axios from "axios";
 
 // ✅ यहां अपने MSG91 WhatsApp API Key डालें
-// पुराने MSG91_AUTH_KEY को MSG91_WHATSAPP_AUTH_KEY में बदला गया है
-const MSG91_WHATSAPP_AUTH_KEY = process.env.MSG91_WHATSAPP_AUTH_KEY;
+// इसे सीधे "shopnishAuthkey" पर बदला गया है, यह मानते हुए कि यह .env/Vercel में नाम है
+const MSG91_AUTH_KEY_VAR = process.env.shopnishAuthkey; // <--- यहां नाम अपडेट किया गया
 const MSG91_BASE_URL = "https://api.msg91.com/api/v5/whatsapp";
+// ✅ नया CleverTap-specific एंडपॉइंट
+const MSG91_CLEVERTAP_ENDPOINT = "https://api.msg91.com/api/v5/whatsapp/outbound/clevertap"; // <--- एंडपॉइंट अपडेट किया गया
 
 // 🔹 OTP Generator
 export function generateOTP(length: number = 6): string {
@@ -18,9 +20,9 @@ export function generateOTP(length: number = 6): string {
 // 🔹 WhatsApp message sender (generic)
 export async function sendWhatsAppMessage(phone: string, message: string) {
   try {
-    // MSG91_AUTH_KEY को MSG91_WHATSAPP_AUTH_KEY में बदला गया है
-    if (!MSG91_WHATSAPP_AUTH_KEY) {
-      console.error("❌ MSG91_WHATSAPP_AUTH_KEY not set in environment variables.");
+    // MSG91_WHATSAPP_AUTH_KEY को MSG91_AUTH_KEY_VAR में बदला गया है
+    if (!MSG91_AUTH_KEY_VAR) {
+      console.error("❌ shopnishAuthkey not set in environment variables."); // <--- एरर मैसेज भी अपडेट किया गया
       return false;
     }
 
@@ -31,11 +33,12 @@ export async function sendWhatsAppMessage(phone: string, message: string) {
     };
 
     const headers = {
-      authkey: MSG91_WHATSAPP_AUTH_KEY, // यहां भी बदला गया
+      authkey: MSG91_AUTH_KEY_VAR, // यहां भी बदला गया
       "Content-Type": "application/json",
     };
 
-    const response = await axios.post(`${MSG91_BASE_URL}/send`, payload, { headers });
+    // ✅ एंडपॉइंट को MSG91_CLEVERTAP_ENDPOINT पर अपडेट किया गया
+    const response = await axios.post(MSG91_CLEVERTAP_ENDPOINT, payload, { headers }); // <--- यहां अपडेट किया गया
 
     console.log("✅ WhatsApp message sent:", response.data);
     return true;
