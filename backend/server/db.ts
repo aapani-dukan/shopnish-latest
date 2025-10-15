@@ -20,7 +20,7 @@ const pool = new Pool({
 });
 
 // ✅ Initialize Drizzle ORM
-export const db = drizzle(pool, { schema });
+export const db = drizzle(pool, { schema, logger:true });
 
 // ✅ Optional: Export the pool as well if you need to perform direct queries or management (e.g., migrations)
 export const databasePool = pool;
