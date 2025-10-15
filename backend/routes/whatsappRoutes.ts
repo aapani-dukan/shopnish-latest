@@ -1,7 +1,7 @@
 // whatsappRoutes.ts
 import { Router, Response } from "express";
 import { db } from "../server/db";
-// ✨ सुनिश्चित करें कि तीनों स्कीमा (orders, users, deliveryAddresses) इम्पोर्ट किए गए हैं
+// ✨ deliveryAddresses को इम्पोर्ट करना सुनिश्चित करें
 import { orders, users, deliveryAddresses } from "../shared/backend/schema";
 import { eq } from "drizzle-orm";
 import { requireDeliveryBoyAuth } from "../server/middleware/authMiddleware";
@@ -10,16 +10,20 @@ import { generateOTP, sendWhatsAppMessage } from "../server/lib/whatsappHelpers"
 
 const router = Router();
 
-// एक हेल्पर फंक्शन जो कई रूट्स में डुप्लीकेट लॉजिक को कम करेगा
-// यह एक ऑर्डर, ग्राहक प्रोफाइल और डिलीवरी एड्रेस से सभी संभावित फोन नंबर और नाम एकत्र करेगा
+// --- हेल्पर फंक्शन ---
+
+/**
+ * एक ऑर्डर से ग्राहक प्रोफ़ाइल और डिलीवरी एड्रेस दोनों के फ़ोन नंबर और नाम एकत्र करता है।
+ */
 async function getCustomerRecipientInfo(orderId: number) {
+  // `with` क्लॉज़ का उपयोग करके दोनों संबंधित टेबलों से डेटा fetch करें
   const order = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),
     with: {
-      customer: { columns: { id: true, phone: true, name: true } }, // 1. यूज़र प्रोफ़ाइल से फ़ोन और नाम
-      deliveryAddress: { columns: { id: true, phoneNumber: true, recipientName: true } } // 2. डिलीवरी एड्रेस से फ़ोन और नाम
+      customer: { columns: { id: true, phone: true, name: true } }, // 1. यूज़र प्रोफ़ाइल
+      deliveryAddress: { columns: { id: true, phoneNumber: true, fullName: true } } // 2. डिलीवरी एड्रेस
     },
-    columns: { // orders टेबल से id और deliveryBoyId, आदि fetch करें
+    columns: { // orders टेबल से केवल आवश्यक कॉलम
       id: true,
       deliveryBoyId: true,
     }
@@ -27,10 +31,11 @@ async function getCustomerRecipientInfo(orderId: number) {
 
   if (!order) return { order: null, recipients: [] };
 
+  // कॉलम के नाम तुम्हारे स्कीमा (fullName और phoneNumber) से मेल खाते हैं
   const deliveryAddressPhone = order.deliveryAddress?.phoneNumber;
-  const deliveryAddressName = order.deliveryAddress?.recipientName;
+  const deliveryAddressName = order.deliveryAddress?.fullName; // ✨ fullName का उपयोग करें
   const userProfilePhone = order.customer?.phone;
-  const userProfileName = order.customer?.name;
+  const userProfileName = order.customer?.name; // users टेबल में नाम firstName/lastName है, लेकिन Drizzle Relation से 'name' आ सकता है
 
   const recipients: { phone: string; name: string }[] = [];
   const uniquePhones = new Set<string>();
@@ -39,7 +44,7 @@ async function getCustomerRecipientInfo(orderId: number) {
   if (deliveryAddressPhone && !uniquePhones.has(deliveryAddressPhone)) {
     recipients.push({
       phone: deliveryAddressPhone,
-      name: deliveryAddressName || userProfileName || "ग्राहक" // नाम प्राथमिकता
+      name: deliveryAddressName || userProfileName || "ग्राहक"
     });
     uniquePhones.add(deliveryAddressPhone);
   }
@@ -48,14 +53,15 @@ async function getCustomerRecipientInfo(orderId: number) {
   if (userProfilePhone && !uniquePhones.has(userProfilePhone)) {
     recipients.push({
       phone: userProfilePhone,
-      name: userProfileName || deliveryAddressName || "ग्राहक" // नाम प्राथमिकता
+      name: userProfileName || deliveryAddressName || "ग्राहक"
     });
     uniquePhones.add(userProfilePhone);
   }
-  
+
   return { order, recipients };
 }
 
+// --- रूट्स ---
 
 /**
  * ✅ Send OTP to Customer (Delivery OTP)
@@ -107,17 +113,19 @@ router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedReques
     return res.status(200).json({
       success: true,
       message: `OTP sent successfully to ${sentCount} recipient(s).`,
-      sentToPhones: recipients.map(r => r.phone), // सभी संभावित प्राप्तकर्ता, चाहे उन पर भेजा गया हो या नहीं
+      sentToPhones: recipients.map(r => r.phone),
       failedToPhones: failedPhones,
-      otp, // Debugging के लिए OTP शामिल करें, production में हटा सकते हैं
+      otp, 
     });
 
   } catch (error: any) {
     console.error("Error /send-otp:", error);
+    // यह 500 एरर डेटाबेस कॉन्फ़िगरेशन समस्या के कारण हो सकता है।
     return res.status(500).json({ message: "Server error." });
   }
 });
 
+---
 
 /**
  * ✅ Send Delivery Thanks Message after delivery
@@ -127,6 +135,7 @@ router.post('/send-delivery-thanks', async (req: AuthenticatedRequest, res: Resp
     const { orderId } = req.body;
     if (!orderId) return res.status(400).json({ message: "Order ID required." });
 
+    // डेटाबेस से फ़ोन नंबर fetch करें (जैसा कि अब `getCustomerRecipientInfo` करता है)
     const { order, recipients } = await getCustomerRecipientInfo(orderId);
 
     if (!order) return res.status(404).json({ message: "Order not found." });
@@ -164,21 +173,27 @@ router.post('/send-delivery-thanks', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
+---
 
 /**
  * ✅ Send Welcome Message on User Login
+ * Welcome Message केवल प्रोफाइल नंबर पर भेजा जाता है, डिलीवरी एड्रेस पर नहीं।
  */
 router.post('/send-welcome', async (req: AuthenticatedRequest, res: Response) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ message: "User ID required." });
 
-    // वेलकम मैसेज के लिए, हमें सीधे यूजर को fetch करना होगा
     const user = await db.query.users.findFirst({ where: eq(users.id, userId) });
-    if (!user || !user.phone || !user.name) return res.status(404).json({ message: "User not found or phone/name missing." });
+    
+    // users.name की जगह users.firstName का उपयोग करें (तुम्हारे स्कीमा में firstName/lastName है)
+    const userName = user?.firstName; 
+    const userPhone = user?.phone;
 
-    const msg = `हेलो ${user.name}, आपका स्वागत है Shopnish में! 🎉 आप हमारे साथ जुड़े हैं।`;
-    const result = await sendWhatsAppMessage(user.phone, msg, { userId });
+    if (!user || !userPhone || !userName) return res.status(404).json({ message: "User not found or phone/name missing." });
+
+    const msg = `हेलो ${userName}, आपका स्वागत है Shopnish में! 🎉 आप हमारे साथ जुड़े हैं।`;
+    const result = await sendWhatsAppMessage(userPhone, msg, { userId, customerName: userName });
 
     if (!result) return res.status(500).json({ message: "Failed to send welcome message." });
     return res.status(200).json({ success: true, message: "Welcome message sent via WhatsApp." });
@@ -188,13 +203,13 @@ router.post('/send-welcome', async (req: AuthenticatedRequest, res: Response) =>
   }
 });
 
+---
 
 /**
  * ✅ Placeholder for Weekly Reminder (future)
  */
 router.post('/send-weekly-reminder', async (req: AuthenticatedRequest, res: Response) => {
   try {
-    // future: fetch all users with last purchase > 7 days, send WhatsApp
     return res.status(200).json({ message: "Weekly reminder endpoint ready." });
   } catch (error: any) {
     console.error("Error /send-weekly-reminder:", error);
