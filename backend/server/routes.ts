@@ -272,7 +272,7 @@ router.get("/categories", async (req: Request, res: Response) => {
 
 // ✅ Products
 router.use("/products", productsRouter);
-router.use('/api/whatsapp', whatsappRouter);
+router.use("/whatsapp", whatsappRouter);
 
 // ✅ Delivery Boy
 router.use("/delivery", dBoyRouter);
