@@ -17,15 +17,12 @@ export const orderStatusEnum = pgEnum('order_status', [
 export const userRoleEnum = pgEnum("user_role", ["customer", "seller", "admin", "delivery-boy"]);
 export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected"]);
 
-// ✅ Updated and cleaned up for clarity
 export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
   "pending", 
   "accepted", 
   "out_for_delivery", 
   "delivered"
 ]);
-
-
 
 
 export const users = pgTable("users", {
@@ -44,6 +41,11 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+
+  // ✨ NEW: WhatsApp से संबंधित कॉलम
+  whatsappOptIn: boolean("whatsapp_opt_in").default(true), // डिफ़ॉल्ट रूप से ऑप्ट-इन, उपयोगकर्ता इसे बदल सकता है
+  welcomeMessageSent: boolean("welcome_message_sent").default(false), // वेलकम मैसेज भेजा गया है या नहीं
+  lastActivityAt: timestamp("last_activity_at").defaultNow(), // अंतिम गतिविधि का समय (रीमाइंडर्स के लिए)
 });
 
 export const sellersPgTable = pgTable("sellers", {
@@ -150,7 +152,7 @@ export const deliveryBoys = pgTable("delivery_boys", {
   rating: decimal("rating", { precision: 3, scale: 2 }).default("5.0"),
   totalDeliveries: integer("total_deliveries").default(0),
   createdAt: timestamp("created_at").defaultNow(),
-    updatedAt: timestamp("updated_at"),  
+  updatedAt: timestamp("updated_at"),  
 });
 
 export const cartItems = pgTable("cart_items", {
@@ -174,7 +176,6 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   state: text('state').notNull(),
   postalCode: text('postal_code').notNull(),
   
-  // ✅ NEW: Latitude and Longitude for accurate mapping
   latitude: decimal('latitude').$type<number>().notNull().default('0.0'),
   longitude: decimal('longitude').$type<number>().notNull().default('0.0'),
   
@@ -185,10 +186,8 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
 
-  // Unique Order Number
   orderNumber: text("order_number").notNull(),
 
-  // Relations
   customerId: integer("customer_id")
     .notNull()
     .references(() => users.id, { onDelete: "cascade" }),
@@ -203,7 +202,6 @@ export const orders = pgTable("orders", {
     .notNull()
     .references(() => deliveryAddresses.id, { onDelete: "cascade" }),
   
-  // Order Details
   status: orderStatusEnum("status").default("pending").notNull(),
   deliveryStatus: deliveryStatusEnum("delivery_status").default("pending").notNull(),
 
@@ -213,23 +211,23 @@ export const orders = pgTable("orders", {
   paymentMethod: text("payment_method").notNull(),
   paymentStatus: text("payment_status").default("pending"),
 
-  // Delivery Address (string version)
   deliveryAddress: text("delivery_address").notNull(),
 
-  // ✅ NEW: Redundant Lat/Lng for quick order retrieval and tracking
   deliveryLat: decimal("delivery_lat").$type<number>().default('0.0'),
   deliveryLng: decimal("delivery_lng").$type<number>().default('0.0'),
 
-  // Delivery Info
   deliveryInstructions: text("delivery_instructions"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
 
-  // Discounts / Offers
   promoCode: text("promo_code"),
   discount: decimal("discount", { precision: 5, scale: 2 }),  
 
-  // Timestamps
+  // ✨✨✨ नए कॉलम: deliveryOtp और deliveryOtpSentAt ✨✨✨
+  deliveryOtp: text("delivery_otp"),
+  deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
+  // ✨✨✨ ✨✨✨ ✨✨✨
+
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
@@ -320,6 +318,7 @@ export const serviceBookings = pgTable("service_bookings", {
   customerNotes: text("customer_notes"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
 export const playingWithNeon = pgTable("playing_with_neon", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),   
@@ -329,21 +328,15 @@ export const playingWithNeon = pgTable("playing_with_neon", {
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),
 
-  // Relations
   customerId: integer("customer_id").references(() => users.id),
   productId: integer("product_id").references(() => products.id),
   orderId: integer("order_id").references(() => orders.id),
 
-  // Nullable columns
-  deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id), // nullable
-  deliveryAddressId: integer("delivery_address_id").references(() => deliveryAddresses.id), // nullable
+  deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id),
+  deliveryAddressId: integer("delivery_address_id").references(() => deliveryAddresses.id),
 
-  // Review details
   rating: integer("rating").notNull(),
   comment: text("comment"),
 
   createdAt: timestamp("created_at").defaultNow(),
 });
-
-  
-
