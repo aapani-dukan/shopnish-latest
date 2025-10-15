@@ -11,7 +11,9 @@
             "seed": "tsx server/seed.ts",
             "db:push": "drizzle-kit push",
             "db:push:force": "drizzle-kit push --force",
-            "db:migrate": "drizzle-kit migrate"
+    "db:generate": "drizzle-kit generate",
+    "db:migrate": "drizzle-kit migrate"
+            
       },
       "keywords": [],
       "author": "",
