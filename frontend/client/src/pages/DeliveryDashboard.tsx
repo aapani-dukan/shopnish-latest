@@ -723,7 +723,7 @@ const completeWithoutOtpMutation = useMutation({
       </section>
 
     {/* OTP Dialog */}
-    {/* OTP Dialog */}
+    
 {otpDialogOpen && selectedOrder && (
   <DeliveryOtpDialog
     isOpen={otpDialogOpen}
@@ -768,7 +768,7 @@ const completeWithoutOtpMutation = useMutation({
     isCompletingWithoutOtp={completeWithoutOtpMutation.isPending}
   />
 )}
-</div> {/* यह </div> DeliveryDashboard के अंत का है */}
+</div> 
     );
 }
 
