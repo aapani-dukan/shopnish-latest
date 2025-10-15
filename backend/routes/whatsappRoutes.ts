@@ -12,7 +12,7 @@ const router = Router();
 /**
  * ✅ Send OTP to Customer (Delivery OTP)
  */
-router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const deliveryBoyId = req.user?.deliveryBoyId;
     const { orderId } = req.body;
@@ -49,7 +49,7 @@ router.post('/send-otp-to-customer', requireDeliveryBoyAuth, async (req: Authent
     return res.status(200).json({ success: true, message: "OTP sent successfully.", customerPhone: customer.phone, customerName: customer.name });
 
   } catch (error: any) {
-    console.error("Error /send-otp-to-customer:", error);
+    console.error("Error /send-otp:", error);
     return res.status(500).json({ message: "Server error." });
   }
 });
