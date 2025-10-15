@@ -5,7 +5,7 @@ import axios from "axios";
 const MSG91_AUTH_KEY_VAR = process.env.shopnishAuthkey; // <--- यहां नाम अपडेट किया गया
 const MSG91_BASE_URL = "https://api.msg91.com/api/v5/whatsapp";
 // ✅ नया CleverTap-specific एंडपॉइंट
-const MSG91_CLEVERTAP_ENDPOINT = "https://api.msg91.com/api/v5/whatsapp/outbound/clevertap"; // <--- एंडपॉइंट अपडेट किया गया
+const MSG91_CLEVERTAP_ENDPOINT = "https://api.msg91.com/api/v5/whatsapp/outbound/clevertap/"; // <--- एंडपॉइंट अपडेट किया गया
 
 // 🔹 OTP Generator
 export function generateOTP(length: number = 6): string {
