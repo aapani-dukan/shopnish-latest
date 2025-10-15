@@ -29,7 +29,7 @@ import userLoginRouter from "../routes/userRoutes.ts";
 import orderRoutes from "../routes/orderRoutes";
 import { verifyToken } from "./middleware/verifyToken";
 import { categories } from "../shared/backend/schema.ts";
-import whatsappRouter from '../routes/whatsappRoutes.ts';
+import whatsappRoutes from '../routes/whatsappRoutes.ts';
 import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 const router = Router();
 
@@ -257,7 +257,7 @@ router.use("/auth", apiAuthLoginRouter);
 router.use("/cart", cartRouter);
 router.use("/orders", orderRoutes);
 router.use("/order-confirmation", orderConfirmationRouter);
-router.use("/sellers", verifyToken, sellerRouter);
+router.use("/sellers", verifyToken, sellerRoutes);
 
 // ✅ Categories
 router.get("/categories", async (req: Request, res: Response) => {
