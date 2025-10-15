@@ -125,7 +125,6 @@ router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedReques
   }
 });
 
----
 
 /**
  * ✅ Send Delivery Thanks Message after delivery
@@ -173,7 +172,6 @@ router.post('/send-delivery-thanks', async (req: AuthenticatedRequest, res: Resp
   }
 });
 
----
 
 /**
  * ✅ Send Welcome Message on User Login
@@ -202,8 +200,6 @@ router.post('/send-welcome', async (req: AuthenticatedRequest, res: Response) =>
     return res.status(500).json({ message: "Server error." });
   }
 });
-
----
 
 /**
  * ✅ Placeholder for Weekly Reminder (future)
