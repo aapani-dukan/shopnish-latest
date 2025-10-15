@@ -1,7 +1,8 @@
 import axios from "axios";
 
 // ✅ यहां अपने MSG91 WhatsApp API Key डालें
-const MSG91_AUTH_KEY = process.env.MSG91_AUTH_KEY;
+// पुराने MSG91_AUTH_KEY को MSG91_WHATSAPP_AUTH_KEY में बदला गया है
+const MSG91_WHATSAPP_AUTH_KEY = process.env.MSG91_WHATSAPP_AUTH_KEY;
 const MSG91_BASE_URL = "https://api.msg91.com/api/v5/whatsapp";
 
 // 🔹 OTP Generator
@@ -17,8 +18,9 @@ export function generateOTP(length: number = 6): string {
 // 🔹 WhatsApp message sender (generic)
 export async function sendWhatsAppMessage(phone: string, message: string) {
   try {
-    if (!MSG91_AUTH_KEY) {
-      console.error("❌ MSG91_AUTH_KEY not set in environment variables.");
+    // MSG91_AUTH_KEY को MSG91_WHATSAPP_AUTH_KEY में बदला गया है
+    if (!MSG91_WHATSAPP_AUTH_KEY) {
+      console.error("❌ MSG91_WHATSAPP_AUTH_KEY not set in environment variables.");
       return false;
     }
 
@@ -29,7 +31,7 @@ export async function sendWhatsAppMessage(phone: string, message: string) {
     };
 
     const headers = {
-      authkey: MSG91_AUTH_KEY,
+      authkey: MSG91_WHATSAPP_AUTH_KEY, // यहां भी बदला गया
       "Content-Type": "application/json",
     };
 
@@ -47,8 +49,7 @@ export async function sendWhatsAppMessage(phone: string, message: string) {
 export async function sendWhatsAppOTP(phone: string, otp: string, orderId: number, customerName: string) {
   const message = `नमस्ते ${customerName} 👋  
 आपका Shopnish ऑर्डर (ID: ${orderId}) डिलीवरी के लिए तैयार है।  
-कृपया यह OTP साझा करें: *${otp}*  
-धन्यवाद 🛍️ Shopnish का उपयोग करने के लिए।`;
+कृपया यह OTP साझा करें: *${otp}* धन्यवाद 🛍️ Shopnish का उपयोग करने के लिए।`;
 
   return sendWhatsAppMessage(phone, message);
 }
