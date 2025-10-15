@@ -303,6 +303,7 @@ const sendOtpToCustomerMutation = useMutation({
     const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+        body: JSON.stringify({ orderId }),
     });
 
     if (!response.ok) {
