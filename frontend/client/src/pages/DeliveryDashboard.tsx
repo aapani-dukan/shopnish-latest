@@ -91,7 +91,7 @@ export default function DeliveryDashboard() {
     fiveDaysAgo.setDate(fiveDaysAgo.getDate() - 5);
     return fiveDaysAgo;
   });
-  
+
   useEffect(() => {
     if (!user || !auth?.currentUser) return;
     try {
@@ -796,11 +796,13 @@ const completeWithoutOtpMutation = useMutation({
           variant: "destructive",
         });
       }
-    }}
+    } }
     isCompletingWithoutOtp={false}
   />
 )}
-
+    </div>
+    );
+}
 // --- Helper Component for Orders List ---
 interface OrdersListViewProps {
   orders: any[];
