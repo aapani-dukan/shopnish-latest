@@ -117,14 +117,20 @@ export default function DeliveryDashboard() {
         api.get("/api/delivery/orders/available"),
           api.get("/api/delivery/orders/my"), 
         ]);
+        
+        // ✨ Axios Response को हैंडल करने के लिए बदलाव: .data.orders का उपयोग करें
         const availableOrders =
-          availableRes.status === "fulfilled" && Array.isArray((availableRes.value as any).orders)
-            ? (availableRes.value as any).orders
+          availableRes.status === "fulfilled" && availableRes.value && Array.isArray((availableRes.value as any).data?.orders)
+            ? (availableRes.value as any).data.orders
             : [];
+            
+        // ✨ Axios Response को हैंडल करने के लिए बदलाव: .data.orders का उपयोग करें
         const myOrders =
-          myRes.status === "fulfilled" && Array.isArray((myRes.value as any).orders)
-            ? (myRes.value as any).orders
+          myRes.status === "fulfilled" && myRes.value && Array.isArray((myRes.value as any).data?.orders)
+            ? (myRes.value as any).data.orders
             : [];
+            
+        // यहाँ से आगे की लॉजिक सही है
         const map = new Map();
         [...availableOrders, ...myOrders].forEach((o) => {
           if (o && typeof o.id === "number") {
@@ -134,7 +140,10 @@ export default function DeliveryDashboard() {
             });
           }
         });
+        
+        console.log("✅ Fetched Orders Count:", map.size); // Debugging के लिए
         return Array.from(map.values());
+        
       } catch (err) {
         console.error("ऑर्डर लाने में त्रुटि:", err);
         toast({
@@ -147,6 +156,7 @@ export default function DeliveryDashboard() {
     },
     enabled: isAuthenticated && !!user && myDeliveryBoyId !== undefined && myDeliveryBoyId !== null,
   });
+  
 
   useEffect(() => {
     if (!socket || !user) return;
