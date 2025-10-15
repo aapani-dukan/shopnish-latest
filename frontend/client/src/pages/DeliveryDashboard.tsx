@@ -104,21 +104,6 @@ export default function DeliveryDashboard() {
     }
   }, [user, auth?.currentUser]);
 
-  const getValidToken = async () => {
-    if (!auth?.currentUser) {
-        console.error("DEBUG: getValidToken - auth.currentUser is null or undefined. User might be logged out.");
-        return null;
-    }
-    try {
-      const token = await auth.currentUser.getIdToken(true);
-      console.log("DEBUG: Token fetched successfully (first 20 chars):", token?.substring(0, 20), "...");
-      return token;
-    } catch (err: any) { // err को 'any' टाइप करें
-      // 🔥 Firebase error code को लॉग करें
-      console.error("DEBUG: ❌ Error fetching ID token:", err.message, "Code:", err.code); 
-      return null;
-    }
-  };
 
   const myDeliveryBoyId = user?.deliveryBoyId; 
   console.log("DEBUG: myDeliveryBoyId from user object (before useQuery):", myDeliveryBoyId); 
@@ -129,8 +114,8 @@ export default function DeliveryDashboard() {
     queryFn: async () => {
       try {
         const [availableRes, myRes] = await Promise.allSettled([
-          apiRequest("get", "/api/delivery/orders/available"),
-          apiRequest("get", "/api/delivery/orders/my"),
+        api.get("/api/delivery/orders/available"),
+          api.get("/api/delivery/orders/my"), 
         ]);
         const availableOrders =
           availableRes.status === "fulfilled" && Array.isArray((availableRes.value as any).orders)
@@ -245,39 +230,53 @@ export default function DeliveryDashboard() {
     onError: () => toast({ title: "त्रुटि", description: "ऑर्डर स्थिति अपडेट करने में विफल", variant: "destructive" }),
   });
 
-  
-// ✅ Unified Delivery Mutations (Production Ready)
-const API_BASE = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+
 
 // ✅ OTP Submit + Complete Delivery
 const handleOtpSubmitMutation = useMutation({
   mutationFn: async ({ orderId, otp }: { orderId: number; otp: string }) => {
-    const token = await getValidToken();
-    if (!token) throw new Error("अमान्य या पुराना टोकन");
+    let data; // ✨ डेटा को यहाँ डिक्लेयर करें ताकि इसे `try` और `catch` ब्लॉक के बाहर एक्सेस किया जा सके
 
-    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-delivery`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ otp }),
-    });
+    try {
+      // ✅ Axios `api.post` का उपयोग करें। Axios त्रुटियों को स्वचालित रूप से फेंकता है।
+      const response = await api.post(`/api/delivery/orders/${orderId}/complete-delivery`, { otp });
+      data = response.data; // ✨ Axios में, डेटा `response.data` प्रॉपर्टी में होता है। `response.json()` की आवश्यकता नहीं है।
 
-    if (response.status === 401) throw new Error("OTP गलत है।");
-    if (!response.ok) throw new Error("डिलीवरी पूरी करने में विफल");
+      // 🔥 `response.status === 401` और `!response.ok` जैसी जाँचों की अब आवश्यकता नहीं है।
+      //    यदि Axios को 4xx या 5xx स्टेटस कोड मिलता है, तो वह एक त्रुटि फेंक देगा,
+      //    जिसे `catch` ब्लॉक में पकड़ा जाएगा।
+      // 🔥 `const data = await response.json();` लाइन भी हटा दी गई है क्योंकि `response.data` पहले से ही पार्स किया हुआ डेटा है।
 
-    const data = await response.json();
+    } catch (error: any) {
+      // ✨ Axios त्रुटियों को यहाँ पकड़ा जाता है।
+      console.error("handleOtpSubmitMutation error:", error);
+      
+      if (error.response) {
+        // सर्वर से एक प्रतिक्रिया मिली (जैसे 401, 404, 500)
+        if (error.response.status === 401) {
+          throw new Error("OTP गलत है।");
+        }
+        // सर्वर द्वारा प्रदान किया गया त्रुटि संदेश दिखाएँ, यदि उपलब्ध हो
+        throw new Error(error.response.data.message || "डिलीवरी पूरी करने में विफल");
+      } else if (error.request) {
+        // अनुरोध भेजा गया था, लेकिन कोई प्रतिक्रिया नहीं मिली (नेटवर्क डाउन, CORS समस्या)
+        throw new Error("नेटवर्क त्रुटि: सर्वर तक पहुँचने में विफल है।");
+      } else {
+        // अनुरोध सेट करते समय कुछ और गलत हो गया
+        throw new Error(error.message || "अनपेक्षित त्रुटि हुई।");
+      }
+    }
 
     // ✅ Delivery सफल होने के बाद WhatsApp पर "Thanks" मैसेज भेजो
-    await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId,
-        customerPhone: data?.customerPhone,
-        customerName: data?.customerName,
-      }),
-    }).catch(() => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या"));
+    // 🔥 यहाँ भी `fetch` की जगह `api.post` का उपयोग करें ताकि इंटरसेप्टर ऑथेंटिकेशन हेडर जोड़ सके।
+    //    `API_BASE` की आवश्यकता नहीं है।
+    await api.post(`/api/whatsapp/send-delivery-thanks`, {
+      orderId,
+      customerPhone: data?.customerPhone, // ✨ `data` अब यहाँ एक्सेसिबल है
+      customerName: data?.customerName,
+    }).catch((err) => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या:", err));
 
-    return data;
+    return data; // ✨ सफल होने पर यह डेटा वापस होगा
   },
 
   onSuccess: () => {
@@ -292,6 +291,7 @@ const handleOtpSubmitMutation = useMutation({
   },
 
   onError: (error: any) => {
+    // ✨ यहाँ error.message पहले से ही `mutationFn` के catch ब्लॉक में सेट हो चुका होगा
     toast({
       title: "OTP त्रुटि",
       description: error.message || "OTP जमा करने में विफल।",
@@ -299,25 +299,46 @@ const handleOtpSubmitMutation = useMutation({
     });
   },
 });
+  
 
+// ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation
 // ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation
 const sendOtpToCustomerMutation = useMutation({
   mutationFn: async (orderId: number) => {
-    const token = await getValidToken();
-    if (!token) throw new Error("अमान्य या पुराना टोकन");
+    // 🔥 `getValidToken()` और `API_BASE` की अब आवश्यकता नहीं है।
+    // Axios इंटरसेप्टर ऑथेंटिकेशन और baseURL को स्वचालित रूप से संभाल लेगा।
 
-    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/send-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-        body: JSON.stringify({ orderId }),
-    });
+    let data; // ✨ डेटा को यहाँ डिक्लेयर करें
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "ग्राहक को OTP भेजने में विफल");
+    try {
+      // ✅ `fetch` की जगह `api.post` का उपयोग करें
+      //    Axios में, POST रिक्वेस्ट के लिए बॉडी सीधे दूसरे आर्गुमेंट के रूप में पास की जाती है।
+      //    यदि सर्वर को `orderId` बॉडी में चाहिए, तो इसे ऐसे भेजें:
+      const response = await api.post(`/api/delivery/orders/${orderId}/send-otp`, { orderId });
+      data = response.data; // ✨ Axios में, डेटा `response.data` प्रॉपर्टी में होता है।
+
+      // 🔥 `!response.ok` जैसी जाँचों की अब आवश्यकता नहीं है,
+      //    Axios स्वचालित रूप से 4xx/5xx स्टेटस कोड पर त्रुटि फेंकता है।
+      // 🔥 `response.json()` की भी आवश्यकता नहीं है।
+
+    } catch (error: any) {
+      // ✨ Axios त्रुटियों को यहाँ पकड़ा जाता है।
+      console.error("sendOtpToCustomerMutation error:", error);
+
+      if (error.response) {
+        // सर्वर से एक प्रतिक्रिया मिली (जो 2xx रेंज से बाहर थी)
+        // यदि सर्वर से कोई विशिष्ट त्रुटि संदेश आता है, तो उसे दिखाएँ।
+        throw new Error(error.response.data.message || "ग्राहक को OTP भेजने में विफल");
+      } else if (error.request) {
+        // अनुरोध भेजा गया था, लेकिन कोई प्रतिक्रिया नहीं मिली (नेटवर्क त्रुटि)
+        throw new Error("नेटवर्क त्रुटि: सर्वर तक पहुँचने में विफल है।");
+      } else {
+        // अनुरोध सेट करते समय कुछ और गलत हो गया
+        throw new Error(error.message || "अनपेक्षित त्रुटि हुई।");
+      }
     }
 
-    return response.json();
+    return data; // ✨ सफल डेटा वापस करें
   },
 
   onSuccess: () => {
@@ -330,6 +351,7 @@ const sendOtpToCustomerMutation = useMutation({
   },
 
   onError: (error: any) => {
+    // ✨ यहाँ error.message `mutationFn` के catch ब्लॉक में सेट हो चुका होगा
     toast({
       title: "OTP भेजने में विफल",
       description: error.message || "कृपया पुनः प्रयास करें।",
@@ -338,36 +360,49 @@ const sendOtpToCustomerMutation = useMutation({
   },
 });
 
+
 // ✅ बिना OTP के डिलीवरी पूरी करने वाला mutation
 const completeWithoutOtpMutation = useMutation({
   mutationFn: async (orderId: number) => {
-    const token = await getValidToken();
-    if (!token) throw new Error("अमान्य या पुराना टोकन");
+    // 🔥 `getValidToken()` और `API_BASE` की अब आवश्यकता नहीं है।
+    // Axios इंटरसेप्टर ऑथेंटिकेशन और baseURL को स्वचालित रूप से संभाल लेगा।
 
-    const response = await fetch(`${API_BASE}/api/delivery/orders/${orderId}/complete-without-otp`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-    });
+    let data; // ✨ डेटा को यहाँ डिक्लेयर करें ताकि इसे `try` और `catch` ब्लॉक के बाहर एक्सेस किया जा सके
 
-    if (!response.ok) {
-      const errorData = await response.json().catch(() => ({}));
-      throw new Error(errorData.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
+    try {
+      // ✅ `fetch` की जगह `api.post` का उपयोग करें
+      const response = await api.post(`/api/delivery/orders/${orderId}/complete-without-otp`);
+      data = response.data; // ✨ Axios में, डेटा `response.data` प्रॉपर्टी में होता है।
+
+      // 🔥 `!response.ok` जैसी जाँचों की अब आवश्यकता नहीं है,
+      //    Axios स्वचालित रूप से 4xx/5xx स्टेटस कोड पर त्रुटि फेंकता है।
+      // 🔥 `response.json()` की भी आवश्यकता नहीं है।
+
+    } catch (error: any) {
+      // ✨ Axios त्रुटियों को यहाँ पकड़ा जाता है।
+      console.error("completeWithoutOtpMutation error:", error);
+
+      if (error.response) {
+        // सर्वर से एक प्रतिक्रिया मिली (जो 2xx रेंज से बाहर थी)
+        throw new Error(error.response.data.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
+      } else if (error.request) {
+        // अनुरोध भेजा गया था, लेकिन कोई प्रतिक्रिया नहीं मिली (नेटवर्क त्रुटि)
+        throw new Error("नेटवर्क त्रुटि: सर्वर तक पहुँचने में विफल है।");
+      } else {
+        // अनुरोध सेट करते समय कुछ और गलत हो गया
+        throw new Error(error.message || "अनपेक्षित त्रुटि हुई।");
+      }
     }
 
-    const data = await response.json();
-
     // ✅ WhatsApp Thanks Message भेजो
-    await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        orderId,
-        customerPhone: data?.customerPhone,
-        customerName: data?.customerName,
-      }),
-    }).catch(() => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या"));
+    // 🔥 यहाँ भी `fetch` की जगह `api.post` का उपयोग करें
+    await api.post(`/api/whatsapp/send-delivery-thanks`, {
+      orderId,
+      customerPhone: data?.customerPhone, // ✨ `data` अब यहाँ एक्सेसिबल है
+      customerName: data?.customerName,
+    }).catch((err) => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या:", err));
 
-    return data;
+    return data; // ✨ सफल डेटा वापस करें
   },
 
   onSuccess: () => {
@@ -378,6 +413,61 @@ const completeWithoutOtpMutation = useMutation({
     });
     setOtpDialogOpen(false);
     setSelectedOrder(null);
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] }); // ✨ क्वेरी को इनवैलिडेट करें
+  },
+
+  onError: (error: any) => {
+    // ✨ यहाँ error.message `mutationFn` के catch ब्लॉक में सेट हो चुका होगा
+    toast({
+      title: "त्रुटि",
+      description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।",
+      variant: "destructive",
+    });
+  },
+});
+  
+// ✅ बिना OTP के डिलीवरी पूरी करने वाला mutation
+const completeWithoutOtpMutation = useMutation({
+  mutationFn: async (orderId: number) => {
+    let data; // डेटा को यहाँ डिक्लेयर करें
+
+    try {
+      // ✅ `fetch` की जगह `api.post` का उपयोग करें
+      const response = await api.post(`/api/delivery/orders/${orderId}/complete-without-otp`);
+      data = response.data; // Axios में, डेटा `response.data` प्रॉपर्टी में होता है।
+
+    } catch (error: any) {
+      console.error("completeWithoutOtpMutation error:", error);
+
+      if (error.response) {
+        throw new Error(error.response.data.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
+      } else if (error.request) {
+        throw new Error("नेटवर्क त्रुटि: सर्वर तक पहुँचने में विफल है।");
+      } else {
+        throw new Error(error.message || "अनपेक्षित त्रुटि हुई।");
+      }
+    }
+
+    // ✅ WhatsApp Thanks Message भेजो
+    // 🔥 यहाँ `fetch` की जगह `api.post` का उपयोग करें और `API_BASE` को हटा दें
+    await api.post(`/api/whatsapp/send-delivery-thanks`, {
+      orderId,
+      customerPhone: data?.customerPhone,
+      customerName: data?.customerName,
+    }).catch((err) => console.warn("⚠️ WhatsApp Thanks Message भेजने में समस्या:", err));
+
+    return data; // सफल डेटा वापस करें
+  },
+
+  onSuccess: () => {
+    toast({
+      title: "डिलीवरी पूरी हुई",
+      description: "ऑर्डर बिना OTP के सफलतापूर्वक डिलीवर हो गया है।",
+      variant: "success",
+    });
+    setOtpDialogOpen(false);
+    setSelectedOrder(null);
+    queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
   },
 
   onError: (error: any) => {
@@ -389,6 +479,7 @@ const completeWithoutOtpMutation = useMutation({
   },
 });
   
+    
   
   const handleStatusProgress = (order: any) => {
     console.log("handleStatusProgress: Order ID:", order.id, "Current Status:", order.status);
@@ -684,6 +775,7 @@ const completeWithoutOtpMutation = useMutation({
       </section>
 
     {/* OTP Dialog */}
+    {/* OTP Dialog */}
     {/* ✅ OTP Dialog (WhatsApp integrated version) */}
 {otpDialogOpen && selectedOrder && (
   <DeliveryOtpDialog
@@ -692,16 +784,10 @@ const completeWithoutOtpMutation = useMutation({
     order={selectedOrder}
     onConfirm={async (otp: string) => {
       try {
-        const response = await fetch(`${API_BASE}/api/whatsapp/verify-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: selectedOrder.id, otp }),
-        });
-
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.message || "OTP सत्यापन असफल रहा");
-        }
+        // 🔥 fetch और API_BASE हटाएँ
+        // ✅ api.post का उपयोग करें
+        const response = await api.post(`/api/whatsapp/verify-otp`, { orderId: selectedOrder.id, otp });
+        // Axios में, डेटा `response.data` में होता है। `response.ok` या `response.json()` की आवश्यकता नहीं है।
 
         toast({
           title: "OTP सफलतापूर्वक सत्यापित ✅",
@@ -714,39 +800,35 @@ const completeWithoutOtpMutation = useMutation({
         queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
 
         // ✅ WhatsApp Thank-you message भेजो
-        await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderId: selectedOrder.id,
-            customerPhone: selectedOrder.customerPhone,
-            customerName: selectedOrder.customerName,
-          }),
-        }).catch(() => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका"));
+        // 🔥 यहाँ भी fetch और API_BASE हटाएँ
+        await api.post(`/api/whatsapp/send-delivery-thanks`, {
+          orderId: selectedOrder.id,
+          customerPhone: selectedOrder.customerPhone,
+          customerName: selectedOrder.customerName,
+        }).catch((err) => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका:", err));
       } catch (error: any) {
+        // Axios त्रुटियों को हैंडल करें
+        console.error("OTP verification error:", error);
         toast({
           title: "OTP त्रुटि",
-          description: error.message || "OTP सत्यापन विफल हुआ।",
+          description: error.response?.data?.message || error.message || "OTP सत्यापन विफल हुआ।",
           variant: "destructive",
         });
       }
     }}
-    isSubmitting={handleOtpSubmitMutation?.isPending || false}
-    error={null}
+    // isSubmitting अब handleOtpSubmitMutation से आ रहा है।
+    isSubmitting={handleOtpSubmitMutation?.isPending || false} 
+    // error को भी handleOtpSubmitMutation से पास किया जाना चाहिए, यदि संभव हो।
+    // अभी के लिए इसे null रखें, या handleOtpSubmitMutation के error को पास करें
+    error={handleOtpSubmitMutation?.error?.message || null} 
 
     // ✅ WhatsApp OTP भेजना
     onSendManualOtp={async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/whatsapp/send-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ orderId: selectedOrder.id }),
-        });
-
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.message || "OTP भेजने में त्रुटि");
-        }
+        // 🔥 fetch और API_BASE हटाएँ
+        // ✅ api.post का उपयोग करें
+        const response = await api.post(`/api/whatsapp/send-otp`, { orderId: selectedOrder.id });
+        // डेटा `response.data` में होता है।
 
         toast({
           title: "OTP भेजा गया 📩",
@@ -754,27 +836,25 @@ const completeWithoutOtpMutation = useMutation({
           variant: "success",
         });
       } catch (error: any) {
+        // Axios त्रुटियों को हैंडल करें
+        console.error("Manual OTP send error:", error);
         toast({
           title: "OTP भेजने में विफल",
-          description: error.message || "कृपया पुनः प्रयास करें।",
+          description: error.response?.data?.message || error.message || "कृपया पुनः प्रयास करें।",
           variant: "destructive",
         });
       }
     }}
-    isSendingManualOtp={false}
+    // isSendingManualOtp अब sendOtpToCustomerMutation से आ रहा है।
+    isSendingManualOtp={sendOtpToCustomerMutation.isPending}
 
     // ✅ बिना OTP के डिलीवरी पूरी करना
     onCompleteWithoutOtp={async () => {
       try {
-        const response = await fetch(`${API_BASE}/api/delivery/orders/${selectedOrder.id}/complete-without-otp`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-        });
-
-        if (!response.ok) {
-          const err = await response.json().catch(() => ({}));
-          throw new Error(err.message || "बिना OTP के डिलीवरी असफल रही");
-        }
+        // 🔥 fetch और API_BASE हटाएँ
+        // ✅ api.post का उपयोग करें
+        const response = await api.post(`/api/delivery/orders/${selectedOrder.id}/complete-without-otp`);
+        // डेटा `response.data` में होता है।
 
         toast({
           title: "डिलीवरी पूरी हुई ✅",
@@ -787,29 +867,75 @@ const completeWithoutOtpMutation = useMutation({
         queryClient.invalidateQueries({ queryKey: ["deliveryOrders"] });
 
         // ✅ WhatsApp Thank-you message भेजो
-        await fetch(`${API_BASE}/api/whatsapp/send-delivery-thanks`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            orderId: selectedOrder.id,
-            customerPhone: selectedOrder.customerPhone,
-            customerName: selectedOrder.customerName,
-          }),
-        }).catch(() => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका"));
+        // 🔥 यहाँ भी fetch और API_BASE हटाएँ
+        await api.post(`/api/whatsapp/send-delivery-thanks`, {
+          orderId: selectedOrder.id,
+          customerPhone: selectedOrder.customerPhone,
+          customerName: selectedOrder.customerName,
+        }).catch((err) => console.warn("⚠️ WhatsApp Thanks Message नहीं भेजा जा सका:", err));
       } catch (error: any) {
+        // Axios त्रुटियों को हैंडल करें
+        console.error("Complete without OTP error:", error);
         toast({
           title: "त्रुटि",
-          description: error.message || "बिना OTP के डिलीवरी विफल रही।",
+          description: error.response?.data?.message || error.message || "बिना OTP के डिलीवरी विफल रही।",
           variant: "destructive",
         });
       }
     } }
-    isCompletingWithoutOtp={false}
+    // isCompletingWithoutOtp अब completeWithoutOtpMutation से आ रहा है।
+    isCompletingWithoutOtp={completeWithoutOtpMutation.isPending}
   />
 )}
     </div>
     );
 }
+
+    // ✅ बिना OTP के डिलीवरी पूरी करना
+
+{/* OTP Dialog */}
+    {/* ✅ OTP Dialog (WhatsApp integrated version) */}
+{otpDialogOpen && selectedOrder && (
+  <DeliveryOtpDialog
+    isOpen={otpDialogOpen}
+    onOpenChange={setOtpDialogOpen}
+    order={selectedOrder}
+    onConfirm={/* (यह पहले से ही handleOtpSubmitMutation का उपयोग कर रहा है) */}
+    isSubmitting={handleOtpSubmitMutation?.isPending || false}
+    error={handleOtpSubmitMutation?.error?.message || null}
+
+    onSendManualOtp={/* (यह पहले से ही sendOtpToCustomerMutation का उपयोग कर रहा है) */}
+    isSendingManualOtp={sendOtpToCustomerMutation.isPending}
+
+    // ✅ बिना OTP के डिलीवरी पूरी करना
+    onCompleteWithoutOtp={async () => {
+      // 🔥 यहाँ सीधे completeWithoutOtpMutation को कॉल करें,
+      //    जो पहले से ही Axios का उपयोग करता है और त्रुटियों को संभालता है।
+      //    इस async फंक्शन में अब किसी भी try-catch ब्लॉक या fetch API कॉल की आवश्यकता नहीं है।
+      try {
+        if (selectedOrder?.id) {
+          // यदि आप user confirmation चाहते हैं तो इसे यहाँ जोड़ सकते हैं
+          // if (window.confirm("क्या आप वाकई इस ऑर्डर को बिना OTP के डिलीवर करना चाहते हैं?")) {
+            await completeWithoutOtpMutation.mutateAsync(selectedOrder.id);
+            // onSuccess और onError logic mutation हुक के अंदर संभाला जाएगा।
+            // यहाँ कोई toast या state अपडेट की आवश्यकता नहीं है,
+            // क्योंकि mutation हुक का onSuccess/onError हुक उन्हें संभाल लेगा।
+          // }
+        }
+      } catch (error: any) {
+        // completeWithoutOtpMutation के onError में toast पहले ही दिख जाएगा।
+        // यहाँ अतिरिक्त लॉगिंग के लिए है यदि आप कुछ और करना चाहते हैं।
+        console.error("Error initiating completeWithoutOtpMutation from dialog:", error);
+      }
+    } }
+    // ✅ isCompletingWithoutOtp प्रॉप को mutation हुक की स्थिति से बांधें
+    isCompletingWithoutOtp={completeWithoutOtpMutation.isPending}
+  />
+)}
+    </div>
+    );
+      }
+      
 // --- Helper Component for Orders List ---
 interface OrdersListViewProps {
   orders: any[];
