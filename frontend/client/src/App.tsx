@@ -1,49 +1,49 @@
-// client/src/App.tsx
+// client/src/App.tsx..
+import React, { useState } from "react";
+import { Routes, Route } from "react-router-dom";
 
-import React, { useState } from "react"; // Capitalized React, useState
-import { Routes, Route } from "react-router-dom"; // Capitalized Routes, Route
+// Layouts and components
+import Header from "./components/header";
+import CartModal from "./components/cart-modal";
+import AdminLayout from "@/components/AdminLayout";
+import { LocationProvider } from "./context/LocationContext
+// Pages
 
-// layouts and components
-import Header from "./components/header"; // Capitalized Header
-import CartModal from "./components/cart-modal"; // Capitalized CartModal
+import HomePage from "@/pages/home";
+import ProductDetail from "@/pages/product-detail";
+import Cart from "@/pages/cart";
+import Checkout from "@/pages/checkout";
+import AuthPage from "@/pages/auth";
+import SellerDashboard from "@/pages/seller-dashboard";
+import SellerApplyPage from "@/pages/seller-apply";
+import SellerStatusPage from "@/pages/seller-status";
+import NotFound from "@/pages/not-found";
+import AdminDashboard from "@/pages/admin-dashboard";
+import DeliveryApplyPage from "@/pages/delivery-apply";
+import DeliveryLogin from "@/pages/delivery-login";
+import LoginPage from "@/pages/login";
+import CategoriesManagement from "@/components/CategoriesManagement";
+import AdminLogin from "@/pages/admin-login";
+import OrderConfirmation from "@/pages/order-confirmation";
+import CustomerOrdersPage from "@/pages/customer/orders";
+import TrackOrder from "@/pages/track-order"; 
+import Checkout2 from "./pages/checkout2";
+import DeliveryDashboard from "@/pages/DeliveryDashboard";
+import AdminOrderDashboard from "./pages/adminOrderDashboard";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsOfService from "@/pages/TermsOfService";
+import CookiesPolicy from "@/pages/CookiesPolicy";
+import FAQ from "@/pages/FAQ";
+import AboutUs from "@/pages/AboutUs";
+import ContactUs from "@/pages/ContactUs";
+// Protected / Auth-based
+import AuthRedirectGuard from "@/components/auth-redirect-guard";
+import AdminGuard from "@/components/admin-guard",
+
+
 import AdminLayout from "./components/AdminLayout"; // Corrected path and Capitalized
-// LocationProvider को यहाँ से हटा दिया है क्योंकि यह main.tsx में है
-// import { LocationProvider } from "./context/LocationContext"; 
+
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
-
-// pages (Capitalized and corrected paths if necessary)
-import HomePage from "./pages/Home";
-import ProductDetail from "./pages/ProductDetail";
-import Cart from "./pages/Cart";
-import Checkout from "./pages/Checkout";
-import AuthPage from "./pages/Auth";
-import SellerDashboard from "./pages/SellerDashboard";
-import SellerApplyPage from "./pages/SellerApply";
-import SellerStatusPage from "./pages/SellerStatus";
-import NotFound from "./pages/NotFound";
-import AdminDashboard from "./pages/AdminDashboard";
-import DeliveryApplyPage from "./pages/DeliveryApply";
-import DeliveryLogin from "./pages/DeliveryLogin";
-import LoginPage from "./pages/Login";
-import CategoriesManagement from "./components/CategoriesManagement"; // This seems to be a component, not a page.
-import AdminLogin from "./pages/AdminLogin";
-import OrderConfirmation from "./pages/OrderConfirmation";
-import CustomerOrdersPage from "./pages/customer/Orders";
-import TrackOrder from "./pages/TrackOrder"; 
-import Checkout2 from "./pages/Checkout2";
-import DeliveryDashboard from "./pages/DeliveryDashboard";
-import AdminOrderDashboard from "./pages/AdminOrderDashboard";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import CookiesPolicy from "./pages/CookiesPolicy";
-import FAQ from "./pages/FAQ";
-import AboutUs from "./pages/AboutUs";
-import ContactUs from "./pages/ContactUs";
-
-// protected / auth-based
-import AuthRedirectGuard from "./components/AuthRedirectGuard"; // Capitalized AuthRedirectGuard
-import AdminGuard from "./components/AdminGuard"; // Capitalized AdminGuard
-
 function App() { // Capitalized App
   const [isCartModalOpen, setIsCartModalOpen] = useState(false); // Capitalized useState, variables
 
