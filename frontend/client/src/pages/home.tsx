@@ -11,7 +11,7 @@ import ProductCard from "@/components/product-card";
 import Footer from "@/components/footer";
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth';
-
+import LocationDisplay from '../components/LocationDisplay';
 interface Category {
   id: number;
   name: string;
@@ -84,6 +84,8 @@ export default function Home() {
     },
   });
 
+
+  
   const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery<Product[]>({
     queryKey: ['featuredProducts'], 
     queryFn: async () => {
@@ -198,7 +200,7 @@ export default function Home() {
           </div>
         </section>
       )}
-
+     
       {/* Featured Categories - Only show on home page */}
       {!selectedCategory && !searchQuery && (
         <section className="py-16 bg-white">
