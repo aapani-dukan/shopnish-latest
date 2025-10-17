@@ -124,10 +124,11 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+
 export const deliveryAreas = pgTable("delivery_areas", {
   id: serial("id").primaryKey(),
   areaName: text("area_name").notNull(),
-  pincode: text("pincode").notNull(),
+  pincode: text("pincode").notNull(), // यह 'delivery_areas' को ग्राहक के postalCode से जोड़ेगा
   city: text("city").notNull(),
   deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
   freeDeliveryAbove: decimal("free_delivery_above", { precision: 10, scale: 2 }),
@@ -165,23 +166,29 @@ export const cartItems = pgTable("cart_items", {
 });
 
 
+
 export const deliveryAddresses = pgTable('delivery_addresses', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').references(() => usersPgTable.id, { onDelete: 'cascade' }),
   fullName: text('full_name').notNull(),
   phoneNumber: text('phone_number'),
   addressLine1: text('address_line1').notNull(),
   addressLine2: text('address_line2'),
   city: text('city').notNull(),
   state: text('state').notNull(),
-  postalCode: text('postal_code').notNull(),
+  postalCode: text('postal_code').notNull(), // यह तुम्हारे पिनकोड के लिए है
   
-  latitude: decimal('latitude').$type<number>().notNull().default('0.0'),
-  longitude: decimal('longitude').$type<number>().notNull().default('0.0'),
+  // --- यहाँ lat/long में बदलाव और नई 'label' फ़ील्ड जोड़ी जा रही है ---
+  latitude: decimal('latitude').$type<number>(),   // अब Nullable हो सकता है
+  longitude: decimal('longitude').$type<number>(),  // अब Nullable हो सकता है
+  label: text('label'), // ग्राहक को पता पहचानने के लिए (जैसे "घर", "ऑफिस")
+  // --- बदलाव यहाँ समाप्त होते हैं ---
   
   isDefault: boolean('is_default').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+
 
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
