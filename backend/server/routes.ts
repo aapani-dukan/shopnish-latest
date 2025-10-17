@@ -274,7 +274,7 @@ router.get("/categories", async (req: Request, res: Response) => {
 // ✅ Products
 router.use("/products", productsRouter);
 router.use("/whatsapp", whatsappRouter);
-router.use("addresses",addressRoutes);
+router.use("/addresses",addressRoutes);
 // ✅ Delivery Boy
 router.use("/delivery", dBoyRouter);
 
