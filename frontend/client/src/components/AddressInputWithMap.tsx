@@ -1,4 +1,4 @@
-// client/src/components/AddressInputWithMap.tsx
+// frontend/client/src/components/AddressInputWithMap.tsx
 
 import React, { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import {
