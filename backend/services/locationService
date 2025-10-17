@@ -1,0 +1,163 @@
+// backend/services/locationService.ts
+
+import axios from 'axios';
+
+// Google Maps API Key from your backend environment variables
+const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
+
+if (!GOOGLE_MAPS_API_KEY) {
+  console.error("GOOGLE_MAPS_API_KEY is not set in backend environment variables.");
+  // process.exit(1); // Depending on your setup, you might want to exit or throw
+}
+
+interface GeocodeResult {
+  formattedAddress: string;
+  addressLine1: string;
+  city: string;
+  state: string;
+  pincode: string;
+  lat: number;
+  lng: number;
+}
+
+/**
+ * रिवर्स जियोकोडिंग: अक्षांश/देशांतर को पठनीय पते में बदलें।
+ */
+export async function reverseGeocode(latitude: number, longitude: number): Promise<GeocodeResult | null> {
+  if (!GOOGLE_MAPS_API_KEY) throw new Error("Google Maps API Key not configured.");
+
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
+
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.status === 'OK' && data.results.length > 0) {
+      const result = data.results[0];
+      const addressComponents = result.address_components;
+
+      let addressLine1 = '';
+      let city = '';
+      let state = '';
+      let pincode = '';
+
+      // Extract relevant address components
+      for (const component of addressComponents) {
+        if (component.types.includes('street_number') || component.types.includes('route')) {
+          addressLine1 += component.long_name + ' ';
+        } else if (component.types.includes('sublocality_level_2')) { // Often more specific than locality
+          addressLine1 = component.long_name + ' ' + addressLine1;
+        } else if (component.types.includes('locality')) {
+          city = component.long_name;
+        } else if (component.types.includes('administrative_area_level_1')) {
+          state = component.long_name;
+        } else if (component.types.includes('postal_code')) {
+          pincode = component.long_name;
+        }
+      }
+
+      addressLine1 = addressLine1.trim();
+      if (!addressLine1 && city) addressLine1 = city; // Fallback if street info is missing
+
+      return {
+        formattedAddress: result.formatted_address,
+        addressLine1: addressLine1 || 'Unknown Street', // Ensure it's not empty
+        city: city || 'Unknown City',
+        state: state || 'Unknown State',
+        pincode: pincode || 'Unknown Pincode',
+        lat: latitude,
+        lng: longitude,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error during reverse geocoding:', error);
+    throw new Error('Failed to reverse geocode coordinates.');
+  }
+}
+
+/**
+ * जियोकोडिंग: पते को अक्षांश/देशांतर में बदलें।
+ * (शायद इस प्रोजेक्ट में सीधे उपयोग नहीं किया जाएगा, लेकिन भविष्य के लिए अच्छा है)
+ */
+export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
+  if (!GOOGLE_MAPS_API_KEY) throw new Error("Google Maps API Key not configured.");
+
+  const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}`;
+
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.status === 'OK' && data.results.length > 0) {
+      const result = data.results[0];
+      const location = result.geometry.location;
+      const addressComponents = result.address_components;
+
+      let addressLine1 = '';
+      let city = '';
+      let state = '';
+      let pincode = '';
+
+      for (const component of addressComponents) {
+        if (component.types.includes('street_number') || component.types.includes('route')) {
+          addressLine1 += component.long_name + ' ';
+        } else if (component.types.includes('sublocality_level_2')) {
+          addressLine1 = component.long_name + ' ' + addressLine1;
+        } else if (component.types.includes('locality')) {
+          city = component.long_name;
+        } else if (component.types.includes('administrative_area_level_1')) {
+          state = component.long_name;
+        } else if (component.types.includes('postal_code')) {
+          pincode = component.long_name;
+        }
+      }
+      addressLine1 = addressLine1.trim();
+      if (!addressLine1 && city) addressLine1 = city;
+
+      return {
+        formattedAddress: result.formatted_address,
+        addressLine1: addressLine1 || 'Unknown Street',
+        city: city || 'Unknown City',
+        state: state || 'Unknown State',
+        pincode: pincode || 'Unknown Pincode',
+        lat: location.lat,
+        lng: location.lng,
+      };
+    }
+    return null;
+  } catch (error) {
+    console.error('Error during geocoding:', error);
+    throw new Error('Failed to geocode address.');
+  }
+}
+
+
+/**
+ * सर्विस एरिया की जांच करें: क्या दिया गया पिनकोड हमारे सर्विस एरिया में है?
+ *
+ * @param pincode - जांच करने के लिए पिनकोड
+ * @returns - यदि पिनकोड सर्विस एरिया में है तो true, अन्यथा false
+ */
+export async function isWithinServiceArea(pincode: string): Promise<boolean> {
+  // TODO: डेटाबेस से सर्विस एरिया पिनकोड/जोन को Fetch करने के लिए लॉजिक लागू करें
+  // अभी के लिए, यह एक डमी लॉजिक है।
+  const SERVICE_PINCODES = ['110001', '110002', '110003', '110004', '122001']; // उदाहरण पिनकोड
+  return SERVICE_PINCODES.includes(pincode);
+}
+
+/**
+ * डिलीवरी शुल्क की गणना करें।
+ *
+ * @param pincode - डिलीवरी स्थान का पिनकोड
+ * @returns - गणना की गई डिलीवरी शुल्क
+ */
+export async function calculateDeliveryCharges(pincode: string): Promise<number> {
+  // TODO: डिलीवरी शुल्क की गणना के लिए लॉजिक लागू करें
+  // यह दूरी, पिनकोड, या अन्य कारकों के आधार पर हो सकता है।
+  // डेटाबेस से शुल्क तालिकाओं को Fetch करना एक तरीका हो सकता है।
+  // अभी के लिए, यह एक डमी लॉजिक है।
+  if (pincode === '110001') return 20;
+  if (pincode === '122001') return 40;
+  return 30; // डिफ़ॉल्ट शुल्क
+}
