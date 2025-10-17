@@ -24,8 +24,11 @@ interface GeocodeResult {
  * रिवर्स जियोकोडिंग: अक्षांश/देशांतर को पठनीय पते में बदलें।
  */
 export async function reverseGeocode(latitude: number, longitude: number): Promise<GeocodeResult | null> {
-  if (!GOOGLE_MAPS_API_KEY) throw new Error("Google Maps API Key not configured.");
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error("Google Maps API Key not configured.");
+  }
 
+  // Ensure back-ticks are used for template literals
   const url = `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`;
 
   try {
@@ -45,7 +48,7 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
       for (const component of addressComponents) {
         if (component.types.includes('street_number') || component.types.includes('route')) {
           addressLine1 += component.long_name + ' ';
-        } else if (component.types.includes('sublocality_level_2')) { // Often more specific than locality
+        } else if (component.types.includes('sublocality_level_2')) { // often more specific than locality
           addressLine1 = component.long_name + ' ' + addressLine1;
         } else if (component.types.includes('locality')) {
           city = component.long_name;
@@ -57,11 +60,11 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
       }
 
       addressLine1 = addressLine1.trim();
-      if (!addressLine1 && city) addressLine1 = city; // Fallback if street info is missing
+      if (!addressLine1 && city) addressLine1 = city; // fallback if street info is missing
 
       return {
         formattedAddress: result.formatted_address,
-        addressLine1: addressLine1 || 'Unknown Street', // Ensure it's not empty
+        addressLine1: addressLine1 || 'Unknown Street',
         city: city || 'Unknown City',
         state: state || 'Unknown State',
         pincode: pincode || 'Unknown Pincode',
@@ -81,8 +84,11 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
  * (शायद इस प्रोजेक्ट में सीधे उपयोग नहीं किया जाएगा, लेकिन भविष्य के लिए अच्छा है)
  */
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
-  if (!GOOGLE_MAPS_API_KEY) throw new Error("Google Maps API Key not configured.");
+  if (!GOOGLE_MAPS_API_KEY) {
+    throw new Error("Google Maps API Key not configured.");
+  }
 
+  // Ensure back-ticks are used for template literals
   const url = `https://maps.googleapis.com/maps/api/geocode/json?address=${encodeURIComponent(address)}&key=${GOOGLE_MAPS_API_KEY}`;
 
   try {
@@ -132,7 +138,6 @@ export async function geocodeAddress(address: string): Promise<GeocodeResult | n
   }
 }
 
-
 /**
  * सर्विस एरिया की जांच करें: क्या दिया गया पिनकोड हमारे सर्विस एरिया में है?
  *
@@ -145,6 +150,7 @@ export async function isWithinServiceArea(pincode: string): Promise<boolean> {
   const SERVICE_PINCODES = ['110001', '110002', '110003', '110004', '122001']; // उदाहरण पिनकोड
   return SERVICE_PINCODES.includes(pincode);
 }
+
 
 /**
  * डिलीवरी शुल्क की गणना करें।
