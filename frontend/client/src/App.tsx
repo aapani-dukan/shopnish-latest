@@ -6,7 +6,7 @@ import { Routes, Route } from "react-router-dom";
 import Header from "./components/header";
 import CartModal from "./components/cart-modal";
 import AdminLayout from "@/components/AdminLayout";
-import { LocationProvider } from "./context/LocationContext",
+import { LocationProvider } from "./context/LocationContext";
 // Pages
 
 import HomePage from "@/pages/home";
