@@ -41,7 +41,6 @@ import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
 
 
-import AdminLayout from "./components/AdminLayout"; // Corrected path and Capitalized
 
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 function App() { // Capitalized App
