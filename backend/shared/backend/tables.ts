@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum } from "drizzle-orm/pg-core";
 
 
 export const orderStatusEnum = pgEnum('order_status', [
@@ -50,18 +50,25 @@ export const users = pgTable("users", {
 
 export const sellersPgTable = pgTable("sellers", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").unique().notNull().references(() => users.id),
+  userId: integer("user_id").unique().notNull().references(() => usersPgTable.id),
   businessName: text("business_name").notNull(),
   businessType: text("business_type").notNull(),
   description: text("description"),
   businessAddress: text("business_address").notNull(),
   city: text("city").notNull(),
-  pincode: text("pincode").notNull(),
+  pincode: text("pincode").notNull(), // विक्रेता का मुख्य पंजीकृत पिनकोड
   businessPhone: text("business_phone").notNull(),
   gstNumber: text("gst_number"),
   bankAccountNumber: text("bank_account_number"),
   ifscCode: text("ifsc_code"),
-  deliveryRadius: integer("delivery_radius"),
+  deliveryRadius: integer("delivery_radius"), // यह मौजूदा फ़ील्ड रहेगी
+
+  // --- यहाँ नई फ़ील्ड्स जोड़ी जा रही हैं ---
+  latitude: numeric("latitude").$type<number>(),   // Geocoding से विक्रेता के पते का Lat
+  longitude: numeric("longitude").$type<number>(),  // Geocoding से विक्रेता के पते का Long
+  deliveryPincodes: text("delivery_pincodes").array(), // उन पिनकोड्स की सूची जहाँ यह विक्रेता डिलीवरी करता है (जैसे ['302001', '311001'])
+  // --- नई फ़ील्ड्स यहाँ समाप्त होती हैं ---
+
   email: text("email"),
   phone: text("phone"),
   address: text("address"),
@@ -71,6 +78,7 @@ export const sellersPgTable = pgTable("sellers", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
 
 export const stores = pgTable("stores", {
   id: serial("id").primaryKey(),
@@ -98,6 +106,7 @@ export const categories = pgTable("categories", {
   sortOrder: integer("sort_order").default(0),
 });
 
+
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").references(() => sellersPgTable.id),
@@ -117,13 +126,18 @@ export const products = pgTable("products", {
   minOrderQty: integer("min_order_qty").default(1),
   maxOrderQty: integer("max_order_qty").default(100),
   isActive: boolean("is_active").default(true),
+
+  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), // 'LOCAL', 'CITYWIDE', 'INTERCITY'
+  productDeliveryPincodes: text("product_delivery_pincodes").array(), // उन पिनकोड्स की सूची जहाँ यह उत्पाद उपलब्ध है (जैसे ['302001', '311001'])
+  productDeliveryRadiusKM: integer("product_delivery_radius_km"),       // 'LOCAL' deliveryScope के लिए रेडियस (KM में)
+  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'), // "1-2 घंटे", "1-2 दिन"
+  
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
-
 
 export const deliveryAreas = pgTable("delivery_areas", {
   id: serial("id").primaryKey(),
