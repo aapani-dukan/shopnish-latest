@@ -1,40 +1,43 @@
-// frontend/client/src/components/AddressInputWithMap.tsx
+// client/src/components/AddressInputWithMap.tsx
 
 import React, { useRef, useState, useMemo, useCallback, useEffect } from "react";
 import {
-  GoogleMap,
-  MarkerF,
+  GoogleMap, // Renamed to GoogleMap
+  MarkerF,   // Renamed to MarkerF
   useLoadScript,
   Autocomplete,
-} from "@react-google-maps/api";
+} from "react-google-maps/api";
+import { useLocation } from '../context/LocationContext'; // <-- नया इम्पोर्ट
 
 const containerStyle = { width: "100%", height: "200px" };
-const LIBRARIES: ("places")[] = ["places"];
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+const libraries: ("places")[] = ["places"];
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY; // Renamed for consistency
 
-interface LatLngLiteral {
+interface LatLngLiteral { // Renamed to LatLngLiteral
   lat: number;
   lng: number;
 }
 
-interface GeocodedLocation extends LatLngLiteral {
+interface GeocodedLocation extends LatLngLiteral { // Renamed
   city: string;
   pincode: string;
 }
 
-interface AddressInputProps {
+interface AddressInputProps { // Renamed
   currentAddress: string;
   currentLocation: LatLngLiteral | null;
   onLocationUpdate: (address: string, location: GeocodedLocation) => void;
+  // यदि यह एक मॉडल के अंदर है तो onClose फंक्शन
+  onClose?: () => void; // <-- नया
 }
 
-// 🔹 Helper: Geocoder से City और Pincode निकालना
-const extractCityAndPincode = (results: any) => {
+// 🔹 Helper: geocoder से city और pincode निकालना
+const extractCityAndPincode = (results: any) => { // Renamed
   let city = "";
   let pincode = "";
 
   if (results && results[0] && results[0].address_components) {
-    results[0].address_components.forEach((component: any) => {
+    results[0].address_components.forEach((component: any) => { // Renamed to forEach
       if (component.types.includes("postal_code")) {
         pincode = component.long_name;
       }
@@ -49,23 +52,26 @@ const extractCityAndPincode = (results: any) => {
   return { city: city || "", pincode: pincode || "" };
 };
 
-const AddressInputWithMap: React.FC<AddressInputProps> = ({
+const AddressInputWithMap: React.FC<AddressInputProps> = ({ // Renamed
   currentAddress,
   currentLocation,
   onLocationUpdate,
+  onClose, // <-- नया
 }) => {
-  const { isLoaded, loadError } = useLoadScript({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY || "",
-    libraries: LIBRARIES,
+  const { isLoaded, loadError } = useLoadScript({ // Renamed
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY || "", // Renamed
+    libraries: libraries,
   });
 
-  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null);
+  const { processLocation, setLoadingLocation } = useLocation(); // <-- LocationContext से processLocation प्राप्त करें
+
+  const autocompleteRef = useRef<google.maps.places.Autocomplete | null>(null); // Renamed
 
   const defaultCenter = useMemo(
     () => ({ lat: 20.5937, lng: 78.9629 }),
     []
   );
-  const [mapCenter, setMapCenter] = useState<LatLngLiteral>(
+  const [mapCenter, setMapCenter] = useState<LatLngLiteral>( // Renamed
     currentLocation || defaultCenter
   );
 
@@ -76,18 +82,18 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
   }, [currentLocation]);
 
   // 🔹 Autocomplete से place चुनने पर
-  const onPlaceChanged = useCallback(() => {
-    const place = autocompleteRef.current?.getPlace();
+  const onPlaceChanged = useCallback(() => { // Renamed
+    const place = autocompleteRef.current?.getPlace(); // Renamed
     if (place?.geometry?.location && place.formatted_address) {
-      const newLat = place.geometry.location.lat();
-      const newLng = place.geometry.location.lng();
-      const newLocation: LatLngLiteral = { lat: newLat, lng: newLng };
+      const newLat = place.geometry.location.lat(); // Renamed
+      const newLng = place.geometry.location.lng(); // Renamed
+      const newLocation: LatLngLiteral = { lat: newLat, lng: newLng }; // Renamed
 
       const geocoder = new (window as any).google.maps.Geocoder();
       geocoder.geocode({ location: newLocation }, (results: any, status: any) => {
-        if (status === "OK" && results[0]) {
-          const { city, pincode } = extractCityAndPincode(results);
-          const updatedLocation: GeocodedLocation = {
+        if (status === "OK" && results[0]) { // "ok" to "OK"
+          const { city, pincode } = extractCityAndPincode(results); // Renamed
+          const updatedLocation: GeocodedLocation = { // Renamed
             ...newLocation,
             city,
             pincode,
@@ -95,23 +101,23 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
           onLocationUpdate(place.formatted_address, updatedLocation);
         }
       });
-      setMapCenter(newLocation);
+      setMapCenter(newLocation); // Renamed
     }
   }, [onLocationUpdate]);
 
   // 🔹 Marker drag होने पर
-  const onMarkerDragEnd = useCallback(
-    (e: google.maps.MapMouseEvent) => {
-      const newLat = e.latLng?.lat();
-      const newLng = e.latLng?.lng();
+  const onMarkerDragEnd = useCallback( // Renamed
+    (e: google.maps.MapMouseEvent) => { // Renamed
+      const newLat = e.latLng?.lat(); // Renamed
+      const newLng = e.latLng?.lng(); // Renamed
       if (newLat && newLng) {
-        const newLocation: LatLngLiteral = { lat: newLat, lng: newLng };
+        const newLocation: LatLngLiteral = { lat: newLat, lng: newLng }; // Renamed
         const geocoder = new (window as any).google.maps.Geocoder();
         geocoder.geocode({ location: newLocation }, (results: any, status: any) => {
-          if (status === "OK" && results && results[0]) {
-   const { city, pincode } = extractCityAndPincode(results);
+          if (status === "OK" && results && results[0]) { // "ok" to "OK"
+            const { city, pincode } = extractCityAndPincode(results); // Renamed
    
-            const updatedLocation: GeocodedLocation = {
+            const updatedLocation: GeocodedLocation = { // Renamed
               ...newLocation,
               city,
               pincode,
@@ -119,103 +125,100 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
             onLocationUpdate(results[0].formatted_address, updatedLocation);
           }
         });
-        setMapCenter(newLocation);
+        setMapCenter(newLocation); // Renamed
       }
     },
     [onLocationUpdate]
   );
 
   // 🔹 Current location बटन
-  const handleGeolocation = useCallback(() => {
+  const handleGeolocation = useCallback(async () => { // Renamed & made async
     if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition((pos) => {
-        const newLocation: LatLngLiteral = {
-          lat: pos.coords.latitude,
-          lng: pos.coords.longitude,
-        };
-        const geocoder = new (window as any).google.maps.Geocoder();
-        geocoder.geocode({ location: newLocation }, (results: any, status: any) => {
-           {
-            if (status === "OK" && results && results[0]) {
-   const { city, pincode } = extractCityAndPincode(results);
-           }
-            const updatedLocation: GeocodedLocation = {
-              ...newLocation,
-              city,
-              pincode,
-            };
-            onLocationUpdate(results[0].formatted_address, updatedLocation);
-          }
-        });
-        setMapCenter(newLocation);
-      });
-    }
-  }, [onLocationUpdate]);
+      setLoadingLocation(true); // Loading context को अपडेट करें
+      navigator.geolocation.getCurrentPosition(
+        async (pos) => {
+          const newLat = pos.coords.latitude;
+          const newLng = pos.coords.longitude;
 
-  if (loadError) return <div>नक्शा लोड नहीं हो पाया। API कुंजी जाँचें।</div>;
+          // **यहाँ बदलाव: सीधे `onLocationUpdate` को कॉल करने के बजाय, अब हम बैकएंड API को कॉल करेंगे**
+          await processLocation(newLat, newLng); 
+          if (onClose) onClose(); // मॉडल को बंद करें अगर यह मॉडल के अंदर है
+          setLoadingLocation(false);
+        },
+        (error) => {
+          console.error("Geolocation Error: ", error);
+          // handleError("वर्तमान स्थान प्राप्त करने में असमर्थ।", error); // त्रुटि को हैंडल करने के लिए
+          setLoadingLocation(false);
+        },
+        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+      );
+    }
+  }, [processLocation, onClose, setLoadingLocation]); // Dependencies updated
+
+  if (loadError) return <div>नक्शा लोड नहीं हो पाया। एपीआई कुंजी जाँचें।</div>;
   if (!isLoaded) return <div>लोकेशन लोडिंग...</div>;
 
   return (
     <div>
-      {/* ✅ Autocomplete Input */}
+      {/* ✅ Autocomplete input */}
       <Autocomplete
-        onLoad={(ref) => (autocompleteRef.current = ref)}
-        onPlaceChanged={onPlaceChanged}
+        onLoad={(ref) => (autocompleteRef.current = ref)} // Renamed
+        onPlaceChanged={onPlaceChanged} // Renamed
       >
         <input
-  type="text"
-  placeholder="डिलीवरी एड्रेस खोजें"
-  defaultValue={currentAddress}  // ✅ value की जगह defaultValue
-  style={{
-    boxSizing: "border-box",
-    border: "1px solid #ccc",
-    width: "100%",
-    height: "40px",
-    padding: "0 12px",
-    borderRadius: "4px",
-    marginTop: "8px",
-  }}
-/>
+          type="text"
+          placeholder="डिलीवरी एड्रेस खोजें"
+          defaultValue={currentAddress}  // ✅ value की जगह defaultValue
+          style={{
+            boxSizing: "border-box", // Renamed
+            border: "1px solid #ccc",
+            width: "100%",
+            height: "40px",
+            padding: "0 12px",
+            borderRadius: "4px", // Renamed
+            marginTop: "8px",    // Renamed
+          }}
+        />
       </Autocomplete>
 
       {/* ✅ Map + Marker */}
-      <div style={{ marginTop: "10px" }}>
+      <div style={{ marginTop: "10px" }}> {/* Renamed */}
         <GoogleMap
-          mapContainerStyle={containerStyle}
-          center={mapCenter}
+          mapContainerStyle={containerStyle} // Renamed
+          center={mapCenter} // Renamed
           zoom={15}
         >
           {currentLocation && (
-            <MarkerF
+            <MarkerF // Renamed
               position={currentLocation}
               draggable={true}
-              onDragEnd={onMarkerDragEnd}
+              onDragEnd={onMarkerDragEnd} // Renamed
             />
           )}
         </GoogleMap>
       </div>
 
-      {/* ✅ Current Location Button */}
+      {/* ✅ Current location button */}
       <button
         type="button"
-        onClick={handleGeolocation}
+        onClick={handleGeolocation} // Renamed
         style={{
-          marginTop: "10px",
+          marginTop: "10px", // Renamed
           padding: "8px 15px",
-          backgroundColor: "#4CAF50",
+          backgroundColor: "#4caf50", // Renamed
           color: "white",
           border: "none",
-          borderRadius: "5px",
+          borderRadius: "5px", // Renamed
           cursor: "pointer",
         }}
       >
         📍 मेरी वर्तमान लोकेशन का उपयोग करें
       </button>
 
-      {/* Debug LatLng */}
+      {/* Debug latlng */}
       {currentLocation && (
-        <p style={{ fontSize: "12px", color: "#555" }}>
-          Lat: {currentLocation.lat.toFixed(5)}, Lng:{" "}
+        <p style={{ fontSize: "12px", color: "#555" }}> {/* Renamed */}
+          Lat: {currentLocation.lat.toFixed(5)}, Lng:{" "} {/* Renamed */}
           {currentLocation.lng.toFixed(5)}
         </p>
       )}
