@@ -4,7 +4,7 @@ import React, { useState } from "react"; // Capitalized React, useState
 import { Routes, Route } from "react-router-dom"; // Capitalized Routes, Route
 
 // layouts and components
-import Header from "./components/Header"; // Capitalized Header
+import Header from "./components/header"; // Capitalized Header
 import CartModal from "./components/CartModal"; // Capitalized CartModal
 import AdminLayout from "./components/AdminLayout"; // Corrected path and Capitalized
 // LocationProvider को यहाँ से हटा दिया है क्योंकि यह main.tsx में है
