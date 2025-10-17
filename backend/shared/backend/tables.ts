@@ -42,7 +42,7 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 
-  // ✨ NEW: WhatsApp से संबंधित कॉलम
+  
   whatsappOptIn: boolean("whatsapp_opt_in").default(true), // डिफ़ॉल्ट रूप से ऑप्ट-इन, उपयोगकर्ता इसे बदल सकता है
   welcomeMessageSent: boolean("welcome_message_sent").default(false), // वेलकम मैसेज भेजा गया है या नहीं
   lastActivityAt: timestamp("last_activity_at").defaultNow(), // अंतिम गतिविधि का समय (रीमाइंडर्स के लिए)
@@ -56,17 +56,17 @@ export const sellersPgTable = pgTable("sellers", {
   description: text("description"),
   businessAddress: text("business_address").notNull(),
   city: text("city").notNull(),
-  pincode: text("pincode").notNull(), // विक्रेता का मुख्य पंजीकृत पिनकोड
+  pincode: text("pincode").notNull(), 
   businessPhone: text("business_phone").notNull(),
   gstNumber: text("gst_number"),
   bankAccountNumber: text("bank_account_number"),
   ifscCode: text("ifsc_code"),
-  deliveryRadius: integer("delivery_radius"), // यह मौजूदा फ़ील्ड रहेगी
+  deliveryRadius: integer("delivery_radius"), 
 
-  // --- यहाँ नई फ़ील्ड्स जोड़ी जा रही हैं ---
-  latitude: numeric("latitude").$type<number>(),   // Geocoding से विक्रेता के पते का Lat
-  longitude: numeric("longitude").$type<number>(),  // Geocoding से विक्रेता के पते का Long
-  deliveryPincodes: text("delivery_pincodes").array(), // उन पिनकोड्स की सूची जहाँ यह विक्रेता डिलीवरी करता है (जैसे ['302001', '311001'])
+  
+  latitude: numeric("latitude").$type<number>(),   
+  longitude: numeric("longitude").$type<number>(),  
+  deliveryPincodes: text("delivery_pincodes").array(), 
   // --- नई फ़ील्ड्स यहाँ समाप्त होती हैं ---
 
   email: text("email"),
@@ -127,10 +127,10 @@ export const products = pgTable("products", {
   maxOrderQty: integer("max_order_qty").default(100),
   isActive: boolean("is_active").default(true),
 
-  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), // 'LOCAL', 'CITYWIDE', 'INTERCITY'
-  productDeliveryPincodes: text("product_delivery_pincodes").array(), // उन पिनकोड्स की सूची जहाँ यह उत्पाद उपलब्ध है (जैसे ['302001', '311001'])
-  productDeliveryRadiusKM: integer("product_delivery_radius_km"),       // 'LOCAL' deliveryScope के लिए रेडियस (KM में)
-  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'), // "1-2 घंटे", "1-2 दिन"
+  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), 
+  productDeliveryPincodes: text("product_delivery_pincodes").array(), 
+  productDeliveryRadiusKM: integer("product_delivery_radius_km"),       
+  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'), 
   
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
@@ -190,13 +190,11 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   addressLine2: text('address_line2'),
   city: text('city').notNull(),
   state: text('state').notNull(),
-  postalCode: text('postal_code').notNull(), // यह तुम्हारे पिनकोड के लिए है
+  postalCode: text('postal_code').notNull(), 
+  latitude: decimal('latitude').$type<number>(),   
+  longitude: decimal('longitude').$type<number>(),  
+  label: text('label'), 
   
-  // --- यहाँ lat/long में बदलाव और नई 'label' फ़ील्ड जोड़ी जा रही है ---
-  latitude: decimal('latitude').$type<number>(),   // अब Nullable हो सकता है
-  longitude: decimal('longitude').$type<number>(),  // अब Nullable हो सकता है
-  label: text('label'), // ग्राहक को पता पहचानने के लिए (जैसे "घर", "ऑफिस")
-  // --- बदलाव यहाँ समाप्त होते हैं ---
   
   isDefault: boolean('is_default').default(false),
   createdAt: timestamp('created_at').defaultNow(),
