@@ -38,7 +38,7 @@ import AboutUs from "@/pages/AboutUs";
 import ContactUs from "@/pages/ContactUs";
 // Protected / Auth-based
 import AuthRedirectGuard from "@/components/auth-redirect-guard";
-import AdminGuard from "@/components/admin-guard",
+import AdminGuard from "@/components/admin-guard";
 
 
 import AdminLayout from "./components/AdminLayout"; // Corrected path and Capitalized
