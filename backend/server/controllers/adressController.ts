@@ -1,7 +1,7 @@
 // Node.js/TypeScript बैकएंड में
 import axios from 'axios';
 import { db } from '../db'; // Drizzle कनेक्शन
-import { deliveryAreas } from '../../shared/backend/tabels'; // deliveryAreas स्कीमा
+import { deliveryAreas } from '../../shared/backend/tables'; // deliveryAreas स्कीमा
 
 export const processCurrentLocation = async (req, res) => {
     const { latitude, longitude } = req.body;
