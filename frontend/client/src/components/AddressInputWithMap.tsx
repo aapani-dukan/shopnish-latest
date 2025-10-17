@@ -6,7 +6,7 @@ import {
   MarkerF,   // Renamed to MarkerF
   useLoadScript,
   Autocomplete,
-} from "react-google-maps/api";
+} from "@react-google-maps/api";
 import { useLocation } from '../context/LocationContext'; // <-- नया इम्पोर्ट
 
 const containerStyle = { width: "100%", height: "200px" };
