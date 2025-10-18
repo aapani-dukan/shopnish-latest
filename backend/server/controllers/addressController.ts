@@ -1,37 +1,52 @@
-// Node.js/TypeScript बैकएंड में
+import { Request, Response } from 'express';
 import axios from 'axios';
-import { db } from '../db'; // Drizzle कनेक्शन
-import { deliveryAreas } from '../../shared/backend/tables'; // deliveryAreas स्कीमा
+import { db } from '../db';
+import { deliveryAreas } from '../../shared/backend/tables';
+import { eq } from 'drizzle-orm';
 
-export const processCurrentLocation = async (req, res) => {
-    const { latitude, longitude } = req.body;
-    const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
-    
-    // 1. Lat/Long को पते में बदलें (Reverse Geocoding)
-    const geocodeResponse = await axios.get(
-        `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
-    );
-    
-    // पते के घटकों को निकालें
-    const addressComponents = geocodeResponse.data.results[0].address_components;
-    // यहां से postal_code निकालें (यह थोड़ा जटिल हो सकता है, लेकिन मान लेते हैं कि यह extract किया गया है)
-    const postalCode = extractPostalCode(addressComponents); 
-    const fullAddress = geocodeResponse.data.results[0].formatted_address; 
+function extractPostalCode(components: any[]): string {
+    const postal = components.find(c => c.types.includes('postal_code'));
+    return postal ? postal.long_name : 'Unknown';
+}
 
-    // 2. सेवा क्षेत्र जाँच
-    const serviceArea = await db.select()
-        .from(deliveryAreas)
-        .where(eq(deliveryAreas.pincode, postalCode)) // Drizzle eq फ़ंक्शन का उपयोग
-        .limit(1);
+export const processCurrentLocation = async (req: Request, res: Response) => {
+    try {
+        const { latitude, longitude } = req.body;
+        const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
-    // 3. प्रतिक्रिया वापस भेजें
-    return res.status(200).json({
-        address: fullAddress,
-        pincode: postalCode,
-        latitude: latitude,
-        longitude: longitude,
-        // यदि कोई मैच मिलता है, तो inServiceArea: true
-        inServiceArea: serviceArea.length > 0, 
-        deliveryCharges: serviceArea[0]?.deliveryCharge || null, // यदि सेवा क्षेत्र में है
-    });
+        if (!GOOGLE_MAPS_API_KEY) throw new Error("Google Maps API Key not configured.");
+
+        // 1. Reverse Geocode
+        const geocodeResponse = await axios.get(
+            `https://maps.googleapis.com/maps/api/geocode/json?latlng=${latitude},${longitude}&key=${GOOGLE_MAPS_API_KEY}`
+        );
+
+        if (!geocodeResponse.data.results?.length) {
+            return res.status(404).json({ message: "Could not resolve address from coordinates." });
+        }
+
+        const result = geocodeResponse.data.results[0];
+        const addressComponents = result.address_components;
+        const postalCode = extractPostalCode(addressComponents);
+        const fullAddress = result.formatted_address;
+
+        // 2. Check service area
+        const serviceArea = await db.select()
+            .from(deliveryAreas)
+            .where(eq(deliveryAreas.pincode, postalCode))
+            .limit(1);
+
+        // 3. Return response
+        return res.status(200).json({
+            address: fullAddress,
+            pincode: postalCode,
+            latitude,
+            longitude,
+            inServiceArea: serviceArea.length > 0,
+            deliveryCharges: serviceArea[0]?.deliveryCharge || null,
+        });
+    } catch (err: any) {
+        console.error("Error in processCurrentLocation:", err.message || err);
+        return res.status(500).json({ message: "Internal server error." });
+    }
 };
