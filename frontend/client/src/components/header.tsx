@@ -33,7 +33,7 @@ import {
 import selleronboardingdialog from "./seller/selleronboardingdialog";
 import { logout as firebaseLogout } from "/lib/firebase"; // ✅ Lucide icon से टकराव से बचने के लिए नाम बदला
 
-import LocationDisplay from "./LocationDisplay"; // ✅ LocationDisplay को इम्पोर्ट किया
+//import LocationDisplay from "./LocationDisplay"; // ✅ LocationDisplay को इम्पोर्ट किया
 
 interface category {
   id: string;
@@ -384,11 +384,11 @@ const header: react.fc<headerprops> = ({ categories = [], oncartclick }) => {
       </div>
       
       {/* ✅ यहां पर LocationDisplay कंपोनेंट को जोड़ें */}
-      <div classname="bg-gray-100 py-2 border-t border-b">
+      {/* <div classname="bg-gray-100 py-2 border-t border-b">
         <div classname="container mx-auto px-4 md:px-6">
           <LocationDisplay /> {/* ✅ LocationDisplay कंपोनेंट */}
         </div>
-      </div>
+      </div> */}
 
       {isauthenticated && (
         <selleronboardingdialog
