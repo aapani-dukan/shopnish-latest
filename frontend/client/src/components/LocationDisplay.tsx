@@ -1,7 +1,7 @@
 // frontend/client/src/components/LocationDisplay.tsx
 
 import React, { useState } from 'react';
-import { useLocation } from '../context/LocationContext';
+import { useLocation } from '@/context/LocationContext';
 import LocationModal from './LocationModal';
 
 const LocationDisplay: React.FC = () => {
