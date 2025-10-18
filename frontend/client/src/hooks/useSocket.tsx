@@ -52,7 +52,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       }
 
       const socketUrl =
-        import.meta.env.VITE_API_BASE_URL || "https://shopnish-00ug.onrender.com";
+        import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
 
       const newSocket = io(socketUrl, {
         transports: ["websocket"],
