@@ -1,6 +1,6 @@
 // client/src/context/LocationContext.tsx
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import axios from 'axios';
 
 // --- Interfaces for Location Data ---
