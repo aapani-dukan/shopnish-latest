@@ -33,7 +33,7 @@ import {
 import SellerOnboardingDialog from "./seller/SellerOnboardingDialog"; // Corrected: SellerOnboardingDialog
 import { logout as firebaseLogout } from "../lib/firebase"; // Corrected: firebaseLogout
 
-import LocationDisplay from "./LocationDisplay"; // Corrected: LocationDisplay (PascalCase for React Component)
+//import LocationDisplay from "./LocationDisplay"; // Corrected: LocationDisplay (PascalCase for React Component)
 
 // यदि आप category डेटा header में उपयोग कर रहे हैं तो इसे वापस जोड़ें, अन्यथा हटा दें।
 // मुझे लगता है कि यह कहीं और से आना चाहिए (जैसे useQuery से), या यह प्रॉप के माध्यम से पास किया जाएगा।
@@ -381,11 +381,7 @@ const Header: React.FC<HeaderProps> = ({ onCartClick }) => { // Corrected: Heade
         </div>
       </div>
       
-    <div className="bg-gray-100 py-2 border-t border-b"> {/* Corrected: className */}
-      <div className="container mx-auto px-4 md:px-6"> {/* Corrected: className */}
-        <LocationDisplay /> {/* Corrected: LocationDisplay */}
-      </div>
-    </div>    
+    
 
     {isAuthenticated && ( // Corrected: isAuthenticated
       <SellerOnboardingDialog // Corrected: SellerOnboardingDialog
