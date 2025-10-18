@@ -91,31 +91,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
         loadInitialLocation();
     }, [getAuthToken]); // Rerun if auth token changes (e.g., user logs in)
-
-    // --- 2. Fetch current geolocation from browser ---
-    const fetchCurrentGeolocation = useCallback(async () => {
-        setLoadingLocation(true);
-        setError(null);
-        if (navigator.geolocation) {
-            navigator.geolocation.getCurrentPosition(
-                async (position) => {
-                    const { latitude, longitude } = position.coords;
-                    await processLocation(latitude, longitude);
-                },
-                (geoError) => {
-                    console.error("Geolocation Error: ", geoError);
-                    setError("लोकेशन प्राप्त करने में असमर्थ। कृपया अनुमति दें।");
-                    setLoadingLocation(false);
-                },
-                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-            );
-        } else {
-            setError("आपका ब्राउज़र जियोलोकेशन को सपोर्ट नहीं करता।");
-            setLoadingLocation(false);
-        }
-    }, [processLocation]);
-
-    // --- 3. Process location via backend API (for service area check & full address) ---
+        // --- 3. Process location via backend API (for service area check & full address) ---
     const processLocation = useCallback(async (lat: number, long: number) => {
         setLoadingLocation(true);
         setError(null);
@@ -140,6 +116,31 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
             setLoadingLocation(false);
         }
     }, [API_BASE_URL]);
+
+    // --- 2. Fetch current geolocation from browser ---
+    const fetchCurrentGeolocation = useCallback(async () => {
+        setLoadingLocation(true);
+        setError(null);
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(
+                async (position) => {
+                    const { latitude, longitude } = position.coords;
+                    await processLocation(latitude, longitude);
+                },
+                (geoError) => {
+                    console.error("Geolocation Error: ", geoError);
+                    setError("लोकेशन प्राप्त करने में असमर्थ। कृपया अनुमति दें।");
+                    setLoadingLocation(false);
+                },
+                { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
+            );
+        } else {
+            setError("आपका ब्राउज़र जियोलोकेशन को सपोर्ट नहीं करता।");
+            setLoadingLocation(false);
+        }
+    }, [processLocation]);
+
+
 
     // --- 4. Load saved addresses (when user is logged in) ---
     const loadSavedAddresses = useCallback(async () => {
