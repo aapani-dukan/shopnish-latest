@@ -53,7 +53,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
     const [error, setError] = useState<string | null>(null);
 
-    const API_BASE_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://shopnish-seprate.onrender.com/api';
+    const API_BASE_URL = import.meta.env.VITE_BACKEND_API_URL || 'http://shopnish-seprate.onrender.com';
 
     // Helper to get auth token
     const getAuthToken = useCallback((): string | null => {
