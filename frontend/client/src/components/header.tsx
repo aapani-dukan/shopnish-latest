@@ -381,13 +381,13 @@ const Header: React.FC<HeaderProps> = ({ onCartClick }) => { // Capitalized Head
         </div>
       </div>
       
-         {/* LocationDisplay को Header के नीचे एक अलग div में जोड़ें ताकि यह स्थिर रहे */}
-      {/*   <div className="bg-gray-100 py-2 border-t border-b">
+        
+        <div className="bg-gray-100 py-2 border-t border-b">
         <div className="container mx-auto px-4 md:px-6">
             <LocationDisplay /> 
         
         </div>
-      </div>*/}
+      </div>
 
       {isAuthenticated && ( // Capitalized
         <SellerOnboardingDialog // Capitalized
