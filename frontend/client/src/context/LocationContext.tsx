@@ -96,7 +96,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
         setLoadingLocation(true);
         setError(null);
         try {
-            const response = await axios.post<ProcessedLocation>(`${API_BASE_URL}/addresses/process-current-location`, {
+            const response = await axios.post<ProcessedLocation>(`${API_BASE_URL}/api/addresses/process-current-location`, {
                 latitude: lat,
                 longitude: long,
             });
@@ -152,7 +152,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
         }
 
         try {
-            const response = await axios.get<ProcessedLocation[]>(`${API_BASE_URL}/addresses/user`, {
+            const response = await axios.get<ProcessedLocation[]>(`${API_BASE_URL}/api/addresses/user`, {
                 headers: { Authorization: `Bearer ${token}` }
             });
             setSavedAddresses(response.data);
