@@ -33,7 +33,7 @@ import {
 } from "lucide-react";
 import SellerOnboardingDialog from "./seller/SellerOnboardingDialog";
 import { logout } from "@/lib/firebase";
-
+import LocationDisplay from "./LocationDisplay";
 interface Category {
   id: string;
   name: string;
@@ -379,6 +379,11 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
               </div>
             </SheetContent>
           </Sheet>
+        </div>
+      </div>
+      <div classname="bg-gray-100 py-2 border-t border-b">
+        <div classname="container mx-auto px-4 md:px-6">
+          <LocationDisplay /> {/* ✅ LocationDisplay कंपोनेंट */}
         </div>
       </div>
       {isAuthenticated && (
