@@ -1,7 +1,7 @@
 //frontend/client/src/components/LocationModal.tsx
 
 import React, { useEffect, useState } from 'react';
-import { useLocation, ProcessedLocation } from '../context/LocationContext'; // ProcessedLocation इम्पोर्ट करें
+import { useLocation, ProcessedLocation } from '@/context/LocationContext'; // ProcessedLocation इम्पोर्ट करें
 import AddressInputWithMap from './AddressInputWithMap';
 
 interface LocationModalProps {
