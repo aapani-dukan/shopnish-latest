@@ -26,10 +26,10 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
             {/* LocationProvider को यहाँ जोड़ें */}
             <LocationProvider>
               <SocketProvider>
-                 <>
+                 <div>
                 <Toaster />
                 <App />
-                 </>
+                 </div>
                 </SocketProvider>        
             </LocationProvider>
           </AuthProvider>
