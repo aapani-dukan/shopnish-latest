@@ -383,13 +383,6 @@ const header: react.fc<headerprops> = ({ categories = [], oncartclick }) => {
         </div>
       </div>
       
-      {/* ✅ यहां पर LocationDisplay कंपोनेंट को जोड़ें */}
-      {/* <div classname="bg-gray-100 py-2 border-t border-b">
-        <div classname="container mx-auto px-4 md:px-6">
-          <LocationDisplay /> {/* ✅ LocationDisplay कंपोनेंट */}
-        </div>
-      </div> */}
-
       {isauthenticated && (
         <selleronboardingdialog
           isopen={issellerdialogopen}
