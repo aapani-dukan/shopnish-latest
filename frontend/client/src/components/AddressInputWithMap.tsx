@@ -7,7 +7,7 @@ import {
   useLoadScript,
   Autocomplete,
 } from "@react-google-maps/api";
-import { useLocation } from '../context/LocationContext'; // <-- नया इम्पोर्ट
+import { useLocation } from '@/context/LocationContext'; // <-- नया इम्पोर्ट
 
 const containerStyle = { width: "100%", height: "200px" };
 const libraries: ("places")[] = ["places"];
