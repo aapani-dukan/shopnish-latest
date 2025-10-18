@@ -213,9 +213,11 @@ const Header: React.FC<HeaderProps> = ({ onCartClick }) => { // Capitalized Head
 
           <DropdownMenu> {/* Capitalized */}
             <DropdownMenuTrigger asChild> {/* Capitalized */}
-              <Button variant="ghost" size="icon"> {/* Capitalized Button */}
+              <Button variant="ghost" size="icon"> 
+                <>
                 <User className="h-5 w-5" /> {/* Capitalized User */}
-                <span className="sr-only">User Menu</span> {/* Capitalized */}
+                <span className="sr-only">User Menu</span> 
+                </>
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56"> {/* Capitalized */}
