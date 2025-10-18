@@ -14,8 +14,8 @@ import { TooltipProvider } from "./components/ui/tooltip"; // Assuming this path
 import { AuthProvider } from "./hooks/useAuth"; // Assuming this path
 import { SocketProvider } from "./hooks/useSocket"; // Assuming this path
 
-// Import the LocationProvider
-//import { LocationProvider } from "./context/LocationContext";
+
+import { LocationProvider } from "./context/LocationContext";
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
   <React.StrictMode>
@@ -24,14 +24,14 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
         <TooltipProvider>
           <AuthProvider>
             
-            {/*   <LocationProvider> */}
+              <LocationProvider> 
               <SocketProvider>
                  <div>
                 <Toaster />
                 <App />
                  </div>
                 </SocketProvider>        
-              {/*    </LocationProvider> */}
+                </LocationProvider> 
           </AuthProvider>
         </TooltipProvider>
       </QueryClientProvider>
