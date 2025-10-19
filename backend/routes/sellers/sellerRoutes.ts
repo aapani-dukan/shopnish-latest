@@ -10,8 +10,8 @@ import {
   orders,
   orderItems,
   orderStatusEnum,
-  insertSellerSchema,
-  updateSellerSchema
+  // insertSellerSchema, // अगर इसकी अब आवश्यकता नहीं है तो हटा सकते हैं
+  updateSellerSchema // इसका उपयोग हम मौजूदा PUT /me में कर रहे हैं
 } from '../../shared/backend/schema';
 import { requireSellerAuth } from '../../server/middleware/authMiddleware';
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
@@ -42,8 +42,9 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
       gstNumber,
       bankAccountNumber,
       ifscCode,
-      deliveryRadius,
+      // deliveryRadius, // इसे यहाँ से हटा दिया गया है क्योंकि यह apply के बजाय delivery-preferences में सेट होगा
       businessType,
+      // यहाँ isDistanceBasedDelivery, latitude, longitude, deliveryPincodes नहीं जोड़ेंगे
     } = req.body;
 
     if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType) {
@@ -75,10 +76,17 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
         gstNumber: gstNumber || null,
         bankAccountNumber: bankAccountNumber || null,
         ifscCode: ifscCode || null,
-        deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : null,
+        // deliveryRadius को यहाँ null रहने दें, यह delivery-preferences में सेट होगा
+        deliveryRadius: null, 
+        // isDistanceBasedDelivery को default(false) रहने दें
+        isDistanceBasedDelivery: false, 
+        // latitude, longitude, deliveryPincodes को null/डिफ़ॉल्ट रहने दें
+        latitude: null,
+        longitude: null,
+        deliveryPincodes: [], 
         businessType,
         approvalStatus: approvalStatusEnum.enumValues[0], // pending
-        applicationDate: new Date(),
+        // applicationDate: new Date(), // applicationDate स्कीमा में नहीं है
       })
       .returning();
 
@@ -98,7 +106,9 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
         firebaseUid: updatedUser.firebaseUid,
         role: updatedUser.role,
         email: updatedUser.email,
-        name: updatedUser.name,
+        // name: updatedUser.name, // users स्कीमा में name फ़ील्ड नहीं है, firstName/lastName का उपयोग करें
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
       },
     });
   } catch (error: any) {
@@ -162,9 +172,9 @@ sellerRouter.get("/orders", requireSellerAuth, async (req: AuthenticatedRequest,
         customer: true,
         deliveryBoy: {
           columns: {
-            id: true, // ID हमेशा भेजनी चाहिए
-            name: true, // हमें नाम चाहिए
-            phone: true, // हमें फ़ोन नंबर चाहिए
+            id: true,
+            name: true,
+            phone: true,
           }
         },
         items: {
@@ -220,7 +230,7 @@ sellerRouter.get('/products', requireSellerAuth, async (req: AuthenticatedReques
   }
 });
 
-// ✅ GET /api/sellers/categories
+// ✅ GET /api/sellers/categories (तुम्हारी schema में categories.sellerId नहीं है, यह यहाँ एक संभावित एरर है)
 sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -232,11 +242,14 @@ sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequ
     if (!sellerProfile) {
       return res.status(404).json({ error: 'Seller profile not found.' });
     }
-    const sellerId = sellerProfile.id;
+    const sellerId = sellerProfile.id; // sellerId का उपयोग करें, यदि categories में sellerId है
 
+    // ध्यान दें: तुम्हारी 'categories' स्कीमा में 'sellerId' कॉलम नहीं है।
+    // यह क्वेरी एरर देगी अगर तुम इसे ऐसे चलाते हो।
+    // यदि तुम सेलर द्वारा बनाई गई कैटेगरी चाहते हो, तो तुम्हें 'categories' टेबल में 'sellerId' जोड़ना होगा।
     const sellerCategories = await db.query.categories.findMany({
-      where: eq(categories.sellerId, sellerId),
-      orderBy: desc(categories.createdAt),
+      // where: eq(categories.sellerId, sellerId), // यह लाइन एरर देगी यदि categories.sellerId मौजूद नहीं है
+      orderBy: desc(categories.id), // createdAt की जगह id का उपयोग करें, क्योंकि createdAt नहीं है
     });
 
     return res.status(200).json(sellerCategories);
@@ -269,7 +282,7 @@ sellerRouter.post(
       }
       const sellerId = sellerProfile.id;
 
-      const { name, description, price, categoryId, stock } = req.body;
+      const { name, description, price, categoryId, stock, unit, brand, minOrderQty, maxOrderQty, estimatedDeliveryTime } = req.body;
       const file = req.file;
 
       if (!name || !price || !categoryId || !stock || !file) {
@@ -279,6 +292,8 @@ sellerRouter.post(
       const parsedCategoryId = parseInt(categoryId as string);
       const parsedStock = parseInt(stock as string);
       const parsedPrice = parseFloat(price as string);
+      const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : undefined;
+      const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : undefined;
 
       if (isNaN(parsedCategoryId) || isNaN(parsedStock) || isNaN(parsedPrice)) {
         return res.status(400).json({ error: 'Invalid data provided for categoryId, price, or stock.' });
@@ -296,6 +311,12 @@ sellerRouter.post(
           stock: parsedStock,
           image: imageUrl,
           sellerId,
+          unit: unit || 'piece', // डिफ़ॉल्ट मान
+          brand: brand || null,
+          minOrderQty: parsedMinOrderQty,
+          maxOrderQty: parsedMaxOrderQty,
+          estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours', // डिफ़ॉल्ट मान
+          approvalStatus: approvalStatusEnum.enumValues[0], // नया प्रोडक्ट लंबित स्थिति में शुरू होगा
         })
         .returning();
 
@@ -416,17 +437,26 @@ sellerRouter.patch("/orders/:orderId/status", requireSellerAuth, async (req: Aut
 // ✅ PUT Update Seller Profile (updates all fields)
 sellerRouter.put('/me', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const sellerId = req.user?.sellerId; // verifyToken से sellerId प्राप्त करें
-    const updateData = req.body;
-
-    if (!sellerId) {
+    const userId = req.user?.id; // Authed user ID
+    if (!userId) {
       return res.status(403).json({ message: "Seller authentication failed." });
     }
 
+    const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
+
+    if (!sellerProfile) {
+        return res.status(404).json({ message: "Seller profile not found." });
+    }
+    const sellerId = sellerProfile.id; // विक्रेता का ID
+
+    const updateData = req.body;
+
     // Zod Validation: क्लाइंट से प्राप्त डेटा को वैलिडेट करें।
     // हम केवल उन फ़ील्ड्स को चुनेंगे जिन्हें क्लाइंट भेज रहा है।
-   // updateSellerSchema का उपयोग करें
-const validUpdateData = updateSellerSchema.safeParse(updateData); 
+    const validUpdateData = updateSellerSchema.safeParse(updateData); 
 
     if (!validUpdateData.success) {
       console.error("❌ Seller update validation error:", validUpdateData.error);
@@ -460,6 +490,85 @@ const validUpdateData = updateSellerSchema.safeParse(updateData);
   }
 });
 
+// ✅ नया एंडपॉइंट: PUT /api/sellers/delivery-preferences
+sellerRouter.put('/delivery-preferences', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id; // ऑथेंटिकेटेड यूजर का ID
+    if (!userId) {
+      return res.status(401).json({ message: "Unauthorized: User not authenticated." });
+    }
+
+    const [sellerProfile] = await db
+      .select()
+      .from(sellersPgTable)
+      .where(eq(sellersPgTable.userId, userId));
+
+    if (!sellerProfile) {
+      return res.status(404).json({ message: "Seller profile not found." });
+    }
+    const sellerId = sellerProfile.id; // विक्रेता का ID
+
+    const {
+      isDistanceBasedDelivery,
+      deliveryRadius,        // यदि isDistanceBasedDelivery true है
+      latitude,              // यदि isDistanceBasedDelivery true है
+      longitude,             // यदि isDistanceBasedDelivery true है
+      deliveryPincodes,      // यदि isDistanceBasedDelivery false है
+    } = req.body;
+
+    // ----- डेटा वैलिडेशन -----
+    if (typeof isDistanceBasedDelivery !== 'boolean') {
+      return res.status(400).json({ message: "isDistanceBasedDelivery must be a boolean." });
+    }
+
+    if (isDistanceBasedDelivery) {
+      // दूरी-आधारित डिलीवरी के लिए आवश्यक फ़ील्ड्स
+      if (deliveryRadius === undefined || typeof deliveryRadius !== 'number' || deliveryRadius <= 0) {
+        return res.status(400).json({ message: "deliveryRadius (in km) is required and must be a positive number for distance-based delivery." });
+      }
+      if (latitude === undefined || typeof latitude !== 'number' || longitude === undefined || typeof longitude !== 'number') {
+        return res.status(400).json({ message: "Shop latitude and longitude are required for distance-based delivery." });
+      }
+      // यदि latitude/longitude मान्य संख्याएं नहीं हैं, तो parseInt/parseFloat उन्हें NaN बना देगा।
+      if (isNaN(latitude) || isNaN(longitude)) {
+        return res.status(400).json({ message: "Invalid latitude or longitude provided." });
+      }
+    } else {
+      // पिनकोड-आधारित डिलीवरी के लिए आवश्यक फ़ील्ड्स
+      if (!Array.isArray(deliveryPincodes) || !deliveryPincodes.every(p => typeof p === 'string' && p.length === 6)) {
+        return res.status(400).json({ message: "deliveryPincodes must be an array of 6-digit strings for pincode-based delivery." });
+      }
+    }
+    // ----- एंड वैलिडेशन -----
+
+    const [updatedSeller] = await db
+      .update(sellersPgTable)
+      .set({
+        isDistanceBasedDelivery: isDistanceBasedDelivery,
+        // जब दूरी-आधारित हो, तो संबंधित फ़ील्ड सेट करें, अन्यथा null
+        deliveryRadius: isDistanceBasedDelivery ? deliveryRadius : null,
+        latitude: isDistanceBasedDelivery ? latitude : null,
+        longitude: isDistanceBasedDelivery ? longitude : null,
+        // जब पिनकोड-आधारित हो, तो संबंधित फ़ील्ड सेट करें, अन्यथा खाली array
+        deliveryPincodes: isDistanceBasedDelivery ? [] : deliveryPincodes,
+        updatedAt: new Date(),
+      })
+      .where(eq(sellersPgTable.id, sellerId))
+      .returning();
+
+    if (!updatedSeller) {
+      return res.status(404).json({ message: "Seller profile not found or no changes made." });
+    }
+
+    getIO().emit("admin:update", { type: "seller-delivery-preferences-update", data: updatedSeller });
+
+    return res.status(200).json({ message: "Delivery preferences updated successfully.", seller: updatedSeller });
+
+  } catch (error: any) {
+    console.error("❌ PUT /api/sellers/delivery-preferences error:", error);
+    res.status(500).json({ message: "Failed to update delivery preferences.", error: error.message });
+  }
+});
+
 
 export default sellerRouter;
-      
