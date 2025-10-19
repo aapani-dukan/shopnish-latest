@@ -11,7 +11,7 @@ import { AuthenticatedRequest } from "./middleware/verifyToken.ts";
 import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware.ts";
 import { authAdmin } from "./lib/firebaseAdmin.ts";
 import { eq } from "drizzle-orm";
-
+ 
 // ✅ Sub-route modules
 import apiAuthLoginRouter from "./roots/apiAuthLogin.ts";
 import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
@@ -33,6 +33,7 @@ import whatsappRouter from '../routes/whatsappRoutes.ts';
 import addressRouter from '../routes/addressRoutes.ts';
 import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
+import customerRouter from '../routes/customerRoutes';
 const router = Router();
 
 // ✅ Health Check
@@ -254,7 +255,7 @@ router.post("/auth/logout", async (req, res) => {
 // ✅ Routes mapping
 router.use("/users", userLoginRouter);
 router.use("/auth", apiAuthLoginRouter);
-
+router.use('/customer', customerRouter);
 // Seller-specific
 router.use("/cart", cartRouter);
 router.use("/orders", orderRoutes);
