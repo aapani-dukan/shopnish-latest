@@ -94,7 +94,39 @@ export async function reverseGeocode(latitude: number, longitude: number): Promi
     return null;
   }
 }
+export async function calculateDistanceKm(
+  originLat: number,
+  originLng: number,
+  destinationLat: number,
+  destinationLng: number
+): Promise<number | null> {
+  if (!GOOGLE_MAPS_API_KEY) {
+    console.error("[ERROR] calculateDistanceKm: GOOGLE_MAPS_API_KEY is NOT configured.");
+    return null;
+  }
 
+  const url = `https://maps.googleapis.com/maps/api/distancematrix/json?origins=${originLat},${originLng}&destinations=${destinationLat},${destinationLng}&units=metric&key=${GOOGLE_MAPS_API_KEY}`;
+
+  try {
+    const response = await axios.get(url);
+    const data = response.data;
+
+    if (data.status === 'OK' && data.rows.length > 0 && data.rows[0].elements.length > 0) {
+      const element = data.rows[0].elements[0];
+      if (element.status === 'OK' && element.distance) {
+        const distanceMeters = element.distance.value;
+        const distanceKm = distanceMeters / 1000;
+        return distanceKm;
+      }
+    } else {
+        console.error(`[ERROR] Google Distance Matrix API returned status: ${data.status || 'UNKNOWN'}. Message: ${data.error_message || 'N/A'}`);
+    }
+    return null;
+  } catch (error) {
+    console.error('[ERROR] Error calling Google Distance Matrix API:', error);
+    return null;
+  }
+}
 export async function geocodeAddress(address: string): Promise<GeocodeResult | null> {
   console.log(`[DEBUG] geocodeAddress: Attempting geocode for address: "${address}"`);
   if (!GOOGLE_MAPS_API_KEY) {
