@@ -1,23 +1,21 @@
 import { Request, Response } from 'express';
 import axios from 'axios';
 import { db } from '../db';
-import { deliveryAreas } from '../../shared/backend/schema';
+// इम्पोर्ट पाथ को '../../shared/backend/tables' पर वापस रीसेट किया गया
+import { deliveryAreas } from '../../shared/backend/tables'; 
 import { eq } from 'drizzle-orm';
-import { z } from "zod';
-function extractPostalCode(components: any[]): string {
-    const postal = components.find(c => c.types.includes('postal_code'));
-    return postal ? postal.long_name : 'Unknown';
-}
+import { z } from "zod"; // Zod इम्पोर्ट
 
-// यह मानकर चलते हैं कि तुम्हारी ProcessLocationSchema इस तरह दिखती है:
+// Zod स्कीमा: यह आमतौर पर एक अलग फाइल में परिभाषित होता है और इम्पोर्ट किया जाता है।
+// यदि यह इसी फाइल में है, तो यह ठीक है।
 const ProcessLocationSchema = z.object({
     latitude: z.number().min(-90).max(90),
     longitude: z.number().min(-180).max(180),
 });
 
-
 // यह फंक्शन address_components ऐरे से पोस्टल कोड निकालता है
-function extractPostalCode(components: any[]): string | null { // null लौटा सकता है यदि नहीं मिला
+// इसकी केवल एक ही परिभाषा होनी चाहिए, और यह null लौटा सकता है।
+function extractPostalCode(components: any[]): string | null {
     const postal = components.find(c => c.types.includes('postal_code'));
     return postal ? postal.long_name : null; // यदि पोस्टल कोड नहीं मिला तो null लौटाएं
 }
@@ -104,10 +102,11 @@ export const processCurrentLocation = async (req: Request, res: Response) => {
 
     } catch (err: any) {
         console.error("Error in processCurrentLocation catch block:", err.message || err);
-        if (err.response) { // Axios errors have a 'response' property for HTTP errors
+        if (axios.isAxiosError(err) && err.response) { // Axios errors have a 'response' property for HTTP errors
             console.error("Axios Error Response Status:", err.response.status);
             console.error("Axios Error Response Data:", err.response.data);
         }
         return res.status(500).json({ message: "Internal server error during location processing." });
     }
 };
+
