@@ -32,6 +32,7 @@ import { categories } from "../shared/backend/schema.ts";
 import whatsappRouter from '../routes/whatsappRoutes.ts';
 import addressRouter from '../routes/addressRoutes.ts';
 import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
+import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 const router = Router();
 
 // ✅ Health Check
@@ -289,6 +290,7 @@ adminRouter.use("/password", adminPasswordRoutes);
 adminRouter.use("/vendors", adminVendorsRoutes);
 adminRouter.use("/delivery-boys", admindBoyRouter);
 adminRouter.use("/orders", adminOrdersRouter);
+adminRouter.use("/delivery-areas", adminDeliveryAreasRouter); 
 // ✅ AdminRouter को मुख्य राउटर पर मैप करें
 router.use("/admin", adminRouter);
 
