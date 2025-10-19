@@ -48,9 +48,10 @@ export const users = pgTable("users", {
   lastActivityAt: timestamp("last_activity_at").defaultNow(), // अंतिम गतिविधि का समय (रीमाइंडर्स के लिए)
 });
 
+
 export const sellersPgTable = pgTable("sellers", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").unique().notNull().references(() => usersPgTable.id),
+  userId: integer("user_id").unique().notNull().references(() => users.id),
   businessName: text("business_name").notNull(),
   businessType: text("business_type").notNull(),
   description: text("description"),
@@ -62,23 +63,16 @@ export const sellersPgTable = pgTable("sellers", {
   bankAccountNumber: text("bank_account_number"),
   ifscCode: text("ifsc_code"),
   deliveryRadius: integer("delivery_radius"), 
-
-  
-  latitude: numeric("latitude").$type<number>(),   
-  longitude: numeric("longitude").$type<number>(),  
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).$type<number>(),   
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).$type<number>(),  
   deliveryPincodes: text("delivery_pincodes").array(), 
-  // --- नई फ़ील्ड्स यहाँ समाप्त होती हैं ---
-
-  email: text("email"),
-  phone: text("phone"),
-  address: text("address"),
+  isDistanceBasedDelivery: boolean("is_distance_based_delivery").default(false), 
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
-
 
 export const stores = pgTable("stores", {
   id: serial("id").primaryKey(),
