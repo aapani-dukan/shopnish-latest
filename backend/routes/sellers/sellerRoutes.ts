@@ -10,16 +10,16 @@ import {
   orders,
   orderItems,
   orderStatusEnum,
-  // insertSellerSchema, // अगर इसकी अब आवश्यकता नहीं है तो हटा सकते हैं
-  updateSellerSchema // इसका उपयोग हम मौजूदा PUT /me में कर रहे हैं
+  // insertSellerSchema,
+  updateSellerSchema
 } from '../../shared/backend/schema';
 import { requireSellerAuth } from '../../server/middleware/authMiddleware';
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
 import { eq, desc, and, exists } from 'drizzle-orm';
 import multer from 'multer';
-import { uploadImage } from '../../server/cloudStorage';
+import { uploadImage, deleteImage } from '../../server/cloudStorage'; // ✅ deleteImage इम्पोर्ट करें
 import { v4 as uuidv4 } from "uuid";
-import { getIO } from "../../server/socket.ts"; // ✅ Socket.IO instance
+import { getIO } from "../../server/socket.ts";
 
 const sellerRouter = Router();
 const upload = multer({ dest: 'uploads/' });
@@ -42,9 +42,7 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
       gstNumber,
       bankAccountNumber,
       ifscCode,
-      // deliveryRadius, // इसे यहाँ से हटा दिया गया है क्योंकि यह apply के बजाय delivery-preferences में सेट होगा
       businessType,
-      // यहाँ isDistanceBasedDelivery, latitude, longitude, deliveryPincodes नहीं जोड़ेंगे
     } = req.body;
 
     if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType) {
@@ -76,25 +74,21 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
         gstNumber: gstNumber || null,
         bankAccountNumber: bankAccountNumber || null,
         ifscCode: ifscCode || null,
-        // deliveryRadius को यहाँ null रहने दें, यह delivery-preferences में सेट होगा
-        deliveryRadius: null, 
-        // isDistanceBasedDelivery को default(false) रहने दें
-        isDistanceBasedDelivery: false, 
-        // latitude, longitude, deliveryPincodes को null/डिफ़ॉल्ट रहने दें
+        deliveryRadius: null,
+        isDistanceBasedDelivery: false,
         latitude: null,
         longitude: null,
-        deliveryPincodes: [], 
+        deliveryPincodes: [],
         businessType,
-        approvalStatus: approvalStatusEnum.enumValues[0], // pending
-        // applicationDate: new Date(), // applicationDate स्कीमा में नहीं है
+        approvalStatus: approvalStatusEnum.enumValues[0],
       })
       .returning();
 
     const [updatedUser] = await db
       .update(users)
       .set({
-        role: userRoleEnum.enumValues[1], // seller
-        approvalStatus: approvalStatusEnum.enumValues[0], // pending
+        role: userRoleEnum.enumValues[1],
+        approvalStatus: approvalStatusEnum.enumValues[0],
       })
       .where(eq(users.id, userId))
       .returning();
@@ -106,7 +100,6 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
         firebaseUid: updatedUser.firebaseUid,
         role: updatedUser.role,
         email: updatedUser.email,
-        // name: updatedUser.name, // users स्कीमा में name फ़ील्ड नहीं है, firstName/lastName का उपयोग करें
         firstName: updatedUser.firstName,
         lastName: updatedUser.lastName,
       },
@@ -242,7 +235,7 @@ sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequ
     if (!sellerProfile) {
       return res.status(404).json({ error: 'Seller profile not found.' });
     }
-    const sellerId = sellerProfile.id; // sellerId का उपयोग करें, यदि categories में sellerId है
+    const sellerId = sellerProfile.id;
 
     // ध्यान दें: तुम्हारी 'categories' स्कीमा में 'sellerId' कॉलम नहीं है।
     // यह क्वेरी एरर देगी अगर तुम इसे ऐसे चलाते हो।
@@ -259,7 +252,173 @@ sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequ
   }
 });
 
-// ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं)
+// ✅ POST /api/sellers/categories (नई कैटेगरी बनाएं)
+sellerRouter.post('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+
+    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+    if (!sellerProfile) {
+      return res.status(404).json({ error: 'Seller profile not found. Complete seller registration.' });
+    }
+    const sellerId = sellerProfile.id;
+
+    const { name, description } = req.body;
+
+    if (!name) {
+      return res.status(400).json({ error: 'Category name is required.' });
+    }
+
+    // सुनिश्चित करें कि इस सेलर के लिए समान नाम वाली कोई कैटेगरी पहले से मौजूद न हो
+    const [existingCategory] = await db.select()
+      .from(categories)
+      .where(and(eq(categories.name, name), eq(categories.sellerId, sellerId))); // ✅ sellerId के साथ चेक करें
+
+    if (existingCategory) {
+      return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
+    }
+
+    const [newCategory] = await db.insert(categories).values({
+      name,
+      description: description || null,
+      sellerId: sellerId, // ✅ sellerId असाइन करें
+    }).returning();
+
+    getIO().emit("category:created", newCategory);
+
+    return res.status(201).json(newCategory);
+  } catch (error: any) {
+    console.error('❌ Error in POST /api/sellers/categories:', error);
+    return res.status(500).json({ error: 'Failed to create category.' });
+  }
+});
+
+// ✅ PUT /api/sellers/categories/:id (कैटेगरी अपडेट करें)
+sellerRouter.put('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const categoryId = parseInt(req.params.id);
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    if (isNaN(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category ID.' });
+    }
+
+    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+    if (!sellerProfile) {
+      return res.status(404).json({ error: 'Seller profile not found.' });
+    }
+    const sellerId = sellerProfile.id;
+
+    const { name, description } = req.body;
+
+    if (!name && !description) {
+      return res.status(400).json({ error: 'No update data provided.' });
+    }
+
+    // सुनिश्चित करें कि कैटेगरी सेलर की है
+    const [existingCategory] = await db.select()
+      .from(categories)
+      .where(and(eq(categories.id, categoryId), eq(categories.sellerId, sellerId))); // ✅ sellerId के साथ चेक करें
+
+    if (!existingCategory) {
+      return res.status(403).json({ error: 'Not authorized to update this category.' });
+    }
+
+    // यदि नाम अपडेट हो रहा है, तो डुप्लिकेट नाम जांचें
+    if (name && name !== existingCategory.name) {
+      const [duplicateCategory] = await db.select()
+        .from(categories)
+        .where(and(eq(categories.name, name), eq(categories.sellerId, sellerId), (categories.id, categoryId))); // ✅ sellerId के साथ चेक करें
+
+      if (duplicateCategory) {
+        return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
+      }
+    }
+    
+    const [updatedCategory] = await db.update(categories)
+      .set({
+        name: name || existingCategory.name,
+        description: description !== undefined ? description : existingCategory.description,
+        updatedAt: new Date(),
+      })
+      .where(eq(categories.id, categoryId))
+      .returning();
+
+    if (!updatedCategory) {
+      return res.status(404).json({ error: 'Category not found or no changes made.' });
+    }
+
+    getIO().emit("category:updated", updatedCategory);
+
+    return res.status(200).json(updatedCategory);
+  } catch (error: any) {
+    console.error('❌ Error in PUT /api/sellers/categories/:id:', error);
+    return res.status(500).json({ error: 'Failed to update category.' });
+  }
+});
+
+// ✅ DELETE /api/sellers/categories/:id (कैटेगरी डिलीट करें)
+sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const categoryId = parseInt(req.params.id);
+
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
+    if (isNaN(categoryId)) {
+      return res.status(400).json({ error: 'Invalid category ID.' });
+    }
+
+    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+    if (!sellerProfile) {
+      return res.status(404).json({ error: 'Seller profile not found.' });
+    }
+    const sellerId = sellerProfile.id;
+
+    // सुनिश्चित करें कि कैटेगरी सेलर की है
+    const [existingCategory] = await db.select()
+      .from(categories)
+      .where(and(eq(categories.id, categoryId), eq(categories.sellerId, sellerId))); // ✅ sellerId के साथ चेक करें
+
+    if (!existingCategory) {
+      return res.status(403).json({ error: 'Not authorized to delete this category.' });
+    }
+
+    // चेक करें कि क्या इस कैटेगरी में कोई प्रोडक्ट है
+    const [hasProducts] = await db.select({ id: products.id })
+      .from(products)
+      .where(eq(products.categoryId, categoryId));
+
+    if (hasProducts) {
+      return res.status(400).json({ error: 'Cannot delete category: products are associated with it.' });
+    }
+
+    const [deletedCategory] = await db.delete(categories)
+      .where(eq(categories.id, categoryId))
+      .returning();
+
+    if (!deletedCategory) {
+      return res.status(404).json({ error: 'Category not found or failed to delete.' });
+    }
+
+    getIO().emit("category:deleted", deletedCategory.id);
+
+    return res.status(200).json({ message: 'Category deleted successfully.', category: deletedCategory });
+  } catch (error: any) {
+    console.error('❌ Error in DELETE /api/sellers/categories/:id:', error);
+    return res.status(500).json({ error: 'Failed to delete category.' });
+  }
+});
+
+
+// ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं) (यह पहले से मौजूद है, यहाँ सिर्फ संदर्भ के लिए)
 sellerRouter.post(
   '/products',
   requireSellerAuth,
@@ -311,16 +470,15 @@ sellerRouter.post(
           stock: parsedStock,
           image: imageUrl,
           sellerId,
-          unit: unit || 'piece', // डिफ़ॉल्ट मान
+          unit: unit || 'piece',
           brand: brand || null,
           minOrderQty: parsedMinOrderQty,
           maxOrderQty: parsedMaxOrderQty,
-          estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours', // डिफ़ॉल्ट मान
-          approvalStatus: approvalStatusEnum.enumValues[0], // नया प्रोडक्ट लंबित स्थिति में शुरू होगा
+          estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours',
+          approvalStatus: approvalStatusEnum.enumValues[0],
         })
         .returning();
 
-      // ✅ Socket event emit
       getIO().emit("product:created", newProduct[0]);
 
       return res.status(201).json(newProduct[0]);
@@ -331,244 +489,98 @@ sellerRouter.post(
   }
 );
 
-// ✅ PATCH /api/sellers/orders/:orderId/status
-sellerRouter.patch("/orders/:orderId/status", requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    const { orderId } = req.params;
-    const { newStatus } = req.body;
+// ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें)
+sellerRouter.patch(
+  '/products/:id',
+  requireSellerAuth,
+  upload.single('image'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const productId = parseInt(req.params.id);
 
-    if (!userId) {
-      return res.status(401).json({ error: "Unauthorized." });
-    }
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
+      }
+      if (isNaN(productId)) {
+        return res.status(400).json({ error: 'Invalid product ID.' });
+      }
 
-    if (!orderId || !newStatus) {
-      return res.status(400).json({ error: "Order ID and new status are required." });
-    }
-    
-    // ✅ सत्यापन की जाँच हटा दी गई ताकि कोई भी मान्य स्टेटस अपडेट हो सके
-    // const validStatusesForSeller = ['processing', 'ready_for_pickup', 'completed', 'cancelled'];
-    // if (!validStatusesForSeller.includes(newStatus)) {
-    //   return res.status(400).json({ error: "Invalid status provided." });
-    // }
-
-    const parsedOrderId = parseInt(orderId, 10);
-    if (isNaN(parsedOrderId)) {
-      return res.status(400).json({ error: "Invalid order ID." });
-    }
-
-    const orderItemsForSeller = await db
-      .select({ sellerId: orderItems.sellerId })
-      .from(orderItems)
-      .where(eq(orderItems.orderId, parsedOrderId));
-
-    if (orderItemsForSeller.length === 0) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
-    if (!sellerProfile) {
-        return res.status(404).json({ error: 'Seller profile not found.' });
-    }
-
-    const sellerId = sellerProfile.id;
-    const isOrderOwnedBySeller = orderItemsForSeller.some(item => item.sellerId === sellerId);
-
-    if (!isOrderOwnedBySeller) {
-      return res.status(403).json({ error: "You are not authorized to update this order." });
-    }
-
-    const [updatedOrder] = await db
-      .update(orders)
-      .set({ status: newStatus as typeof orderStatusEnum.enumValues[number] })
-      .where(eq(orders.id, parsedOrderId))
-      .returning();
-
-    if (!updatedOrder) {
-      return res.status(404).json({ error: "Order not found." });
-    }
-
-    const fullUpdatedOrder = await db.query.orders.findFirst({
-    where: eq(orders.id, parsedOrderId),
-    with: {
-        customer: true,
-        deliveryBoy: {
-            columns: {
-                id: true,
-                name: true,
-                phone: true,
-            }
-        },
-        
-        items: { columns: { sellerId: true } } 
-    }
-});
-    if (!fullUpdatedOrder) {
-        return res.status(404).json({ error: "Order not found after update." });
-    }
-
-    // ऑर्डर का सेलर ID ज्ञात करें
-    
-    const customerId = fullUpdatedOrder.customerId;
-
-    // ✅ Socket event emit - Targeted Messaging
-    const io = getIO();
-
-    // 1. सेलर को भेजें: ऑर्डर की पूरी जानकारी
-   io.to(`seller:${sellerId}`).emit("order-updated-for-seller", fullUpdatedOrder);
-
-    // 2. एडमिन को भेजें: ऑर्डर की पूरी जानकारी
-    io.to('admin').emit("order-updated-for-admin", fullUpdatedOrder);
-
-    // 3. कस्टमर को भेजें: केवल स्टेटस अपडेट
-    io.to(`user:${customerId}`).emit("order-status-update", fullUpdatedOrder);
-
-
-    return res.status(200).json({ message: "Order status updated successfully.", order: fullUpdatedOrder });
-
-    
-  } catch (error: any) {
-    console.error("❌ Error updating order status:", error);
-    return res.status(500).json({ error: "Failed to update order status." });
-  }
-});
-
-
-// ✅ PUT Update Seller Profile (updates all fields)
-sellerRouter.put('/me', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id; // Authed user ID
-    if (!userId) {
-      return res.status(403).json({ message: "Seller authentication failed." });
-    }
-
-    const [sellerProfile] = await db
+      const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
         .where(eq(sellersPgTable.userId, userId));
 
-    if (!sellerProfile) {
-        return res.status(404).json({ message: "Seller profile not found." });
-    }
-    const sellerId = sellerProfile.id; // विक्रेता का ID
+      if (!sellerProfile) {
+        return res.status(404).json({ error: 'Seller profile not found.' });
+      }
+      const sellerId = sellerProfile.id;
 
-    const updateData = req.body;
+      // सुनिश्चित करें कि प्रोडक्ट सेलर का है
+      const [existingProduct] = await db.select()
+        .from(products)
+        .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
 
-    // Zod Validation: क्लाइंट से प्राप्त डेटा को वैलिडेट करें।
-    // हम केवल उन फ़ील्ड्स को चुनेंगे जिन्हें क्लाइंट भेज रहा है।
-    const validUpdateData = updateSellerSchema.safeParse(updateData); 
+      if (!existingProduct) {
+        return res.status(403).json({ error: 'Not authorized to update this product.' });
+      }
 
-    if (!validUpdateData.success) {
-      console.error("❌ Seller update validation error:", validUpdateData.error);
-      return res.status(400).json({ 
-        message: "Invalid data provided for seller profile update.", 
-        errors: validUpdateData.error.flatten().fieldErrors 
-      });
-    }
+      const { name, description, price, categoryId, stock, unit, brand, minOrderQty, maxOrderQty, estimatedDeliveryTime } = req.body;
+      const file = req.file;
 
-    // Drizzle Update Query
-    const [updatedSeller] = await db
-      .update(sellersPgTable)
-      .set({
-        ...validUpdateData.data,
+      let imageUrl = existingProduct.image;
+      if (file) {
+        // ✅ पुरानी इमेज को क्लाउड स्टोरेज से हटाने पर विचार करें
+        if (existingProduct.image) {
+          // ensure 'deleteImage' is imported from your cloud storage service
+          // Example: await deleteImage(existingProduct.image);
+          console.log(`[INFO] Attempting to delete old image: ${existingProduct.image}`);
+          // 'deleteImage' फंक्शन को इम्प्लीमेंट और उपयोग करें
+          await deleteImage(existingProduct.image); // <--- Make sure this function exists and works!
+        }
+        imageUrl = await uploadImage(file.path, file.originalname);
+      }
+
+      const updatePayload: any = {
         updatedAt: new Date(),
-      })
-      .where(eq(sellersPgTable.id, sellerId))
-      .returning();
+        // यदि कोई बड़ा बदलाव है (जैसे नाम, विवरण), तो अप्रूवल स्थिति को 'pending' पर सेट करें
+        // या इसे admin तय करें कि किन बदलावों पर अप्रूवल चाहिए
+        // approvalStatus: approvalStatusEnum.enumValues[0] // 'pending'
+      };
 
-    if (!updatedSeller) {
-      return res.status(404).json({ message: "Seller profile not found or no changes made." });
-    }
+      if (name !== undefined) updatePayload.name = name;
+      if (description !== undefined) updatePayload.description = description;
+      if (price !== undefined) updatePayload.price = parseFloat(price as string);
+      if (categoryId !== undefined) updatePayload.categoryId = parseInt(categoryId as string);
+      if (stock !== undefined) updatePayload.stock = parseInt(stock as string);
+      if (unit !== undefined) updatePayload.unit = unit;
+      if (brand !== undefined) updatePayload.brand = brand;
+      if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(minOrderQty as string);
+      if (maxOrderQty !== undefined) updatePayload.maxOrderQty = parseInt(maxOrderQty as string);
+      if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
+      if (imageUrl !== undefined) updatePayload.image = imageUrl;
 
-    // Admin को सूचित करें
-    getIO().emit("admin:update", { type: "seller-profile-update", data: updatedSeller });
 
-    return res.status(200).json(updatedSeller);
-  } catch (error: any) {
-    console.error("❌ PUT /sellers/me error:", error);
-    res.status(500).json({ message: "Failed to update seller profile.", error: error.message });
-  }
-});
+      const [updatedProduct] = await db
+        .update(products)
+        .set(updatePayload)
+        .where(eq(products.id, productId))
+        .returning();
 
-// ✅ नया एंडपॉइंट: PUT /api/sellers/delivery-preferences
-sellerRouter.put('/delivery-preferences', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id; // ऑथेंटिकेटेड यूजर का ID
-    if (!userId) {
-      return res.status(401).json({ message: "Unauthorized: User not authenticated." });
-    }
-
-    const [sellerProfile] = await db
-      .select()
-      .from(sellersPgTable)
-      .where(eq(sellersPgTable.userId, userId));
-
-    if (!sellerProfile) {
-      return res.status(404).json({ message: "Seller profile not found." });
-    }
-    const sellerId = sellerProfile.id; // विक्रेता का ID
-
-    const {
-      isDistanceBasedDelivery,
-      deliveryRadius,        // यदि isDistanceBasedDelivery true है
-      latitude,              // यदि isDistanceBasedDelivery true है
-      longitude,             // यदि isDistanceBasedDelivery true है
-      deliveryPincodes,      // यदि isDistanceBasedDelivery false है
-    } = req.body;
-
-    // ----- डेटा वैलिडेशन -----
-    if (typeof isDistanceBasedDelivery !== 'boolean') {
-      return res.status(400).json({ message: "isDistanceBasedDelivery must be a boolean." });
-    }
-
-    if (isDistanceBasedDelivery) {
-      // दूरी-आधारित डिलीवरी के लिए आवश्यक फ़ील्ड्स
-      if (deliveryRadius === undefined || typeof deliveryRadius !== 'number' || deliveryRadius <= 0) {
-        return res.status(400).json({ message: "deliveryRadius (in km) is required and must be a positive number for distance-based delivery." });
+      if (!updatedProduct) {
+        return res.status(404).json({ error: 'Product not found or no changes made.' });
       }
-      if (latitude === undefined || typeof latitude !== 'number' || longitude === undefined || typeof longitude !== 'number') {
-        return res.status(400).json({ message: "Shop latitude and longitude are required for distance-based delivery." });
-      }
-      // यदि latitude/longitude मान्य संख्याएं नहीं हैं, तो parseInt/parseFloat उन्हें NaN बना देगा।
-      if (isNaN(latitude) || isNaN(longitude)) {
-        return res.status(400).json({ message: "Invalid latitude or longitude provided." });
-      }
-    } else {
-      // पिनकोड-आधारित डिलीवरी के लिए आवश्यक फ़ील्ड्स
-      if (!Array.isArray(deliveryPincodes) || !deliveryPincodes.every(p => typeof p === 'string' && p.length === 6)) {
-        return res.status(400).json({ message: "deliveryPincodes must be an array of 6-digit strings for pincode-based delivery." });
-      }
-    }
-    // ----- एंड वैलिडेशन -----
 
-    const [updatedSeller] = await db
-      .update(sellersPgTable)
-      .set({
-        isDistanceBasedDelivery: isDistanceBasedDelivery,
-        // जब दूरी-आधारित हो, तो संबंधित फ़ील्ड सेट करें, अन्यथा null
-        deliveryRadius: isDistanceBasedDelivery ? deliveryRadius : null,
-        latitude: isDistanceBasedDelivery ? latitude : null,
-        longitude: isDistanceBasedDelivery ? longitude : null,
-        // जब पिनकोड-आधारित हो, तो संबंधित फ़ील्ड सेट करें, अन्यथा खाली array
-        deliveryPincodes: isDistanceBasedDelivery ? [] : deliveryPincodes,
-        updatedAt: new Date(),
-      })
-      .where(eq(sellersPgTable.id, sellerId))
-      .returning();
+      getIO().emit("product:updated", updatedProduct);
 
-    if (!updatedSeller) {
-      return res.status(404).json({ message: "Seller profile not found or no changes made." });
-    }
+      return res.status(200).json(updatedProduct);
 
-    getIO().emit("admin:update", { type: "seller-delivery-preferences-update", data: updatedSeller });
-
-    return res.status(200).json({ message: "Delivery preferences updated successfully.", seller: updatedSeller });
-
-  } catch (error: any) {
-    console.error("❌ PUT /api/sellers/delivery-preferences error:", error);
+    } catch (error: any) {
+      console.error("❌ PUT /api/sellers/delivery-preferences error:", error);
     res.status(500).json({ message: "Failed to update delivery preferences.", error: error.message });
   }
 });
 
 
-export default sellerRouter;
+export default sellerRouter
+    
