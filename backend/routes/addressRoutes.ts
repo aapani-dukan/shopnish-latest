@@ -2,21 +2,18 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../server/db'; // Your Drizzle DB instance
-import { deliveryAddresses } from '../shared/backend/schema';
+import { deliveryAddresses } from '../shared/backend/schema'; // यह मानकर चल रहे हैं कि यह पाथ सही है
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod'; // Validation के लिए Zod
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken'; // Auth middleware
 import { requireAuth } from '../server/middleware/authMiddleware'; // Auth middleware
 
-// Services/Utils
+// Services/Utils - ये तुम्हारे locationService.ts से आते हैं
 import { geocodeAddress, reverseGeocode, isWithinServiceArea, calculateDeliveryCharges } from '../services/locationService';
 
 const addressRouter = Router(); // Express Router इंस्टेंस
 
 // --- Schemas for Validation ---
-// Zod स्कीमा को Express validator (जैसे express-validator या कस्टम मिडलवेयर) के साथ इस्तेमाल किया जा सकता है
-// अभी के लिए, हम इसे मैन्युअल रूप से संभालेंगे।
-
 const ProcessLocationSchema = z.object({
   latitude: z.number().min(-90).max(90),
   longitude: z.number().min(-180).max(180),
@@ -41,27 +38,44 @@ const UpdateAddressSchema = CreateAddressSchema.partial().extend({
 });
 
 
+// FATAL DEBUG TEST LOG: यह सुनिश्चित करने के लिए कि यह रूट हिट हो रहा है
+addressRouter.use('/process-current-location', (req, res, next) => {
+    console.log(`\n\n[!!! FATAL DEBUG TEST !!!] Request received for: ${req.method} ${req.originalUrl}`);
+    next();
+});
+
+
 // 1. POST /api/addresses/process-current-location
 //    Geocodes Lat/Lng, checks service area, calculates delivery charges.
 addressRouter.post(
   '/process-current-location',
   async (req: Request, res: Response) => {
     try {
+      console.log("[DEBUG] addressRoutes: Starting process-current-location handler."); // नया लॉग
       // Zod validation
       const validation = ProcessLocationSchema.safeParse(req.body);
       if (!validation.success) {
+        console.error("[DEBUG] addressRoutes: Zod validation failed for process-current-location.", validation.error.errors); // नया लॉग
         return res.status(400).json({ errors: validation.error.errors });
       }
       const { latitude, longitude } = validation.data;
+      console.log(`[DEBUG] addressRoutes: Validated coords: Lat ${latitude}, Lng ${longitude}`); // नया लॉग
 
+      // *** यहां असली Google API कॉल reverseGeocode फंक्शन में हो रही है ***
+      // सुनिश्चित करें कि reverseGeocode फंक्शन के अंदर भी console.log हैं।
       const fullAddressDetails = await reverseGeocode(latitude, longitude);
 
       if (!fullAddressDetails) {
+        console.warn("[DEBUG] addressRoutes: reverseGeocode returned no address details."); // नया लॉग
         return res.status(404).json({ message: 'Could not resolve address from coordinates.' });
       }
+      console.log(`[DEBUG] addressRoutes: Address resolved: ${fullAddressDetails.formattedAddress}`); // नया लॉग
+
 
       const inServiceArea = await isWithinServiceArea(fullAddressDetails.pincode);
       const deliveryCharges = inServiceArea ? await calculateDeliveryCharges(fullAddressDetails.pincode) : null;
+
+      console.log(`[DEBUG] addressRoutes: Service area: ${inServiceArea}, Delivery Charges: ${deliveryCharges}`); // नया लॉग
 
       return res.status(200).json({
         latitude,
@@ -75,7 +89,12 @@ addressRouter.post(
         deliveryCharges,
       });
     } catch (error) {
-      console.error('Error processing location:', error);
+      console.error('Error in addressRoutes.ts process-current-location handler:', error); // अधिक विशिष्ट त्रुटि लॉग
+      // यदि यह AxiosError है, तो उसके विवरण को भी लॉग करें
+      if (axios.isAxiosError(error) && error.response) {
+        console.error("Axios Error Response Status:", error.response.status);
+        console.error("Axios Error Response Data:", error.response.data);
+      }
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
@@ -225,4 +244,3 @@ addressRouter.delete(
 );
 
 export default addressRouter;
-                          
