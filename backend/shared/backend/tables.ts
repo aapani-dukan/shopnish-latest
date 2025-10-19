@@ -177,7 +177,7 @@ export const cartItems = pgTable("cart_items", {
 
 export const deliveryAddresses = pgTable('delivery_addresses', {
   id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => usersPgTable.id, { onDelete: 'cascade' }),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
   fullName: text('full_name').notNull(),
   phoneNumber: text('phone_number'),
   addressLine1: text('address_line1').notNull(),
