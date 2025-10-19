@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../server/db.ts';
-import { products, categories } from '../shared/backend/schema.ts';
-import { eq, like } from 'drizzle-orm';
-
+import { products, categories,sellersPgTable } from '../shared/backend/schema.ts';
+import { eq, like,inArray, and } from 'drizzle-orm';
+import { calculateDistanceKm } from '../services/locationService'; 
 const router = Router();
 
 // ✅ GET /api/products/pending (यह लंबित प्रोडक्ट्स को लिस्ट करता है)
