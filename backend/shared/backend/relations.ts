@@ -258,7 +258,7 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
    }),
   deliveryAddress: one(deliveryAddresses, {
      fields: [reviews.deliveryAddressId],
-  /l   references: [deliveryAddresses.id],
+     references: [deliveryAddresses.id],
     optional: true,
    }),
 }));
