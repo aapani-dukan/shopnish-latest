@@ -72,6 +72,12 @@ export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => 
   deliveryBatches: many(deliveryBatches), // ✅ NEW: डिलीवरी बॉय deliveryBatches से लिंक होगा
 }));
 
+export const couponRelations = relations(couponsPgTable, ({ one }) => ({
+  seller: one(sellersPgTable, { fields: [couponsPgTable.sellerId], references: [sellersPgTable.id] }),
+  product: one(products, { fields: [couponsPgTable.productId], references: [products.id] }),
+  category: one(categories, { fields: [couponsPgTable.categoryId], references: [categories.id] }),
+}));
+
 export const cartItemRelations = relations(cartItems, ({ one }) => ({
   user: one(users, {
     fields: [cartItems.userId],
