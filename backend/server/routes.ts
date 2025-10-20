@@ -290,7 +290,7 @@ adminRouter.use("/products", adminProductsRoutes);
 
 adminRouter.use("/vendors", adminVendorsRoutes);
 adminRouter.use("/delivery-boys", admindBoyRouter);
-adminRouter.use("/orders", adminOrdersRouter);
+adminRouter.use("/discounts", adminDiscountsRouter);
 adminRouter.use("/delivery-areas", adminDeliveryAreasRouter); 
 // ✅ AdminRouter को मुख्य राउटर पर मैप करें
 router.use("/admin", adminRouter);
