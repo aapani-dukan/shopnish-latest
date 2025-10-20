@@ -422,34 +422,34 @@ export default function Checkout2() {
                         <Label htmlFor="cod" className="flex-1 cursor-pointer"> {/* ✅ Corrected component name and className */}
                           <div>
                             <p className="font-medium">Cash on Delivery (COD)</p> {/* ✅ Consistent casing and className */}
-                            <p className="text-sm text-gray-600">Pay when your order arrives</p> {/* ✅ Corrected className */}
+                            <p className="text-sm text-gray-600">Pay when your order arrives</p> 
                           </div>
                         </Label>
                       </div>
 
                       {/* दूसरा विकल्प: Online */}
-                      <div className="flex items-center space-x-2 p-4 border rounded-lg opacity-50"> {/* ✅ Corrected className */}
-                        <RadioGroupItem value="online" id="online" disabled /> {/* ✅ Corrected component name */}
-                        <Label htmlFor="online" className="flex-1 cursor-pointer"> {/* ✅ Corrected component name and className */}
+                      <div className="flex items-center space-x-2 p-4 border rounded-lg opacity-50"> 
+                        <RadioGroupItem value="online" id="online" disabled /> 
+                        <Label htmlFor="online" className="flex-1 cursor-pointer"> 
                           <div>
-                            <p className="font-medium">Online Payment</p> {/* ✅ Consistent casing and className */}
-                            <p className="text-sm text-gray-600">Pay now using UPI, card, or net banking (coming soon)</p> {/* ✅ Corrected className */}
+                            <p className="font-medium">Online Payment</p> 
+                            <p className="text-sm text-gray-600">Pay now using UPI, card, or net banking (coming soon)</p> 
                           </div>
                         </Label>
                       </div>
 
-                    </div> {/* ✅ रैपर div यहाँ बंद होता है */}
+                    </div> 
                   </RadioGroup>
 
 
-                  <div className="flex space-x-4 mt-6"> {/* ✅ Corrected className */}
-                    <Button variant="outline" onClick={() => setCurrentStep(2)}>Back to Address</Button> {/* ✅ Corrected component name and casing */}
+                  <div className="flex space-x-4 mt-6"> 
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>Back to Address</Button> 
                     <Button
-                      onClick={handlePlaceOrder} // ✅ Corrected casing
-                      disabled={createOrderMutation.isPending} // ✅ Corrected casing
-                      className="flex-1" // ✅ Corrected className
+                      onClick={handlePlaceOrder} 
+                      disabled={createOrderMutation.isPending} 
+                      className="flex-1" 
                     >
-                      {createOrderMutation.isPending ? "Placing Order..." : `Place Order - ₹${total.toFixed(2)}`} {/* ✅ Consistent casing and toFixed(2) */}
+                      {createOrderMutation.isPending ? "Placing Order..." : `Place Order - ₹${total.toFixed(2)}`} 
                     </Button>
                   </div>
                 </CardContent>
@@ -459,35 +459,35 @@ export default function Checkout2() {
 
           {/* order summary */}
           <div>
-            <Card className="sticky top-4"> {/* ✅ Corrected component name and className */}
-              <CardHeader> {/* ✅ Corrected component name */}
-                <CardTitle>Order Summary</CardTitle> {/* ✅ Consistent casing */}
+            <Card className="sticky top-4"> 
+              <CardHeader> 
+                <CardTitle>Order Summary</CardTitle> 
               </CardHeader>
-              <CardContent> {/* ✅ Corrected component name */}
-                <div className="space-y-3"> {/* ✅ Corrected className */}
-                  <div className="flex justify-between"> {/* ✅ Corrected className */}
-                    <span>Subtotal ({directBuyQuantity} item{directBuyQuantity > 1 ? "s" : ""})</span> {/* ✅ Consistent casing */}
+              <CardContent> 
+                <div className="space-y-3"> 
+                  <div className="flex justify-between"> 
+                    <span>Subtotal ({directBuyQuantity} item{directBuyQuantity > 1 ? "s" : ""})</span> 
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between"> {/* ✅ Corrected className */}
-                    <span>Delivery Charges</span> {/* ✅ Consistent casing */}
+                  <div className="flex justify-between"> 
+                    <span>Delivery Charges</span> 
                     <span>{deliveryCharge === 0 ? "Free" : `₹${deliveryCharge.toFixed(2)}`}</span>
                   </div>
-                  {deliveryCharge === 0 && ( // ✅ Corrected casing
-                    <p className="text-sm text-green-600">Free delivery on orders above ₹500</p> {/* ✅ Consistent casing and className */}
+                  {deliveryCharge === 0 && ( 
+                    <p className="text-sm text-green-600">Free delivery on orders above ₹500</p> 
                   )}
                   <hr />
-                  <div className="flex justify-between font-semibold text-lg"> {/* ✅ Corrected className */}
-                    <span>Total</span> {/* ✅ Consistent casing */}
+                  <div className="flex justify-between font-semibold text-lg"> 
+                    <span>Total</span> 
                     <span>₹{total.toFixed(2)}</span>
                   </div>
-                  <div className="text-sm text-gray-600"> {/* ✅ Corrected className */}
-                    <p>Estimated Delivery: Within 1 hour</p> {/* ✅ Consistent casing */}
+                  <div className="text-sm text-gray-600"> 
+                    <p>Estimated Delivery: Within 1 hour</p> 
                     <p>
                       From:{" "}
-                      {productData.seller?.businessName // ✅ Corrected casing
-                        ? `${productData.seller.businessName}, ${productData.seller.city}` // ✅ Corrected casing
-                        : "Our Partner Store"} {/* ✅ Consistent casing */}
+                      {productData.seller?.businessName 
+                        ? `${productData.seller.businessName}, ${productData.seller.city}` 
+                        : "Our Partner Store"} 
                     </p>
                   </div>
                 </div>
