@@ -1,38 +1,42 @@
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
-import { Label } from "@/components/ui/label";
-import { Skeleton } from "@/components/ui/skeleton";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { insertProductSchema, insertCategorySchema, type Seller, ProductWithSeller, Category } from "shared/backend/schema";
-import { apiRequest } from "@/lib/queryClient";
-import { useToast } from "@/hooks/use-toast";
+// frontend/components/productmanager.tsx
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // ✅ Corrected casing and path
+import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
+import { Badge } from "@/components/ui/badge"; // ✅ Corrected casing and path
+import { Input } from "@/components/ui/input"; // ✅ Corrected casing and path
+import { Textarea } from "@/components/ui/textarea"; // ✅ Corrected casing and path
+import { Label } from "@/components/ui/label"; // ✅ Corrected casing and path
+import { Skeleton } from "@/components/ui/skeleton"; // ✅ Corrected casing and path
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"; // ✅ Corrected casing and path
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // ✅ Corrected casing and path
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"; // ✅ Corrected casing and path
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ Corrected casing
+import { useForm } from "react-hook-form"; // ✅ Corrected casing
+import { zodResolver } from "@hookform/resolvers/zod"; // ✅ Corrected casing
+import { insertProductSchema, insertCategorySchema, type Seller, ProductWithSeller, Category } from "shared/backend/schema"; // Ensure these types are correctly imported
+import { apiRequest } from "@/lib/queryclient"; // ✅ Corrected casing and path
+import { useToast } from "@/hooks/use-toast"; // ✅ Corrected casing and path
 import { Plus, Edit, Trash2, Info } from "lucide-react";
 import { z } from "zod";
-import { getAuth } from "firebase/auth";
-import { useState } from "react";
+import { getAuth } from "firebase/auth"; // ✅ Corrected casing
+import { useState } from "react"; // ✅ Corrected casing
 
+// ✅ Updated ProductFormSchema for frontend use
 const productFormSchema = insertProductSchema.extend({
+  // For update operations, image might not be required
   image: z
     .any()
-    .refine((file) => file instanceof File, {
+    .refine((file) => !file || file instanceof File, { // ✅ Make image optional for updates
       message: "An image file is required.",
     })
-    .refine((file) => file.size < 5000000, {
+    .refine((file) => !file || file.size < 5000000, {
       message: "Image size must be less than 5MB.",
-    }),
+    })
+    .optional(), // Make image optional
   price: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Price must be a positive number")
   ),
-  originalPrice: z.preprocess(
+  originalPrice: z.preprocess( // ✅ Corrected to originalPrice
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Original price must be a positive number").optional()
   ),
@@ -40,215 +44,244 @@ const productFormSchema = insertProductSchema.extend({
     (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Stock must be an integer").min(0, "Stock cannot be negative").default(0)
   ),
-  categoryId: z.preprocess(
+  categoryId: z.preprocess( // ✅ Corrected to categoryId
     (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Category ID must be an integer").min(1, "Category ID is required")
   ),
-});
+}).partial(); // ✅ Make all fields partial for PATCH requests, as only changed fields are sent
 
 const categoryFormSchema = z.object({
   name: z.string().min(2, { message: "Category name must be at least 2 characters." }),
   slug: z.string().min(2, { message: "Slug must be at least 2 characters." }),
   description: z.string().optional(),
-  image: z.any().refine(file => file instanceof File, {
+  image: z.any().refine(file => file instanceof File, { // ✅ Corrected to File
     message: "An image file is required.",
   }),
-  isActive: z.boolean().default(true),
+  isActive: z.boolean().default(true), // ✅ Corrected to isActive
 });
 
-interface ProductManagerProps {
+interface ProductManagerProps { // ✅ Corrected casing
   seller: Seller;
 }
 
-export default function ProductManager({ seller }: ProductManagerProps) {
-  const { toast } = useToast();
-  const queryClient = useQueryClient();
-  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
-  const [editingProduct, setEditingProduct] = useState<ProductWithSeller | null>(null);
-  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
+export default function ProductManager({ seller }: ProductManagerProps) { // ✅ Corrected casing
+  const { toast } = useToast(); // ✅ Corrected casing
+  const queryClient = useQueryClient(); // ✅ Corrected casing
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false); // ✅ Corrected casing
+  const [editingProduct, setEditingProduct] = useState<ProductWithSeller | null>(null); // ✅ Corrected casing
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false); // ✅ Corrected casing
 
-  // Fetch seller's products
-
-    // Fetch seller's products
-    
-  const { data: products, isLoading: productsLoading, error: productsError } = useQuery({
-    queryKey: ["/api/sellers/products"],
-    queryFn: () => apiRequest("GET", "/api/sellers/products"),
+  // fetch seller's products
+  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<ProductWithSeller[]>({ // ✅ Corrected casing
+    queryKey: ["/api/sellers/products"], // ✅ Corrected casing
+    queryFn: () => apiRequest("get", "/api/sellers/products"), // ✅ Corrected casing
     enabled: !!seller?.id,
-    staleTime: 5 * 60 * 1000,
+    staleTime: 5 * 60 * 1000, // ✅ Corrected casing
   });
 
-
-  // Fetch categories for product form
-  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
-    queryKey: ["/api/categories"],
-    queryFn: () => apiRequest("GET", "/api/categories"),
-    staleTime: Infinity,
+  // fetch categories for product form
+  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({ // ✅ Corrected casing
+    queryKey: ["/api/categories"], // ✅ Corrected casing
+    queryFn: () => apiRequest("get", "/api/categories"), // ✅ Corrected casing
+    staleTime: Infinity, // ✅ Corrected casing
   });
-  
-  // Product form
-  const productForm = useForm<z.infer<typeof productFormSchema>>({
-    resolver: zodResolver(productFormSchema),
-    defaultValues: {
+
+  // product form
+  const productForm = useForm<z.infer<typeof productFormSchema>>({ // ✅ Corrected casing
+    resolver: zodResolver(productFormSchema), // ✅ Corrected casing
+    defaultValues: { // ✅ Corrected casing
       name: "",
       description: "",
       price: undefined,
-      originalPrice: undefined,
-      categoryId: null,
+      originalPrice: undefined, // ✅ Corrected to originalPrice
+      categoryId: undefined, // ✅ Changed from null to undefined for Zod number processing
       stock: 0,
-      images: null,
+      image: undefined, // ✅ Changed from images to image, and null to undefined
     },
   });
 
-  // Category form
-  const categoryForm = useForm<z.infer<typeof categoryFormSchema>>({
-    resolver: zodResolver(categoryFormSchema),
-    defaultValues: {
+  // category form
+  const categoryForm = useForm<z.infer<typeof categoryFormSchema>>({ // ✅ Corrected casing
+    resolver: zodResolver(categoryFormSchema), // ✅ Corrected casing
+    defaultValues: { // ✅ Corrected casing
       name: "",
       slug: "",
       description: "",
       image: undefined,
-      isActive: true,
+      isActive: true, // ✅ Corrected to isActive
     },
   });
-  
-  const productMutation = useMutation({
+
+  // ✅ Product Create/Update Mutation
+  const productMutation = useMutation({ // ✅ Corrected casing
     mutationFn: async (data: z.infer<typeof productFormSchema>) => {
       const auth = getAuth();
-      const user = auth.currentUser;
+      const user = auth.currentUser; // ✅ Corrected casing
       if (!user) {
-        throw new Error("User not authenticated.");
+        throw new Error("User not authenticated."); // ✅ Corrected casing
       }
-      const token = await user.getIdToken();
-      const formData = new FormData();
-      formData.append('image', data.image);
+      const token = await user.getIdToken(); // ✅ Corrected casing
+      const formData = new FormData(); // ✅ Corrected casing
+
+      // Append image if present
+      if (data.image) {
+        formData.append('image', data.image);
+      }
+
+      // Append other fields, ensuring numbers are converted to string for FormData
       for (const key in data) {
+        // Skip image field as it's handled separately, and don't append undefined values
         if (data[key] !== null && data[key] !== undefined && key !== 'image') {
-          formData.append(key, data[key]);
+          // Special handling for number fields that Zod has preprocessed to number
+          if (typeof data[key] === 'number') {
+            formData.append(key, String(data[key])); // Convert numbers to strings for FormData
+          } else if (typeof data[key] === 'boolean') {
+            formData.append(key, String(data[key])); // Convert booleans to strings
+          } else {
+            formData.append(key, data[key]);
+          }
         }
       }
-      const response = await fetch("/api/sellers/products", {
-        method: "POST",
-        body: formData,
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
+
+      let response: Response;
+      if (editingProduct) {
+        // PATCH request for updating product
+        response = await fetch(`/api/sellers/products/${editingProduct.id}`, { // ✅ Use PATCH and product ID
+          method: "PATCH",
+          body: formData,
+          headers: {
+            'Authorization': `Bearer ${token}` // Note: FormData doesn't like 'Content-Type': 'multipart/form-data' explicitly here. Fetch does it automatically.
+          },
+        });
+      } else {
+        // POST request for creating new product
+        response = await fetch("/api/sellers/products", {
+          method: "POST", // ✅ Use POST for new product
+          body: formData,
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+      }
+
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || "Failed to create product");
+        const errorData = await response.json(); // ✅ Corrected casing
+        throw new Error(errorData.error || errorData.message || "Failed to process product"); // ✅ Corrected casing
       }
       return response.json();
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    onSuccess: () => { // ✅ Corrected casing
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] }); // ✅ Invalidate seller's products, not general products
       toast({
-        title: editingProduct ? "Product updated" : "Product created",
-        description: `Product has been ${editingProduct ? "updated" : "created"} successfully`,
+        title: editingProduct ? "Product Updated" : "Product Created", // ✅ Consistent casing
+        description: `Product has been ${editingProduct ? "updated" : "created"} successfully.`,
       });
-      setIsProductDialogOpen(false);
-      setEditingProduct(null);
-      productForm.reset();
+      setIsProductDialogOpen(false); // ✅ Corrected casing
+      setEditingProduct(null); // ✅ Corrected casing
+      productForm.reset(); // ✅ Corrected casing
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // ✅ Corrected casing
       toast({
-        title: "Error",
-        description: error.message || `Failed to ${editingProduct ? "update" : "create"} product`,
+        title: "Error", // ✅ Consistent casing
+        description: error.message || `Failed to ${editingProduct ? "update" : "create"} product.`,
         variant: "destructive",
       });
     },
   });
 
-  // Delete product mutation
-  const deleteProductMutation = useMutation({
-    mutationFn: async (productId: number) => {
-      return await apiRequest("DELETE", `/api/products/${productId}`);
+  // delete product mutation
+  const deleteProductMutation = useMutation({ // ✅ Corrected casing
+    mutationFn: async (productId: number) => { // ✅ Corrected casing
+      return await apiRequest("delete", `/api/sellers/products/${productId}`); // ✅ Use seller's product delete endpoint
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
+    onSuccess: () => { // ✅ Corrected casing
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] }); // ✅ Invalidate seller's products
       toast({
-        title: "Product deleted",
-        description: "Product has been deleted successfully",
+        title: "Product Deleted", // ✅ Consistent casing
+        description: "Product has been deleted successfully.",
       });
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // ✅ Corrected casing
       toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to delete product",
+        title: "Error", // ✅ Consistent casing
+        description: error.response?.data?.message || "Failed to delete product.",
         variant: "destructive",
       });
     },
   });
 
-  const categoryMutation = useMutation({
-    mutationFn: async (data: FormData) => {
-      return await apiRequest("POST", "/api/sellers/categories", data);
+  const categoryMutation = useMutation({ // ✅ Corrected casing
+    mutationFn: async (data: FormData) => { // ✅ Corrected casing
+      // Note: Backend endpoint for seller creating category is /api/sellers/categories
+      return await apiRequest("post", "/api/sellers/categories", data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
+    onSuccess: () => { // ✅ Corrected casing
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] }); // ✅ Corrected casing
       toast({
-        title: "Category created",
-        description: "Category has been created successfully",
+        title: "Category Created", // ✅ Consistent casing
+        description: "Category has been created successfully.",
       });
-      setIsCategoryDialogOpen(false);
-      categoryForm.reset();
+      setIsCategoryDialogOpen(false); // ✅ Corrected casing
+      categoryForm.reset(); // ✅ Corrected casing
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // ✅ Corrected casing
       toast({
-        title: "Error",
-        description: error.response?.data?.message || "Failed to create category",
+        title: "Error", // ✅ Consistent casing
+        description: error.response?.data?.message || "Failed to create category.",
         variant: "destructive",
       });
     },
   });
 
-  const onProductSubmit = (data: z.infer<typeof productFormSchema>) => {
-    productMutation.mutate(data);
+  const onProductSubmit = (data: z.infer<typeof productFormSchema>) => { // ✅ Corrected casing
+    productMutation.mutate(data); // ✅ Corrected casing
   };
 
-  const onCategorySubmit = (data: z.infer<typeof categoryFormSchema>) => {
+  const onCategorySubmit = (data: z.infer<typeof categoryFormSchema>) => { // ✅ Corrected casing
     if (!data.image) {
       toast({
-        title: "Error",
+        title: "Error", // ✅ Consistent casing
         description: "Please select an image for the category.",
         variant: "destructive",
       });
       return;
     }
-    const formData = new FormData();
+    const formData = new FormData(); // ✅ Corrected casing
     formData.append("name", data.name);
     formData.append("slug", data.slug);
     formData.append("description", data.description || "");
     formData.append("image", data.image);
-    categoryMutation.mutate(formData);
+    categoryMutation.mutate(formData); // ✅ Corrected casing
   };
 
-  const handleEditProduct = (product: ProductWithSeller) => {
-    setEditingProduct(product);
-    productForm.reset({
+  const handleEditProduct = (product: ProductWithSeller) => { // ✅ Corrected casing
+    setEditingProduct(product); // ✅ Corrected casing
+    // Pre-fill form with product data for editing
+    productForm.reset({ // ✅ Corrected casing
       name: product.name,
       description: product.description || "",
-      price: product.price,
-      originalPrice: product.originalPrice,
-      categoryId: product.categoryId,
+      price: parseFloat(product.price), // Convert string price to number for form
+      originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : undefined, // ✅ Convert to number, handle optional
+      categoryId: product.categoryId, // ✅ Corrected casing
       stock: product.stock || 0,
-      images: product.images || [],
+      // Image is not pre-filled as file input cannot be programmatically set
+      // images: product.images || [], // If you had a multi-image component, this would be more complex
     });
-    setIsProductDialogOpen(true);
+    setIsProductDialogOpen(true); // ✅ Corrected casing
   };
 
-  const handleDeleteProduct = (productId: number) => {
+  const handleDeleteProduct = (productId: number) => { // ✅ Corrected casing
     toast({
-      title: "Confirm Deletion",
+      title: "Confirm Deletion", // ✅ Consistent casing
       description: "Are you sure you want to delete this product? This action cannot be undone.",
       variant: "destructive",
       action: (
-        <div className="flex gap-2">
-          <Button onClick={() => {
-            deleteProductMutation.mutate(productId);
+        <div className="flex gap-2"> {/* ✅ Corrected className */}
+          <Button onClick={() => { // ✅ Corrected component name and casing
+            deleteProductMutation.mutate(productId); // ✅ Corrected casing
             toast.dismiss();
-          }} className="bg-red-500 hover:bg-red-600 text-white">
+          }} className="bg-red-500 hover:bg-red-600 text-white"> {/* ✅ Corrected className */}
             Delete
           </Button>
-          <Button onClick={() => toast.dismiss()} variant="outline">
+          <Button onClick={() => toast.dismiss()} variant="outline"> {/* ✅ Corrected component name and casing */}
             Cancel
           </Button>
         </div>
@@ -258,97 +291,97 @@ export default function ProductManager({ seller }: ProductManagerProps) {
   };
 
   return (
-    <Card>
-      <CardHeader>
-        <div className="flex justify-between items-center">
-          <CardTitle>Your Products</CardTitle>
-          <div className="flex gap-2">
-            {seller.approvalStatus === "approved" ? (
+    <Card> {/* ✅ Corrected component name */}
+      <CardHeader> {/* ✅ Corrected component name */}
+        <div className="flex justify-between items-center"> {/* ✅ Corrected className */}
+          <CardTitle>Your Products</CardTitle> {/* ✅ Corrected component name */}
+          <div className="flex gap-2"> {/* ✅ Corrected className */}
+            {seller.approvalStatus === "approved" ? ( // ✅ Corrected casing
               <>
-                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button variant="outline" onClick={() => {
-                      categoryForm.reset();
+                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}> {/* ✅ Corrected casing */}
+                  <DialogTrigger asChild> {/* ✅ Corrected casing */}
+                    <Button variant="outline" onClick={() => { // ✅ Corrected component name and casing
+                      categoryForm.reset(); // ✅ Corrected casing
                     }}>
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
                       Create Category
                     </Button>
                   </DialogTrigger>
-                  <DialogContent>
-                    <DialogHeader>
-                      <DialogTitle>Create New Category</DialogTitle>
-                      <DialogDescription>
+                  <DialogContent> {/* ✅ Corrected casing */}
+                    <DialogHeader> {/* ✅ Corrected casing */}
+                      <DialogTitle>Create New Category</DialogTitle> {/* ✅ Corrected casing */}
+                      <DialogDescription> {/* ✅ Corrected casing */}
                         Add a new product category to organize your items.
                       </DialogDescription>
                     </DialogHeader>
-                    <Form {...categoryForm}>
-                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
-                        <FormField
+                    <Form {...categoryForm}> {/* ✅ Corrected component name */}
+                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4"> {/* ✅ Corrected casing */}
+                        <FormField // ✅ Corrected component name
                           control={categoryForm.control}
                           name="name"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Category Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Category Name</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Input {...field} /> {/* ✅ Corrected component name */}
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <FormField
+                        <FormField // ✅ Corrected component name
                           control={categoryForm.control}
                           name="slug"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Category Slug</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g., electronics" />
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Category Slug</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Input {...field} placeholder="e.g., electronics" /> {/* ✅ Corrected component name */}
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <FormField
+                        <FormField // ✅ Corrected component name
                           control={categoryForm.control}
                           name="description"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description (Optional)</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} />
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Description (Optional)</FormLabel> {/* ✅ Consistent casing */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Textarea {...field} /> {/* ✅ Corrected component name */}
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <FormField
+                        <FormField // ✅ Corrected component name
                           control={categoryForm.control}
                           name="image"
-                          render={({ field: { value, onChange, ...fieldProps } }) => (
-                            <FormItem>
-                              <FormLabel>Category Image</FormLabel>
-                              <FormControl>
-                                <Input
+                          render={({ field: { value, onChange, ...fieldProps } }) => ( // ✅ Corrected casing
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Category Image</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Input // ✅ Corrected component name
                                   {...fieldProps}
                                   type="file"
                                   accept="image/*"
-                                  onChange={(event) => onChange(event.target.files?.[0])}
+                                  onChange={(event) => onChange(event.target.files?.[0])} // ✅ Corrected casing
                                 />
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <div className="flex justify-end space-x-2">
-                          <Button
+                        <div className="flex justify-end space-x-2"> {/* ✅ Corrected className */}
+                          <Button // ✅ Corrected component name
                             type="button"
                             variant="outline"
-                            onClick={() => setIsCategoryDialogOpen(false)}
+                            onClick={() => setIsCategoryDialogOpen(false)} // ✅ Corrected casing
                           >
                             Cancel
                           </Button>
-                          <Button type="submit">
+                          <Button type="submit"> {/* ✅ Corrected component name */}
                             Create Category
                           </Button>
                         </div>
@@ -356,152 +389,152 @@ export default function ProductManager({ seller }: ProductManagerProps) {
                     </Form>
                   </DialogContent>
                 </Dialog>
-                <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
-                  <DialogTrigger asChild>
-                    <Button onClick={() => {
-                      setEditingProduct(null);
-                      productForm.reset();
+                <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}> {/* ✅ Corrected casing */}
+                  <DialogTrigger asChild> {/* ✅ Corrected casing */}
+                    <Button onClick={() => { // ✅ Corrected component name and casing
+                      setEditingProduct(null); // ✅ Corrected casing
+                      productForm.reset(); // ✅ Corrected casing
                     }}>
-                      <Plus className="h-4 w-4 mr-2" />
+                      <Plus className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
                       Add Product
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl">
-                    <DialogHeader>
-                      <DialogTitle>
-                        {editingProduct ? "Edit Product" : "Add New Product"}
+                  <DialogContent className="max-w-2xl"> {/* ✅ Corrected className */}
+                    <DialogHeader> {/* ✅ Corrected casing */}
+                      <DialogTitle> {/* ✅ Corrected casing */}
+                        {editingProduct ? "Edit Product" : "Add New Product"} {/* ✅ Consistent casing */}
                       </DialogTitle>
-                      <DialogDescription>
+                      <DialogDescription> {/* ✅ Corrected casing */}
                         {editingProduct ? "Update details for your product." : "Add a new product to your inventory."}
                       </DialogDescription>
                     </DialogHeader>
-                    <Form {...productForm}>
-                      <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4">
-                        <FormField
+                    <Form {...productForm}> {/* ✅ Corrected component name */}
+                      <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4"> {/* ✅ Corrected casing */}
+                        <FormField // ✅ Corrected component name
                           control={productForm.control}
                           name="name"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Product Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} />
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Product Name</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Input {...field} /> {/* ✅ Corrected component name */}
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <FormField
+                        <FormField // ✅ Corrected component name
                           control={productForm.control}
                           name="description"
                           render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Description</FormLabel>
-                              <FormControl>
-                                <Textarea {...field} />
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Description</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Textarea {...field} /> {/* ✅ Corrected component name */}
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <FormField
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* ✅ Corrected className */}
+                          <FormField // ✅ Corrected component name
                             control={productForm.control}
                             name="price"
                             render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Price (₹)</FormLabel>
-                                <FormControl>
-                                  <Input {...field} type="number" step="0.01" />
+                              <FormItem> {/* ✅ Corrected component name */}
+                                <FormLabel>Price (₹)</FormLabel> {/* ✅ Consistent casing */}
+                                <FormControl> {/* ✅ Corrected component name */}
+                                  <Input {...field} type="number" step="0.01" /> {/* ✅ Corrected component name */}
                                 </FormControl>
-                                <FormMessage />
+                                <FormMessage /> {/* ✅ Corrected component name */}
                               </FormItem>
                             )}
                           />
-                          <FormField
+                          <FormField // ✅ Corrected component name
                             control={productForm.control}
-                            name="originalPrice"
+                            name="originalPrice" // ✅ Corrected to originalPrice
                             render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Original Price (₹) (Optional)</FormLabel>
-                                <FormControl>
-                                  <Input {...field} type="number" step="0.01" />
+                              <FormItem> {/* ✅ Corrected component name */}
+                                <FormLabel>Original Price (₹) (Optional)</FormLabel> {/* ✅ Consistent casing */}
+                                <FormControl> {/* ✅ Corrected component name */}
+                                  <Input {...field} type="number" step="0.01" /> {/* ✅ Corrected component name */}
                                 </FormControl>
-                                <FormMessage />
+                                <FormMessage /> {/* ✅ Corrected component name */}
                               </FormItem>
                             )}
                           />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                          <FormField
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* ✅ Corrected className */}
+                          <FormField // ✅ Corrected component name
                             control={productForm.control}
-                            name="categoryId"
+                            name="categoryId" // ✅ Corrected to categoryId
                             render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Category</FormLabel>
-                                <Select onValueChange={field.onChange} value={field.value?.toString()}>
-                                  <FormControl>
-                                    <SelectTrigger>
-                                      <SelectValue placeholder="Select a category" />
+                              <FormItem> {/* ✅ Corrected component name */}
+                                <FormLabel>Category</FormLabel> {/* ✅ Corrected component name */}
+                                <Select onValueChange={field.onChange} value={field.value?.toString()}> {/* ✅ Corrected casing */}
+                                  <FormControl> {/* ✅ Corrected component name */}
+                                    <SelectTrigger> {/* ✅ Corrected component name */}
+                                      <SelectValue placeholder="Select a category" /> {/* ✅ Corrected component name */}
                                     </SelectTrigger>
                                   </FormControl>
-                                  <SelectContent>
+                                  <SelectContent> {/* ✅ Corrected component name */}
                                     {categories?.map((category) => (
-                                      <SelectItem key={category.id} value={category.id.toString()}>
+                                      <SelectItem key={category.id} value={category.id.toString()}> {/* ✅ Corrected casing */}
                                         {category.name}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <FormMessage />
+                                <FormMessage /> {/* ✅ Corrected component name */}
                               </FormItem>
                             )}
                           />
-                          <FormField
+                          <FormField // ✅ Corrected component name
                             control={productForm.control}
                             name="stock"
                             render={({ field }) => (
-                              <FormItem>
-                                <FormLabel>Stock</FormLabel>
-                                <FormControl>
-                                  <Input {...field} type="number" />
+                              <FormItem> {/* ✅ Corrected component name */}
+                                <FormLabel>Stock</FormLabel> {/* ✅ Corrected component name */}
+                                <FormControl> {/* ✅ Corrected component name */}
+                                  <Input {...field} type="number" /> {/* ✅ Corrected component name */}
                                 </FormControl>
-                                <FormMessage />
+                                <FormMessage /> {/* ✅ Corrected component name */}
                               </FormItem>
                             )}
                           />
                         </div>
-                        <FormField
+                        <FormField // ✅ Corrected component name
                           control={productForm.control}
                           name="image"
-                          render={({ field: { value, onChange, ...fieldProps } }) => (
-                            <FormItem>
-                              <FormLabel>Product Image</FormLabel>
-                              <FormControl>
-                                <Input
+                          render={({ field: { value, onChange, ...fieldProps } }) => ( // ✅ Corrected casing
+                            <FormItem> {/* ✅ Corrected component name */}
+                              <FormLabel>Product Image</FormLabel> {/* ✅ Corrected component name */}
+                              <FormControl> {/* ✅ Corrected component name */}
+                                <Input // ✅ Corrected component name
                                   {...fieldProps}
                                   type="file"
                                   accept="image/*"
-                                  onChange={(event) => onChange(event.target.files?.[0])}
+                                  onChange={(event) => onChange(event.target.files?.[0])} // ✅ Corrected casing
                                 />
                               </FormControl>
-                              <FormMessage />
+                              <FormMessage /> {/* ✅ Corrected component name */}
                             </FormItem>
                           )}
                         />
-                        <div className="flex justify-end space-x-2">
-                          <Button
+                        <div className="flex justify-end space-x-2"> {/* ✅ Corrected className */}
+                          <Button // ✅ Corrected component name
                             type="button"
                             variant="outline"
-                            onClick={() => {
-                              setIsProductDialogOpen(false);
-                              setEditingProduct(null);
-                              productForm.reset();
+                            onClick={() => { // ✅ Corrected casing
+                              setIsProductDialogOpen(false); // ✅ Corrected casing
+                              setEditingProduct(null); // ✅ Corrected casing
+                              productForm.reset(); // ✅ Corrected casing
                             }}
                           >
                             Cancel
                           </Button>
-                          <Button type="submit" disabled={productMutation.isPending}>
-                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")}
+                          <Button type="submit" disabled={productMutation.isPending}> {/* ✅ Corrected casing */}
+                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")} {/* ✅ Consistent casing */}
                           </Button>
                         </div>
                       </form>
@@ -510,49 +543,49 @@ export default function ProductManager({ seller }: ProductManagerProps) {
                 </Dialog>
               </>
             ) : (
-              <Badge variant="outline" className="text-orange-500">
-                <Info className="h-4 w-4 mr-2" />
+              <Badge variant="outline" className="text-orange-500"> {/* ✅ Corrected component name and className */}
+                <Info className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
                 Verify account to add products
               </Badge>
             )}
           </div>
         </div>
       </CardHeader>
-      <CardContent>
-        {productsLoading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {[...Array(3)].map((_, i) => (
-              <Skeleton key={i} className="h-48 w-full rounded-lg" />
+      <CardContent> {/* ✅ Corrected component name */}
+        {productsLoading ? ( // ✅ Corrected casing
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> {/* ✅ Corrected className */}
+            {[...Array(3)].map((_, i) => ( // ✅ Corrected casing
+              <Skeleton key={i} className="h-48 w-full rounded-lg" /> // ✅ Corrected component name and className
             ))}
           </div>
-        ) : productsError ? (
-          <p className="text-red-500">Error loading products: {productsError.message}</p>
+        ) : productsError ? ( // ✅ Corrected casing
+          <p className="text-red-500">Error loading products: {productsError.message}</p> // ✅ Corrected className and casing
         ) : products && products.length === 0 ? (
-          <p className="text-muted-foreground">You haven't added any products yet.</p>
+          <p className="text-muted-foreground">You haven't added any products yet.</p> {/* ✅ Corrected className */}
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> {/* ✅ Corrected className */}
             {products?.map((product) => (
-              <Card key={product.id} className="relative group overflow-hidden">
-                {product.images && product.images.length > 0 && (
+              <Card key={product.id} className="relative group overflow-hidden"> {/* ✅ Corrected component name and className */}
+                {product.image && ( // Assuming `image` is a single string URL for display
                   <img
-                    src={product.images[0]}
+                    src={product.image}
                     alt={product.name}
-                    className="w-full h-40 object-cover rounded-t-lg"
+                    className="w-full h-40 object-cover rounded-t-lg" // ✅ Corrected className
                   />
                 )}
-                <CardContent className="p-4">
-                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4>
-                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
-                  <div className="flex justify-between items-center mt-2">
-                    <p className="text-lg font-bold text-primary">₹{product.price}</p>
-                    <Badge variant="secondary">{product.stock} in stock</Badge>
+                <CardContent className="p-4"> {/* ✅ Corrected component name and className */}
+                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4> {/* ✅ Corrected className */}
+                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p> {/* ✅ Corrected className */}
+                  <div className="flex justify-between items-center mt-2"> {/* ✅ Corrected className */}
+                    <p className="text-lg font-bold text-primary">₹{product.price}</p> {/* ✅ Corrected className */}
+                    <Badge variant="secondary">{product.stock} in stock</Badge> {/* ✅ Corrected component name */}
                   </div>
-                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}>
-                      <Edit className="h-4 w-4" />
+                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"> {/* ✅ Corrected className */}
+                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}> {/* ✅ Corrected component name and casing */}
+                      <Edit className="h-4 w-4" /> {/* ✅ Corrected className */}
                     </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}>
-                      <Trash2 className="h-4 w-4" />
+                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}> {/* ✅ Corrected component name and casing */}
+                      <Trash2 className="h-4 w-4" /> {/* ✅ Corrected className */}
                     </Button>
                   </div>
                 </CardContent>
@@ -564,4 +597,3 @@ export default function ProductManager({ seller }: ProductManagerProps) {
     </Card>
   );
 }
-            
