@@ -105,15 +105,15 @@ export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").references(() => sellersPgTable.id),
   storeId: integer("store_id").references(() => stores.id),
-  categoryId: integer("category_id").references(() => categories.id),
+  categoryId: integer("category_id").references(() => categories.id), // या productCategories.id
   name: text("name").notNull(),
   nameHindi: text("name_hindi"),
   description: text("description"),
   descriptionHindi: text("description_hindi"),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  originalPrice: decimal("original_price", { precision: 10, scale: 2 }),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅
+  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).$type<number>(), // ✅
   image: text("image").notNull(),
-  images: text("images").array(),
+  images: text("images").array().$type<string[]>(), // ✅
   unit: text("unit").notNull().default("piece"),
   brand: text("brand"),
   stock: integer("stock").notNull().default(0),
@@ -121,10 +121,10 @@ export const products = pgTable("products", {
   maxOrderQty: integer("max_order_qty").default(100),
   isActive: boolean("is_active").default(true),
 
-  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), 
-  productDeliveryPincodes: text("product_delivery_pincodes").array(), 
-  productDeliveryRadiusKM: integer("product_delivery_radius_km"),       
-  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'), 
+  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), // 'LOCAL', 'CITY', 'STATE', 'NATIONAL'
+  productDeliveryPincodes: text("product_delivery_pincodes").array().$type<string[]>(), // ✅
+  productDeliveryRadiusKM: integer("product_delivery_radius_km").$type<number>(), // ✅
+  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'),
   
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
@@ -132,6 +132,7 @@ export const products = pgTable("products", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
 
 export const deliveryAreas = pgTable("delivery_areas", {
   id: serial("id").primaryKey(),
