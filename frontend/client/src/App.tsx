@@ -18,7 +18,7 @@ import SellerDashboard from "@/pages/seller-dashboard";
 import SellerApplyPage from "@/pages/seller-apply";
 import SellerStatusPage from "@/pages/seller-status";
 import NotFound from "@/pages/not-found";
-import AdminDashboard from "@/pages/admin-dashboard";
+import AdminDashboard from "@/pages/admin/admin-dashboard";
 import DeliveryApplyPage from "@/pages/delivery-apply";
 import DeliveryLogin from "@/pages/delivery-login";
 import LoginPage from "@/pages/login";
@@ -29,7 +29,7 @@ import CustomerOrdersPage from "@/pages/customer/orders";
 import TrackOrder from "@/pages/track-order"; 
 import Checkout2 from "./pages/checkout2";
 import DeliveryDashboard from "@/pages/DeliveryDashboard";
-import AdminOrderDashboard from "./pages/adminOrderDashboard";
+import AdminOrderDashboard from "./pages/admin/adminOrderDashboard";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import CookiesPolicy from "@/pages/CookiesPolicy";
@@ -39,7 +39,7 @@ import ContactUs from "@/pages/ContactUs";
 // Protected / Auth-based
 import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
-
+import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage'; 
 
 
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
@@ -130,6 +130,10 @@ function App() { // Capitalized App
               </AuthRedirectGuard>
             }
           />
+
+          <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        {/* New route for vendor details/edit */}
+        <Route path="/admin/vendors/:id" element={<AdminVendorDetailsPage />} />
           {/* यह /track-order/:orderId का सही स्थान है */}
           <Route 
             path="/track-order/:orderId" // orderId, not orderid
