@@ -1,7 +1,7 @@
 // backend/src/routes/customerRoutes.ts
 import { Router, Request, Response, NextFunction } from 'express';
 import { db } from '../../server/db';
-import { deliveryAddresses, users } from '../../shared/backend/schema'; // users भी इम्पोर्ट करें
+import { deliveryAddresses, users, products, cartItems} from '../../shared/backend/schema'; // users भी इम्पोर्ट करें
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
 import { eq, and, desc } from 'drizzle-orm';
 import { geocodeAddress } from '../../services/geocodingService'; // Geocoding Service इम्पोर्ट करें
