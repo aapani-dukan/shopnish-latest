@@ -16,7 +16,7 @@ import { eq } from "drizzle-orm";
 import apiAuthLoginRouter from "./roots/apiAuthLogin.ts";
 //import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
 //import adminRejectProductRoutes from "./roots/admin/reject-product.ts";
-import adminProductsRoutes from "./roots/admin/products.ts";
+import adminProductsRoutes from "./roots/admin/adminProductsRoutes";
 import adminVendorsRoutes from "./roots/admin/vendors.ts";
 //import adminPasswordRoutes from "./roots/admin/admin-password.ts";
 import sellerRouter from "../routes/sellers/sellerRoutes.ts";
