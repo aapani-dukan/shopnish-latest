@@ -1,17 +1,17 @@
 // backend/server/routes/adminVendorsRoutes.ts (Updated)
 import { Router, Response } from 'express';
-import { db } from '../server/db'; // Corrected path
+import { db } from '../../db'; // Corrected path
 import {
   sellersPgTable,
   users,
   approvalStatusEnum,
   userRoleEnum,
   deliveryAreas // ✅ Added for potential delivery area validation if needed
-} from '../../shared/backend/schema';
+} from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../server/middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
-import { authorize } from '../server/middleware/authorize'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../server/middleware/validateRequest';
+import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
+import { validateRequest } from '../../middleware/validateRequest';
 import { z } from 'zod'; // ✅ For validation
 
 const adminVendorsRouter = Router();
