@@ -16,7 +16,7 @@ import { Label } from "../components/ui/label";
 // --- TypeScript Type Definitions ---
 export interface Order {
   id: number;
-  orderNumber?: string;
+  orderNumber?: string | number;
   total?: string;
   deliveryAddress?: {
     fullName?: string;
@@ -81,7 +81,7 @@ const DeliveryOtpDialog: React.FC<DeliveryOtpDialogProps> = ({
           <div className="p-4 bg-blue-50 rounded-lg mb-4">
             <p className="font-medium">ऑर्डर #{order.orderNumber}</p>
             <p className="text-sm text-gray-600">{order.deliveryAddress?.fullName}</p>
-            <p className="text-sm text-gray-600">कुल: ₹{order.total}</p>
+            <p className="text-sm text-gray-600">कुल: ₹{Number(order.total ?? 0).toLocaleString('en-IN')}</p> 
           </div>
         )}
 
