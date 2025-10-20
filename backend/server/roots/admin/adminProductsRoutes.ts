@@ -1,19 +1,19 @@
-// backend/server/routes/adminProductsRoutes.ts (Updated)
+// backend/server/roots/admin/adminProductsRoutes.ts (Updated)
 import { Router, Response } from 'express';
-import { db } from '../server/db'; // Corrected path
+import { db } from '../../db'; // Corrected path
 import {
   products,
   approvalStatusEnum,
   categories, // ✅ Added for product updates
   sellersPgTable // ✅ Added for product updates (seller context)
-} from '../../shared/backend/schema';
-import { AuthenticatedRequest } from '../server/middleware/verifyToken'; // Corrected path
+} from '/..../../shared/backend/schema';
+import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
-import { authorize } from '../server/middleware/authorize'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../server/middleware/validateRequest';
+import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
+import { validateRequest } from '../../middleware/validateRequest';
 import { z } from 'zod'; // ✅ For validation
 import multer from 'multer'; // ✅ For image upload
-import { uploadImage } from '../server/cloudStorage'; // ✅ For image upload
+import { uploadImage } from '../../cloudStorage'; // ✅ For image upload
 import { v4 as uuidv4 } from "uuid"; // ✅ For unique filenames
 
 const adminProductsRouter = Router();
