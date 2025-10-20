@@ -17,7 +17,7 @@ import {
   subOrderStatusEnum, // ✅ Sub-order status enum
   deliveryStatusEnum, // ✅ Delivery batch status enum
   approvalStatusEnum // ✅ Approval status enum
-} from '../../shared/backend/schema';
+} from '../shared/backend/schema';
 import { eq, and, desc, inArray, or } from 'drizzle-orm'; // ✅ Added 'or'
 import multer from 'multer';
 import { uploadImage } from '../server/cloudStorage';
