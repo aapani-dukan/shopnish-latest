@@ -14,11 +14,11 @@ import { eq } from "drizzle-orm";
  
 // ✅ Sub-route modules
 import apiAuthLoginRouter from "./roots/apiAuthLogin.ts";
-import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
-import adminRejectProductRoutes from "./roots/admin/reject-product.ts";
+//import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
+//import adminRejectProductRoutes from "./roots/admin/reject-product.ts";
 import adminProductsRoutes from "./roots/admin/products.ts";
 import adminVendorsRoutes from "./roots/admin/vendors.ts";
-import adminPasswordRoutes from "./roots/admin/admin-password.ts";
+//import adminPasswordRoutes from "./roots/admin/admin-password.ts";
 import sellerRouter from "../routes/sellers/sellerRoutes.ts";
 import productsRouter from "../routes/productRoutes.ts";
 import cartRouter from "../routes/cartRoutes.ts";
@@ -31,7 +31,7 @@ import { verifyToken } from "./middleware/verifyToken";
 import { categories } from "../shared/backend/schema.ts";
 import whatsappRouter from '../routes/whatsappRoutes.ts';
 import addressRouter from '../routes/addressRoutes.ts';
-import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
+//import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 import customerRouter from '../routes/customerRoutes';
 const router = Router();
@@ -284,10 +284,10 @@ router.use("/delivery", dBoyRouter);
 // ✅ Admin Routes
 const adminRouter = Router();
 adminRouter.use(requireAdminAuth);
-adminRouter.use("/products/approve", adminApproveProductRoutes);
-adminRouter.use("/products/reject", adminRejectProductRoutes);
+
+
 adminRouter.use("/products", adminProductsRoutes);
-adminRouter.use("/password", adminPasswordRoutes);
+
 adminRouter.use("/vendors", adminVendorsRoutes);
 adminRouter.use("/delivery-boys", admindBoyRouter);
 adminRouter.use("/orders", adminOrdersRouter);
