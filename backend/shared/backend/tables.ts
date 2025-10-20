@@ -24,6 +24,8 @@ export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
   "delivered"
 ]);
 
+export const paymentMethodEnum = pgEnum("payment_method", ["COD", "ONLINE"]); // या अन्य
+export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
 
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
@@ -223,9 +225,9 @@ export const orders = pgTable("orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
   total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
   deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
-  paymentMethod: text("payment_method").notNull(), // ✅ Payment Method Enum का उपयोग करने का सुझाव दिया गया था
-  paymentStatus: text("payment_status").default("pending"),
-
+  
+  paymentMethod: paymentMethodEnum("payment_method").notNull(),
+  paymentStatus: paymentStatusEnum("payment_status").default("pending").notNull(),
   deliveryAddress: text("delivery_address").notNull(), // ✅ JSON string, $type<any>() के साथ बेहतर
   deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }).$type<number>().default('0.0'), // ✅ Precision
   deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }).$type<number>().default('0.0'), // ✅ Precision
