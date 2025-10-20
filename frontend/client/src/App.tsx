@@ -41,7 +41,7 @@ import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
 import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage'; 
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
-
+import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 function App() { // Capitalized App
   const [isCartModalOpen, setIsCartModalOpen] = useState(false); // Capitalized useState, variables
@@ -72,7 +72,12 @@ function App() { // Capitalized App
           <Route path="/faq" element={<FAQ />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
-          
+          <Route path="/admin" element={<AdminDashboard />} />
+        <Route path="/admin/orders" element={<AdminOrderDashboard />} />
+        <Route path="/admin/settings" element={<AdminSettingsPage />} />
+        <Route path="/admin/vendors/:id" element={<AdminVendorDetailsPage />} />
+        {/* New route for product details/edit */}
+        <Route path="/admin/products/:id" element={<AdminProductDetailsPage />} />
           {/* Protected Routes */}
           <Route
             path="/seller-dashboard"
@@ -131,9 +136,7 @@ function App() { // Capitalized App
             }
           />
 
-          <Route path="/admin/settings" element={<AdminSettingsPage />} />
-        {/* New route for vendor details/edit */}
-        <Route path="/admin/vendors/:id" element={<AdminVendorDetailsPage />} />
+          
           {/* यह /track-order/:orderId का सही स्थान है */}
           <Route 
             path="/track-order/:orderId" // orderId, not orderid
