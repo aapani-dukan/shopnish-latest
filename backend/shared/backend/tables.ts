@@ -187,35 +187,28 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
+// backend/src/shared/backend/schema.ts
+// ... (अन्य इम्पोर्ट्स, जैसे users, products)
+
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id, { onDelete: 'cascade' }), // nullable हो सकता है यदि अनाम कार्ट की अनुमति हो
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }), // ✅ NOT NULL
   productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+  sellerId: integer("seller_id").notNull().references(() => sellersPgTable.id), // ✅ sellerId जोड़ा
   quantity: integer("quantity").notNull().default(1),
-  // priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ इसे सक्रिय करें!
-  sessionId: text("session_id"), // यदि अनाम कार्ट की अनुमति हो
+  priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ सक्रिय किया और NOT NULL
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ totalPrice जोड़ा
+  sessionId: text("session_id"), // यदि अनाम कार्ट की अनुमति हो (तुम्हारे router में उपयोग नहीं हो रहा है)
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(), // ✅ updatedAt भी जोड़ें
+  updatedAt: timestamp("updated_at").defaultNow(), // ✅ updatedAt जोड़ा
 }, (table) => {
   return {
-    // ✅ या तो userId और productId का संयोजन अद्वितीय होगा, या sessionId और productId का
     unqUserProduct: unique("unq_user_product").on(table.userId, table.productId),
-    unqSessionProduct: unique("unq_session_product").on(table.sessionId, table.productId),
+    // unqSessionProduct: unique("unq_session_product").on(table.sessionId, table.productId), // यदि sessionId का उपयोग नहीं कर रहे हो तो इसे हटा सकते हो
   };
 });
 
 
-// Cart Items Relations
-export const cartItemRelations = relations(cartItems, ({ one }) => ({
-  user: one(users, {
-    fields: [cartItems.userId],
-    references: [users.id],
-  }),
-  product: one(products, {
-    fields: [cartItems.productId],
-    references: [products.id],
-  }),
-}));
 
 
 export const orders = pgTable("orders", {
