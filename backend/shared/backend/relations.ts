@@ -68,7 +68,7 @@ export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => 
   orders: many(orders),
 }));
 
-export const cartItemsRelations = relations(cartItems, ({ one }) => ({
+export const cartItemRelations = relations(cartItems, ({ one }) => ({
   user: one(users, {
     fields: [cartItems.userId],
     references: [users.id],
@@ -77,8 +77,11 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
     fields: [cartItems.productId],
     references: [products.id],
   }),
+  seller: one(sellersPgTable, { // ✅ Seller रिलेशन जोड़ा
+    fields: [cartItems.sellerId],
+    references: [sellersPgTable.id],
+  }),
 }));
-
 export const deliveryAddressesRelations = relations(deliveryAddresses, ({ one, many }) => ({
   user: one(users, {
     fields: [deliveryAddresses.userId],
