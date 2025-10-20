@@ -1,26 +1,26 @@
 // server/routes/cartRouter.ts
 
-import { Router, Response } from 'express';
+import { Router, Response, NextFunction } from 'express'; // ✅ NextFunction जोड़ा
 import { db } from '../server/db.ts';
 import {
   users,
-  orderItems, // ⚠️ इसे अब सिर्फ़ reference के लिए रखा है, उपयोग cartItems का होगा
-  cartItems,    // ✅ NEW: cartItems स्कीमा को इम्पोर्ट करें
-  products
+  cartItems,
+  products,
+  approvalStatusEnum, // ✅ approvalStatusEnum इम्पोर्ट करें
+  sellersPgTable, // ✅ sellersPgTable इम्पोर्ट करें अगर sellerId को संदर्भित कर रहे हो
 } from '../shared/backend/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { AuthenticatedRequest, requireAuth } from '../server/middleware/authMiddleware.ts';
-import { getIO } from '../server/socket.ts'; 
+import { getIO } from '../server/socket.ts';
 
 const cartRouter = Router();
 
 // 1. ✅ GET /api/cart - Get user's cart (अब cartItems टेबल का उपयोग करता है)
-cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
   try {
     console.log("🛒 [API] Received GET request for cart.");
-    const firebaseUid = req.user?.firebaseUid;
+    const userId = req.user?.id; // firebaseUid के बजाय सीधे userId का उपयोग करें
     
-    // कैशिंग हेडर को सेट करें (जैसा कि हमने पहले तय किया था)
     res.set({
         'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
         'Pragma': 'no-cache',
@@ -28,205 +28,324 @@ cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response
     });
     res.removeHeader('ETag'); 
 
-    if (!firebaseUid) {
-      return res.status(401).json({ error: 'Unauthorized: Missing user UUID' });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user ID' });
     }
 
-    const [dbUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid));
-
-    if (!dbUser) {
-      return res.status(404).json({ error: 'User not found.' });
-    }
-
-    // 🛑 FIX: orderItems से cartItems पर स्विच करें, status की अब आवश्यकता नहीं है।
-    const cartItemsData = await db.query.cartItems.findMany({
-      where: eq(cartItems.userId, dbUser.id),
+    // सीधे cartItems को प्रोडक्ट डिटेल्स के साथ fetch करें
+    const cartItemsWithDetails = await db.query.cartItems.findMany({
+      where: eq(cartItems.userId, userId),
+      with: {
+        product: {
+          columns: {
+            id: true,
+            name: true,
+            description: true,
+            price: true, // Product का वर्तमान मूल्य
+            image: true,
+            sellerId: true,
+            unit: true,
+            stock: true, // स्टॉक जानकारी भी महत्वपूर्ण है
+            minOrderQty: true,
+            maxOrderQty: true,
+            approvalStatus: true,
+          }
+        },
+        seller: { // ✅ सेलर का विवरण भी fetch करें
+          columns: {
+            id: true,
+            businessName: true,
+          }
+        }
+      },
+      orderBy: (cartItems, { asc }) => [asc(cartItems.createdAt)],
     });
 
-    if (cartItemsData.length === 0) {
-      return res.status(200).json({ message: "Your cart is empty", items: [] });
-    }
+    let totalAmount = 0;
+    const cleanedCartData = cartItemsWithDetails.map(item => {
+      // सुनिश्चित करें कि प्रोडक्ट डेटा मौजूद है और स्वीकृत है
+      if (!item.product || item.product.approvalStatus !== approvalStatusEnum.enumValues[1]) {
+          console.warn(`[CART] Product ${item.productId} not found or not approved, removing from cart view.`);
+          return null; // अमान्य प्रोडक्ट को कार्ट से हटा दें
+      }
 
-    // बाकी लॉजिक (products fetch, data cleaning) समान रहता है
-    const productIds = cartItemsData.map(item => item.productId);
-    const productsData = await db.query.products.findMany({
-      where: inArray(products.id, productIds),
-    });
+      // priceAtAdded का उपयोग करें (जो स्कीमा में है)
+      const effectivePrice = item.priceAtAdded; // अब यह स्कीमा में है
 
-    const productsMap = new Map(productsData.map(product => [product.id, product]));
+      // मात्रा और स्टॉक की जांच
+      const effectiveQuantity = Math.min(item.quantity, item.product.stock); // स्टॉक से अधिक मात्रा न होने दें
+      
+      const itemTotal = effectivePrice * effectiveQuantity;
+      totalAmount += itemTotal;
 
-    const cleanedCartData = cartItemsData.map(item => {
-      const product = productsMap.get(item.productId);
-      if (!product) return null;
       return {
         id: item.id,
-        quantity: item.quantity,
+        productId: item.productId,
+        quantity: effectiveQuantity, // अपडेटेड मात्रा
+        priceAtAdded: item.priceAtAdded, // कार्ट में जोड़ते समय की कीमत
+        itemTotal: itemTotal,
         product: {
-          id: product.id,
-          name: product.name,
-          price: product.price,
-          image: product.image,
-          sellerId: product.sellerId,
-          nameHindi: product.nameHindi, 
-          unit: product.unit,
+          id: item.product.id,
+          name: item.product.name,
+          price: item.product.price, // प्रोडक्ट का वर्तमान मूल्य
+          image: item.product.image,
+          unit: item.product.unit,
+          stock: item.product.stock,
+          minOrderQty: item.product.minOrderQty,
+          maxOrderQty: item.product.maxOrderQty,
         },
+        seller: item.seller ? {
+          id: item.seller.id,
+          businessName: item.seller.businessName,
+        } : null,
       };
-    }).filter(item => item !== null);
+    }).filter(item => item !== null); // null आइटम्स को हटा दें
 
-    return res.status(200).json({ message: "Cart fetched successfully", items: cleanedCartData });
+    return res.status(200).json({
+      message: "Cart fetched successfully",
+      items: cleanedCartData,
+      totalAmount: totalAmount,
+    });
 
   } catch (error: any) {
     console.error('❌ [API] Error fetching cart:', error);
     res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate' }); 
+    // next(error); // ✅ त्रुटियों को संभालने के लिए next का उपयोग करें
     return res.status(500).json({ error: 'Failed to fetch cart. An unexpected error occurred.' });
   }
 });
 
 
 // 2. ✅ POST /api/cart/add - Add a new item to cart (अब cartItems टेबल का उपयोग करता है)
-cartRouter.post('/add', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+cartRouter.post('/add', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
   try {
-    const firebaseUid = req.user?.firebaseUid;
+    const userId = req.user?.id;
     const { productId, quantity } = req.body;
 
-    if (!firebaseUid || !productId || !quantity) {
-      return res.status(400).json({ error: 'Missing required fields.' });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user ID' });
     }
-
-    const [dbUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid));
-
-    if (!dbUser) return res.status(404).json({ error: 'User not found.' });
+    if (!productId || typeof quantity !== 'number' || quantity <= 0) { // Quantity 0 या नकारात्मक नहीं हो सकती
+      return res.status(400).json({ error: 'Invalid productId or quantity.' });
+    }
 
     const [product] = await db.select().from(products).where(eq(products.id, productId)).limit(1);
     if (!product) return res.status(404).json({ error: 'Product not found.' });
+    if (product.approvalStatus !== approvalStatusEnum.enumValues[1]) { // 'approved'
+      return res.status(400).json({ error: 'Product is not approved for sale.' });
+    }
+    if (product.stock < quantity) {
+      return res.status(400).json({ error: `Insufficient stock. Only ${product.stock} units available.` });
+    }
+    if (product.minOrderQty && quantity < product.minOrderQty) {
+      return res.status(400).json({ error: `Minimum order quantity for ${product.name} is ${product.minOrderQty}.` });
+    }
+    if (product.maxOrderQty && quantity > product.maxOrderQty) {
+      return res.status(400).json({ error: `Maximum order quantity for ${product.name} is ${product.maxOrderQty}.` });
+    }
 
-    const unitPrice = parseFloat(product.price);
-    const totalPrice = unitPrice * quantity;
+    const priceAtAdded = product.price; // प्रोडक्ट का वर्तमान मूल्य
     const sellerId = product.sellerId;
 
-    // 🛑 FIX: orderItems से cartItems पर स्विच करें
     const [existingItem] = await db
       .select()
       .from(cartItems)
-      .where(and(eq(cartItems.userId, dbUser.id), eq(cartItems.productId, productId))); // status की अब आवश्यकता नहीं
+      .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)));
 
     let item;
     if (existingItem) {
-      // 🛑 FIX: orderItems से cartItems पर स्विच करें
+      const newQuantity = existingItem.quantity + quantity;
+      if (newQuantity > product.stock) {
+        return res.status(400).json({ error: `Cannot add ${quantity} units. Only ${product.stock - existingItem.quantity} units available.` });
+      }
+      if (product.maxOrderQty && newQuantity > product.maxOrderQty) {
+        return res.status(400).json({ error: `Adding this quantity exceeds maximum order quantity of ${product.maxOrderQty} for ${product.name}.` });
+      }
+
+      const newTotalPrice = priceAtAdded * newQuantity; // नए कुल मूल्य की गणना करें
+
       const updatedItem = await db
         .update(cartItems)
         .set({
-          quantity: existingItem.quantity + quantity,
-          totalPrice: existingItem.totalPrice + totalPrice,
+          quantity: newQuantity,
+          totalPrice: newTotalPrice, // ✅ totalPrice अपडेट करें
+          updatedAt: new Date(), // ✅ updatedAt अपडेट करें
         })
         .where(eq(cartItems.id, existingItem.id))
         .returning();
       item = updatedItem[0];
     } else {
-      // 🛑 FIX: orderItems से cartItems पर स्विच करें
+      const newTotalPrice = priceAtAdded * quantity; // कुल मूल्य की गणना करें
+
       const newItem = await db
         .insert(cartItems)
         .values({
-          userId: dbUser.id,
+          userId: userId,
           productId,
           quantity,
-          unitPrice,
-          totalPrice,
-          sellerId,
-          // status अब यहाँ आवश्यक नहीं है, यदि cartItems टेबल में status फ़ील्ड नहीं है
+          priceAtAdded: priceAtAdded, // ✅ priceAtAdded उपयोग करें
+          totalPrice: newTotalPrice, // ✅ totalPrice सेट करें
+          sellerId, // ✅ sellerId सेट करें
+          createdAt: new Date(),
+          updatedAt: new Date(), // ✅ updatedAt सेट करें
         })
         .returning();
       item = newItem[0];
     }
 
-    getIO().emit("cart:updated", { userId: dbUser.id });
+    getIO().emit("cart:updated", { userId: userId }); // userId के साथ भेजें
 
     return res.status(200).json({ message: 'Item added to cart.', item });
   } catch (error: any) {
     console.error('❌ [API] Error adding item to cart:', error);
+    // next(error); // ✅ त्रुटियों को संभालने के लिए next का उपयोग करें
     return res.status(500).json({ error: 'Failed to add item to cart.' });
   }
 });
 
+
 // 3. ✅ PUT /api/cart/:cartItemId - Update quantity (अब cartItems टेबल का उपयोग करता है)
-cartRouter.put('/:cartItemId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+cartRouter.put('/:cartItemId', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
   try {
-    const firebaseUid = req.user?.firebaseUid;
-    const { cartItemId } = req.params;
+    const userId = req.user?.id;
+    const cartItemId = parseInt(req.params.cartItemId); // parseInt एक ही बार करें
     const { quantity } = req.body;
 
-    if (!firebaseUid || !quantity || isNaN(parseInt(cartItemId))) {
-      return res.status(400).json({ error: 'Invalid or missing fields.' });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user ID' });
+    }
+    if (isNaN(cartItemId) || typeof quantity !== 'number' || quantity < 0) { // Quantity 0 या नकारात्मक नहीं हो सकती (हटाने के लिए DELETE का उपयोग करें)
+      return res.status(400).json({ error: 'Invalid cart item ID or quantity.' });
     }
 
-    const [dbUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid));
+    // पहले कार्ट आइटम और प्रोडक्ट की जानकारी fetch करें
+    const [existingCartItem] = await db.query.cartItems.findMany({
+        where: and(eq(cartItems.id, cartItemId), eq(cartItems.userId, userId)),
+        with: {
+            product: {
+                columns: {
+                    id: true,
+                    stock: true,
+                    price: true, // वर्तमान प्रोडक्ट मूल्य
+                    minOrderQty: true,
+                    maxOrderQty: true,
+                }
+            }
+        }
+    });
 
-    if (!dbUser) return res.status(404).json({ error: 'User not found.' });
+    if (!existingCartItem || !existingCartItem.product) {
+        return res.status(404).json({ message: 'Cart item or associated product not found or does not belong to user.' });
+    }
 
-    // 🛑 FIX: orderItems से cartItems पर स्विच करें
+    const product = existingCartItem.product;
+    const priceAtAdded = existingCartItem.priceAtAdded; // कार्ट में जोड़ते समय की कीमत
+
+    if (quantity === 0) {
+        // यदि मात्रा 0 है, तो आइटम को हटा दें (DELETE एंडपॉइंट के समान)
+        const [deletedItem] = await db.delete(cartItems)
+            .where(eq(cartItems.id, cartItemId))
+            .returning();
+        
+        if (!deletedItem) {
+            return res.status(404).json({ message: 'Cart item not found or failed to delete.' });
+        }
+        getIO().emit("cart:updated", { userId: userId });
+        return res.status(200).json({ message: 'Cart item removed successfully (quantity set to 0).', item: deletedItem });
+    }
+
+    if (quantity > product.stock) {
+        return res.status(400).json({ error: `Insufficient stock. Only ${product.stock} units available.` });
+    }
+    if (product.minOrderQty && quantity < product.minOrderQty) {
+      return res.status(400).json({ error: `Minimum order quantity for ${product.name} is ${product.minOrderQty}.` });
+    }
+    if (product.maxOrderQty && quantity > product.maxOrderQty) {
+      return res.status(400).json({ error: `Maximum order quantity for ${product.name} is ${product.maxOrderQty}.` });
+    }
+
+    const newTotalPrice = priceAtAdded * quantity;
+
     const [updatedItem] = await db.update(cartItems)
-      .set({ quantity })
-      // status की अब यहाँ आवश्यकता नहीं है
-      .where(and(eq(cartItems.id, parseInt(cartItemId)), eq(cartItems.userId, dbUser.id)))
+      .set({
+        quantity: quantity,
+        totalPrice: newTotalPrice, // ✅ totalPrice अपडेट करें
+        updatedAt: new Date(), // ✅ updatedAt अपडेट करें
+      })
+      .where(eq(cartItems.id, cartItemId)) // यहां userId की जांच पहले ही हो चुकी है
       .returning();
 
     if (!updatedItem) {
-      return res.status(404).json({ message: 'Cart item not found or does not belong to user.' });
+      return res.status(404).json({ message: 'Cart item not found or no changes made.' });
     }
 
-    getIO().emit("cart:updated", { userId: dbUser.id });
+    getIO().emit("cart:updated", { userId: userId });
 
     return res.status(200).json({ message: 'Cart item updated successfully.', item: updatedItem });
   } catch (error: any) {
     console.error('❌ [API] Error updating cart item:', error);
+    // next(error); // ✅ त्रुटियों को संभालने के लिए next का उपयोग करें
     return res.status(500).json({ error: 'Failed to update cart item.' });
   }
 });
 
 // 4. ✅ DELETE /api/cart/:cartItemId - Remove a single item (अब cartItems टेबल का उपयोग करता है)
-cartRouter.delete('/:cartItemId', requireAuth, async (req: AuthenticatedRequest, res: Response) => {
+cartRouter.delete('/:cartItemId', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
   try {
-    const firebaseUid = req.user?.firebaseUid;
-    const { cartItemId } = req.params;
+    const userId = req.user?.id;
+    const cartItemId = parseInt(req.params.cartItemId);
 
-    if (!firebaseUid || isNaN(parseInt(cartItemId))) {
-      return res.status(400).json({ error: 'Invalid or missing cart item ID.' });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user ID.' });
+    }
+    if (isNaN(cartItemId)) {
+      return res.status(400).json({ error: 'Invalid cart item ID.' });
     }
 
-    const [dbUser] = await db
-      .select({ id: users.id })
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid));
-
-    if (!dbUser) return res.status(404).json({ error: 'User not found.' });
-
-    // 🛑 FIX: orderItems से cartItems पर स्विच करें
     const [deletedItem] = await db.delete(cartItems)
-      // status की अब यहाँ आवश्यकता नहीं है
-      .where(and(eq(cartItems.id, parseInt(cartItemId)), eq(cartItems.userId, dbUser.id)))
+      .where(and(eq(cartItems.id, cartItemId), eq(cartItems.userId, userId))) // ✅ userId की जांच
       .returning();
 
     if (!deletedItem) {
       return res.status(404).json({ message: 'Cart item not found or does not belong to user.' });
     }
 
-    getIO().emit("cart:updated", { userId: dbUser.id });
+    getIO().emit("cart:updated", { userId: userId });
 
     return res.status(200).json({ message: 'Cart item removed successfully.' });
   } catch (error: any) {
     console.error('❌ [API] Error removing cart item:', error);
+    // next(error); // ✅ त्रुटियों को संभालने के लिए next का उपयोग करें
     return res.status(500).json({ error: 'Failed to remove item from cart.' });
   }
 });
 
+// 5. ✅ DELETE /api/cart/clear - Clear the entire cart for a user
+cartRouter.delete('/clear', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized: Missing user ID.' });
+        }
+
+        const deletedCount = await db.delete(cartItems)
+            .where(eq(cartItems.userId, userId))
+            .returning({ id: cartItems.id }); // यह हमें बताता है कि कितने आइटम डिलीट हुए
+
+        if (deletedCount.length === 0) {
+            return res.status(200).json({ message: 'Cart is already empty.' });
+        }
+
+        getIO().emit("cart:updated", { userId: userId });
+
+        return res.status(200).json({ message: 'Cart cleared successfully.', clearedItemsCount: deletedCount.length });
+    } catch (error: any) {
+        console.error('❌ [API] Error clearing cart:', error);
+        // next(error);
+        return res.status(500).json({ error: 'Failed to clear cart.' });
+    }
+});
+
+
 export default cartRouter;
-           
+  
