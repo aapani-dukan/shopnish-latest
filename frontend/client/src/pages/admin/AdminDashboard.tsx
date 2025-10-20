@@ -4,13 +4,14 @@
 
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "../../hooks/use-toast"; // Corrected path
+import { toast } from "../../hooks/use-toast";
 import { Button } from "../../components/ui/button";
-import { Check, X, Loader2 } from "lucide-react";
-import api from "../../lib/api"; // Corrected path
+import { Check, X, Loader2, Pencil } from "lucide-react"; // Added Pencil icon
+import api from "../../lib/api"; // This should be `apiRequest` if that's what you use for consistency
 import { useSocket } from "../../hooks/useSocket";
 import { useNavigate } from "react-router-dom";
-import AdminSettingsPage from "./AdminSettingsPage"; // Import the new settings page
+import AdminSettingsPage from "./AdminSettingsPage";
+import AdminOrderDashboard from "./AdminOrderDashboard"; // Ensure this is imported
 
 // Interfaces
 interface Vendor {
@@ -129,7 +130,7 @@ const AdminDashboard: React.FC = () => {
     },
   });
 
-  // Mutations
+  // Mutations (Existing logic for approval/rejection remains, but consider moving to VendorDetails page)
   const approveVendorMutation = useMutation({
     mutationFn: (vendorId: number) => api.post(`/api/admin/vendors/${vendorId}/approve`),
     onSuccess: () => {
@@ -191,11 +192,14 @@ const AdminDashboard: React.FC = () => {
             {pendingVendors?.map((vendor) => (
               <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
                 <span>{vendor.businessName}</span>
-                <div>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}>
+                    <Pencil className="h-4 w-4 mr-1" /> View/Edit
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => approveVendorMutation.mutate(vendor.id)} disabled={approveVendorMutation.isPending}>
                     {approveVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />}
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => rejectVendorMutation.mutate(vendor.id)} disabled={rejectVendorMutation.isPending} className="ml-2">
+                  <Button variant="destructive" size="sm" onClick={() => rejectVendorMutation.mutate(vendor.id)} disabled={rejectVendorMutation.isPending}>
                     {rejectVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -209,7 +213,12 @@ const AdminDashboard: React.FC = () => {
           <div>
             <h2 className="text-lg font-semibold mb-2">Approved Vendors</h2>
             {approvedVendors?.map((vendor) => (
-              <div key={vendor.id} className="bg-white p-2 rounded mb-2 shadow-sm">{vendor.businessName}</div>
+              <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
+                <span>{vendor.businessName}</span>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}>
+                  <Pencil className="h-4 w-4 mr-1" /> View/Edit
+                </Button>
+              </div>
             ))}
           </div>
         );
@@ -221,11 +230,14 @@ const AdminDashboard: React.FC = () => {
             {pendingProducts?.map((product) => (
               <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
                 <span>{product.name}</span>
-                <div>
+                <div className="flex items-center space-x-2">
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> {/* New Edit Button */}
+                    <Pencil className="h-4 w-4 mr-1" /> View/Edit
+                  </Button>
                   <Button variant="outline" size="sm" onClick={() => approveProductMutation.mutate(product.id)} disabled={approveProductMutation.isPending}>
                     {approveProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />}
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => rejectProductMutation.mutate(product.id)} disabled={rejectProductMutation.isPending} className="ml-2">
+                  <Button variant="destructive" size="sm" onClick={() => rejectProductMutation.mutate(product.id)} disabled={rejectProductMutation.isPending}>
                     {rejectProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />}
                   </Button>
                 </div>
@@ -239,7 +251,12 @@ const AdminDashboard: React.FC = () => {
           <div>
             <h2 className="text-lg font-semibold mb-2">Approved Products</h2>
             {approvedProducts?.map((product) => (
-              <div key={product.id} className="bg-white p-2 rounded mb-2 shadow-sm">{product.name}</div>
+              <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
+                <span>{product.name}</span>
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> {/* New Edit Button */}
+                    <Pencil className="h-4 w-4 mr-1" /> View/Edit
+                </Button>
+              </div>
             ))}
           </div>
         );
@@ -252,11 +269,11 @@ const AdminDashboard: React.FC = () => {
               pendingDeliveryBoys.map((dboy) => (
                 <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm">
                   <span>{dboy.name}</span>
-                  <div>
+                  <div className="flex items-center space-x-2">
                     <Button variant="outline" size="sm" onClick={() => approveDeliveryBoyMutation.mutate(dboy.id)} disabled={approveDeliveryBoyMutation.isPending}>
                       {approveDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />}
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => rejectDeliveryBoyMutation.mutate(dboy.id)} disabled={rejectDeliveryBoyMutation.isPending} className="ml-2">
+                    <Button variant="destructive" size="sm" onClick={() => rejectDeliveryBoyMutation.mutate(dboy.id)} disabled={rejectDeliveryBoyMutation.isPending}>
                       {rejectDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />}
                     </Button>
                   </div>
@@ -287,8 +304,8 @@ const AdminDashboard: React.FC = () => {
       case "platform-settings":
         return <AdminSettingsPage />;
 
-      case "orders": // New case for AdminOrderDashboard
-        return <AdminOrderDashboard />; // Render the Order Dashboard
+      case "orders":
+        return <AdminOrderDashboard />;
 
       default:
         return <p>Select a tab</p>;
@@ -306,7 +323,6 @@ const AdminDashboard: React.FC = () => {
         <Button variant={activeTab === "pending-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("pending-deliveryboys")}>Pending Delivery Boys</Button>
         <Button variant={activeTab === "approved-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("approved-deliveryboys")}>Approved Delivery Boys</Button>
         
-        {/* New buttons for additional dashboards */}
         <Button variant={activeTab === "orders" ? "default" : "outline"} onClick={() => setActiveTab("orders")}>Orders</Button>
         <Button variant={activeTab === "platform-settings" ? "default" : "outline"} onClick={() => setActiveTab("platform-settings")}>Platform Settings</Button>
       </div>
@@ -316,4 +332,3 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard;
-      
