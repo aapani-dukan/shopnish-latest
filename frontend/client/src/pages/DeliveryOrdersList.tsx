@@ -44,7 +44,7 @@ export interface OrderItem {
 export interface Order {
   id: number;
   orderNumber?: string;
-  total?: string;
+  total?: string | number;
   items?: OrderItem[];
   deliveryStatus?: string; // ✅ deliveryStatus का उपयोग सही ढंग से
   status?: string;
@@ -110,12 +110,11 @@ const normalizeDeliveryAddress = (raw: any): Address | null => {
 const normalizeSeller = (order: Order): Seller | null => {
   let rawSellerData = null;
 
-  // 1. Drizzle से आने वाले नेस्टेड पाथ को खोजें: items[0].product.seller
-  if (order.items && order.items.length > 0) {
-    rawSellerData = order.items[0]?.product?.seller;
-  }
+  // 1. Drizzle से आने वाले नेस्टेड पाथ को सुरक्षित रूप से खोजें: items[0].product.seller
+  // ✅ Nullish coalescing और Optional Chaining का उपयोग करके सुरक्षित एक्सेस
+  rawSellerData = order.items?.[0]?.product?.seller;
   
-  // 2. पुराने/सीधे पाथ को फॉलबैक के तौर पर रखें (यदि बैकएंड भविष्य में बदलता है)
+  // 2. पुराने/सीधे पाथ को फॉलबैक के तौर पर रखें
   if (!rawSellerData && order.seller) {
     rawSellerData = order.seller;
   }
@@ -125,14 +124,14 @@ const normalizeSeller = (order: Order): Seller | null => {
     return null;
   }
 
-  // 4. ✅ विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
+  // 4. विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
   return {
     id: rawSellerData.id ?? undefined,
     // businessName को name और businessName दोनों से लें
     name: rawSellerData.name ?? rawSellerData.businessName, 
     businessName: rawSellerData.businessName ?? rawSellerData.name,
     
-    // ✅ BACKEND FIELD NAMES (businessPhone, businessAddress) को map करें
+    // BACKEND FIELD NAMES (businessPhone, businessAddress) को map करें
     phone: rawSellerData.businessPhone ?? rawSellerData.phone ?? rawSellerData.phoneNumber,
     email: rawSellerData.email ?? null,
     
@@ -182,9 +181,11 @@ const AddressBlock: React.FC<{
 
   const email = (details as Seller).email ?? null;
 
-  const handleNavigate = () => {
-    const query = encodeURIComponent(`${addressLine} ${city} ${pincode}`);
-    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank"); // ✅ Google Maps URL ठीक किया गया
+const handleNavigate = () => {
+    const addressString = `${addressLine}, ${city}, ${pincode}`;
+    const query = encodeURIComponent(addressString);
+    // ✅ Google Maps URL को सही फॉर्मेट में बदला गया
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank"); 
   };
 
   const handleCall = () => {
@@ -321,7 +322,8 @@ const OrderCard: React.FC<
             <div>
               <ui.CardTitle>ऑर्डर #{order.orderNumber ?? "N/A"}</ui.CardTitle>
               <p className="text-sm text-gray-600">
-                {order.items?.length || 0} आइटम • ₹{order.total ?? 0}
+                {order.items?.length || 0} आइटम • {/* ✅ order.total को सुरक्षित रूप से प्रारूपित किया गया */}
+                ₹{Number(order.total ?? 0).toLocaleString('en-IN')} 
               </p>
             </div>
             <ui.Badge
