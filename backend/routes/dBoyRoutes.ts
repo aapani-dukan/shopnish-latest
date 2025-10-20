@@ -2,22 +2,22 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../server/db';
 import {
-  deliveryBoysPgTable, // ✅ Corrected table name
+  deliveryBoysPgTable, 
   users,
   customers,
-  deliveryBatches, // ✅ New: deliveryBatches
-  deliveryStatusEnum, // ✅ New: deliveryStatusEnum
-  subOrders, // ✅ New: subOrders
-  subOrderStatusEnum, // ✅ New: subOrderStatusEnum
-  orders, // ✅ Master Orders (still needed for some context and customerId)
-  masterOrderStatusEnum, // ✅ Master Order Status
-  orderTracking, // ✅ Order Tracking
-  sellersPgTable, // ✅ Seller profile to get details
-  // products, // Removed, accessed via subOrders.orderItems.product
-  // deliveryAddresses, // Removed, accessed via subOrders.masterOrder.deliveryAddress
+  deliveryBatches, 
+  deliveryStatusEnum, 
+  subOrders, 
+  subOrderStatusEnum, 
+  orders, 
+  masterOrderStatusEnum, 
+  orderTracking, 
+  sellersPgTable, 
+  // products, 
+  // deliveryAddresses, 
   approvalStatusEnum,
-  userRoleEnum, // ✅ New: userRoleEnum
-} from '../../shared/backend/schema';
+  userRoleEnum, 
+} from '../shared/backend/schema';
 import { eq, and, not, desc, asc, inArray, isNull } from 'drizzle-orm'; // ✅ inArray, isNull
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
