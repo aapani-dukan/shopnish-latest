@@ -40,7 +40,7 @@ import ContactUs from "@/pages/ContactUs";
 import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
 import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage'; 
-
+import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 function App() { // Capitalized App
