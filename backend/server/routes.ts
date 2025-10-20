@@ -11,7 +11,8 @@ import { AuthenticatedRequest } from "./middleware/verifyToken.ts";
 import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware.ts";
 import { authAdmin } from "./lib/firebaseAdmin.ts";
 import { eq } from "drizzle-orm";
- 
+import { Authorize } from "./middleware/authorization";
+import { validateRequest } from "./middleware/validation";
 // ✅ Sub-route modules
 import apiAuthLoginRouter from "./roots/apiAuthLogin.ts";
 //import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
