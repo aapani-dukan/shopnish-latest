@@ -18,53 +18,156 @@ const router = Router();
 
 // =========================================================================
 // Helper Functions (Validation)
-// =========================================================================
-
-/**
- * Helper function for input validation.
- */
+// =====================================================================
 function validateProductInput(data: any, isUpdate: boolean = false) {
   const errors: string[] = [];
 
-  if (!isUpdate || data.name !== undefined) {
+  // Product Name
+  if (data.name !== undefined) { // अगर undefined नहीं है, तो चेक करें (चाहे update हो या create)
     if (typeof data.name !== 'string' || data.name.trim().length < 3) {
       errors.push("Product name must be a string of at least 3 characters.");
     }
+  } else if (!isUpdate) { // केवल create करते समय name की आवश्यकता होती है
+    errors.push("Product name is required.");
   }
-  if (!isUpdate || data.description !== undefined) {
-    if (typeof data.description !== 'string' || data.description.trim().length < 10) {
-      errors.push("Product description must be a string of at least 10 characters.");
+
+  // Product Description (अगर स्कीमा में optional है, तो इसे थोड़ा ढीला कर सकते हो)
+  if (data.description !== undefined) {
+    if (typeof data.description !== 'string' || (data.description.trim().length > 0 && data.description.trim().length < 10)) {
+        errors.push("Product description must be empty or a string of at least 10 characters.");
     }
   }
-  if (!isUpdate || data.price !== undefined) {
+  // Optional: अगर description optional है और खाली स्ट्रिंग भी accept करते हो, तो ऊपर वाले 'else if (!isUpdate)' को हटा दो।
+  // यदि description अनिवार्य है, तो 'else if (!isUpdate)' जोड़ो।
+
+  // Price
+  if (data.price !== undefined) {
     if (typeof data.price !== 'number' || data.price <= 0) {
       errors.push("Price must be a positive number.");
     }
+  } else if (!isUpdate) {
+    errors.push("Price is required.");
   }
-  if (!isUpdate || data.stock !== undefined) {
+
+  // Stock
+  if (data.stock !== undefined) {
     if (typeof data.stock !== 'number' || data.stock < 0) {
       errors.push("Stock must be a non-negative number.");
     }
+  } else if (!isUpdate) {
+    errors.push("Stock is required.");
   }
-  if (!isUpdate || data.categoryId !== undefined) {
+
+  // Category ID
+  if (data.categoryId !== undefined) {
     if (typeof data.categoryId !== 'number' || data.categoryId <= 0) {
       errors.push("Category ID must be a positive number.");
     }
+  } else if (!isUpdate) {
+    errors.push("Category ID is required.");
   }
-  if (!isUpdate || data.image !== undefined) {
-    if (typeof data.image !== 'string' || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp)$/i.test(data.image)) {
+
+  // Image (main)
+  if (data.image !== undefined) {
+    if (typeof data.image !== 'string' || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(data.image)) { // ✅ .svg भी जोड़ा
       errors.push("Image must be a valid URL.");
     }
+  } else if (!isUpdate) {
+    errors.push("Main product image is required.");
   }
-  if (data.unit !== undefined && typeof data.unit !== 'string' || data.unit.trim().length === 0) {
-    errors.push("Unit is required and must be a non-empty string.");
+  
+  // Images (array)
+  if (data.images !== undefined) {
+    if (!Array.isArray(data.images) || data.images.some((img: any) => typeof img !== 'string' || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(img))) { // ✅ .svg भी जोड़ा
+      errors.push("Additional images must be an array of valid URLs.");
+    }
   }
-  if (data.minOrderQty !== undefined && (typeof data.minOrderQty !== 'number' || data.minOrderQty < 1)) {
-    errors.push("Minimum order quantity must be a positive number.");
+  // images को create करते समय optional रखते हैं, इसलिए 'else if (!isUpdate)' नहीं जोड़ा
+
+  // Unit
+  if (data.unit !== undefined) {
+    if (typeof data.unit !== 'string' || data.unit.trim().length === 0) {
+      errors.push("Unit is required and must be a non-empty string.");
+    }
+  } else if (!isUpdate) { // स्कीमा में default है, लेकिन client-side validation के लिए अच्छा है
+    errors.push("Unit is required.");
   }
-  if (data.maxOrderQty !== undefined && (typeof data.maxOrderQty !== 'number' || data.maxOrderQty < (data.minOrderQty || 1))) {
-    errors.push("Maximum order quantity must be greater than or equal to minimum order quantity.");
+
+  // Minimum Order Quantity
+  if (data.minOrderQty !== undefined) {
+    if (typeof data.minOrderQty !== 'number' || data.minOrderQty < 1) {
+      errors.push("Minimum order quantity must be a positive number.");
+    }
+  } else if (!isUpdate) { // स्कीमा में default है, लेकिन client-side validation के लिए अच्छा है
+      errors.push("Minimum order quantity is required.");
   }
+
+  // Maximum Order Quantity
+  if (data.maxOrderQty !== undefined) {
+    if (typeof data.maxOrderQty !== 'number' || data.maxOrderQty < (data.minOrderQty || 1)) { // ✅ minOrderQty यहाँ पहले से मान्य माना गया है
+      errors.push(`Maximum order quantity must be a number greater than or equal to minimum order quantity (${data.minOrderQty || 1}).`);
+    }
+  } else if (!isUpdate) { // स्कीमा में default है, लेकिन client-side validation के लिए अच्छा है
+      errors.push("Maximum order quantity is required.");
+  }
+  
+  // Delivery Scope
+  if (data.deliveryScope !== undefined) {
+    const validScopes = ['LOCAL', 'CITY', 'STATE', 'NATIONAL'];
+    if (typeof data.deliveryScope !== 'string' || !validScopes.includes(data.deliveryScope)) {
+      errors.push("Invalid delivery scope. Must be one of: " + validScopes.join(', '));
+    }
+  } else if (!isUpdate) {
+      errors.push("Delivery scope is required.");
+  }
+
+  // Conditional delivery fields based on deliveryScope
+  if (data.deliveryScope === 'LOCAL') {
+    if (data.productDeliveryRadiusKM !== undefined) {
+      if (typeof data.productDeliveryRadiusKM !== 'number' || data.productDeliveryRadiusKM <= 0) {
+        errors.push("Product delivery radius (KM) must be a positive number for LOCAL scope.");
+      }
+    } else if (!isUpdate) {
+        errors.push("Product delivery radius (KM) is required for LOCAL scope.");
+    }
+    // LOCAL scope के लिए pincodes की आवश्यकता नहीं है
+  } else if (data.deliveryScope === 'CITY' || data.deliveryScope === 'STATE') {
+    if (data.productDeliveryPincodes !== undefined) {
+      if (!Array.isArray(data.productDeliveryPincodes) || data.productDeliveryPincodes.length === 0 || data.productDeliveryPincodes.some((p: any) => typeof p !== 'string' || p.length !== 6 || !/^\d+$/.test(p))) { // ✅ 6-digit number check
+        errors.push("Product delivery pincodes must be a non-empty array of valid 6-digit strings for CITY/STATE scope.");
+      }
+    } else if (!isUpdate) {
+        errors.push("Product delivery pincodes are required for CITY/STATE scope.");
+    }
+    // CITY/STATE scope के लिए radius की आवश्यकता नहीं है
+  }
+  // NATIONAL scope के लिए कोई विशेष डिलीवरी फ़ील्ड नहीं
+
+  // Estimated Delivery Time
+  if (data.estimatedDeliveryTime !== undefined) {
+    if (typeof data.estimatedDeliveryTime !== 'string' || data.estimatedDeliveryTime.trim().length === 0) {
+      errors.push("Estimated delivery time must be a non-empty string.");
+    }
+  } else if (!isUpdate) { // स्कीमा में default है, लेकिन client-side validation के लिए अच्छा है
+      errors.push("Estimated delivery time is required.");
+  }
+
+  // Store ID (यदि प्रोडक्ट बनाते समय स्टोर ID की आवश्यकता है)
+  if (data.storeId !== undefined) {
+      if (typeof data.storeId !== 'number' || data.storeId <= 0) {
+          errors.push("Store ID must be a positive number.");
+      }
+  } else if (!isUpdate) {
+      errors.push("Store ID is required."); // यदि प्रत्येक प्रोडक्ट को एक स्टोर से लिंक करना अनिवार्य है
+  }
+
+  // Optional fields that don't need strict validation beyond type
+  // nameHindi, descriptionHindi, originalPrice, brand
+  if (data.nameHindi !== undefined && typeof data.nameHindi !== 'string') errors.push("Product Hindi name must be a string.");
+  if (data.descriptionHindi !== undefined && typeof data.descriptionHindi !== 'string') errors.push("Product Hindi description must be a string.");
+  if (data.originalPrice !== undefined && (typeof data.originalPrice !== 'number' || data.originalPrice <= 0)) errors.push("Original price must be a positive number.");
+  if (data.brand !== undefined && typeof data.brand !== 'string') errors.push("Brand must be a string.");
+
 
   return errors;
 }
