@@ -1,6 +1,6 @@
 // backend/src/shared/backend/schema.ts
 
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum, unique } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm"; // ✅ relations को इम्पोर्ट करें
 
 // =========================================================================
@@ -45,7 +45,8 @@ export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approve
 export const paymentMethodEnum = pgEnum("payment_method", ["COD", "ONLINE"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
 
-
+export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed_amount']);
+export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_seller', 'specific_product', 'category']);
 // =========================================================================
 // Core User & Seller Tables (कोई बड़ा बदलाव नहीं, बस रेफ्रेंस के लिए)
 // =========================================================================
@@ -342,6 +343,29 @@ export const orderItems = pgTable("order_items", {
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const couponsPgTable = pgTable('coupons', {
+  id: serial('id').primaryKey(),
+  code: varchar('code', { length: 255 }).unique().notNull(), // e.g., "FLAT100", "SAVE15"
+  description: text('description'),
+  discountType: discountTypeEnum('discount_type').notNull(), // 'percentage' or 'fixed_amount'
+  discountValue: numeric('discount_value', { precision: 10, scale: 2 }).notNull(), // e.g., 10 (for 10%), 100 (for 100 Rs)
+  minOrderValue: numeric('min_order_value', { precision: 10, scale: 2 }).default('0.00').notNull(),
+  maxDiscountAmount: numeric('max_discount_amount', { precision: 10, scale: 2 }), // For percentage discounts, max value
+  startDate: timestamp('start_date', { withTimezone: true }).notNull(),
+  endDate: timestamp('end_date', { withTimezone: true }).notNull(),
+  usageLimit: integer('usage_limit'), // Total number of times this coupon can be used
+  usageCount: integer('usage_count').default(0).notNull(), // How many times it has been used
+  perUserLimit: integer('per_user_limit').default(1).notNull(), // How many times a single user can use it
+  isActive: boolean('is_active').default(true).notNull(),
+  couponScope: couponScopeEnum('coupon_scope').default('all_orders').notNull(), // 'all_orders', 'specific_seller', 'specific_product', 'category'
+  // Foreign keys for specific scopes
+  sellerId: integer('seller_id').references(() => sellersPgTable.id), // If scope is specific_seller
+  productId: integer('product_id').references(() => products.id),     // If scope is specific_product
+  categoryId: integer('category_id').references(() => categories.id), // If scope is category
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const orderTracking = pgTable("order_tracking", {
