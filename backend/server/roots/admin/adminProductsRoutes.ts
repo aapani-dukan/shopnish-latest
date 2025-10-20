@@ -6,7 +6,7 @@ import {
   approvalStatusEnum,
   categories, // ✅ Added for product updates
   sellersPgTable // ✅ Added for product updates (seller context)
-} from '/..../../shared/backend/schema';
+} from '/../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
