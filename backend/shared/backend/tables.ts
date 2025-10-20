@@ -187,9 +187,6 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// backend/src/shared/backend/schema.ts
-// ... (अन्य इम्पोर्ट्स, जैसे users, products)
-
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }), // ✅ NOT NULL
@@ -210,67 +207,60 @@ export const cartItems = pgTable("cart_items", {
 
 
 
-
+// Orders Table
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-
-  orderNumber: text("order_number").notNull(),
-
-  customerId: integer("customer_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  sellerId: integer("seller_id")
-    .notNull()
-    .references(() => sellersPgTable.id, { onDelete: "cascade" }),
-
-  deliveryBoyId: integer("delivery_boy_id")
-    .references(() => deliveryBoys.id, { onDelete: "set null" }),
-
-  deliveryAddressId: integer("delivery_address_id")
-    .notNull()
-    .references(() => deliveryAddresses.id, { onDelete: "cascade" }),
+  orderNumber: text("order_number").notNull().unique(), // ✅ UNIQUE
+  customerId: integer("customer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  sellerId: integer("seller_id").references(() => sellersPgTable.id, { onDelete: "cascade" }), // ⚠️ यदि एक ऑर्डर में कई सेलर्स हैं तो इसे हटा दें
+  deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id, { onDelete: "set null" }),
+  deliveryAddressId: integer("delivery_address_id").notNull().references(() => deliveryAddresses.id, { onDelete: "cascade" }),
   
   status: orderStatusEnum("status").default("pending").notNull(),
   deliveryStatus: deliveryStatusEnum("delivery_status").default("pending").notNull(),
 
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull(),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull(),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
-  paymentMethod: text("payment_method").notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
+  paymentMethod: text("payment_method").notNull(), // ✅ Payment Method Enum का उपयोग करने का सुझाव दिया गया था
   paymentStatus: text("payment_status").default("pending"),
 
-  deliveryAddress: text("delivery_address").notNull(),
-
-  deliveryLat: decimal("delivery_lat").$type<number>().default('0.0'),
-  deliveryLng: decimal("delivery_lng").$type<number>().default('0.0'),
+  deliveryAddress: text("delivery_address").notNull(), // ✅ JSON string, $type<any>() के साथ बेहतर
+  deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }).$type<number>().default('0.0'), // ✅ Precision
+  deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }).$type<number>().default('0.0'), // ✅ Precision
 
   deliveryInstructions: text("delivery_instructions"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
-
   promoCode: text("promo_code"),
-  discount: decimal("discount", { precision: 5, scale: 2 }),  
-
-  // ✨✨✨ नए कॉलम: deliveryOtp और deliveryOtpSentAt ✨✨✨
+  discount: decimal("discount", { precision: 5, scale: 2 }).$type<number>(), // ✅ $type<number>()
   deliveryOtp: text("delivery_otp"),
   deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
-  // ✨✨✨ ✨✨✨ ✨✨✨
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => { // ✅ unique constraint जोड़ा
+  return {
+    orderNumberUnique: unique("order_number_unique").on(table.orderNumber),
+  };
 });
 
+// Order Items Table
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
-  orderId: integer("order_id").references(() => orders.id),
-  productId: integer("product_id").references(() => products.id),
-  sellerId: integer("seller_id").references(() => sellersPgTable.id),
+  // userId: integer("user_id").references(() => users.id), //  हटाया गया
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }), // ✅ notNull
+  productId: integer("product_id").notNull().references(() => products.id), // ✅ notNull
+  sellerId: integer("seller_id").notNull().references(() => sellersPgTable.id), // ✅ notNull
   quantity: integer("quantity").notNull(),
-  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull(),
-  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
-  status: orderStatusEnum('status').default('in_cart'),
+  unitPrice: decimal("unit_price", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull().$type<number>(), // ✅ $type<number>()
+  // status: orderStatusEnum('status').default('in_cart'), // ❌ हटाया गया या पुनर्परिभाषित किया गया
+  createdAt: timestamp("created_at").defaultNow(), // ✅ जोड़ा गया
+  updatedAt: timestamp("updated_at").defaultNow(), // ✅ जोड़ा गया
 });
+
+
 
 export const orderTracking = pgTable("order_tracking", {
   id: serial("id").primaryKey(),
