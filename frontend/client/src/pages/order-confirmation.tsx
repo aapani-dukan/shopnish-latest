@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge";
 import { CheckCircle, Package, MapPin, Clock, Phone, Store } from "lucide-react";
 import { useAuth } from "../hooks/useAuth";
-import { apiRequest } from "../lib/queryclient";
+import { apiRequest } from "../lib/queryClient";
 import { useSocket } from "../hooks/useSocket";
 
 export interface Product {
