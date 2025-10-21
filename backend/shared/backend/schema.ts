@@ -3,7 +3,7 @@ import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
-  orderStatusEnum,subOrders,deliveryBatches,couponsPgTable
+  orderStatusEnum,subOrders,deliveryBatches,couponsPgTable, masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum
 } from './tables';
 
 import {
@@ -146,7 +146,7 @@ export {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
-  orderStatusEnum,subOrders, deliveryBatches, couponsPgTable,
+  orderStatusEnum,subOrders, deliveryBatches, couponsPgTable,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
 
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
