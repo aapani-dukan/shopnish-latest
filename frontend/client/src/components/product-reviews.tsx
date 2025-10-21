@@ -8,7 +8,7 @@ import { Badge } from "@/components/ui/badge"; // ✅ Corrected casing and path
 import { useToast } from "@/hooks/use-toast"; // ✅ Corrected casing and path
 import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
 import { Star, User, MessageSquare } from "lucide-react"; // ✅ Corrected casing
-import { useAuth } from "@/hooks/useauth"; // ✅ Added for authenticated user info
+import { useAuth } from "@/hooks/useAuth"; // ✅ Added for authenticated user info
 
 // ✅ Updated Review Interface
 interface Review {
