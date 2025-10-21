@@ -1,4 +1,4 @@
-import Header from "../components/Header";
+import Header from "../components/header";
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
