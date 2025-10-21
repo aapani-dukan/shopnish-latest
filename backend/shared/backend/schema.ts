@@ -148,7 +148,7 @@ export {
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
   orderStatusEnum,subOrders, deliveryBatches, couponsPgTable,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
-productCategoryEnum,deluveryStatusEnum,
+productCategoryEnum,deliveryStatusEnum,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
