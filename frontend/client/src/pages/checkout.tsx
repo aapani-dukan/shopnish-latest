@@ -13,7 +13,7 @@ import { useToast } from "@/hooks/use-toast"; // Adjusted path
 import { apiRequest } from "@/lib/queryClient"; // Adjusted path
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react"; // Adjusted path
 import { Link } from "react-router-dom";
-import { useAuth } from "@/hooks/useauth"; // Adjusted path
+import { useAuth } from "@/hooks/useAuth"; // Adjusted path
 import AddressInputWithMap from "@/components/addressinputwithmap"; // Adjusted path
 
 // ✅ Updated CartItem Interface
