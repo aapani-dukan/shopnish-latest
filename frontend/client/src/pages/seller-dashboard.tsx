@@ -121,18 +121,18 @@ export default function SellerDashboard() {
   // ----------------- loading -----------------
   if (sellerLoading) { // ✅ Corrected casing
     return (
-      <div className="min-h-screen bg-background"> {/* ✅ Corrected className */}
+      <div className="min-h-screen bg-background"> 
         <Header /> {/* ✅ Corrected casing */}
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> {/* ✅ Corrected className */}
-          <div className="animate-pulse space-y-6"> {/* ✅ Corrected className */}
-            <Skeleton className="h-8 w-64 mb-6" /> {/* ✅ Corrected casing */}
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-6"> {/* ✅ Corrected className */}
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> 
+          <div className="animate-pulse space-y-6"> 
+            <Skeleton className="h-8 w-64 mb-6" /> 
+            <div className="grid grid-cols-1 md:grid-cols-4 gap-6"> 
               {[...Array(4)].map((_, i) => ( // ✅ Corrected Array casing
-                <Skeleton key={i} className="h-32 rounded-xl" /> {/* ✅ Corrected casing */}
+                <Skeleton key={i} className="h-32 rounded-xl" /> 
               ))}
             </div>
-            <Skeleton className="h-10 w-full mb-4 rounded-md" /> {/* ✅ Corrected casing */}
-            <Skeleton className="h-96 w-full rounded-xl" /> {/* ✅ Corrected casing */}
+            <Skeleton className="h-10 w-full mb-4 rounded-md" /> 
+            <Skeleton className="h-96 w-full rounded-xl" /> 
           </div>
         </div>
       </div>
@@ -142,32 +142,32 @@ export default function SellerDashboard() {
   // ----------------- error -----------------
   if (sellerError || !seller) { // ✅ Corrected casing
     return (
-      <div className="min-h-screen bg-background"> {/* ✅ Corrected className */}
-        <Header /> {/* ✅ Corrected casing */}
-        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center"> {/* ✅ Corrected className */}
-          <div className="text-6xl mb-4"> {/* ✅ Corrected className */}
+      <div className="min-h-screen bg-background"> 
+        <Header /> 
+        <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-16 text-center"> 
+          <div className="text-6xl mb-4"> 
             {sellerError ? ( // ✅ Corrected casing
-              <XCircle className="w-20 h-20 text-red-500 mx-auto" /> {/* ✅ Corrected casing and className */}
+              <XCircle className="w-20 h-20 text-red-500 mx-auto" /> 
             ) : (
               "🏪"
             )}
           </div>
-          <h2 className="text-2xl font-bold mb-4"> {/* ✅ Corrected className */}
-            {sellerError ? "Error Loading Profile" : "Seller Profile Not Found"} {/* ✅ Consistent casing */}
+          <h2 className="text-2xl font-bold mb-4"> 
+            {sellerError ? "Error Loading Profile" : "Seller Profile Not Found"} 
           </h2>
-          <p className="text-muted-foreground mb-6"> {/* ✅ Corrected className */}
+          <p className="text-muted-foreground mb-6"> 
             {sellerError // ✅ Corrected casing
               ? "There was an issue fetching your seller profile. Please try again." // ✅ Consistent casing
               : "It looks like you haven't set up your seller profile yet or it's not approved."}
           </p>
-          <Link to="/seller-apply"> {/* ✅ Corrected casing */}
-            <Button> {/* ✅ Corrected casing */}
-              {sellerError ? "Retry" : "Apply to be a Seller"} {/* ✅ Consistent casing */}
+          <Link to="/seller-apply"> 
+            <Button> 
+              {sellerError ? "Retry" : "Apply to be a Seller"} 
             </Button>
           </Link>
-          <Link to="/"> {/* ✅ Corrected casing */}
-            <Button variant="ghost" className="ml-4"> {/* ✅ Corrected casing and className */}
-              Go Back Home {/* ✅ Consistent casing */}
+          <Link to="/"> 
+            <Button variant="ghost" className="ml-4"> 
+              Go Back Home 
             </Button>
           </Link>
         </div>
@@ -177,86 +177,86 @@ export default function SellerDashboard() {
 
   // ----------------- dashboard -----------------
   return (
-    <div className="min-h-screen bg-background"> {/* ✅ Corrected className */}
-      <Header /> {/* ✅ Corrected casing */}
+    <div className="min-h-screen bg-background"> 
+      <Header /> 
 
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> {/* ✅ Corrected className */}
+      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8"> 
         {/* header */}
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8"> {/* ✅ Corrected className */}
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
           <div>
-            <h1 className="text-3xl font-bold text-foreground mb-2"> {/* ✅ Corrected className */}
-              Seller Dashboard {/* ✅ Consistent casing */}
+            <h1 className="text-3xl font-bold text-foreground mb-2"> 
+              Seller Dashboard 
             </h1>
-            <p className="text-muted-foreground"> {/* ✅ Corrected className */}
+            <p className="text-muted-foreground"> 
               Manage your products and orders
             </p>
           </div>
-          <div className="flex items-center space-x-4 mt-4 sm:mt-0"> {/* ✅ Corrected className */}
+          <div className="flex items-center space-x-4 mt-4 sm:mt-0"> 
             {seller.approvalStatus === "approved" ? ( // ✅ Corrected casing
-              <Badge variant="default" className="bg-green-600"> {/* ✅ Corrected casing and className */}
-                <CheckCircle className="h-3 w-3 mr-1" /> {/* ✅ Corrected casing and className */}
-                Verified Seller {/* ✅ Consistent casing */}
+              <Badge variant="default" className="bg-green-600"> 
+                <CheckCircle className="h-3 w-3 mr-1" /> 
+                Verified Seller 
               </Badge>
             ) : seller.approvalStatus === "pending" ? ( // ✅ Corrected casing
-              <Badge variant="secondary"> {/* ✅ Corrected casing */}
-                <Clock className="h-3 w-3 mr-1" /> {/* ✅ Corrected casing and className */}
-                Pending Verification {/* ✅ Consistent casing */}
+              <Badge variant="secondary"> 
+                <Clock className="h-3 w-3 mr-1" /> 
+                Pending Verification 
               </Badge>
             ) : (
-              <Badge variant="destructive"> {/* ✅ Corrected casing */}
-                <XCircle className="h-3 w-3 mr-1" /> {/* ✅ Corrected casing and className */}
-                Rejected ({seller.rejectionReason || "No reason specified"}) {/* ✅ Corrected casing and Consistent casing */}
+              <Badge variant="destructive"> 
+                <XCircle className="h-3 w-3 mr-1" /> 
+                Rejected ({seller.rejectionReason || "No reason specified"}) 
               </Badge>
             )}
           </div>
         </div>
 
         {/* metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"> {/* ✅ Corrected className */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8"> 
           <Card> {/* ✅ Corrected casing */}
-            <CardContent className="p-6 flex items-center"> {/* ✅ Corrected casing and className */}
-              <TrendingUp className="h-8 w-8 text-primary" /> {/* ✅ Corrected casing and className */}
-              <div className="ml-4"> {/* ✅ Corrected className */}
-                <p className="text-sm font-medium text-muted-foreground"> {/* ✅ Corrected className */}
-                  Total Revenue {/* ✅ Consistent casing */}
+            <CardContent className="p-6 flex items-center"> 
+              <TrendingUp className="h-8 w-8 text-primary" /> 
+              <div className="ml-4"> {
+                <p className="text-sm font-medium text-muted-foreground"> 
+                  Total Revenue 
                 </p>
-                <p className="text-2xl font-bold"> {/* ✅ Corrected className */}
-                  ₹{totalRevenue.toLocaleString()} {/* ✅ Corrected casing */}
+                <p className="text-2xl font-bold"> 
+                  ₹{totalRevenue.toLocaleString()} 
                 </p>
               </div>
             </CardContent>
           </Card>
-          <Card> {/* ✅ Corrected casing */}
-            <CardContent className="p-6 flex items-center"> {/* ✅ Corrected casing and className */}
-              <ShoppingCart className="h-8 w-8 text-secondary" /> {/* ✅ Corrected casing and className */}
-              <div className="ml-4"> {/* ✅ Corrected className */}
-                <p className="text-sm font-medium text-muted-foreground"> {/* ✅ Corrected className */}
-                  Total Orders {/* ✅ Consistent casing */}
+          <Card> 
+            <CardContent className="p-6 flex items-center"> 
+              <ShoppingCart className="h-8 w-8 text-secondary" /> 
+              <div className="ml-4"> 
+                <p className="text-sm font-medium text-muted-foreground"> 
+                  Total Orders 
                 </p>
-                <p className="text-2xl font-bold">{totalOrders}</p> {/* ✅ Corrected casing and className */}
+                <p className="text-2xl font-bold">{totalOrders}</p> 
               </div>
             </CardContent>
           </Card>
-          <Card> {/* ✅ Corrected casing */}
-            <CardContent className="p-6 flex items-center"> {/* ✅ Corrected casing and className */}
-              <Package className="h-8 w-8 text-yellow-600" /> {/* ✅ Corrected casing and className */}
-              <div className="ml-4"> {/* ✅ Corrected className */}
-                <p className="text-sm font-medium text-muted-foreground"> {/* ✅ Corrected className */}
-                  Products {/* ✅ Consistent casing */}
+          <Card> 
+            <CardContent className="p-6 flex items-center"> 
+              <Package className="h-8 w-8 text-yellow-600" /> 
+              <div className="ml-4"> 
+                <p className="text-sm font-medium text-muted-foreground"> 
+                  Products 
                 </p>
-                <p className="text-2xl font-bold">{totalProducts}</p> {/* ✅ Corrected casing and className */}
+                <p className="text-2xl font-bold">{totalProducts}</p> 
               </div>
             </CardContent>
           </Card>
-          <Card> {/* ✅ Corrected casing */}
-            <CardContent className="p-6 flex items-center"> {/* ✅ Corrected casing and className */}
-              <Star className="h-8 w-8 text-yellow-500" /> {/* ✅ Corrected casing and className */}
-              <div className="ml-4"> {/* ✅ Corrected className */}
-                <p className="text-sm font-medium text-muted-foreground"> {/* ✅ Corrected className */}
-                  Rating {/* ✅ Consistent casing */}
+          <Card> 
+            <CardContent className="p-6 flex items-center"> 
+              <Star className="h-8 w-8 text-yellow-500" /> 
+              <div className="ml-4"> 
+                <p className="text-sm font-medium text-muted-foreground"> 
+                  Rating 
                 </p>
-                <p className="text-2xl font-bold"> {/* ✅ Corrected className */}
-                  {averageRating.toFixed(1)} {/* ✅ Corrected casing */}
+                <p className="text-2xl font-bold"> 
+                  {averageRating.toFixed(1)} 
                 </p>
               </div>
             </CardContent>
@@ -270,23 +270,23 @@ export default function SellerDashboard() {
           onValueChange={setActiveTab} // ✅ Corrected casing
           className="space-y-4" // ✅ Corrected className
         >
-          <TabsList> {/* ✅ Corrected casing */}
-            <TabsTrigger value="products"> {/* ✅ Corrected casing */}
-              <Package className="h-4 w-4 mr-2" /> Products {/* ✅ Corrected casing */}
+          <TabsList> 
+            <TabsTrigger value="products"> 
+              <Package className="h-4 w-4 mr-2" /> Products 
             </TabsTrigger>
-            <TabsTrigger value="orders"> {/* ✅ Corrected casing */}
-              <ShoppingCart className="h-4 w-4 mr-2" /> Orders {/* ✅ Corrected casing */}
+            <TabsTrigger value="orders"> 
+              <ShoppingCart className="h-4 w-4 mr-2" /> Orders 
             </TabsTrigger>
-            <TabsTrigger value="profile"> {/* ✅ Corrected casing */}
-              <Settings className="h-4 w-4 mr-2" /> Profile {/* ✅ Corrected casing */}
+            <TabsTrigger value="profile"> 
+              <Settings className="h-4 w-4 mr-2" /> Profile 
             </TabsTrigger>
           </TabsList>
 
-          <TabsContent value="products"> {/* ✅ Corrected casing */}
-            <ProductManager seller={seller} /> {/* ✅ Corrected casing */}
+          <TabsContent value="products"> 
+            <ProductManager seller={seller} /> 
           </TabsContent>
 
-          <TabsContent value="orders"> {/* ✅ Corrected casing */}
+          <TabsContent value="orders"> 
             <OrderManager // ✅ Corrected casing
               seller={seller}
               orders={orders}
@@ -295,8 +295,8 @@ export default function SellerDashboard() {
             />
           </TabsContent>
 
-          <TabsContent value="profile"> {/* ✅ Corrected casing */}
-            <ProfileManager seller={seller} /> {/* ✅ Corrected casing */}
+          <TabsContent value="profile"> 
+            <ProfileManager seller={seller} /> 
           </TabsContent>
         </Tabs>
       </div>
