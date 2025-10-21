@@ -394,7 +394,9 @@ export const orderTracking = pgTable("order_tracking", {
   messageHindi: text("message_hindi"),
   location: text("location"), // ✅ lat/lng के लिए अलग कॉलम बेहतर होगा
   updatedBy: integer("updated_by").references(() => users.id),
+
   createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(), // ✅ timestamp with time zone (createdAt)
+
 });
 
 // ✅ orderTrackingRelations
