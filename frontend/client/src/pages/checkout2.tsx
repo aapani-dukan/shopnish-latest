@@ -404,24 +404,24 @@ export default function Checkout2() {
 
             {/* step 3: payment */}
                     {currentStep === 3 && ( // ✅ Corrected casing
-              <Card> {/* ✅ Corrected component name */}
-                <CardHeader> {/* ✅ Corrected component name */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ Corrected component name and className */}
-                    <CreditCard className="w-5 h-5" /> {/* ✅ Corrected component name and className */}
-                    <span>Payment Method</span> {/* ✅ Consistent casing */}
+              <Card> 
+                <CardHeader> 
+                  <CardTitle className="flex items-center space-x-2"> 
+                    <CreditCard className="w-5 h-5" /> 
+                    <span>Payment Method</span> 
                   </CardTitle>
                 </CardHeader>
-                <CardContent> {/* ✅ Corrected component name */}
-                  <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}> {/* ✅ Corrected component name and casing */}
-                    {/* ✅ fix: सभी विकल्पों को इस 'space-y-4' div में रैप करें */}
-                    <div className="space-y-4"> {/* ✅ Corrected className */}
+                <CardContent> 
+                  <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}> 
+                    
+                    <div className="space-y-4"> 
 
                       {/* पहला विकल्प: COD */}
-                      <div className="flex items-center space-x-2 p-4 border rounded-lg"> {/* ✅ Corrected className */}
-                        <RadioGroupItem value="cod" id="cod" /> {/* ✅ Corrected component name */}
-                        <Label htmlFor="cod" className="flex-1 cursor-pointer"> {/* ✅ Corrected component name and className */}
+                      <div className="flex items-center space-x-2 p-4 border rounded-lg"> 
+                        <RadioGroupItem value="cod" id="cod" /> 
+                        <Label htmlFor="cod" className="flex-1 cursor-pointer"> 
                           <div>
-                            <p className="font-medium">Cash on Delivery (COD)</p> {/* ✅ Consistent casing and className */}
+                            <p className="font-medium">Cash on Delivery (COD)</p> 
                             <p className="text-sm text-gray-600">Pay when your order arrives</p> 
                           </div>
                         </Label>
