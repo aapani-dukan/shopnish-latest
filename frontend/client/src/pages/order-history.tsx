@@ -183,7 +183,7 @@ export default function OrderHistory() {
           <Card>
             <CardContent className="py-12 text-center">
               <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-              <h3 className="text-lg font-medium mb-2">No Orders Yet</h3> {/* ✅ Consistent casing */}
+              <h3 className="text-lg font-medium mb-2">No Orders Yet</h3> 
               <p className="text-gray-600 mb-6">Start shopping to see your orders here</p>
               <Button onClick={() => navigate("/")}>
                 Start Shopping
@@ -197,17 +197,17 @@ export default function OrderHistory() {
                 <CardHeader className="bg-gray-50">
                   <div className="flex items-center justify-between">
                     <div>
-                      <CardTitle className="text-lg">Order #{order.orderNumber}</CardTitle> {/* ✅ Corrected casing */}
+                      <CardTitle className="text-lg">Order #{order.orderNumber}</CardTitle> 
                       <p className="text-sm text-gray-600 mt-1">
-                        Placed on {formatDate(order.createdAt)} {/* ✅ Corrected casing */}
+                        Placed on {formatDate(order.createdAt)} 
                       </p>
                     </div>
                     <div className="text-right">
-                      <Badge className={`${getStatusColor(order.status)} text-white mb-2`}> {/* ✅ Corrected casing */}
-                        {getStatusIcon(order.status)} {/* ✅ Corrected casing */}
-                        <span className="ml-1">{getStatusText(order.status)}</span> {/* ✅ Corrected casing */}
+                      <Badge className={`${getStatusColor(order.status)} text-white mb-2`}> 
+                        {getStatusIcon(order.status)} 
+                        <span className="ml-1">{getStatusText(order.status)}</span>
                       </Badge>
-                      <p className="text-lg font-bold">₹{order.total.toFixed(2)}</p> {/* ✅ Corrected toFixed(2) */}
+                      <p className="text-lg font-bold">₹{order.total.toFixed(2)}</p> 
                     </div>
                   </div>
                 </CardHeader>
@@ -215,7 +215,7 @@ export default function OrderHistory() {
                 <CardContent className="p-6">
                   {/* order items */}
                   <div className="space-y-4 mb-6">
-                    <h4 className="font-medium text-gray-900">Order Items</h4> {/* ✅ Consistent casing */}
+                    <h4 className="font-medium text-gray-900">Order Items</h4> 
                     {order.items.map((item) => (
                       <div key={item.id} className="flex items-center space-x-4">
                         <img
@@ -225,13 +225,13 @@ export default function OrderHistory() {
                         />
                         <div className="flex-1">
                           <h5 className="font-medium">{item.product.name}</h5>
-                          <p className="text-sm text-gray-600">{item.product.nameHindi}</p> {/* ✅ Corrected casing */}
+                          <p className="text-sm text-gray-600">{item.product.nameHindi}</p> 
                           <p className="text-sm text-gray-500">
-                            ₹{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit} {/* ✅ Corrected casing and toFixed(2) */}
+                            ₹{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit} 
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium">₹{item.totalPrice.toFixed(2)}</p> {/* ✅ Corrected casing and toFixed(2) */}
+                          <p className="font-medium">₹{item.totalPrice.toFixed(2)}</p> 
                         </div>
                       </div>
                     ))}
@@ -240,21 +240,21 @@ export default function OrderHistory() {
                   {/* order summary */}
                   <div className="grid grid-cols-1 md:grid-cols-3 gap-4 p-4 bg-gray-50 rounded-lg mb-4">
                     <div>
-                      <p className="text-sm text-gray-600">Payment Method</p> {/* ✅ Consistent casing */}
+                      <p className="text-sm text-gray-600">Payment Method</p> 
                       <p className="font-medium">
-                        {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'} {/* ✅ Corrected casing */}
+                        {order.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Online Payment'} 
                       </p>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Payment Status</p> {/* ✅ Consistent casing */}
-                      <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'secondary'}> {/* ✅ Corrected casing */}
-                        {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)} {/* ✅ Corrected casing */}
+                      <p className="text-sm text-gray-600">Payment Status</p> 
+                      <Badge variant={order.paymentStatus === 'paid' ? 'default' : 'secondary'}> 
+                        {order.paymentStatus.charAt(0).toUpperCase() + order.paymentStatus.slice(1)} 
                       </Badge>
                     </div>
                     <div>
-                      <p className="text-sm text-gray-600">Delivery Address</p> {/* ✅ Consistent casing */}
+                      <p className="text-sm text-gray-600">Delivery Address</p> 
                       <p className="font-medium text-sm">
-                        {order.deliveryAddress.address}, {order.deliveryAddress.city} {/* ✅ Corrected casing */}
+                        {order.deliveryAddress.address}, {order.deliveryAddress.city} 
                       </p>
                     </div>
                   </div>
@@ -266,7 +266,7 @@ export default function OrderHistory() {
                       onClick={() => navigate(`/track-order/${order.id}`)}
                     >
                       <Package className="w-4 h-4 mr-2" />
-                      Track Order {/* ✅ Consistent casing */}
+                      Track Order 
                     </Button>
 
                     <Button
@@ -274,7 +274,7 @@ export default function OrderHistory() {
                       onClick={() => navigate(`/order-confirmation/${order.id}`)}
                     >
                       <Receipt className="w-4 h-4 mr-2" />
-                      View Details {/* ✅ Consistent casing */}
+                      View Details 
                     </Button>
 
                     {canRequestReturn(order) && ( // ✅ Corrected casing
@@ -284,7 +284,7 @@ export default function OrderHistory() {
                         className="text-orange-600 border-orange-600 hover:bg-orange-50"
                       >
                         <RotateCcw className="w-4 h-4 mr-2" />
-                        Request Return {/* ✅ Consistent casing */}
+                        Request Return 
                       </Button>
                     )}
 
@@ -294,7 +294,7 @@ export default function OrderHistory() {
                         onClick={() => navigate(`/product/${order.items[0].product.id}#reviews`)}
                         className="text-blue-600 border-blue-600 hover:bg-blue-50"
                       >
-                        Write Review {/* ✅ Consistent casing */}
+                        Write Review 
                       </Button>
                     )}
                   </div>
