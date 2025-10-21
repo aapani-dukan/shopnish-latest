@@ -2,7 +2,7 @@
 import { Router, Request, Response } from 'express';
 import { db } from '../server/db';
 import {
-  deliveryBoysPgTable, 
+  deliveryBoys, 
   users,
   customers,
   deliveryBatches, 
