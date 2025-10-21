@@ -75,6 +75,28 @@ const getNextStatusLabel = (status: string) => {
     default:                  return "";
   }
 };
+
+interface OrdersListViewProps {
+  orders: any[];
+  title: string;
+  subtitle?: string;
+  myDeliveryBoyId: number | null | undefined;
+  onAcceptOrder: (orderId: number) => void;
+  onUpdateStatus: (order: any) => void; // Changed from (orderId: string, status: string) to (order: any)
+  acceptLoading: boolean;
+  updateLoading: boolean;
+  Button: React.ElementType;
+  Card: React.ElementType;
+  CardContent: React.ElementType;
+  CardHeader: React.ElementType;
+  CardTitle: React.ElementType;
+  Badge: React.ElementType;
+  statusColor: (status: string) => string;
+  statusText: (status: string) => string;
+  nextStatus: (status: string) => string | null; // Can return null
+  nextStatusLabel: (status: string) => string;
+}
+
 // --- Main Component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
@@ -760,26 +782,6 @@ const completeWithoutOtpMutation = useMutation({
 
       
 // --- Helper Component for Orders List ---
-interface OrdersListViewProps {
-  orders: any[];
-  title: string;
-  subtitle?: string;
-  myDeliveryBoyId: number | null | undefined;
-  onAcceptOrder: (orderId: number) => void;
-  onUpdateStatus: (order: any) => void; // Changed from (orderId: string, status: string) to (order: any)
-  acceptLoading: boolean;
-  updateLoading: boolean;
-  Button: React.ElementType;
-  Card: React.ElementType;
-  CardContent: React.ElementType;
-  CardHeader: React.ElementType;
-  CardTitle: React.ElementType;
-  Badge: React.ElementType;
-  statusColor: (status: string) => string;
-  statusText: (status: string) => string;
-  nextStatus: (status: string) => string | null; // Can return null
-  nextStatusLabel: (status: string) => string;
-}
 
 const OrdersListView: React.FC<OrdersListViewProps> = ({ 
   orders, 
