@@ -11,7 +11,7 @@ import {
 import { AuthenticatedRequest } from '../server/middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../../middleware/valudation';
+import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod'; // ✅ For validation
 
 const adminVendorsRouter = Router();
