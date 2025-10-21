@@ -1,14 +1,14 @@
-import React, { useState, useEffect } from "react"; // ✅ React, useState, useEffect capitalized
-import { useParams, useLocation } from "react-router-dom"; // ✅ useLocation जोड़ा गया
-import { useQuery } from "@tanstack/react-query"; // ✅ tanstack/react-query से import
-import { apiRequest } from "../lib/queryclient"; // ✅ सापेक्ष पथ
-import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"; // ✅ सापेक्ष पथ
-import { Badge } from "../components/ui/badge"; // ✅ सापेक्ष पथ
-import { Button } from "../components/ui/button"; // ✅ सापेक्ष पथ
-import { useAuth } from "../hooks/useAuth"; // ✅ सापेक्ष पथ और useAuth capitalized
-import { useSocket } from "../hooks/useSocket"; // ✅ सापेक्ष पथ और useSocket capitalized
-import GoogleMapTracker from "../components/GoogleMapTracker"; // ✅ सापेक्ष पथ और GoogleMapTracker capitalized
-import { // ✅ icons capitalized
+import React, { useState, useEffect, useMemo } from "react";
+import { useParams, useLocation } from "react-router-dom";
+import { useQuery } from "@tanstack/react-query";
+import { apiRequest } from "../lib/queryClient";
+import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
+import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
+import { useAuth } from "../hooks/useAuth";
+import { useSocket } from "../hooks/useSocket";
+import GoogleMapTracker from "../components/GoogleMapTracker";
+import {
   Package,
   Truck,
   MapPin,
@@ -16,48 +16,48 @@ import { // ✅ icons capitalized
   Phone,
   CheckCircle,
   User,
-  Store
+  Store,
 } from "lucide-react";
 
-// -------------------- interfaces --------------------
+// -------------------- Interfaces --------------------
 
-interface Location { // ✅ Location capitalized
+interface Location {
   lat: number;
   lng: number;
   timestamp: string;
 }
 
-interface DeliveryAddress { // ✅ DeliveryAddress capitalized
-  fullName: string; // ✅ fullName capitalized
+interface DeliveryAddress {
+  fullName: string;
   address: string;
   city: string;
   pincode: string;
   phone: string;
 }
 
-export interface OrderTracking { // ✅ OrderTracking capitalized
+export interface OrderTracking {
   id: number;
-  orderId: number; // ✅ orderId capitalized
+  orderId: number;
   status: string;
   location: string;
   timestamp: string;
   notes: string;
 }
 
-interface DeliveryBoy { // ✅ DeliveryBoy capitalized
+interface DeliveryBoy {
   id: number;
-  firstName: string; // ✅ firstName capitalized
-  lastName: string; // ✅ lastName capitalized
+  firstName: string;
+  lastName: string;
   phone: string;
 }
 
-export interface StoreType { // ✅ StoreType capitalized
+export interface StoreType {
   id: number;
-  storeName: string; // ✅ storeName capitalized
+  storeName: string;
   address: string;
   phone: string;
-  latitude?: number; // ✅ latitude जोड़ा गया
-  longitude?: number; // ✅ longitude जोड़ा गया
+  latitude?: number;
+  longitude?: number;
 }
 
 export interface Product {
@@ -65,8 +65,8 @@ export interface Product {
   name: string;
   image?: string;
   unit?: string;
-  storeId?: number; // ✅ storeId जोड़ा गया
-  store?: StoreType; // ✅ store जोड़ा गया
+  storeId?: number;
+  store?: StoreType;
 }
 
 export interface OrderItem {
@@ -75,7 +75,6 @@ export interface OrderItem {
   product: Product;
 }
 
-// ✅ SubOrder इंटरफ़ेस को customerorderspage से फिर से उपयोग करें
 export interface SubOrder {
   id: number;
   sellerId: number;
@@ -85,137 +84,128 @@ export interface SubOrder {
   deliveryStatus: string;
   total: string | number;
   items: OrderItem[];
-  deliveryBoyId?: number; // ✅ SubOrder स्तर पर डिलीवरी बॉय
+  deliveryBoyId?: number;
   deliveryBoy?: DeliveryBoy;
-  store?: StoreType; // ✅ SubOrder स्तर पर स्टोर
+  store?: StoreType;
 }
 
-export interface MainOrder { // ✅ MainOrder (पुराने Order के बजाय)
+export interface MainOrder {
   id: number;
-  orderNumber: string; // ✅ orderNumber capitalized
+  orderNumber: string;
   status: string;
-  paymentMethod: string; // ✅ paymentMethod capitalized
-  paymentStatus: string; // ✅ paymentStatus capitalized
+  paymentMethod: string;
+  paymentStatus: string;
   total: string | number;
-  deliveryAddress: DeliveryAddress; // ✅ DeliveryAddress capitalized
-  estimatedDeliveryTime: string; // ✅ estimatedDeliveryTime capitalized
-  createdAt: string; // ✅ createdAt capitalized
-  // main order में अब subOrders होते हैं, जिसमें डिलीवरी बॉय और स्टोर की जानकारी होती है
+  deliveryAddress: DeliveryAddress;
+  estimatedDeliveryTime: string;
+  createdAt: string;
   subOrders?: SubOrder[];
 }
 
+// -------------------- Component --------------------
 
-// -------------------- component --------------------
+export default function TrackOrder() {
+  const { orderId } = useParams<{ orderId: string }>();
+  const location = useLocation();
+  const numericOrderId = orderId ? Number(orderId) : null;
 
-export default function TrackOrder() { // ✅ TrackOrder capitalized
-  const { orderid } = useParams<{ orderid: string }>(); // ✅ useParams capitalized
-  const location = useLocation(); // ✅ useLocation hook
-  const numericOrderId = orderid ? Number(orderid) : null; // ✅ numericOrderId capitalized
-
-  // ✅ URL से sellerId प्राप्त करें
   const queryParams = new URLSearchParams(location.search);
-  const sellerId = queryParams.get('sellerId') ? Number(queryParams.get('sellerId')) : null;
+  const sellerId = queryParams.get("sellerId") ? Number(queryParams.get("sellerId")) : null;
 
-  const { socket } = useSocket(); // ✅ useSocket capitalized
-  const { user } = useAuth(); // ✅ useAuth capitalized
+  const { socket } = useSocket();
+  const { user } = useAuth();
 
-  const [deliveryBoyLocation, setDeliveryBoyLocation] = useState<Location | null>(null); // ✅ deliveryBoyLocation capitalized
+  const [deliveryBoyLocation, setDeliveryBoyLocation] = useState<Location | null>(null);
 
-  const { data: mainOrder, isLoading: isMainOrderLoading } = useQuery<MainOrder>({ // ✅ mainOrder, isMainOrderLoading capitalized
-    queryKey: [`/api/orders/${numericOrderId}`], // ✅ queryKey capitalized
+  const { data: mainOrder, isLoading: isMainOrderLoading } = useQuery<MainOrder>({
+    queryKey: [`/api/orders/${numericOrderId}`],
     queryFn: async () => {
-      // ✅ यदि sellerId मौजूद है, तो इसे API को भेजें ताकि विक्रेता-विशिष्ट डेटा फ़िल्टर हो सके
       const url = sellerId ? `/api/orders/${numericOrderId}?sellerId=${sellerId}` : `/api/orders/${numericOrderId}`;
-      const response = await apiRequest("get", url); // ✅ apiRequest capitalized
+      const response = await apiRequest("get", url);
       return response;
     },
     enabled: !!numericOrderId,
   });
 
-  // ✅ यदि sellerId मौजूद है, तो subOrder डेटा का चयन करें
-  const order = React.useMemo(() => {
+  const order = useMemo(() => {
     if (!mainOrder) return null;
     if (sellerId && mainOrder.subOrders) {
-      return mainOrder.subOrders.find(so => so.sellerId === sellerId) || null;
+      return mainOrder.subOrders.find((so) => so.sellerId === sellerId) || null;
     }
-    // यदि कोई sellerId नहीं है या subOrders नहीं हैं, तो mainOrder को दिखाएँ (सिंगल-सेलर केस)
-    // ✅ इस स्थिति में, हमें MainOrder को SubOrder के रूप में दिखाना पड़ सकता है
-    // ताकि UI लॉजिक को सरल बनाया जा सके।
-    return mainOrder; 
+    // If no sellerId or no subOrders, treat mainOrder as the primary order
+    return mainOrder;
   }, [mainOrder, sellerId]);
 
-  // ✅ ट्रैकिंग डेटा अब subOrder.status पर आधारित होगा यदि sellerId मौजूद है
-  const { data: trackingData, isLoading: isTrackingLoading } = useQuery<OrderTracking[]>({ // ✅ trackingData, isTrackingLoading capitalized
-    queryKey: [`/api/orders/${numericOrderId}/tracking`, { sellerId }], // ✅ queryKey में sellerId जोड़ा गया
+  const { data: trackingData, isLoading: isTrackingLoading } = useQuery<OrderTracking[]>({
+    queryKey: [`/api/orders/${numericOrderId}/tracking`, { sellerId }],
     queryFn: async () => {
       const url = sellerId ? `/api/orders/${numericOrderId}/tracking?sellerId=${sellerId}` : `/api/orders/${numericOrderId}/tracking`;
-      const response = await apiRequest("get", url); // ✅ apiRequest capitalized
+      const response = await apiRequest("get", url);
       return response;
     },
     enabled: !!numericOrderId,
   });
 
-  const tracking: OrderTracking[] = Array.isArray(trackingData) ? trackingData : []; // ✅ OrderTracking, Array capitalized
+  const tracking: OrderTracking[] = Array.isArray(trackingData) ? trackingData : [];
 
-  const effectiveDeliveryBoy = order?.deliveryBoy; // ✅ अब order से डिलीवरी बॉय लें
-  const effectiveStore = order?.store; // ✅ अब order से स्टोर लें
-  const effectiveOrderId = order?.id || numericOrderId; // socket के लिए सही orderId का उपयोग करें
+  const effectiveDeliveryBoy = order?.deliveryBoy;
+  const effectiveStore = order?.store;
+  const effectiveOrderId = order?.id || numericOrderId;
 
-  useEffect(() => { // ✅ useEffect capitalized
-    const userIdToUse = user?.id || user?.uid; // ✅ user?.id, user?.uid
-    // ✅ socket को केवल तभी रजिस्टर करें जब प्रभावी orderId और user मौजूद हों
+  useEffect(() => {
+    const userIdToUse = user?.id || user?.uid;
     if (!socket || !effectiveOrderId || isMainOrderLoading || !userIdToUse) return;
 
-    const handleLocationUpdate = (data: Location & { orderId: number }) => { // ✅ handleLocationUpdate capitalized
-      if (data.orderId === effectiveOrderId) { // ✅ effectiveOrderId
-        setDeliveryBoyLocation({ // ✅ setDeliveryBoyLocation capitalized
+    const handleLocationUpdate = (data: Location & { orderId: number }) => {
+      if (data.orderId === effectiveOrderId) {
+        setDeliveryBoyLocation({
           lat: data.lat,
           lng: data.lng,
           timestamp: data.timestamp,
         });
-        console.log("🛵 new location received:", data.lat, data.lng);
+        console.log("🛵 New location received:", data.lat, data.lng);
       }
     };
 
-    socket.emit("register-client", { role: "user", userId: userIdToUse }); // ✅ userId capitalized
-    socket.emit("join-order-room", { orderId: effectiveOrderId }); // ✅ orderId, effectiveOrderId capitalized
-    socket.on("order:delivery_location", handleLocationUpdate); // ✅ handleLocationUpdate capitalized
+    socket.emit("register-client", { role: "user", userId: userIdToUse });
+    socket.emit("join-order-room", { orderId: effectiveOrderId });
+    socket.on("order:delivery_location", handleLocationUpdate);
 
     return () => {
-      socket.off("order:delivery_location", handleLocationUpdate); // ✅ handleLocationUpdate capitalized
+      socket.off("order:delivery_location", handleLocationUpdate);
     };
-  }, [socket, effectiveOrderId, isMainOrderLoading, user]); // ✅ isMainOrderLoading capitalized
+  }, [socket, effectiveOrderId, isMainOrderLoading, user]);
 
-  if (isMainOrderLoading || isTrackingLoading) { // ✅ isMainOrderLoading, isTrackingLoading capitalized
+  if (isMainOrderLoading || isTrackingLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center"> {/* ✅ className capitalized */}
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div> {/* ✅ className capitalized */}
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
       </div>
     );
   }
 
-  if (!order || !mainOrder) { // ✅ mainOrder भी चेक करें
+  if (!order || !mainOrder) {
     return (
-      <div className="min-h-screen flex items-center justify-center"> {/* ✅ className capitalized */}
-        <Card className="w-full max-w-md"> {/* ✅ Card, className capitalized */}
-          <CardContent className="pt-6 text-center"> {/* ✅ CardContent, className capitalized */}
-            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" /> {/* ✅ Package, className capitalized */}
-            <h3 className="text-lg font-medium mb-2">Order not found</h3> {/* ✅ className capitalized */}
-            <p className="text-gray-600">Unable to track this order or sub-order.</p> {/* ✅ className capitalized */}
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
+            <h3 className="text-lg font-medium mb-2">Order Not Found</h3>
+            <p className="text-gray-600">Unable to track this order or sub-order.</p>
           </CardContent>
         </Card>
       </div>
     );
   }
 
-  const getStatusColor = (status: string) => { // ✅ getStatusColor capitalized
-    switch (status.toLowerCase()) { // ✅ status.toLowerCase() जोड़ा गया
+  const getStatusColor = (status: string) => {
+    switch (status.toLowerCase()) {
       case 'placed':
       case 'confirmed':
         return 'bg-blue-500';
       case 'preparing':
         return 'bg-yellow-500';
-      case 'ready_for_pickup': // ✅ 'ready' को 'ready_for_pickup' में बदला गया
+      case 'ready_for_pickup':
       case 'picked_up':
         return 'bg-orange-500';
       case 'out_for_delivery':
@@ -223,89 +213,84 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
       case 'delivered':
         return 'bg-green-500';
       case 'cancelled':
-      case 'rejected': // ✅ rejected जोड़ा गया
+      case 'rejected':
         return 'bg-red-500';
       default:
         return 'bg-gray-500';
     }
   };
 
-  const getStatusText = (status: string) => { // ✅ getStatusText capitalized
-    switch (status.toLowerCase()) { // ✅ status.toLowerCase() जोड़ा गया
+  const getStatusText = (status: string) => {
+    switch (status.toLowerCase()) {
       case 'placed': return 'Order Placed';
       case 'confirmed': return 'Order Confirmed';
       case 'preparing': return 'Preparing Order';
-      case 'ready_for_pickup': return 'Ready for Pickup'; // ✅ 'ready' को 'ready_for_pickup' में बदला गया
+      case 'ready_for_pickup': return 'Ready for Pickup';
       case 'picked_up': return 'Picked Up';
-      case 'out_for_delivery': return 'Out for Delivery';
+      case 'on_the_way': return 'On The Way'; // Changed from 'out_for_delivery' to 'on_the_way'
       case 'delivered': return 'Delivered';
       case 'cancelled': return 'Cancelled';
-      case 'rejected': return 'Rejected'; // ✅ Rejected जोड़ा गया
+      case 'rejected': return 'Rejected';
       default: return status;
     }
   };
 
-  const estimatedTime = new Date(mainOrder.estimatedDeliveryTime).toLocaleTimeString('en-IN', { // ✅ mainOrder, estimatedDeliveryTime capitalized, Date capitalized
+  const estimatedTime = new Date(mainOrder.estimatedDeliveryTime).toLocaleTimeString('en-IN', {
     hour: '2-digit',
     minute: '2-digit'
   });
 
-  const orderTime = new Date(mainOrder.createdAt).toLocaleString('en-IN'); // ✅ mainOrder, createdAt capitalized, Date capitalized
+  const orderTime = new Date(mainOrder.createdAt).toLocaleString('en-IN');
 
-  // ✅ अब स्टोर की जानकारी order (यानी subOrder) से ली जाती है
-  const store = effectiveStore; 
-  // ✅ deliveryboy की जानकारी भी order (यानी subOrder) से ली जाती है
+  const store = effectiveStore;
   const deliveryBoy = effectiveDeliveryBoy;
 
-  // ✅ currentOrder (mainOrder या subOrder) के status का उपयोग करें
-  const currentOrderStatus = order.status; 
-  const lastCompletedIndex = tracking.length > 0 ? tracking.findIndex(t => t.status.toLowerCase() === currentOrderStatus.toLowerCase()) : -1; // ✅ status.toLowerCase()
+  const currentOrderStatus = order.status;
+  const lastCompletedIndex = tracking.length > 0 ? tracking.findIndex(t => t.status.toLowerCase() === currentOrderStatus.toLowerCase()) : -1;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8"> {/* ✅ className capitalized */}
-      <div className="max-w-4xl mx-auto px-4"> {/* ✅ className capitalized */}
-
-        {/* header */}
-        <div className="mb-8 text-center"> {/* ✅ className capitalized */}
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Track Your Order</h1> {/* ✅ className capitalized */}
-          <p className="text-lg text-gray-600">Order #{mainOrder.orderNumber}{sellerId ? ` (Seller: ${sellerId})` : ''}</p> {/* ✅ mainOrder.orderNumber */}
+    <div className="min-h-screen bg-gray-50 py-8">
+      <div className="max-w-4xl mx-auto px-4">
+        {/* Header */}
+        <div className="mb-8 text-center">
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Track Your Order</h1>
+          <p className="text-lg text-gray-600">Order #{mainOrder.orderNumber}{sellerId ? ` (Seller: ${sellerId})` : ''}</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8"> {/* ✅ className capitalized */}
-
-          {/* main tracking */}
-          <div className="lg:col-span-2 space-y-6"> {/* ✅ className capitalized */}
-            {(currentOrderStatus === 'picked_up' || currentOrderStatus === 'out_for_delivery') && deliveryBoy && ( // ✅ currentOrderStatus
-              <Card> {/* ✅ Card capitalized */}
-                <CardHeader> {/* ✅ CardHeader capitalized */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ CardTitle, className capitalized */}
-                    <MapPin className="w-5 h-5 text-purple-600" /> {/* ✅ MapPin capitalized */}
-                    <span>Real-Time Tracking</span>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+          {/* Main Tracking */}
+          <div className="lg:col-span-2 space-y-6">
+            {(currentOrderStatus === 'picked_up' || currentOrderStatus === 'on_the_way') && deliveryBoy && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <MapPin className="w-5 h-5 text-purple-600" />
+                    <span>Real-time Tracking</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="p-0"> {/* ✅ CardContent, className capitalized */}
-                  <div className="w-full h-80"> {/* ✅ className capitalized */}
-                    {deliveryBoyLocation && mainOrder.deliveryAddress && ( // ✅ mainOrder.deliveryAddress
-                      <GoogleMapTracker // ✅ GoogleMapTracker capitalized
-                        deliveryBoyLocation={deliveryBoyLocation} // ✅ deliveryBoyLocation capitalized
-                        customerAddress={mainOrder.deliveryAddress} // ✅ mainOrder.deliveryAddress capitalized
-                        storeLocation={store ? {lat: store.latitude || 0, lng: store.longitude || 0} : undefined} 
+                <CardContent className="p-0">
+                  <div className="w-full h-80">
+                    {deliveryBoyLocation && mainOrder.deliveryAddress ? (
+                      <GoogleMapTracker
+                        deliveryBoyLocation={deliveryBoyLocation}
+                        customerAddress={mainOrder.deliveryAddress}
+                        storeLocation={store ? {lat: store.latitude || 0, lng: store.longitude || 0} : undefined}
                       />
                     ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500"> 
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
                         <p>Waiting for delivery partner's location...</p>
                       </div>
                     )}
                   </div>
 
-                  {deliveryBoyLocation && ( // ✅ deliveryBoyLocation capitalized
-                    <div className="p-4 border-t"> {/* ✅ className capitalized */}
-                      <p className="text-sm font-medium">Delivery partner location updated:</p> {/* ✅ className capitalized */}
-                      <p className="text-xs text-gray-600"> {/* ✅ className capitalized */}
-                        Lat: {deliveryBoyLocation.lat.toFixed(4)}, Lng: {deliveryBoyLocation.lng.toFixed(4)} {/* ✅ deliveryBoyLocation capitalized */}
+                  {deliveryBoyLocation && (
+                    <div className="p-4 border-t">
+                      <p className="text-sm font-medium">Delivery Partner Location Updated:</p>
+                      <p className="text-xs text-gray-600">
+                        Lat: {deliveryBoyLocation.lat.toFixed(4)}, Lng: {deliveryBoyLocation.lng.toFixed(4)}
                       </p>
-                      <p className="text-xs text-gray-600"> {/* ✅ className capitalized */}
-                        Last update: {new Date(deliveryBoyLocation.timestamp).toLocaleTimeString()} {/* ✅ deliveryBoyLocation, Date capitalized */}
+                      <p className="text-xs text-gray-600">
+                        Last Update: {new Date(deliveryBoyLocation.timestamp).toLocaleTimeString()}
                       </p>
                     </div>
                   )}
@@ -313,35 +298,35 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
               </Card>
             )}
 
-            {/* current status */}
-            <Card> {/* ✅ Card capitalized */}
-              <CardHeader> {/* ✅ CardHeader capitalized */}
-                <CardTitle className="flex items-center justify-between"> {/* ✅ CardTitle, className capitalized */}
+            {/* Current Status */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center justify-between">
                   <span>Current Status</span>
-                  <Badge className={`${getStatusColor(currentOrderStatus)} text-white`}> {/* ✅ getStatusColor, currentOrderStatus, className capitalized */}
-                    {getStatusText(currentOrderStatus)} {/* ✅ getStatusText, currentOrderStatus capitalized */}
+                  <Badge className={`${getStatusColor(currentOrderStatus)} text-white`}>
+                    {getStatusText(currentOrderStatus)}
                   </Badge>
                 </CardTitle>
               </CardHeader>
-              <CardContent> {/* ✅ CardContent capitalized */}
-                <div className="flex items-center space-x-4"> {/* ✅ className capitalized */}
-                  <div className={`w-12 h-12 rounded-full ${getStatusColor(currentOrderStatus)} flex items-center justify-center`}> {/* ✅ getStatusColor, currentOrderStatus, className capitalized */}
-                    {currentOrderStatus === 'delivered' ? ( // ✅ currentOrderStatus
-                      <CheckCircle className="w-6 h-6 text-white" /> {/* ✅ CheckCircle capitalized */}
-                    ) : currentOrderStatus === 'out_for_delivery' ? ( // ✅ currentOrderStatus
-                      <Truck className="w-6 h-6 text-white" /> {/* ✅ Truck capitalized */}
+              <CardContent>
+                <div className="flex items-center space-x-4">
+                  <div className={`w-12 h-12 rounded-full ${getStatusColor(currentOrderStatus)} flex items-center justify-center`}>
+                    {currentOrderStatus === 'delivered' ? (
+                      <CheckCircle className="w-6 h-6 text-white" />
+                    ) : currentOrderStatus === 'on_the_way' ? (
+                      <Truck className="w-6 h-6 text-white" />
                     ) : (
-                      <Package className="w-6 h-6 text-white" /> {/* ✅ Package capitalized */}
+                      <Package className="w-6 h-6 text-white" />
                     )}
                   </div>
                   <div>
-                    <p className="font-medium text-lg">{getStatusText(currentOrderStatus)}</p> {/* ✅ getStatusText, currentOrderStatus, className capitalized */}
-                    <p className="text-gray-600"> {/* ✅ className capitalized */}
-                      {currentOrderStatus === 'delivered' // ✅ currentOrderStatus
+                    <p className="font-medium text-lg">{getStatusText(currentOrderStatus)}</p>
+                    <p className="text-gray-600">
+                      {currentOrderStatus === 'delivered'
                         ? 'Your order has been delivered successfully.'
-                        : currentOrderStatus === 'out_for_delivery' // ✅ currentOrderStatus
+                        : currentOrderStatus === 'on_the_way'
                         ? `Arriving by ${estimatedTime}.`
-                        : currentOrderStatus === 'preparing' // ✅ currentOrderStatus
+                        : currentOrderStatus === 'preparing'
                         ? 'Your order is being prepared.'
                         : 'Order confirmed and being processed.'
                       }
@@ -351,32 +336,32 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
               </CardContent>
             </Card>
 
-            {/* progress timeline */}
-            <Card> {/* ✅ Card capitalized */}
-              <CardHeader> {/* ✅ CardHeader capitalized */}
-                <CardTitle>Order Timeline</CardTitle> {/* ✅ CardTitle capitalized */}
+            {/* Progress Timeline */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Timeline</CardTitle>
               </CardHeader>
-              <CardContent> {/* ✅ CardContent capitalized */}
-                <div className="space-y-6"> {/* ✅ className capitalized */}
+              <CardContent>
+                <div className="space-y-6">
                   {tracking.map((step, index) => {
-                    const isCompleted = index <= lastCompletedIndex; // ✅ isCompleted capitalized
+                    const isCompleted = index <= lastCompletedIndex;
                     return (
-                      <div key={step.id} className="flex items-center space-x-4"> {/* ✅ className capitalized */}
-                        <div className="relative"> {/* ✅ className capitalized */}
-                          <div className={`w-4 h-4 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}> {/* ✅ isCompleted, className capitalized */}
-                            {isCompleted && <CheckCircle className="w-4 h-4 text-white" />} {/* ✅ isCompleted, CheckCircle capitalized */}
+                      <div key={step.id} className="flex items-center space-x-4">
+                        <div className="relative">
+                          <div className={`w-4 h-4 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}>
+                            {isCompleted && <CheckCircle className="w-4 h-4 text-white" />}
                           </div>
                           {index < tracking.length - 1 && (
-                            <div className={`absolute top-4 left-2 w-0.5 h-6 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`} /> {/* ✅ isCompleted, className capitalized */}
+                            <div className={`absolute top-4 left-2 w-0.5 h-6 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`} />
                           )}
                         </div>
-                        <div className="flex-1"> {/* ✅ className capitalized */}
-                          <p className={`font-medium ${isCompleted ? 'text-gray-900' : 'text-gray-500'}`}> {/* ✅ isCompleted, className capitalized */}
-                            {getStatusText(step.status)} {/* ✅ getStatusText capitalized */}
+                        <div className="flex-1">
+                          <p className={`font-medium ${isCompleted ? 'text-gray-900' : 'text-gray-500'}`}>
+                            {getStatusText(step.status)}
                           </p>
                           {step.timestamp && (
-                            <p className="text-sm text-gray-600"> {/* ✅ className capitalized */}
-                              {new Date(step.timestamp).toLocaleString()} {/* ✅ Date capitalized */}
+                            <p className="text-sm text-gray-600">
+                              {new Date(step.timestamp).toLocaleString()}
                             </p>
                           )}
                         </div>
@@ -387,23 +372,23 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
               </CardContent>
             </Card>
 
-            {/* delivery details */}
-            {deliveryBoy && ( // ✅ deliveryBoy
-              <Card> {/* ✅ Card capitalized */}
-                <CardHeader> {/* ✅ CardHeader capitalized */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ CardTitle, className capitalized */}
-                    <User className="w-5 h-5" /> {/* ✅ User capitalized */}
+            {/* Delivery Details */}
+            {deliveryBoy && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <User className="w-5 h-5" />
                     <span>Delivery Partner</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent> {/* ✅ CardContent capitalized */}
-                  <div className="flex items-center justify-between"> {/* ✅ className capitalized */}
+                <CardContent>
+                  <div className="flex items-center justify-between">
                     <div>
-                      <p className="font-medium">{deliveryBoy.firstName} {deliveryBoy.lastName}</p> {/* ✅ deliveryBoy.firstName, deliveryBoy.lastName */}
-                      <p className="text-sm text-gray-600">Delivery Partner</p> {/* ✅ className capitalized */}
+                      <p className="font-medium">{deliveryBoy.firstName} {deliveryBoy.lastName}</p>
+                      <p className="text-sm text-gray-600">Delivery Partner</p>
                     </div>
-                    <Button variant="outline" size="sm"> {/* ✅ Button capitalized */}
-                      <Phone className="w-4 h-4 mr-2" /> {/* ✅ Phone capitalized */}
+                    <Button variant="outline" size="sm">
+                      <Phone className="w-4 h-4 mr-2" />
                       Call
                     </Button>
                   </div>
@@ -412,29 +397,29 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
             )}
           </div>
 
-          {/* sidebar */}
-          <div className="space-y-6"> {/* ✅ className capitalized */}
-            {/* order summary */}
-            <Card> {/* ✅ Card capitalized */}
-              <CardHeader> {/* ✅ CardHeader capitalized */}
-                <CardTitle>Order Summary</CardTitle> {/* ✅ CardTitle capitalized */}
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Order Summary */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Summary</CardTitle>
               </CardHeader>
-              <CardContent> {/* ✅ CardContent capitalized */}
-                <div className="space-y-3"> {/* ✅ className capitalized */}
-                  <div className="flex justify-between"> {/* ✅ className capitalized */}
+              <CardContent>
+                <div className="space-y-3">
+                  <div className="flex justify-between">
                     <span>Order Total</span>
-                    <span className="font-medium">₹{Number(mainOrder.total).toLocaleString('en-IN')}</span> {/* ✅ mainOrder.total */}
+                    <span className="font-medium">₹{Number(mainOrder.total).toLocaleString('en-IN')}</span>
                   </div>
-                  <div className="flex justify-between"> {/* ✅ className capitalized */}
+                  <div className="flex justify-between">
                     <span>Payment</span>
-                    <Badge variant={mainOrder.paymentStatus === 'paid' ? 'default' : 'secondary'}> {/* ✅ mainOrder.paymentStatus */}
-                      {mainOrder.paymentMethod === 'cod' ? 'Cash on Delivery' : 'Paid Online'} {/* ✅ mainOrder.paymentMethod */}
+                    <Badge variant={mainOrder.paymentStatus === 'paid' ? 'default' : 'secondary'}>
+                      {mainOrder.paymentMethod === 'cod' ? 'Cash On Delivery' : 'Paid Online'}
                     </Badge>
                   </div>
                   <hr />
-                  <div className="text-sm text-gray-600"> {/* ✅ className capitalized */}
-                    <p className="flex items-center space-x-2"> {/* ✅ className capitalized */}
-                      <Clock className="w-4 h-4" /> {/* ✅ Clock capitalized */}
+                  <div className="text-sm text-gray-600">
+                    <p className="flex items-center space-x-2">
+                      <Clock className="w-4 h-4" />
                       <span>Estimated Delivery: {estimatedTime}</span>
                     </p>
                   </div>
@@ -442,23 +427,23 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
               </CardContent>
             </Card>
 
-            {/* store info */}
-            {store && ( // ✅ store
-              <Card> {/* ✅ Card capitalized */}
-                <CardHeader> {/* ✅ CardHeader capitalized */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ CardTitle, className capitalized */}
-                    <Store className="w-5 h-5" /> {/* ✅ Store capitalized */}
+            {/* Store Info */}
+            {store && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center space-x-2">
+                    <Store className="w-5 h-5" />
                     <span>Store Details</span>
                   </CardTitle>
                 </CardHeader>
-                <CardContent> {/* ✅ CardContent capitalized */}
-                  <div className="space-y-2"> {/* ✅ className capitalized */}
-                    <p className="font-medium">{store.storeName}</p> {/* ✅ store.storeName */}
-                    <p className="text-sm text-gray-600">{store.address}</p> {/* ✅ className capitalized */}
-                    <div className="flex items-center justify-between pt-2"> {/* ✅ className capitalized */}
-                      <span className="text-sm text-gray-600">Contact Store</span> {/* ✅ className capitalized */}
-                      <Button variant="outline" size="sm"> {/* ✅ Button capitalized */}
-                        <Phone className="w-4 h-4 mr-2" /> {/* ✅ Phone capitalized */}
+                <CardContent>
+                  <div className="space-y-2">
+                    <p className="font-medium">{store.storeName}</p>
+                    <p className="text-sm text-gray-600">{store.address}</p>
+                    <div className="flex items-center justify-between pt-2">
+                      <span className="text-sm text-gray-600">Contact Store</span>
+                      <Button variant="outline" size="sm">
+                        <Phone className="w-4 h-4 mr-2" />
                         Call
                       </Button>
                     </div>
@@ -467,42 +452,42 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
               </Card>
             )}
 
-            {/* delivery address */}
-            <Card> {/* ✅ Card capitalized */}
-              <CardHeader> {/* ✅ CardHeader capitalized */}
-                <CardTitle className="flex items-center space-x-2"> {/* ✅ CardTitle, className capitalized */}
-                  <MapPin className="w-5 h-5" /> {/* ✅ MapPin capitalized */}
+            {/* Delivery Address */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center space-x-2">
+                  <MapPin className="w-5 h-5" />
                   <span>Delivery Address</span>
                 </CardTitle>
               </CardHeader>
-              <CardContent> {/* ✅ CardContent capitalized */}
-                <div className="space-y-2"> {/* ✅ className capitalized */}
-                  <p className="font-medium">{mainOrder.deliveryAddress.fullName}</p> {/* ✅ mainOrder.deliveryAddress.fullName */}
-                  <p className="text-sm text-gray-600">{mainOrder.deliveryAddress.address}</p> {/* ✅ mainOrder.deliveryAddress.address */}
-                  <p className="text-sm text-gray-600"> {/* ✅ className capitalized */}
-                    {mainOrder.deliveryAddress.city}, {mainOrder.deliveryAddress.pincode} {/* ✅ mainOrder.deliveryAddress.city, mainOrder.deliveryAddress.pincode */}
+              <CardContent>
+                <div className="space-y-2">
+                  <p className="font-medium">{mainOrder.deliveryAddress.fullName}</p>
+                  <p className="text-sm text-gray-600">{mainOrder.deliveryAddress.address}</p>
+                  <p className="text-sm text-gray-600">
+                    {mainOrder.deliveryAddress.city}, {mainOrder.deliveryAddress.pincode}
                   </p>
-                  <div className="flex items-center space-x-2 text-sm text-gray-600"> {/* ✅ className capitalized */}
-                    <Phone className="w-4 h-4" /> {/* ✅ Phone capitalized */}
-                    <span>{mainOrder.deliveryAddress.phone}</span> {/* ✅ mainOrder.deliveryAddress.phone */}
+                  <div className="flex items-center space-x-2 text-sm text-gray-600">
+                    <Phone className="w-4 h-4" />
+                    <span>{mainOrder.deliveryAddress.phone}</span>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* help & support */}
-            <Card> {/* ✅ Card capitalized */}
-              <CardHeader> {/* ✅ CardHeader capitalized */}
-                <CardTitle>Need Help?</CardTitle> {/* ✅ CardTitle capitalized */}
+            {/* Help & Support */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Need Help?</CardTitle>
               </CardHeader>
-              <CardContent> {/* ✅ CardContent capitalized */}
-                <div className="space-y-3"> {/* ✅ className capitalized */}
-                  <Button variant="outline" className="w-full justify-start"> {/* ✅ Button, className capitalized */}
-                    <Phone className="w-4 h-4 mr-2" /> {/* ✅ Phone capitalized */}
+              <CardContent>
+                <div className="space-y-3">
+                  <Button variant="outline" className="w-full justify-start">
+                    <Phone className="w-4 h-4 mr-2" />
                     Call Support
                   </Button>
-                  <Button variant="outline" className="w-full justify-start"> {/* ✅ Button, className capitalized */}
-                    <Package className="w-4 h-4 mr-2" /> {/* ✅ Package capitalized */}
+                  <Button variant="outline" className="w-full justify-start">
+                    <Package className="w-4 h-4 mr-2" />
                     Report Issue
                   </Button>
                 </div>
