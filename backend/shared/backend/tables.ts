@@ -384,12 +384,6 @@ export const orderTracking = pgTable("order_tracking", {
 });
 
 // ✅ orderTrackingRelations
-export const orderTrackingRelations = relations(orderTracking, ({ one }) => ({
-  masterOrder: one(orders, { fields: [orderTracking.masterOrderId], references: [orders.id] }),
-  deliveryBatch: one(deliveryBatches, { fields: [orderTracking.deliveryBatchId], references: [deliveryBatches.id] }),
-  updatedByUser: one(users, { fields: [orderTracking.updatedBy], references: [users.id] }),
-}));
-
 
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
