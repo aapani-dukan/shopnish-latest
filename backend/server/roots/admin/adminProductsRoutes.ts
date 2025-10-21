@@ -10,7 +10,7 @@ import {
 import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../../middleware/validateRequest';
+import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod'; // ✅ For validation
 import multer from 'multer'; // ✅ For image upload
 import { uploadImage } from '../../cloudStorage'; // ✅ For image upload
