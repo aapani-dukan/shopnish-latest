@@ -11,10 +11,10 @@ import {
 import { eq, like, inArray, and, desc, asc, sql } from 'drizzle-orm'; // ✅ desc, asc, sql इम्पोर्ट करें
 import { calculateDistanceKm } from '../services/locationService.ts'; // ✅ पाथ सही करें
 
-import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
+import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 
 
-import { requireAuth, requireSellerAuth, requireAdminAuth } from '../../server/middleware/authMiddleware';
+import { requireAuth, requireSellerAuth, requireAdminAuth } from '../server/middleware/authMiddleware';
 
 
 const router = Router();
