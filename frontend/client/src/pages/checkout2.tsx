@@ -11,7 +11,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react";
-import { useAuth } from "@/hooks/useauth";
+import { useAuth } from "@/hooks/useAuth";
 import AddressInputWithMap from "@/components/addressinputwithmap";
 
 // ✅ Updated SellerInfo Interface
