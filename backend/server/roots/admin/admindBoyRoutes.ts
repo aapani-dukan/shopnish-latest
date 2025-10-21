@@ -9,8 +9,8 @@ import {
 } from 'shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
-import { authorize } from '../../middleware/authMiddleware'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../../middleware/authMiddleware';
+import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
+import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod'; // ✅ For validation
 
 const adminDeliveryBoysRouter = Router(); // Changed variable name to match file name for clarity
