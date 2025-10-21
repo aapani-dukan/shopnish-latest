@@ -1,5 +1,5 @@
 import axios from "axios";
-
+import { generateOTP } from '../util/otp';
 // ✅ यहां अपने MSG91 WhatsApp API Key डालें
 // इसे सीधे "shopnishAuthkey" पर बदला गया है, यह मानते हुए कि यह .env/Vercel में नाम है
 const MSG91_AUTH_KEY_VAR = process.env.shopnishAuthkey; // <--- यहां नाम अपडेट किया गया
@@ -7,15 +7,6 @@ const MSG91_BASE_URL = "https://api.msg91.com/api/v5/whatsapp";
 // ✅ नया CleverTap-specific एंडपॉइंट
 const MSG91_CLEVERTAP_ENDPOINT = "https://api.msg91.com/api/v5/whatsapp/outbound/clevertap/"; // <--- एंडपॉइंट अपडेट किया गया
 
-// 🔹 OTP Generator
-export function generateOTP(length: number = 6): string {
-  const digits = "0123456789";
-  let otp = "";
-  for (let i = 0; i < length; i++) {
-    otp += digits[Math.floor(Math.random() * 10)];
-  }
-  return otp;
-}
 
 // 🔹 WhatsApp message sender (generic)
 export async function sendWhatsAppMessage(phone: string, message: string) {
