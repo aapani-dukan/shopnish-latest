@@ -2,7 +2,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ Corrected casing
 import { toast } from "@/hooks/use-toast"; // Assuming correct path based on common Next.js/React setup
 import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
-import { apiRequest } from "@/lib/queryclient"; // ✅ Corrected casing and path
+import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
 import React, { useState } from "react"; // ✅ Corrected casing
 import { useAuth } from "@/hooks/useauth"; // Assuming correct path and casing
 import {
