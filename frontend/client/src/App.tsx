@@ -29,7 +29,7 @@ import CustomerOrdersPage from "@/pages/customer/orders";
 import TrackOrder from "@/pages/track-order"; 
 import Checkout2 from "./pages/checkout2";
 import DeliveryDashboard from "@/pages/DeliveryDashboard";
-import AdminOrderDashboard from "./pages/admin/adminOrderDashboard";
+import AdminOrderDashboard from "./pages/admin/AdminOrderDashboard";
 import PrivacyPolicy from "@/pages/PrivacyPolicy";
 import TermsOfService from "@/pages/TermsOfService";
 import CookiesPolicy from "@/pages/CookiesPolicy";
