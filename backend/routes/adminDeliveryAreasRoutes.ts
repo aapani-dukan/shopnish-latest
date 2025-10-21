@@ -1,11 +1,11 @@
 import { Router } from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../middleware/validateRequest';
+import { validateRequest } from '../server/middleware/validation';
 import { db } from '../server/db';
 import { deliveryAreas } from '../shared/backend/schema';
 import { eq, like, and } from 'drizzle-orm';
-import { verifyToken } from '../middleware/verifyToken'; // ऑथेंटिकेशन
-import { authorize } from '../middleware/authorize'; // ऑथराइजेशन
+import { verifyToken } from '../server/middleware/verifyToken'; // ऑथेंटिकेशन
+import { authorize } from '../server/middleware/authorize'; // ऑथराइजेशन
 
 const adminDeliveryAreasRouter = Router();
 
