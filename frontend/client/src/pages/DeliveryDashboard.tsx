@@ -779,7 +779,9 @@ const completeWithoutOtpMutation = useMutation({
   />
 )}
       
-
+</div>
+    );
+}
       
 // --- Helper Component for Orders List ---
 
