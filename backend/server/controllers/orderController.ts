@@ -22,7 +22,7 @@ import {
 } from "../../shared/backend/schema"; // ✅ schema फ़ाइल से इम्पोर्ट करें
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { AuthenticatedRequest } from "../middleware/authMiddleware"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
-import { getIo } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
+import { getIO } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
 import { json } from "drizzle-orm/pg-core"; // ✅ json को drizzle से इम्पोर्ट करें
 
 // --- सहायक कार्य (Helper Functions) ---
