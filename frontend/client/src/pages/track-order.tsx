@@ -289,10 +289,10 @@ export default function TrackOrder() { // ✅ TrackOrder capitalized
                       <GoogleMapTracker // ✅ GoogleMapTracker capitalized
                         deliveryBoyLocation={deliveryBoyLocation} // ✅ deliveryBoyLocation capitalized
                         customerAddress={mainOrder.deliveryAddress} // ✅ mainOrder.deliveryAddress capitalized
-                        storeLocation={store ? {lat: store.latitude || 0, lng: store.longitude || 0} : undefined} // ✅ storeLocation जोड़ा गया
+                        storeLocation={store ? {lat: store.latitude || 0, lng: store.longitude || 0} : undefined} 
                       />
                     ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500"> {/* ✅ className capitalized */}
+                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500"> 
                         <p>Waiting for delivery partner's location...</p>
                       </div>
                     )}
