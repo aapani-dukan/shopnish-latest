@@ -10,7 +10,7 @@ import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Loader2, ArrowLeft } from "lucide-react";
-import apiRequest from "../../lib/queryclient"; // Ensure this path is correct
+import apiRequest from "../../lib/queryClient"; // Ensure this path is correct
 
 // Interfaces
 interface Product {
