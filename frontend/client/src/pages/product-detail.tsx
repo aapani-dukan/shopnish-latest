@@ -271,7 +271,7 @@ export default function ProductDetail() {
                 <p className="text-sm text-gray-500">Category: <span className="font-medium">{product.categoryName}</span></p> // ✅ Consistent casing and className
               )}
               {product.brand && (
-                <p className="text-gray-600">By {product.brand}</p> {/* ✅ Corrected className */}
+                <p className="text-gray-600">By {product.brand}</p> 
               )}
               {product.seller && ( // ✅ New: Display seller info
                 <p className="text-gray-600 text-sm">Sold by: <span className="font-semibold">{product.seller.businessName}</span></p>
@@ -279,21 +279,21 @@ export default function ProductDetail() {
             </div>
 
             {/* rating */}
-            <div className="flex items-center space-x-4"> {/* ✅ Corrected className */}
-              {renderStars(Math.round(averageRating))} {/* ✅ Corrected casing */}
-              <span className="text-gray-600"> {/* ✅ Corrected className */}
+            <div className="flex items-center space-x-4"> 
+              {renderStars(Math.round(averageRating))} 
+              <span className="text-gray-600"> 
                 ({reviews.length} reviews)
               </span>
             </div>
 
             {/* price */}
-            <div className="flex items-center space-x-4"> {/* ✅ Corrected className */}
-              <span className="text-3xl font-bold text-primary"> {/* ✅ Corrected className */}
-                ₹{product.price.toFixed(2)} {/* ✅ Format price */}
+            <div className="flex items-center space-x-4"> 
+              <span className="text-3xl font-bold text-primary"> 
+                ₹{product.price.toFixed(2)} 
               </span>
               {product.originalPrice && ( // ✅ Corrected casing
-                <span className="text-xl text-gray-400 line-through"> {/* ✅ Corrected className */}
-                  ₹{product.originalPrice.toFixed(2)} {/* ✅ Format price */}
+                <span className="text-xl text-gray-400 line-through"> 
+                  ₹{product.originalPrice.toFixed(2)} 
                 </span>
               )}
             </div>
@@ -301,11 +301,11 @@ export default function ProductDetail() {
             {/* stock status */}
             <div>
               {product.stock > 0 ? (
-                <Badge variant="secondary" className="bg-green-100 text-green-800"> {/* ✅ Corrected component name and className */}
+                <Badge variant="secondary" className="bg-green-100 text-green-800"> 
                   In Stock ({product.stock} available)
                 </Badge>
               ) : (
-                <Badge variant="destructive"> {/* ✅ Corrected component name */}
+                <Badge variant="destructive"> 
                   Out of Stock
                 </Badge>
               )}
@@ -313,8 +313,8 @@ export default function ProductDetail() {
 
             {/* quantity selector */}
             <div className="flex items-center space-x-4"> {/* ✅ Corrected className */}
-              <Label className="text-sm font-medium">Quantity:</Label> {/* ✅ Corrected component name and className */}
-              <div className="flex items-center border border-gray-300 rounded-lg"> {/* ✅ Corrected className */}
+              <Label className="text-sm font-medium">Quantity:</Label> 
+              <div className="flex items-center border border-gray-300 rounded-lg"> 
                 <Button // ✅ Corrected component name
                   variant="ghost"
                   size="sm"
@@ -322,9 +322,9 @@ export default function ProductDetail() {
                   disabled={quantity <= 1 || product.stock === 0} // ✅ Disable if stock is 0
                   className="px-3 py-1" // ✅ Corrected className
                 >
-                  <Minus className="h-4 w-4" /> {/* ✅ Corrected className */}
+                  <Minus className="h-4 w-4" /> 
                 </Button>
-                <span className="px-4 py-2 min-w-[50px] text-center"> {/* ✅ Corrected className */}
+                <span className="px-4 py-2 min-w-[50px] text-center"> 
                   {quantity}
                 </span>
                 <Button // ✅ Corrected component name
@@ -334,13 +334,13 @@ export default function ProductDetail() {
                   disabled={quantity >= product.stock || product.stock === 0} // ✅ Disable if stock is 0
                   className="px-3 py-1" // ✅ Corrected className
                 >
-                  <Plus className="h-4 w-4" /> {/* ✅ Corrected className */}
+                  <Plus className="h-4 w-4" /> 
                 </Button>
               </div>
             </div>
 
             {/* action buttons */}
-            <div className="space-y-4"> {/* ✅ Corrected className */}
+            <div className="space-y-4"> 
               <Button // ✅ Corrected component name
                 onClick={handleAddToCart} // ✅ Corrected casing
                 disabled={product.stock === 0 || addToCartMutation.isPending} // ✅ Corrected casing
@@ -349,7 +349,7 @@ export default function ProductDetail() {
               >
                 {addToCartMutation.isPending ? "Adding..." : ( // ✅ Corrected casing
                   <>
-                    <ShoppingCart className="mr-2 h-5 w-5" /> {/* ✅ Corrected component name and className */}
+                    <ShoppingCart className="mr-2 h-5 w-5" /> 
                     Add to Cart
                   </>
                 )}
@@ -364,15 +364,15 @@ export default function ProductDetail() {
               </Button>
             </div>
 
-            <Separator /> {/* ✅ Corrected component name */}
+            <Separator /> 
 
-            <div className="flex space-x-4"> {/* ✅ Corrected className */}
-              <Button variant="outline" size="lg" className="flex-1"> {/* ✅ Corrected component name and className */}
-                <Heart className="mr-2 h-5 w-5" /> {/* ✅ Corrected component name and className */}
+            <div className="flex space-x-4"> 
+              <Button variant="outline" size="lg" className="flex-1"> 
+                <Heart className="mr-2 h-5 w-5" /> 
                 Add to Wishlist
               </Button>
-              <Button variant="outline" size="lg" className="flex-1"> {/* ✅ Corrected component name and className */}
-                <Share2 className="mr-2 h-5 w-5" /> {/* ✅ Corrected component name and className */}
+              <Button variant="outline" size="lg" className="flex-1"> 
+                <Share2 className="mr-2 h-5 w-5" /> 
                 Share
               </Button>
             </div>
@@ -380,47 +380,47 @@ export default function ProductDetail() {
         </div>
 
         {/* product details tabs */}
-        <Tabs defaultValue="description" className="w-full"> {/* ✅ Corrected component name and className */}
-          <TabsList className="grid w-full grid-cols-2"> {/* ✅ Corrected component name and className */}
-            <TabsTrigger value="description">Description</TabsTrigger> {/* ✅ Corrected component name */}
-            <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger> {/* ✅ Corrected component name */}
+        <Tabs defaultValue="description" className="w-full"> 
+          <TabsList className="grid w-full grid-cols-2"> 
+            <TabsTrigger value="description">Description</TabsTrigger> 
+            <TabsTrigger value="reviews">Reviews ({reviews.length})</TabsTrigger> 
           </TabsList>
 
-          <TabsContent value="description"> {/* ✅ Corrected component name */}
-            <Card> {/* ✅ Corrected component name */}
-              <CardContent className="p-6"> {/* ✅ Corrected component name and className */}
-                <h3 className="text-xl font-semibold mb-4">Product Description</h3> {/* ✅ Consistent casing and className */}
-                <p className="text-gray-700 leading-relaxed"> {/* ✅ Corrected className */}
+          <TabsContent value="description"> 
+            <Card> 
+              <CardContent className="p-6"> 
+                <h3 className="text-xl font-semibold mb-4">Product Description</h3> 
+                <p className="text-gray-700 leading-relaxed"> 
                   {product.description || "No description available for this product."}
                 </p>
               </CardContent>
             </Card>
           </TabsContent>
 
-          <TabsContent value="reviews"> {/* ✅ Corrected component name */}
-            <Card> {/* ✅ Corrected component name */}
-              <CardContent className="p-6"> {/* ✅ Corrected component name and className */}
-                <h3 className="text-xl font-semibold mb-4">Customer Reviews</h3> {/* ✅ Consistent casing and className */}
+          <TabsContent value="reviews"> 
+            <Card> 
+              <CardContent className="p-6"> 
+                <h3 className="text-xl font-semibold mb-4">Customer Reviews</h3> 
 
                 {reviews.length === 0 ? (
-                  <p className="text-gray-600">No reviews yet. Be the first to review this product!</p> {/* ✅ Corrected className */}
+                  <p className="text-gray-600">No reviews yet. Be the first to review this product!</p> 
                 ) : (
-                  <div className="space-y-6"> {/* ✅ Corrected className */}
+                  <div className="space-y-6"> 
                     {reviews.map((review) => (
-                      <div key={review.id} className="border-b border-gray-200 pb-6 last:border-b-0"> {/* ✅ Corrected className */}
-                        <div className="flex items-center justify-between mb-2"> {/* ✅ Corrected className */}
-                          <div className="flex items-center space-x-2"> {/* ✅ Corrected className */}
+                      <div key={review.id} className="border-b border-gray-200 pb-6 last:border-b-0"> 
+                        <div className="flex items-center justify-between mb-2"> 
+                          <div className="flex items-center space-x-2"> 
                             {renderStars(review.rating)}
-                            <span className="font-medium"> {/* ✅ Corrected className */}
-                              {review.user.firstName || 'Anonymous'} {review.user.lastName || ''} {/* ✅ Corrected casing */}
+                            <span className="font-medium"> 
+                              {review.user.firstName || 'Anonymous'} {review.user.lastName || ''} 
                             </span>
                           </div>
-                          <span className="text-sm text-gray-500"> {/* ✅ Corrected className */}
-                            {new Date(review.createdAt).toLocaleString()} {/* ✅ Corrected casing */}
+                          <span className="text-sm text-gray-500"> 
+                            {new Date(review.createdAt).toLocaleString()} 
                           </span>
                         </div>
                         {review.comment && (
-                          <p className="text-gray-700">{review.comment}</p> {/* ✅ Corrected className */}
+                          <p className="text-gray-700">{review.comment}</p> 
                         )}
                       </div>
                     ))}
