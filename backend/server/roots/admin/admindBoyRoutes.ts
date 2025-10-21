@@ -2,7 +2,7 @@
 import { Router, Response } from 'express';
 import { db } from '../../db'; // Corrected path
 import {
-  deliveryBoysPgTable, // ✅ Corrected table name
+  deliveryBoys, // ✅ Corrected table name
   users,
   approvalStatusEnum,
   userRoleEnum,
