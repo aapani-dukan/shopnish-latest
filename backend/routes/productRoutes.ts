@@ -3,7 +3,7 @@ import { Router, Request, Response, NextFunction } from 'express'; // ✅ NextFu
 import { db } from '../server/db.ts'; // ✅ पाथ सही करें यदि यह 'backend/db.ts' है
 import {
   products,
-  productCategories, // ✅ 'categories' की जगह 'productCategories' का उपयोग करें जैसा कि स्कीमा में होगा
+  categories, // ✅ 'categories' की जगह 'productCategories' का उपयोग करें जैसा कि स्कीमा में होगा
   sellersPgTable,
   approvalStatusEnum, // ✅ approvalStatusEnum इम्पोर्ट करें
   users, // यदि आवश्यक हो
