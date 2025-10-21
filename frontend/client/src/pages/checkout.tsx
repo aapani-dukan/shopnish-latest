@@ -10,7 +10,7 @@ import { Label } from "@/components/ui/label"; // Adjusted path
 import { Textarea } from "@/components/ui/textarea"; // Adjusted path
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"; // Adjusted path
 import { useToast } from "@/hooks/use-toast"; // Adjusted path
-import { apiRequest } from "@/lib/queryclient"; // Adjusted path
+import { apiRequest } from "@/lib/queryClient"; // Adjusted path
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react"; // Adjusted path
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useauth"; // Adjusted path
