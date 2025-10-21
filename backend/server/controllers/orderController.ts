@@ -158,7 +158,7 @@ async function handleDeliveryAddress(
 /**
  * handles placing a direct "buy now" order.
  */
-export const placeOrderByNow = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("🚀 [API] Received request to place buy now order.");
   const userId = req.user?.id;
 
