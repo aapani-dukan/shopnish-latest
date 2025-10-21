@@ -38,7 +38,21 @@ export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
   "failed",           // डिलीवरी विफल
   "cancelled"         // डिलीवरी रद्द
 ]);
-
+// ✅ 4. Product Category Enum (नई)
+export const productCategoryEnum = pgEnum("product_category", [
+  "Electronics",
+  "Fashion",
+  "Home & Kitchen",
+  "Books",
+  "Groceries",
+  "Health & Beauty",
+  "Sports & Outdoors",
+  "Toys & Games",
+  "Automotive",
+  "Jewelry",
+  "Pet Supplies",
+  "Other"
+]);
 export const userRoleEnum = pgEnum("user_role", ["customer", "seller", "admin", "delivery-boy"]);
 export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected"]);
 
