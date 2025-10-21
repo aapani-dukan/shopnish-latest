@@ -331,8 +331,8 @@ export default function Checkout() {
                     {/* ✅ मैप से मिला एड्रेस दिखाने और एडिट करने के लिए */}
                     {/* *************************************************************** */}
 
-                    <div className="md:col-span-2"> {/* ✅ Corrected className */}
-                      <Label htmlFor="address_text">Delivery Address Text</Label> {/* ✅ Corrected component name */}
+                    <div className="md:col-span-2"> 
+                      <Label htmlFor="address_text">Delivery Address Text</Label> 
                       <Textarea // ✅ Corrected component name
                         id="address_text"
                         value={deliveryAddress.address} // <-- map से मिला पता यहाँ दिखेगा
@@ -348,7 +348,7 @@ export default function Checkout() {
                     {/* *************************************************************** */}
 
                     <div>
-                      <Label htmlFor="city">City</Label> {/* ✅ Corrected component name and casing */}
+                      <Label htmlFor="city">City</Label> 
                       <Input
                         id="city"
                         value={deliveryAddress.city} // ✅ Corrected casing
@@ -357,7 +357,7 @@ export default function Checkout() {
                       />
                     </div>
                     <div>
-                      <Label htmlFor="pincode">Pincode</Label> {/* ✅ Corrected component name and casing */}
+                      <Label htmlFor="pincode">Pincode</Label> 
                       <Input
                         id="pincode"
                         value={deliveryAddress.pincode} // ✅ Corrected casing
@@ -365,8 +365,8 @@ export default function Checkout() {
                         placeholder="Enter pincode"
                       />
                     </div>
-                    <div className="md:col-span-2"> {/* ✅ Corrected className */}
-                      <Label htmlFor="landmark">Landmark (Optional)</Label> {/* ✅ Corrected component name and casing */}
+                    <div className="md:col-span-2"> 
+                      <Label htmlFor="landmark">Landmark (Optional)</Label> 
                       <Input
                         id="landmark"
                         value={deliveryAddress.landmark || ''} // Ensure it's not undefined
@@ -374,55 +374,55 @@ export default function Checkout() {
                         placeholder="Nearby landmark"
                       />
                     </div>
-                    <div className="md:col-span-2"> {/* ✅ Corrected className */}
-                      <Label htmlFor="instructions">Delivery Instructions</Label> {/* ✅ Corrected component name and casing */}
+                    <div className="md:col-span-2"> 
+                      <Label htmlFor="instructions">Delivery Instructions</Label> 
                       <Textarea // ✅ Corrected component name
                         id="instructions"
                         value={deliveryInstructions} // ✅ Corrected casing
-                        onChange={(e) => setDeliveryInstructions(e.target.value)} // ✅ Corrected casing
+                        onChange={(e) => setDeliveryInstructions(e.target.value)} 
                         placeholder="Any special instructions for delivery"
                         rows={2}
                       />
                     </div>
                   </div>
 
-                  <div className="flex space-x-4 mt-6"> {/* ✅ Corrected className */}
-                    <Button variant="outline" onClick={() => setCurrentStep(1)}>Back to Cart</Button> {/* ✅ Corrected component name and casing */}
-                    <Button onClick={() => setCurrentStep(3)}>Proceed to Payment</Button> {/* ✅ Corrected component name and casing */}
+                  <div className="flex space-x-4 mt-6"> 
+                    <Button variant="outline" onClick={() => setCurrentStep(1)}>Back to Cart</Button> 
+                    <Button onClick={() => setCurrentStep(3)}>Proceed to Payment</Button> 
                   </div>
                 </CardContent>
               </Card>
             )}
 
-            {currentStep === 3 && ( // ✅ Corrected casing
-              <Card> {/* ✅ Corrected component name */}
-                <CardHeader> {/* ✅ Corrected component name */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ Corrected component name and className */}
-                    <CreditCard className="w-5 h-5" /> {/* ✅ Corrected component name and className */}
-                    <span>Payment Method</span> {/* ✅ Consistent casing */}
+            {currentStep === 3 && ( 
+              <Card> 
+                <CardHeader> 
+                  <CardTitle className="flex items-center space-x-2"> 
+                    <CreditCard className="w-5 h-5" /> 
+                    <span>Payment Method</span> 
                   </CardTitle>
                 </CardHeader>
-                <CardContent> {/* ✅ Corrected component name */}
-                  <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}> {/* ✅ Corrected component name and casing */}
+                <CardContent> 
+                  <RadioGroup value={paymentMethod} onValueChange={setPaymentMethod}> 
                     <div className="space-y-4"> 
                         {/* पहला विकल्प: COD */}
-                      <div className="flex items-center space-x-2 p-4 border rounded-lg"> {/* ✅ Corrected className */}
-                        <RadioGroupItem value="cod" id="cod" /> {/* ✅ Corrected component name */}
-                        <Label htmlFor="cod" className="flex-1 cursor-pointer"> {/* ✅ Corrected component name and className */}
+                      <div className="flex items-center space-x-2 p-4 border rounded-lg"> 
+                        <RadioGroupItem value="cod" id="cod" /> 
+                        <Label htmlFor="cod" className="flex-1 cursor-pointer"> 
                           <div>
-                            <p className="font-medium">Cash on Delivery (COD)</p> {/* ✅ Consistent casing and className */}
-                            <p className="text-sm text-gray-600">Pay when your order arrives</p> {/* ✅ Corrected className */}
+                            <p className="font-medium">Cash on Delivery (COD)</p> 
+                            <p className="text-sm text-gray-600">Pay when your order arrives</p> 
                           </div>
                         </Label>
                       </div>
 
                       {/* दूसरा विकल्प: Online */}
-                      <div className="flex items-center space-x-2 p-4 border rounded-lg opacity-50"> {/* ✅ Corrected className */}
-                        <RadioGroupItem value="online" id="online" disabled /> {/* ✅ Corrected component name */}
-                        <Label htmlFor="online" className="flex-1 cursor-pointer"> {/* ✅ Corrected component name and className */}
+                      <div className="flex items-center space-x-2 p-4 border rounded-lg opacity-50"> 
+                        <RadioGroupItem value="online" id="online" disabled /> 
+                        <Label htmlFor="online" className="flex-1 cursor-pointer"> 
                           <div>
-                            <p className="font-medium">Online Payment</p> {/* ✅ Consistent casing and className */}
-                            <p className="text-sm text-gray-600">Pay now using UPI, card, or net banking (coming soon)</p> {/* ✅ Corrected className */}
+                            <p className="font-medium">Online Payment</p> 
+                            <p className="text-sm text-gray-600">Pay now using UPI, card, or net banking (coming soon)</p> 
                           </div>
                         </Label>
                       </div>
@@ -431,14 +431,14 @@ export default function Checkout() {
                   </RadioGroup>
 
 
-                  <div className="flex space-x-4 mt-6"> {/* ✅ Corrected className */}
-                    <Button variant="outline" onClick={() => setCurrentStep(2)}>Back to Address</Button> {/* ✅ Corrected component name and casing */}
+                  <div className="flex space-x-4 mt-6"> 
+                    <Button variant="outline" onClick={() => setCurrentStep(2)}>Back to Address</Button> 
                     <Button
-                      onClick={handlePlaceOrder} // ✅ Corrected casing
-                      disabled={createOrderMutation.isPending} // ✅ Corrected casing
-                      className="flex-1" // ✅ Corrected className
+                      onClick={handlePlaceOrder} 
+                      disabled={createOrderMutation.isPending} 
+                      className="flex-1" 
                     >
-                      {createOrderMutation.isPending ? "Placing Order..." : `Place Order - ₹${total.toFixed(2)}`} {/* ✅ Consistent casing */}
+                      {createOrderMutation.isPending ? "Placing Order..." : `Place Order - ₹${total.toFixed(2)}`} 
                     </Button>
                   </div>
                 </CardContent>
@@ -447,31 +447,31 @@ export default function Checkout() {
           </div>
 
           <div>
-            <Card className="sticky top-4"> {/* ✅ Corrected component name and className */}
-              <CardHeader> {/* ✅ Corrected component name */}
-                <CardTitle>Order Summary</CardTitle> {/* ✅ Consistent casing */}
+            <Card className="sticky top-4"> 
+              <CardHeader> 
+                <CardTitle>Order Summary</CardTitle> 
               </CardHeader>
-              <CardContent> {/* ✅ Corrected component name */}
-                <div className="space-y-3"> {/* ✅ Corrected className */}
-                  <div className="flex justify-between"> {/* ✅ Corrected className */}
-                    <span>Subtotal ({cartItems.length} items)</span> {/* ✅ Consistent casing */}
+              <CardContent> 
+                <div className="space-y-3"> 
+                  <div className="flex justify-between"> 
+                    <span>Subtotal ({cartItems.length} items)</span> 
                     <span>₹{subtotal.toFixed(2)}</span>
                   </div>
-                  <div className="flex justify-between"> {/* ✅ Corrected className */}
-                    <span>Delivery Charges</span> {/* ✅ Consistent casing */}
+                  <div className="flex justify-between"> 
+                    <span>Delivery Charges</span> 
                     <span>{deliveryCharge === 0 ? "Free" : `₹${deliveryCharge.toFixed(2)}`}</span>
                   </div>
-                  {deliveryCharge === 0 && ( // ✅ Corrected casing
-                    <p className="text-sm text-green-600">Free delivery on orders above ₹500</p> {/* ✅ Consistent casing and className */}
+                  {deliveryCharge === 0 && ( 
+                    <p className="text-sm text-green-600">Free delivery on orders above ₹500</p> 
                   )}
                   <hr />
-                  <div className="flex justify-between font-semibold text-lg"> {/* ✅ Corrected className */}
-                    <span>Total</span> {/* ✅ Consistent casing */}
+                  <div className="flex justify-between font-semibold text-lg"> 
+                    <span>Total</span> 
                     <span>₹{total.toFixed(2)}</span>
                   </div>
-                  <div className="text-sm text-gray-600"> {/* ✅ Corrected className */}
-                    <p>Estimated Delivery: Within 1 hour</p> {/* ✅ Consistent casing */}
-                    <p>From: Kumar General Store, Bundi</p> {/* ✅ Hardcoded to Bundi for now, consider dynamic seller info */}
+                  <div className="text-sm text-gray-600"> 
+                    <p>Estimated Delivery: Within 1 hour</p> 
+                    <p>From: Kumar General Store, Bundi</p> 
                   </div>
                 </div>
               </CardContent>
