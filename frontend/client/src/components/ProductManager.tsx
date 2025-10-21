@@ -533,8 +533,8 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
                           >
                             Cancel
                           </Button>
-                          <Button type="submit" disabled={productMutation.isPending}> {/* ✅ Corrected casing */}
-                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")} {/* ✅ Consistent casing */}
+                          <Button type="submit" disabled={productMutation.isPending}> 
+                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")} 
                           </Button>
                         </div>
                       </form>
@@ -543,8 +543,8 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
                 </Dialog>
               </>
             ) : (
-              <Badge variant="outline" className="text-orange-500"> {/* ✅ Corrected component name and className */}
-                <Info className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
+              <Badge variant="outline" className="text-orange-500"> 
+                <Info className="h-4 w-4 mr-2" /> 
                 Verify account to add products
               </Badge>
             )}
@@ -553,7 +553,7 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
       </CardHeader>
       <CardContent> {/* ✅ Corrected component name */}
         {productsLoading ? ( // ✅ Corrected casing
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> {/* ✅ Corrected className */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> 
             {[...Array(3)].map((_, i) => ( // ✅ Corrected casing
               <Skeleton key={i} className="h-48 w-full rounded-lg" /> // ✅ Corrected component name and className
             ))}
@@ -561,11 +561,11 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
         ) : productsError ? ( // ✅ Corrected casing
           <p className="text-red-500">Error loading products: {productsError.message}</p> // ✅ Corrected className and casing
         ) : products && products.length === 0 ? (
-          <p className="text-muted-foreground">You haven't added any products yet.</p> {/* ✅ Corrected className */}
+          <p className="text-muted-foreground">You haven't added any products yet.</p> 
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> {/* ✅ Corrected className */}
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> 
             {products?.map((product) => (
-              <Card key={product.id} className="relative group overflow-hidden"> {/* ✅ Corrected component name and className */}
+              <Card key={product.id} className="relative group overflow-hidden"> 
                 {product.image && ( // Assuming `image` is a single string URL for display
                   <img
                     src={product.image}
@@ -573,19 +573,19 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
                     className="w-full h-40 object-cover rounded-t-lg" // ✅ Corrected className
                   />
                 )}
-                <CardContent className="p-4"> {/* ✅ Corrected component name and className */}
-                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4> {/* ✅ Corrected className */}
-                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p> {/* ✅ Corrected className */}
-                  <div className="flex justify-between items-center mt-2"> {/* ✅ Corrected className */}
-                    <p className="text-lg font-bold text-primary">₹{product.price}</p> {/* ✅ Corrected className */}
-                    <Badge variant="secondary">{product.stock} in stock</Badge> {/* ✅ Corrected component name */}
+                <CardContent className="p-4"> 
+                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4> 
+                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p> 
+                  <div className="flex justify-between items-center mt-2"> 
+                    <p className="text-lg font-bold text-primary">₹{product.price}</p> 
+                    <Badge variant="secondary">{product.stock} in stock</Badge> 
                   </div>
-                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"> {/* ✅ Corrected className */}
-                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}> {/* ✅ Corrected component name and casing */}
-                      <Edit className="h-4 w-4" /> {/* ✅ Corrected className */}
+                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"> 
+                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}> 
+                      <Edit className="h-4 w-4" /> 
                     </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}> {/* ✅ Corrected component name and casing */}
-                      <Trash2 className="h-4 w-4" /> {/* ✅ Corrected className */}
+                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}> 
+                      <Trash2 className="h-4 w-4" /> 
                     </Button>
                   </div>
                 </CardContent>
