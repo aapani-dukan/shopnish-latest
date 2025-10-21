@@ -5,8 +5,8 @@ import { orders, users, deliveryAddresses } from "../shared/backend/schema";
 import { eq, and, sql, isNull } from "drizzle-orm"; // sql और isNull इम्पोर्ट करें
 import { requireDeliveryBoyAuth } from "../server/middleware/authMiddleware";
 import { AuthenticatedRequest } from "../server/types";
-import { generateOTP, sendWhatsAppMessage } from "../server/lib/whatsappHelpers";
-
+import {  sendWhatsAppMessage } from "../server/lib/whatsappHelpers";
+import { generateOTP } from "../server/util/otp";
 const router = Router();
 
 // --- हेल्पर फंक्शन ---
