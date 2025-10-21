@@ -22,7 +22,7 @@ import { eq, and, not, desc, asc, inArray, isNull } from 'drizzle-orm'; // ✅ i
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
-import { sendWhatsappMessage } from '../server/util/msg91'; // ✅ New notification service
+import { sendWhatsappMessage } from '../server/lib/whatsappHelpers'; // ✅ New notification service
 import { grnerateOtp } from '../server/util/otp';
 const router = Router();
 
