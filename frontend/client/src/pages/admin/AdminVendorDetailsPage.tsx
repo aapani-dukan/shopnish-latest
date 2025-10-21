@@ -11,7 +11,7 @@ import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea"; // Assuming you have a Textarea component
 import { Loader2, ArrowLeft } from "lucide-react"; // Added ArrowLeft icon
-import apiRequest from "../../lib/queryclient"; // Changed from axios to apiRequest (assuming it's a wrapper over axios)
+import apiRequest from "../../lib/queryClient"; // Changed from axios to apiRequest (assuming it's a wrapper over axios)
 
 // Interfaces
 interface Seller { // Renamed from seller to Seller for consistency
