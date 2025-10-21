@@ -15,6 +15,13 @@
       "when": 1760532129441,
       "tag": "0001_long_toad_men",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1761056911343,
+      "tag": "0002_spicy_roulette",
+      "breakpoints": true
     }
   ]
 }

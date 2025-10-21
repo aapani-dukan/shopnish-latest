@@ -4,7 +4,7 @@ import { relations } from 'drizzle-orm';
 import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, subOrders, deliveryBatches, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews // ✅ subOrders और deliveryBatches को इम्पोर्ट करें
+  services, serviceProviders, serviceBookings, reviews,couponsPgTable // ✅ subOrders और deliveryBatches को इम्पोर्ट करें
 } from './schema'; // ✅ अब 'tables' की जगह 'schema' होना चाहिए अगर सभी टेबल एक ही फ़ाइल में हैं
 
 // --- Drizzle ORM Relations ---
