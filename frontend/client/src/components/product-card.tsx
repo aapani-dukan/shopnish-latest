@@ -4,7 +4,7 @@ import { toast } from "@/hooks/use-toast"; // Assuming correct path based on com
 import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
 import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
 import React, { useState } from "react"; // ✅ Corrected casing
-import { useAuth } from "@/hooks/useauth"; // Assuming correct path and casing
+import { useAuth } from "@/hooks/useAuth"; // Assuming correct path and casing
 import {
   Dialog,
   DialogContent,
