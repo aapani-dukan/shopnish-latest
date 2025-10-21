@@ -10,8 +10,8 @@ import {
 } from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../server/middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
-import { authorize } from '../../middleware/authMiddleware'; // ✅ Assuming authorize middleware
-import { validateRequest } from '../../middleware/authMiddleware';
+import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
+import { validateRequest } from '../../middleware/valudation';
 import { z } from 'zod'; // ✅ For validation
 
 const adminVendorsRouter = Router();
