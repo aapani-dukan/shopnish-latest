@@ -18,7 +18,7 @@ import SellerDashboard from "@/pages/seller-dashboard";
 import SellerApplyPage from "@/pages/seller-apply";
 import SellerStatusPage from "@/pages/seller-status";
 import NotFound from "@/pages/not-found";
-import AdminDashboard from "@/pages/admin/admin-dashboard";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
 import DeliveryApplyPage from "@/pages/delivery-apply";
 import DeliveryLogin from "@/pages/delivery-login";
 import LoginPage from "@/pages/login";
