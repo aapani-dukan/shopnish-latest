@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Textarea } from "@/components/ui/textarea"; // ✅ Corrected casing and path
 import { Badge } from "@/components/ui/badge"; // ✅ Corrected casing and path
 import { useToast } from "@/hooks/use-toast"; // ✅ Corrected casing and path
-import { apiRequest } from "@/lib/queryclient"; // ✅ Corrected casing and path
+import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
 import { Star, User, MessageSquare } from "lucide-react"; // ✅ Corrected casing
 import { useAuth } from "@/hooks/useauth"; // ✅ Added for authenticated user info
 
