@@ -3,14 +3,14 @@ import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
-  orderStatusEnum
+  orderStatusEnum,subOrders,deliveryBatches,couponsPgTable
 } from './tables';
 
 import {
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
-  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrderRelations,deliveryBatchesRelations
 } from './relations';
 
 import {
@@ -146,13 +146,13 @@ export {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
-  orderStatusEnum,
+  orderStatusEnum,subOrders, deliveryBatches, couponsPgTable,
 
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
-  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrderRelations,deliveryBatchesRelations,
 
   // Schemas
   insertUserSchema, insertSellerSchema, updateSellerSchema, insertStoreSchema, insertCategorySchema,
@@ -160,7 +160,7 @@ export {
   insertDeliveryAddressSchema, insertOrderSchema, insertOrderItemSchema, insertOrderTrackingSchema,
   insertPromoCodeSchema, insertServiceCategorySchema, insertServiceSchema, insertServiceProviderSchema,
   insertServiceBookingSchema, insertReviewSchema,
-
+insertSubOrderSchema, insertDeliveryBatchesSchema, insertCouponsPgTableSchema,
   // Types
   OrderItemWithProduct, OrderWithItems, User, InsertUser, Seller, InsertSeller, Store, InsertStore,
   Category, InsertCategory, Product, InsertProduct, DeliveryArea, InsertDeliveryArea, DeliveryBoy,
