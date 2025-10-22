@@ -4,7 +4,7 @@ import { Router, Request, Response } from 'express';
 import { db } from '../db.ts';
 import { users, userRoleEnum } from '../../shared/backend/schema.ts';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt';
+import bcrypt from 'bcryptjs';
 import { authAdmin } from '../lib/firebaseAdmin.ts';
 // ✅ authUtils से comparePassword को इम्पोर्ट करें
 import { comparePassword } from '../util/authUtils.ts'; // सुनिश्चित करें कि पाथ सही है
