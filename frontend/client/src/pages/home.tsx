@@ -1,20 +1,20 @@
 // client/src/pages/home.tsx
 
-import React, { useState, useEffect } from "react"; // ✅ usestate, useeffect को React से इम्पोर्ट करें
-import { useQuery } from "@tanstack/react-query"; // ✅ usequery को @tanstack/react-query से इम्पोर्ट करें
-import { useLocation as useRouterLocation, Link } from "react-router-dom"; // ✅ react-router-dom के useLocation को useRouterLocation नाम दें
-import { useLocation } from '../context/LocationContext'; // ✅ अपने LocationContext से useLocation इम्पोर्ट करें
-import { Filter, ArrowRight, ShieldIcon } from "lucide-react"; // ✅ icons के नाम सही करें
-import { Button } from "/components/ui/button"; // ✅ Button को Button के रूप में इम्पोर्ट करें
-import { Card, CardContent } from "/components/ui/card";
-import { Checkbox } from "/components/ui/checkbox";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "/components/ui/select";
-import { Skeleton } from "/components/ui/skeleton";
-import ProductCard from "/components/product-card"; // ✅ ProductCard का नामकरण सही करें
-import Footer from "/components/footer"; // ✅ Footer का नामकरण सही करें
+import React, { useState, useEffect } from "react"; 
+import { useQuery } from "@tanstack/react-query"; 
+import { useLocation as useRouterLocation, Link } from "react-router-dom"; 
+import { useLocation } from '../context/LocationContext'; 
+import { Filter, ArrowRight, ShieldIcon } from "lucide-react"; 
+import { Button } from "@/components/ui/button"; 
+import { Card, CardContent } from "@/components/ui/card";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Skeleton } from "@/components/ui/skeleton";
+import ProductCard from "@/components/product-card"; 
+import Footer from "@/components/footer"; 
 import axios from 'axios';
-import { useAuth } from '/hooks/useauth'; // ✅ useAuth का नामकरण सही करें
-import LocationDisplay from '../components/locationdisplay'; // ✅ LocationDisplay का नामकरण सही करें
+import { useAuth } from '@/hooks/useauth'; 
+import LocationDisplay from '../components/locationdisplay'; 
 
 // Add URLSearchParams import for older environments if needed
 // import { URLSearchParams } from 'url'; 
