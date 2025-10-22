@@ -72,17 +72,37 @@ export default function Home() {
   });
 
   const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
-    queryKey: ['products', selectedCategory, searchQuery], 
+    queryKey: ['products', selectedCategory, searchQuery, customerLocation], // ✅ QueryKey में Location जोड़ें
     queryFn: async () => {
       const params = new URLSearchParams();
+      
+      // 1. यदि स्थान डेटा मौजूद नहीं है, तो एक स्पष्ट एरर थ्रो करें (जैसा कि बैकएंड अपेक्षित करता है)
+      if (!customerLocation || !customerLocation.pincode) {
+          throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
+      }
+
+      // 2. आवश्यक स्थान पैरामीटर्स जोड़ें
+      params.append('pincode', customerLocation.pincode.toString());
+      params.append('lat', customerLocation.lat.toString());
+      params.append('lng', customerLocation.lng.toString());
+      
+      // 3. मौजूदा फ़िल्टर जोड़ें
       if (selectedCategory) params.append('categoryId', selectedCategory.toString());
       if (searchQuery) params.append('search', searchQuery);
       
       const response = await fetch(`/api/products?${params}`);
-      if (!response.ok) throw new Error('Failed to fetch products');
+      
+      if (!response.ok) {
+        // ✅ बैकएंड से एरर मैसेज पढ़ें (जैसा कि 400 प्रतिक्रिया में आ रहा है)
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch products');
+      }
       return response.json();
     },
+    // ✅ केवल तभी फ़ेच करें जब location data भी उपलब्ध हो (वैकल्पिक रूप से)
+    enabled: !!customerLocation?.pincode, 
   });
+
 
 
   
