@@ -12,7 +12,7 @@ import {
 import { AuthenticatedRequest } from '../../middleware/verifyToken';
 import { eq, and, gt, lt, sql } from 'drizzle-orm'; // ✅ Added sql for now()
 import { authorize } from '../../middleware/authorize';
-import { validateRequest } from '../../middleware/validateRequest';
+import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod'; // For validation
 
 const adminDiscountsRouter = Router();
