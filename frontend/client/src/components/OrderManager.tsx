@@ -6,9 +6,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 // ✅ Assuming these types are correctly defined in shared/backend/schema
 import type { Seller, OrderWithItems, OrderStatusEnum } from "shared/backend/schema";
-import { apiRequest } from "@/lib/queryclient";
+import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
-import { useSocket } from "@/hooks/usesocket";
+import { useSocket } from "@/hooks/useSocket";
 import { useEffect } from "react";
 
 // ✅ Extend OrderWithItems for consistency, assuming deliveryBoy is part of the order response
