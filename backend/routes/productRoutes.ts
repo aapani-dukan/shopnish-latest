@@ -230,7 +230,7 @@ router.post('/', verifyToken, isSeller, async (req: AuthenticatedRequest, res: R
 });
 
 // PUT /api/products/:productId - Update an existing product (Seller)
-router.put('/:productId', verifyToken, isSeller, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.put('/:productId', verifyToken,requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log(`🔄 [API] Received request to update product ${req.params.productId}.`);
   const sellerId = req.user?.id;
   const productId = Number(req.params.productId);
