@@ -4,7 +4,7 @@ import { authAdmin } from "../lib/firebaseAdmin.ts";
 import { db } from "../db"; // ✅ Drizzle DB इंस्टेंस को इम्पोर्ट करें
 import { users } from "../../shared/backend/schema"; // ✅ Users स्कीमा को इम्पोर्ट करें
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcrypt'; // ✅ bcrypt को इम्पोर्ट करें
+import bcrypt from 'bcryptjs'; // ✅ bcrypt को इम्पोर्ट करें
 
 const saltRounds = 10; // bcrypt की जटिलता। 10 एक अच्छा डिफ़ॉल्ट है।
 
