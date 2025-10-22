@@ -32,6 +32,7 @@ import { verifyToken } from "./middleware/verifyToken";
 import { categories } from "../shared/backend/schema.ts";
 import whatsappRouter from '../routes/whatsappRoutes.ts';
 import addressRouter from '../routes/addressRoutes.ts';
+import adminDiscountsRouter from './roots/adminDiscount.ts';
 //import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 import customerRouter from '../routes/customerRoutes';
