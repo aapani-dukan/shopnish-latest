@@ -8,12 +8,13 @@ import { Filter, ArrowRight, ShieldIcon } from "lucide-react";
 import { Button } from "@/components/ui/button"; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
+
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/product-card"; 
 import Footer from "@/components/footer"; 
 import axios from 'axios';
-import { useAuth } from '@/hooks/useauth'; 
+import { useAuth } from '@/hooks/useAuth'; 
 import LocationDisplay from '../components/locationdisplay'; 
 
 // Add URLSearchParams import for older environments if needed
