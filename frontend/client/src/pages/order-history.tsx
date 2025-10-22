@@ -13,8 +13,8 @@ import {
   Receipt,
   // ✅ added custom user auth hook
 } from "lucide-react";
-import { useAuth } from "@/hooks/useauth";
-import { apiRequest } from "@/lib/queryclient"; // Assuming apiRequest is available
+import { useAuth } from "@/hooks/useAuth";
+import { apiRequest } from "@/lib/queryClient"; // Assuming apiRequest is available
 
 // ✅ Updated DeliveryAddress interface
 interface DeliveryAddress {
