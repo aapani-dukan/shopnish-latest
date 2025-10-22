@@ -369,7 +369,7 @@ router.get('/seller', verifyToken,requireSellerAuth, async (req: AuthenticatedRe
 // =========================================================================
 
 // GET /api/products/admin/pending - Get products awaiting admin approval (Admin)
-router.get('/admin/pending', verifyToken, isAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.get('/admin/pending', verifyToken,requireAdminAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     console.log("📄 [API] Received request to get pending products for admin review.");
     try {
         const pendingProducts = await db.query.products.findMany({
@@ -395,7 +395,7 @@ router.get('/admin/pending', verifyToken, isAdmin, async (req: AuthenticatedRequ
 });
 
 // PUT /api/products/admin/:productId/approve - Approve a product (Admin)
-router.put('/admin/:productId/approve', verifyToken, isAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.put('/admin/:productId/approve', verifyToken,requireAdminAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     console.log(`✅ [API] Received request to approve product ${req.params.productId}.`);
     const productId = Number(req.params.productId);
 
@@ -420,7 +420,7 @@ router.put('/admin/:productId/approve', verifyToken, isAdmin, async (req: Authen
 });
 
 // PUT /api/products/admin/:productId/reject - Reject a product (Admin)
-router.put('/admin/:productId/reject', verifyToken, isAdmin, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.put('/admin/:productId/reject', verifyToken,requireAdminAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     console.log(`❌ [API] Received request to reject product ${req.params.productId}.`);
     const productId = Number(req.params.productId);
     const { reason } = req.body; // अस्वीकृति का कारण
