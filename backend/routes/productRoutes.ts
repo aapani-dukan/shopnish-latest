@@ -180,7 +180,7 @@ function validateProductInput(data: any, isUpdate: boolean = false) {
 // =========================================================================
 
 // POST /api/products - Create a new product (Seller)
-router.post('/', verifyToken, isSeller, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.post('/', verifyToken,requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("🚀 [API] Received request to create a new product.");
   const sellerId = req.user?.id; // Assuming req.user.id is the seller's user ID
 
@@ -303,7 +303,7 @@ router.put('/:productId', verifyToken,requireSellerAuth, async (req: Authenticat
 });
 
 // DELETE /api/products/:productId - Delete a product (Seller)
-router.delete('/:productId', verifyToken, isSeller, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.delete('/:productId', verifyToken,requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log(`🗑️ [API] Received request to delete product ${req.params.productId}.`);
   const sellerId = req.user?.id;
   const productId = Number(req.params.productId);
@@ -336,7 +336,7 @@ router.delete('/:productId', verifyToken, isSeller, async (req: AuthenticatedReq
 });
 
 // GET /api/products/seller - Get products for the authenticated seller (Seller)
-router.get('/seller', verifyToken, isSeller, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+router.get('/seller', verifyToken,requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("📦 [API] Received request to get seller's products.");
   const sellerId = req.user?.id;
 
