@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator"; // Adjusted path
 import { Skeleton } from "@/components/ui/skeleton"; // Adjusted path
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Adjusted path
 import { useToast } from "@/hooks/use-toast"; // Adjusted path
-import { apiRequest } from "@/lib/queryclient"; // Adjusted path
+import { apiRequest } from "@/lib/queryClient"; // Adjusted path
 import Header from "@/components/header"; // Adjusted path
 import Footer from "@/components/footer"; // Adjusted path
 // Removed direct import of api and auth as they are not used directly here anymore.
