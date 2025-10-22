@@ -12,7 +12,7 @@ import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
-import AddressInputWithMap from "@/components/addressinputwithmap";
+import AddressInputWithMap from "@/components/AddressInputWithMap";
 
 // ✅ Updated SellerInfo Interface
 interface SellerInfo {
