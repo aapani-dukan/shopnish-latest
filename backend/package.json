@@ -24,7 +24,7 @@
             "@neondatabase/serverless": "^0.10.4",
             "are-we-there-yet": "^4.0.2",
             "axios": "^1.12.2",
-            "bcrypt": "^5.1.1",
+            
             "bcryptjs": "^2.4.3",
             "buffer": "^6.0.3",
             "compression": "^1.8.0",
