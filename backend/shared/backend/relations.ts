@@ -236,7 +236,6 @@ export const serviceBookingsRelations = relations(serviceBookings, ({ one }) => 
     references: [services.id],
   }),
 }));
-
 export const reviewsRelations = relations(reviews, ({ one }) => ({
   customer: one(users, {
     fields: [reviews.customerId],
@@ -246,19 +245,20 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
     fields: [reviews.productId],
     references: [products.id],
   }),
-  order: one(orders, { // ✅ Master Order से लिंक
+  order: one(orders, {
     fields: [reviews.orderId],
     references: [orders.id],
   }),
-  // ✅ यदि deliveryBoyId भी रिव्यू में है, तो उसका भी रिलेशन यहाँ जोड़ें
-   deliveryBoy: one(deliveryBoys, {
-     fields: [reviews.deliveryBoyId],
-    references: [deliveryBoys.id],
-     optional: true,
-   }),
-  deliveryAddress: one(deliveryAddresses, {
-     fields: [reviews.deliveryAddressId],
-     references: [deliveryAddresses.id],
-    optional: true,
-   }),
+  // ❌ इन दोनों संबंधों को हटा दें अगर reviews टेबल में deliveryBoyId और deliveryAddressId कॉलम नहीं हैं
+  // deliveryBoy: one(deliveryBoys, {
+  //   fields: [reviews.deliveryBoyId], // यह undefined होगा
+  //   references: [deliveryBoys.id],
+  //   optional: true,
+  // }),
+  // deliveryAddress: one(deliveryAddresses, {
+  //   fields: [reviews.deliveryAddressId], // यह undefined होगा
+  //   references: [deliveryAddresses.id],
+  //   optional: true,
+  // }),
 }));
+
