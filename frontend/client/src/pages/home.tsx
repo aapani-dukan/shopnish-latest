@@ -123,23 +123,44 @@ export default function Home() { // ✅ function का नामकरण स�
       }
       return response.json();
     },
-    // ✅ केवल तभी फ़ेच करें जब location data उपलब्ध हो और लोड हो गया हो
+    
     enabled: !!currentLocation?.pincode && !loadingLocation, 
   });
 
   // Featured products data fetching
-  const { 
-    data: featuredProducts = [], // ✅ featuredProducts का नामकरण सही करें
-    isLoading: featuredProductsLoading, // ✅ isLoading का नामकरण सही करें
-    error: featuredProductsError // ✅ error का नामकरण सही करें
-  } = useQuery<Product[]>({ // ✅ useQuery का नामकरण सही करें
-    queryKey: ['featuredProducts'], 
-    queryFn: async () => {
-      const response = await fetch('/api/products?featured=true');
-      if (!response.ok) throw new Error('Failed to fetch featured products');
-      return response.json();
-    },
-  });
+  
+const { 
+  data: featuredProducts = [], 
+  isLoading: featuredProductsLoading, 
+  error: featuredProductsError 
+} = useQuery<Product[]>({
+  queryKey: ['featuredProducts', currentLocation], // ✅ यहाँ currentLocation जोड़ें
+  queryFn: async () => {
+    const params = new URLSearchParams();
+
+    // ✅ currentLocation से lat/lng/pincode का उपयोग करें
+    if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
+        throw new Error("Customer location (pincode, lat, lng) is required for filtering featured products.");
+    }
+
+    // ✅ सक्रिय currentLocation से पैरामीटर्स जोड़ें
+    params.append('pincode', currentLocation.pincode.toString());
+    params.append('lat', currentLocation.lat.toString());
+    params.append('lng', currentLocation.lng.toString());
+    
+    params.append('featured', 'true'); // यह पहले से था
+
+    const response = await fetch(`/api/products?${params.toString()}`); // ✅ .toString() जोड़ें
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to fetch featured products');
+    }
+    return response.json();
+  },
+  // ✅ तभी फ़ेच करें जब location data उपलब्ध हो और लोड हो गया हो
+  enabled: !!currentLocation?.pincode && !loadingLocation, 
+});
+  
 
   // Handle loading and error states at the top level for a better UX
   // ✅ LocationContext से लोडिंग स्टेट्स को भी शामिल करें
