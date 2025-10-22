@@ -14,7 +14,7 @@ import { apiRequest } from "@/lib/queryClient"; // Adjusted path
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react"; // Adjusted path
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth"; // Adjusted path
-import AddressInputWithMap from "@/components/addressinputwithmap"; // Adjusted path
+import AddressInputWithMap from "@/components/AddressInputWithMap"; // Adjusted path
 
 // ✅ Updated CartItem Interface
 interface CartItem {
