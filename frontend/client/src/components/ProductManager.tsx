@@ -13,7 +13,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; /
 import { useForm } from "react-hook-form"; // ✅ Corrected casing
 import { zodResolver } from "@hookform/resolvers/zod"; // ✅ Corrected casing
 import { insertProductSchema, insertCategorySchema, type Seller, ProductWithSeller, Category } from "shared/backend/schema"; // Ensure these types are correctly imported
-import { apiRequest } from "@/lib/queryclient"; // ✅ Corrected casing and path
+import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
 import { useToast } from "@/hooks/use-toast"; // ✅ Corrected casing and path
 import { Plus, Edit, Trash2, Info } from "lucide-react";
 import { z } from "zod";
