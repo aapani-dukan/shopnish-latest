@@ -6,7 +6,7 @@ import {
   users,
   approvalStatusEnum,
   userRoleEnum,
-} from 'shared/backend/schema';
+} from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Corrected path
 import { eq, and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
