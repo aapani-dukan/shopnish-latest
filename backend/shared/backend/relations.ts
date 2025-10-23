@@ -1,6 +1,6 @@
 // backend/src/shared/backend/relations.ts
 
-import { relations } from 'drizzle-orm';
+{/*import { relations } from 'drizzle-orm';
 // ✅ सभी स्कीमा ऑब्जेक्ट्स को एक साथ इम्पोर्ट करें
 import * as schema from './schema';
 
@@ -17,7 +17,7 @@ export const usersRelations = relations(schema.users, ({ one, many }) => ({
   serviceBookings: many(schema.serviceBookings),
   cartItems: many(schema.cartItems),
 }));
-
+*/}
 {/*export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
   user: one(schema.users, {
     fields: [schema.sellersPgTable.userId],
