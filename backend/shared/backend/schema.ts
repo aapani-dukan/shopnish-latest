@@ -11,7 +11,7 @@ import {
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
-  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrderRelations,deliveryBatchesRelations
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrdersRelations,deliveryBatchesRelations
 } from './relations';
 
 import {
@@ -153,7 +153,7 @@ productCategoryEnum,deliveryStatusEnum,
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
-  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrderRelations,deliveryBatchesRelations,
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrdersRelations,deliveryBatchesRelations,
 
   // Schemas
   insertUserSchema, insertSellerSchema, updateSellerSchema, insertStoreSchema, insertCategorySchema,
