@@ -83,10 +83,7 @@ export const cartItemRelations = relations(cartItems, ({ one }) => ({
     fields: [cartItems.userId],
     references: [users.id],
   }),
-  product: one(products, {
-   fields: [cartItems.productId],
-    references: [products.id],
-  }),
+  product: one(() => products, { fields: [cartItems.productId], references: [products.id] }),
   seller: one(sellersPgTable, {
     fields: [cartItems.sellerId],
     references: [sellersPgTable.id],
