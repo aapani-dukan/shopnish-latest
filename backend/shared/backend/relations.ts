@@ -222,7 +222,7 @@ export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one
   }),
 }));
 
-export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
+{/*export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.reviews.customerId],
     references: [schema.users.id],
@@ -234,5 +234,5 @@ export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
   order: one(schema.orders, {
     fields: [schema.reviews.orderId],
     references: [schema.orders.id],
-  }),
-}));
+  }), 
+})); 
