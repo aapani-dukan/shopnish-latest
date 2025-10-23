@@ -231,7 +231,7 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+//  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
   sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
   quantity: integer("quantity").notNull().default(1),
   priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(),
