@@ -88,7 +88,7 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
   }),
 }));
 */}
-export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
+{/*export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
   user: one(schema.users, {
     fields: [schema.deliveryAddresses.userId],
     references: [schema.users.id],
@@ -206,7 +206,7 @@ export const serviceProvidersRelations = relations(schema.serviceProviders, ({ o
   }),
   serviceBookings: many(schema.serviceBookings),
 }));
-
+*/}
 {/*export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.serviceBookings.customerId],
