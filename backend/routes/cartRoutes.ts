@@ -16,23 +16,28 @@ import { getIO } from '../server/socket.ts';
 const cartRouter = Router();
 
 // 1. ✅ GET /api/cart - Get user's cart (अब cartItems टेबल का उपयोग करता है)
-cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
+
+cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     console.log("🛒 [API] Received GET request for cart.");
-    const userId = req.user?.id; // firebaseUid के बजाय सीधे userId का उपयोग करें
-    
+
+    const userId = req.user?.id;
+    console.log("👤 [API] userId:", userId); // ✅ पहला debug point
+
     res.set({
-        'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0',
+      'Cache-Control': 'no-store, no-cache, must-revalidate, proxy-revalidate',
+      'Pragma': 'no-cache',
+      'Expires': '0',
     });
     res.removeHeader('ETag'); 
 
     if (!userId) {
+      console.warn("⚠️ [API] Missing userId in request — returning 401");
       return res.status(401).json({ error: 'Unauthorized: Missing user ID' });
     }
 
-    // सीधे cartItems को प्रोडक्ट डिटेल्स के साथ fetch करें
+    console.log("🧩 [API] Fetching cart items from DB for user:", userId);
+
     const cartItemsWithDetails = await db.query.cartItems.findMany({
       where: eq(cartItems.userId, userId),
       with: {
@@ -41,17 +46,17 @@ cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response
             id: true,
             name: true,
             description: true,
-            price: true, // Product का वर्तमान मूल्य
+            price: true,
             image: true,
             sellerId: true,
             unit: true,
-            stock: true, // स्टॉक जानकारी भी महत्वपूर्ण है
+            stock: true,
             minOrderQty: true,
             maxOrderQty: true,
             approvalStatus: true,
           }
         },
-        seller: { // ✅ सेलर का विवरण भी fetch करें
+        seller: {
           columns: {
             id: true,
             businessName: true,
@@ -61,33 +66,30 @@ cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response
       orderBy: (cartItems, { asc }) => [asc(cartItems.createdAt)],
     });
 
+    console.log(`✅ [API] Found ${cartItemsWithDetails.length} cart items`);
+
     let totalAmount = 0;
     const cleanedCartData = cartItemsWithDetails.map(item => {
-      // सुनिश्चित करें कि प्रोडक्ट डेटा मौजूद है और स्वीकृत है
       if (!item.product || item.product.approvalStatus !== approvalStatusEnum.enumValues[1]) {
-          console.warn(`[CART] Product ${item.productId} not found or not approved, removing from cart view.`);
-          return null; // अमान्य प्रोडक्ट को कार्ट से हटा दें
+        console.warn(`[CART] ⚠️ Invalid or unapproved product in cartItem ${item.id} (productId: ${item.productId})`);
+        return null;
       }
 
-      // priceAtAdded का उपयोग करें (जो स्कीमा में है)
-      const effectivePrice = item.priceAtAdded; // अब यह स्कीमा में है
-
-      // मात्रा और स्टॉक की जांच
-      const effectiveQuantity = Math.min(item.quantity, item.product.stock); // स्टॉक से अधिक मात्रा न होने दें
-      
+      const effectivePrice = item.priceAtAdded;
+      const effectiveQuantity = Math.min(item.quantity, item.product.stock);
       const itemTotal = effectivePrice * effectiveQuantity;
       totalAmount += itemTotal;
 
       return {
         id: item.id,
         productId: item.productId,
-        quantity: effectiveQuantity, // अपडेटेड मात्रा
-        priceAtAdded: item.priceAtAdded, // कार्ट में जोड़ते समय की कीमत
-        itemTotal: itemTotal,
+        quantity: effectiveQuantity,
+        priceAtAdded: item.priceAtAdded,
+        itemTotal,
         product: {
           id: item.product.id,
           name: item.product.name,
-          price: item.product.price, // प्रोडक्ट का वर्तमान मूल्य
+          price: item.product.price,
           image: item.product.image,
           unit: item.product.unit,
           stock: item.product.stock,
@@ -99,22 +101,23 @@ cartRouter.get('/', requireAuth, async (req: AuthenticatedRequest, res: Response
           businessName: item.seller.businessName,
         } : null,
       };
-    }).filter(item => item !== null); // null आइटम्स को हटा दें
+    }).filter(item => item !== null);
+
+    console.log(`🧮 [API] Total amount: ${totalAmount}, Cleaned items: ${cleanedCartData.length}`);
 
     return res.status(200).json({
       message: "Cart fetched successfully",
       items: cleanedCartData,
-      totalAmount: totalAmount,
+      totalAmount,
     });
 
   } catch (error: any) {
     console.error('❌ [API] Error fetching cart:', error);
-    res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate' }); 
-    // next(error); // ✅ त्रुटियों को संभालने के लिए next का उपयोग करें
+    console.error('❌ [API] Stack Trace:', error.stack); // ✅ दूसरा debug point
+    res.set({ 'Cache-Control': 'no-store, no-cache, must-revalidate' });
     return res.status(500).json({ error: 'Failed to fetch cart. An unexpected error occurred.' });
   }
 });
-
 
 // 2. ✅ POST /api/cart/add - Add a new item to cart (अब cartItems टेबल का उपयोग करता है)
 cartRouter.post('/add', requireAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
