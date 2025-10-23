@@ -18,7 +18,7 @@ export const usersRelations = relations(schema.users, ({ one, many }) => ({
   cartItems: many(schema.cartItems),
 }));
 
-export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
+{/*export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
   user: one(schema.users, {
     fields: [schema.sellersPgTable.userId],
     references: [schema.users.id],
@@ -40,7 +40,7 @@ export const storesRelations = relations(schema.stores, ({ one, many }) => ({
 export const categoriesRelations = relations(schema.categories, ({ many }) => ({
   products: many(schema.products),
 }));
-
+*/}
 {/*export const productsRelations = relations(schema.products, ({ one, many }) => ({
   seller: one(schema.sellersPgTable, {
     fields: [schema.products.sellerId],
