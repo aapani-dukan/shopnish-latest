@@ -3,7 +3,7 @@ import { z } from "zod";
 import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   orders, orderItems, orderTracking, promoCodes, serviceCategories, services, serviceProviders,
-  serviceBookings, reviews, deliveryAddresses
+  serviceBookings, reviews, deliveryAddresses, subOrders, deliveryBatches, couponsPgTables
 } from './tables';
 
 // --- Zod Schemas for Validation ---
