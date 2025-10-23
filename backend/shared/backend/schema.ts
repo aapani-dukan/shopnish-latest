@@ -162,11 +162,5 @@ productCategoryEnum,deliveryStatusEnum,
   insertPromoCodeSchema, insertServiceCategorySchema, insertServiceSchema, insertServiceProviderSchema,
   insertServiceBookingSchema, insertReviewSchema,
 insertSubOrderSchema, insertDeliveryBatchesSchema, insertCouponsPgTableSchema,
-  // Types
-  OrderItemWithProduct, OrderWithItems, User, InsertUser, Seller, InsertSeller, Store, InsertStore,
-  Category, InsertCategory, Product, InsertProduct, DeliveryArea, InsertDeliveryArea, DeliveryBoy,
-  InsertDeliveryBoy, CartItem, InsertCartItem, DeliveryAddress, InsertDeliveryAddress, Order, InsertOrder,
-  OrderItem, InsertOrderItem, OrderTracking, InsertOrderTracking, PromoCode, InsertPromoCode,
-  ServiceCategory, InsertServiceCategory, Service, InsertService, ServiceProvider, InsertServiceProvider,
-  ServiceBooking, InsertServiceBooking, Review, InsertReview
+  
 };
