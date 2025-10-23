@@ -56,7 +56,7 @@ router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, n
       deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : null,
       businessType,
       approvalStatus: approvalStatusEnum.enumValues[0],
-      applicationDate: new Date(),
+    //  applicationDate: new Date(),
     }).returning();
 
     const [updatedUser] = await db.update(users)
@@ -75,7 +75,7 @@ router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, n
         firebaseUid: updatedUser.firebaseUid,
         role: updatedUser.role,
         email: updatedUser.email,
-        name: updatedUser.name,
+        name: updatedUser.firstName + " " updatedUser.lastName,
       },
     });
   } catch (error) {
