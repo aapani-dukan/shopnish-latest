@@ -9,7 +9,7 @@ import {
 
 import {
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
-  deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
+  deliveryBoysRelations, cartItemRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrderRelations,deliveryBatchesRelations
 } from './relations';
@@ -151,7 +151,7 @@ export {
 productCategoryEnum,deliveryStatusEnum,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
-  deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
+  deliveryBoysRelations, cartItemRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrderRelations,deliveryBatchesRelations,
 
