@@ -1,73 +1,40 @@
-// backend/src/shared/backend/schema.ts
+// backend/src/shared/backend/tables.ts
 
 import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm"; // ✅ relations को इम्पोर्ट करें
+import { relations } from "drizzle-orm"; // ✅ relations को इम्पोर्ट करें - यह यहाँ उपयोग नहीं हो रहा है, लेकिन ठीक है
 
 // =========================================================================
-// Enums
+// Enums - इन्हें सबसे पहले रखें
 // =========================================================================
 
-// Master Order Status (ग्राहक के समग्र ऑर्डर के लिए)
 export const masterOrderStatusEnum = pgEnum('master_order_status', [
-  'pending',          // ऑर्डर बनाया गया है, भुगतान लंबित/पुष्टि की प्रतीक्षा
-  'confirmed',        // भुगतान सफल, सभी सब-ऑर्डर बनाए गए हैं
-  'partially_fulfilled', // कुछ सब-ऑर्डर डिलीवर हो गए हैं
-  'fulfilled',        // सभी सब-ऑर्डर डिलीवर हो गए हैं
-  'cancelled',        // पूरा मास्टर ऑर्डर रद्द कर दिया गया है
-  'failed'            // भुगतान विफल या ऑर्डर बनाने में विफलता
+  'pending', 'confirmed', 'partially_fulfilled', 'fulfilled', 'cancelled', 'failed'
 ]);
-
-// Sub-Order Status (सेलर-विशिष्ट ऑर्डर के लिए, प्रोसेसिंग से संबंधित)
 export const subOrderStatusEnum = pgEnum('sub_order_status', [
-  'pending',      // सेलर को असाइन किया गया, पुष्टि की प्रतीक्षा
-  'accepted',     // सेलर ने स्वीकार कर लिया
-  'preparing',    // सेलर प्रोडक्ट तैयार कर रहा है
-  'ready_for_pickup', // प्रोडक्ट डिलीवरी बॉय के लिए तैयार है
-  'cancelled',    // सेलर या एडमिन द्वारा रद्द कर दिया गया है
-  'rejected'      // सेलर द्वारा अस्वीकार कर दिया गया है
+  'pending', 'accepted', 'preparing', 'ready_for_pickup', 'cancelled', 'rejected'
 ]);
- export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
+export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
   "pending", "processing", "shipped", "delivered", "cancelled", "returned"
 ]);
-// Delivery Status (डिलीवरी बैच और सब-ऑर्डर डिलीवरी के लिए)
 export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
-  "pending",          // अभी तक डिलीवरी असाइन नहीं की गई है
-  "assigned",         // डिलीवरी बॉय को असाइन किया गया है
-  "out_for_pickup",   // डिलीवरी बॉय पिकअप के रास्ते में है
-  "picked_up",        // डिलीवरी बॉय ने आइटम पिकअप कर लिया है (पहला पिकअप होने पर ट्रिगर)
-  "out_for_delivery", // डिलीवरी बॉय डिलीवरी के लिए निकला है (सभी पिकअप होने पर ट्रिगर)
-  "delivered",        // डिलीवर कर दिया गया है
-  "failed", 
-  "exepted",          // डिलीवरी विफल
-  "cancelled"         // डिलीवरी रद्द
+  "pending", "assigned", "out_for_pickup", "picked_up", "out_for_delivery", "delivered", "failed", "exepted", "cancelled"
 ]);
-// ✅ 4. Product Category Enum (नई)
 export const productCategoryEnum = pgEnum("product_category", [
-  "Electronics",
-  "Fashion",
-  "Home & Kitchen",
-  "Books",
-  "Groceries",
-  "Health & Beauty",
-  "Sports & Outdoors",
-  "Toys & Games",
-  "Automotive",
-  "Jewelry",
-  "Pet Supplies",
-  "Other"
+  "Electronics", "Fashion", "Home & Kitchen", "Books", "Groceries", "Health & Beauty",
+  "Sports & Outdoors", "Toys & Games", "Automotive", "Jewelry", "Pet Supplies", "Other"
 ]);
 export const userRoleEnum = pgEnum("user_role", ["customer", "seller", "admin", "delivery-boy"]);
 export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected"]);
-
 export const paymentMethodEnum = pgEnum("payment_method", ["COD", "ONLINE"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
-
 export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed_amount']);
 export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_seller', 'specific_product', 'category']);
+
 // =========================================================================
-// Core User & Seller Tables (कोई बड़ा बदलाव नहीं, बस रेफ्रेंस के लिए)
+// Core User & Seller Tables (Order them carefully)
 // =========================================================================
 
+// 1. users - किसी को संदर्भित नहीं करता
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
   firebaseUid: text("firebase_uid").unique(),
@@ -78,7 +45,7 @@ export const users = pgTable("users", {
   phone: text("phone").notNull(),
   role: userRoleEnum("role").notNull().default("customer"),
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("approved"),
-  address: text("address"), // ✅ ये डिलीवरी एड्रेस से मूव हो सकते हैं यदि user का अपना स्थायी पता स्टोर करना हो
+  address: text("address"),
   city: text("city"),
   pincode: text("pincode"),
   isActive: boolean("is_active").default(true),
@@ -89,7 +56,25 @@ export const users = pgTable("users", {
   lastActivityAt: timestamp("last_activity_at").defaultNow(),
 });
 
+// 2. deliveryAddresses - users को संदर्भित करता है
+export const deliveryAddresses = pgTable('delivery_addresses', {
+  id: serial('id').primaryKey(),
+  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
+  fullName: text('full_name').notNull(),
+  phoneNumber: text('phone_number'),
+  addressLine1: text('address_line1').notNull(),
+  addressLine2: text('address_line2'),
+  city: text('city').notNull().default('unknown'),
+  state: text('state').notNull(),
+  postalCode: text('postal_code').notNull(),
+  latitude: decimal('latitude', { precision: 10, scale: 7 }).$type<number>(),
+  longitude: decimal('longitude', { precision: 10, scale: 7 }).$type<number>(),
+  label: text('label'),
+  isDefault: boolean('is_default').default(false),
+  createdAt: timestamp('created_at').defaultNow(),
+});
 
+// 3. sellersPgTable - users को संदर्भित करता है
 export const sellersPgTable = pgTable("sellers", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").unique().notNull().references(() => users.id),
@@ -115,6 +100,7 @@ export const sellersPgTable = pgTable("sellers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// 4. stores - sellersPgTable को संदर्भित करता है
 export const stores = pgTable("stores", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").references(() => sellersPgTable.id),
@@ -127,13 +113,13 @@ export const stores = pgTable("stores", {
   isActive: boolean("is_active").default(true),
   licenseNumber: text("license_number"),
   gstNumber: text("gst_number"),
-  latitude: decimal("latitude", { precision: 10, scale: 7 }).$type<number>(), // ✅ स्टोर के लिए Latitude
-  longitude: decimal("longitude", { precision: 10, scale: 7 }).$type<number>(), // ✅ स्टोर के लिए Longitude
+  latitude: decimal("latitude", { precision: 10, scale: 7 }).$type<number>(),
+  longitude: decimal("longitude", { precision: 10, scale: 7 }).$type<number>(),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(), // ✅ updatedAt जोड़ा
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-
+// 5. categories - किसी को संदर्भित नहीं करता
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
@@ -145,7 +131,7 @@ export const categories = pgTable("categories", {
   sortOrder: integer("sort_order").default(0),
 });
 
-
+// 6. products - sellersPgTable, stores, categories को संदर्भित करता है
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
@@ -165,12 +151,10 @@ export const products = pgTable("products", {
   minOrderQty: integer("min_order_qty").default(1),
   maxOrderQty: integer("max_order_qty").default(100),
   isActive: boolean("is_active").default(true),
-
-  deliveryScope: text("delivery_scope").notNull().default('LOCAL'), // 'LOCAL', 'CITY', 'STATE', 'NATIONAL'
+  deliveryScope: text("delivery_scope").notNull().default('LOCAL'),
   productDeliveryPincodes: text("product_delivery_pincodes").array().$type<string[]>(),
   productDeliveryRadiusKM: integer("product_delivery_radius_km").$type<number>(),
-  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'), // ✅ यह सेलर के लिए अनुमानित डिलीवरी टाइम फ्रेम है
-  
+  estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'),
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
@@ -178,17 +162,7 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-
-export const deliveryAreas = pgTable("delivery_areas", {
-  id: serial("id").primaryKey(),
-  areaName: text("area_name").notNull(),
-  pincode: text("pincode").notNull(),
-  city: text("city").notNull().default("Unknown"),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
-  freeDeliveryAbove: decimal("free_delivery_above", { precision: 10, scale: 2 }),
-  isActive: boolean("is_active").default(true),
-});
-
+// 7. deliveryBoys - users को संदर्भित करता है
 export const deliveryBoys = pgTable("delivery_boys", {
   id: serial("id").primaryKey(),
   firebaseUid: text("firebase_uid").unique(),
@@ -210,24 +184,7 @@ export const deliveryBoys = pgTable("delivery_boys", {
   updatedAt: timestamp("updated_at"),
 });
 
-
-export const deliveryAddresses = pgTable('delivery_addresses', {
-  id: serial('id').primaryKey(),
-  userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
-  fullName: text('full_name').notNull(),
-  phoneNumber: text('phone_number'),
-  addressLine1: text('address_line1').notNull(),
-  addressLine2: text('address_line2'),
-  city: text('city').notNull().default('unknown'),
-  state: text('state').notNull(),
-  postalCode: text('postal_code').notNull(),
-  latitude: decimal('latitude', { precision: 10, scale: 7 }).$type<number>(), // ✅ Precision
-  longitude: decimal('longitude', { precision: 10, scale: 7 }).$type<number>(), // ✅ Precision
-  label: text('label'),
-  isDefault: boolean('is_default').default(false),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
+// 8. cartItems - users, products, sellersPgTable को संदर्भित करता है
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
@@ -245,87 +202,54 @@ export const cartItems = pgTable("cart_items", {
   };
 });
 
-
-// =========================================================================
-// NEW/UPDATED Order & Delivery Tables
-// =========================================================================
-
-// 1. Master Orders Table (ग्राहक का मुख्य ऑर्डर)
-
-
-
-
-export const orders = pgTable("orders", { // अब यह "master_orders" के रूप में काम करेगा
+// 9. orders - users, deliveryAddresses को संदर्भित करता है
+export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  orderNumber: text("order_number").notNull().unique(), // जैसे "ORD-12345"
+  orderNumber: text("order_number").notNull().unique(),
   customerId: integer("customer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-
-  // Delivery Address Snapshot (ग्राहक के पते की जानकारी, ताकि यह स्थायी हो)
-  deliveryAddressId: integer("delivery_address_id").notNull().references(() => deliveryAddresses.id, { onDelete: "cascade" }), // यह ग्राहक के सहेजे गए पते को संदर्भित करता है
-  deliveryAddress: text("delivery_address").notNull().$type<string>(), // JSON string or detailed address string
+  deliveryAddressId: integer("delivery_address_id").notNull().references(() => deliveryAddresses.id, { onDelete: "cascade" }),
+  deliveryAddress: text("delivery_address").notNull().$type<string>(),
   deliveryCity: text("delivery_city").notNull().default('Unknown'),
-  deliveryState: text("delivery_state").notNull().default('Unknown'), // ✅ डिफ़ॉल्ट मान ठीक किया गया
-  deliveryPincode: text("delivery_pincode").notNull().default('000000'), // ✅ डिफ़ॉल्ट मान ठीक किया गया
+  deliveryState: text("delivery_state").notNull().default('Unknown'),
+  deliveryPincode: text("delivery_pincode").notNull().default('000000'),
   deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }).$type<number>().default('0.0'),
   deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }).$type<number>().default('0.0'),
   deliveryInstructions: text("delivery_instructions"),
-
-  
-  deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id), // ❌ हटाया गया
-   sellerId: integer("seller_id").references(() => sellersPgTable.id), // ❌ हटाया गया
-
-  // यहाँ कुछ कॉलम जिनकी तुमने बात की थी, अगर तुम इन्हें वापस जोड़ना चाहते हो
-  // यदि deliveryStatusEnum अभी भी तुम्हारी स्कीमा में है और तुम इसे उपयोग करना चाहते हो:
-  deliveryStatus: deliveryStatusEnum("delivery_status").default('pending').notNull(), // ✅ default और notNull जोड़ा गया
-
-  deliveryOtp: text("delivery_otp"), // ✅ वापस जोड़ा गया
-  deliveryOtpSentAt: timestamp("delivery_otp_sent_at"), // ✅ वापस जोड़ा गया
-
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(), // सभी आइटम का योग
-  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),     // कुल राशि (सबटोटल + डिलीवरी - डिस्काउंट)
-
-  paymentMethod: paymentMethodEnum("payment_method").notNull(), // Enum का उपयोग करें
-  paymentStatus: paymentStatusEnum("payment_status").default("pending").notNull(), // Enum का उपयोग करें
-  transactionId: text("transaction_id"), // ऑनलाइन भुगतान के लिए
-
-  // ✅ ये भी वापस जोड़े गए और सही किए गए
+  deliveryStatus: deliveryStatusEnum("delivery_status").default('pending').notNull(),
+  deliveryOtp: text("delivery_otp"),
+  deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  paymentMethod: paymentMethodEnum("payment_method").notNull(),
+  paymentStatus: paymentStatusEnum("payment_status").default("pending").notNull(),
+  transactionId: text("transaction_id"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).default('0.0').notNull(), // ✅ precision, scale और default जोड़ा गया
-  
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).default('0.0').notNull(),
   promoCode: text("promo_code"),
-  discount: decimal("discount", { precision: 5, scale: 2 }).$type<number>().default('0.0'), // ✅ default जोड़ा गया
-  
-  status: masterOrderStatusEnum("status").default("pending").notNull(), // मास्टर ऑर्डर का समग्र स्टेटस
-  
-  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(), // ✅ .at("created_at") हटाकर सही किया गया
-  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(), // ✅ .at("updated_at") हटाकर सही किया गया
+  discount: decimal("discount", { precision: 5, scale: 2 }).$type<number>().default('0.0'),
+  status: masterOrderStatusEnum("status").default("pending").notNull(),
+  createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
+  updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 }, (table) => {
   return {
     orderNumberUnique: unique("order_number_unique").on(table.orderNumber),
   };
 });
-// 2. Sub-Orders Table (प्रत्येक सेलर और उसकी तैयारी/पिकअप स्थिति के लिए)
-//    - यह एक मास्टर ऑर्डर के भीतर प्रत्येक सेलर के लिए एक व्यक्तिगत ऑर्डर का प्रतिनिधित्व करता है।
-//    - यह सेलर के डैशबोर्ड पर एक स्वतंत्र ऑर्डर के रूप में दिखाई देगा।
-export const subOrders = pgTable("sub_orders", { // ✅ नया टेबल
+
+// 10. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
+export const subOrders = pgTable("sub_orders", {
   id: serial("id").primaryKey(),
-  masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }), // मास्टर ऑर्डर से लिंक
-  subOrderNumber: text("sub_order_number").notNull().unique(), // जैसे "ORD-12345-A" (मास्टर ऑर्डर ID + सेलर का शॉर्ट कोड)
-  
-  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id, { onDelete: "cascade" }), // ✅ इस सब-ऑर्डर का सेलर
-  storeId: integer("store_id").references(() => stores.id, { onDelete: 'set null' }), // ✅ सेलर का कौन सा स्टोर जहां से पिकअप होगा
-
-  status: subOrderStatusEnum("status").default("pending").notNull(), // सेलर-विशिष्ट ऑर्डर स्टेटस (accepted, preparing, ready_for_pickup)
-  
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(), // इस सब-ऑर्डर के आइटम का योग
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().default(0).$type<number>(), // ✅ इस सब-ऑर्डर का डिलीवरी शुल्क
-  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(), // इस सब-ऑर्डर का कुल (subtotal + deliveryCharge)
-
-  estimatedPreparationTime: text("estimated_preparation_time"), // सेलर के लिए अनुमानित तैयारी का समय
-  
-  isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false), // ✅ जैसे सीमेंट, रेत
-  
+  masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  subOrderNumber: text("sub_order_number").notNull().unique(),
+  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id, { onDelete: "cascade" }),
+  storeId: integer("store_id").references(() => stores.id, { onDelete: 'set null' }),
+  status: subOrderStatusEnum("status").default("pending").notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().default(0).$type<number>(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  estimatedPreparationTime: text("estimated_preparation_time"),
+  isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 }, (table) => {
@@ -334,179 +258,149 @@ export const subOrders = pgTable("sub_orders", { // ✅ नया टेबल
   };
 });
 
-// 3. Delivery Batches Table (डिलीवरी बॉय को असाइन की गई एक या एक से अधिक सब-ऑर्डर का समूह)
-//    - यह टेबल कई sub_orders को एक डिलीवरी असाइनमेंट में समूहित करेगा।
-//    - यह डिलीवरी बॉय के डैशबोर्ड पर एक कार्य के रूप में दिखाई देगा।
-export const deliveryBatches = pgTable("delivery_batches", { // ✅ नया टेबल
+// 11. deliveryBatches - orders, deliveryBoys, deliveryAddresses को संदर्भित करता है
+export const deliveryBatches = pgTable("delivery_batches", {
     id: serial("id").primaryKey(),
-    masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }), // किस मास्टर ऑर्डर से संबंधित
-    deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id, { onDelete: "set null" }), // इस बैच को कौन सा डिलीवरी बॉय हैंडल कर रहा है
-    customerDeliveryAddressId: integer("customer_delivery_address_id").notNull().references(() => deliveryAddresses.id), // ग्राहक का अंतिम डिलीवरी पता
-    
-    // इस बैच का समग्र डिलीवरी स्टेटस (डिलीवरी बॉय द्वारा अपडेट किया गया)
+    masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+    deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id, { onDelete: "set null" }),
+    customerDeliveryAddressId: integer("customer_delivery_address_id").notNull().references(() => deliveryAddresses.id),
     status: deliveryStatusEnum("status").default("pending").notNull(),
-    
-    estimatedDeliveryTime: timestamp("estimated_delivery_time"), // इस बैच की समग्र अनुमानित डिलीवरी
+    estimatedDeliveryTime: timestamp("estimated_delivery_time"),
     actualDeliveryTime: timestamp("actual_delivery_time"),
-    
     deliveryOtp: text("delivery_otp"),
     deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
-
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 4. Order Items Table (अब sub_orders से संबंधित)
+// 12. orderItems - subOrders, orders, sellersPgTable, users, products को संदर्भित करता है
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
-  
-  // ✅ नया लिंक: sub_order से (जैसा पहले था)
   subOrderId: integer("sub_order_id").notNull().references(() => subOrders.id, { onDelete: 'cascade' }),
-  
-  // ✅ अनुरोधित पुराने कॉलम वापस जोड़े गए जो सीधे टकराव नहीं कर रहे हैं:
-  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }), // अब orders टेबल से लिंक
-  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id), // अब sellersPgTable से लिंक
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }), // अब users टेबल से लिंक
-
-  productId: integer("product_id").notNull().references(() => products.id),
-  
-  // Product details snapshot (कोई बदलाव नहीं - ये मौजूदा स्कीमा के साथ ठीक हैं)
+  orderId: integer("order_id").notNull().references(() => orders.id, { onDelete: 'cascade' }),
+  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().notNull().references(() => products.id),
   productName: text("product_name").notNull().default('Unknown Product'),
   productImage: text("product_image"),
   productPrice: decimal("product_price", { precision: 10, scale: 2 }).notNull().default('0.0').$type<number>(),
   productUnit: text("product_unit").notNull().default('piece'),
-  
   quantity: integer("quantity").notNull(),
-  itemTotal: decimal("item_total", { precision: 10, scale: 2 }).notNull().default('0.00').$type<number>(), // (price * quantity)
-
-  // ✅ पुरानी status वापस जोड़ी गई, एक enum का उपयोग करके।
-  status: orderItemStatusEnum("status").default('pending').notNull(), // Enum का उपयोग करें
-
-  // ✅ timestamp फिक्स (जैसा हमने पहले किया था)
+  itemTotal: decimal("item_total", { precision: 10, scale: 2 }).notNull().default('0.00').$type<number>(),
+  status: orderItemStatusEnum("status").default('pending').notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-export const couponsPgTable = pgTable('coupons', {
-  id: serial('id').primaryKey(),
-  code: varchar('code', { length: 255 }).unique().notNull(), // e.g., "FLAT100", "SAVE15"
-  description: text('description'),
-  discountType: discountTypeEnum('discount_type').notNull(), // 'percentage' or 'fixed_amount'
-  discountValue: numeric('discount_value', { precision: 10, scale: 2 }).notNull(), // e.g., 10 (for 10%), 100 (for 100 Rs)
-  minOrderValue: numeric('min_order_value', { precision: 10, scale: 2 }).default('0.00').notNull(),
-  maxDiscountAmount: numeric('max_discount_amount', { precision: 10, scale: 2 }), // For percentage discounts, max value
-  startDate: timestamp('start_date', { withTimezone: true }).notNull(),
-  endDate: timestamp('end_date', { withTimezone: true }).notNull(),
-  usageLimit: integer('usage_limit'), // Total number of times this coupon can be used
-  usageCount: integer('usage_count').default(0).notNull(), // How many times it has been used
-  perUserLimit: integer('per_user_limit').default(1).notNull(), // How many times a single user can use it
-  isActive: boolean('is_active').default(true).notNull(),
-  couponScope: couponScopeEnum('coupon_scope').default('all_orders').notNull(), // 'all_orders', 'specific_seller', 'specific_product', 'category'
-  // Foreign keys for specific scopes
-  sellerId: integer('seller_id').references(() => sellersPgTable.id), // If scope is specific_seller
-  productId: integer('product_id').references(() => products.id),     // If scope is specific_product
-  categoryId: integer('category_id').references(() => categories.id), // If scope is category
-  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
-  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
-});
-
+// 13. orderTracking - orders, deliveryBatches, users को संदर्भित करता है
 export const orderTracking = pgTable("order_tracking", {
   id: serial("id").primaryKey(),
-  // orderId: integer("order_id").references(() => orders.id), // ❌ इसे हटाओ
-  // ✅ अब orderTracking सीधे master order या deliveryBatch से लिंक हो सकता है
   masterOrderId: integer("master_order_id").references(() => orders.id, { onDelete: 'cascade' }),
-  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id, { onDelete: 'cascade' }), // ✅ या deliveryBatch से लिंक करें
-
-  status: text("status").notNull(), // ✅ text की बजाय pgEnum का उपयोग करना बेहतर होगा (जैसे `orderTrackingStatusEnum`)
-  message: text("message"),
-  messageHindi: text("message_hindi"),
-  location: text("location"), // ✅ lat/lng के लिए अलग कॉलम बेहतर होगा
-  updatedBy: integer("updated_by").references(() => users.id),
-
-  createdAt: timestamp("created_at", { withTimezone: true, mode: 'string' }).defaultNow().notNull(), // ✅ timestamp with time zone (createdAt)
-
+  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id, { onDelete: 'cascade' }),
+  status: text("status").notNull(), // यहाँ एक अलग enum या string हो सकता है
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  location: text("location"),
+  updatedBy: integer("updated_by").references(() => users.id), // कौन अपडेट कर रहा है (admin, seller, delivery-boy)
+  notes: text("notes"),
 });
 
-// ✅ orderTrackingRelations
-
+// 14. promoCodes - किसी को संदर्भित नहीं करता (लेकिन यह orders के साथ लिंक हो सकता है)
 export const promoCodes = pgTable("promo_codes", {
   id: serial("id").primaryKey(),
-  code: text("code").notNull().unique(),
-  description: text("description").notNull(),
-  discountType: text("discount_type").notNull(),
-  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).notNull(),
-  minOrderAmount: decimal("min_order_amount", { precision: 10, scale: 2 }),
-  maxDiscount: decimal("max_discount", { precision: 10, scale: 2 }),
-  usageLimit: integer("usage_limit"),
+  code: text("code").unique().notNull(),
+  discountType: discountTypeEnum("discount_type").notNull(),
+  discountValue: decimal("discount_value", { precision: 5, scale: 2 }).notNull().$type<number>(),
+  minOrderValue: decimal("min_order_value", { precision: 10, scale: 2 }).$type<number>(),
+  maxDiscountValue: decimal("max_discount_value", { precision: 10, scale: 2 }).$type<number>(),
+  usageLimit: integer("usage_limit").default(1), // एक प्रोमो कोड कितनी बार उपयोग किया जा सकता है
   usedCount: integer("used_count").default(0),
-  validFrom: timestamp("valid_from").notNull(),
-  validUntil: timestamp("valid_until").notNull(),
+  expiryDate: timestamp("expiry_date"),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// 15. serviceCategories - किसी को संदर्भित नहीं करता
 export const serviceCategories = pgTable("service_categories", {
   id: serial("id").primaryKey(),
   name: text("name").notNull(),
-  nameHindi: text("name_hindi"),
+  slug: text("slug").notNull().unique(),
   description: text("description"),
-  icon: text("icon"),
+  image: text("image"),
   isActive: boolean("is_active").default(true),
 });
 
+// 16. services - serviceCategories को संदर्भित करता है
 export const services = pgTable("services", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").references(() => serviceCategories.id),
   name: text("name").notNull(),
-  nameHindi: text("name_hindi"),
   description: text("description"),
-  basePrice: decimal("base_price", { precision: 10, scale: 2 }).notNull(),
-  duration: integer("duration").notNull(),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  image: text("image"),
   isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// 17. serviceProviders - users, services को संदर्भित करता है
 export const serviceProviders = pgTable("service_providers", {
   id: serial("id").primaryKey(),
-  userId: integer("user_id").references(() => users.id),
+  userId: integer("user_id").unique().notNull().references(() => users.id),
   serviceId: integer("service_id").references(() => services.id),
-  experience: text("experience"),
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("5.0"),
-  totalJobs: integer("total_jobs").default(0),
+  description: text("description"),
+  experienceYears: integer("experience_years"),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0.0"),
   isAvailable: boolean("is_available").default(true),
+  approvalStatus: approvalStatusEnum("approval_status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
+// 18. serviceBookings - users, serviceProviders, services को संदर्भित करता है
 export const serviceBookings = pgTable("service_bookings", {
   id: serial("id").primaryKey(),
-  customerId: integer("customer_id").references(() => users.id),
-  serviceProviderId: integer("service_provider_id").references(() => serviceProviders.id),
-  serviceId: integer("service_id").references(() => services.id),
-  bookingNumber: text("booking_number").notNull().unique(),
-  scheduledDate: timestamp("scheduled_date").notNull(),
-  scheduledTime: text("scheduled_time").notNull(),
-  address: json("address").notNull(),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull(),
-  status: text("status").default("pending"),
-  paymentMethod: text("payment_method").notNull(),
-  paymentStatus: text("payment_status").default("pending"),
-  customerNotes: text("customer_notes"),
+  customerId: integer("customer_id").notNull().references(() => users.id),
+  serviceProviderId: integer("service_provider_id").notNull().references(() => serviceProviders.id),
+  serviceId: integer("service_id").notNull().references(() => services.id),
+  bookingDate: timestamp("booking_date").notNull(),
+  status: text("status").notNull().default("pending"),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull(),
+  notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-export const playingWithNeon = pgTable("playing_with_neon", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),   
-  value: text("value"),
-});
-
+// 19. reviews - users, products, orders को संदर्भित करता है
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),
-  customerId: integer("customer_id").references(() => users.id),
-  productId: integer("product_id").references(() => products.id),
-  orderId: integer("order_id").references(() => orders.id), // ✅ Master Order ID के लिए
-  deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id),
-  deliveryAddressId: integer("delivery_address_id").references(() => deliveryAddresses.id), // यह समीक्षा डिलीवरी पते के लिए है
+  customerId: integer("customer_id").notNull().references(() => users.id),
+  productId: integer("product_id").notNull().references(() => products.id),
+  orderId: integer("order_id").notNull().references(() => orders.id),
   rating: integer("rating").notNull(),
   comment: text("comment"),
+  imageUrl: text("image_url"),
   createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+
+export const coupons = pgTable('coupons', {
+  id: serial('id').primaryKey(),
+  code: varchar('code', { length: 255 }).unique().notNull(), // e.g., "FLAT100", "SAVE15"
+  description: text('description'),
+  discountType: discountTypeEnum('discount_type').notNull(),
+  discountValue: decimal('discount_value', { precision: 10, scale: 2 }).notNull().$type<number>(),
+  minOrderValue: decimal('min_order_value', { precision: 10, scale: 2 }).$type<number>(), // Minimum order value to apply coupon
+  maxDiscountValue: decimal('max_discount_value', { precision: 10, scale: 2 }).$type<number>(), // Maximum discount for percentage coupons
+  usageLimit: integer('usage_limit').default(1), // Total times this coupon can be used
+  usedCount: integer('used_count').default(0), // How many times it has been used
+  expiryDate: timestamp('expiry_date'),
+  isActive: boolean('is_active').default(true),
+  scope: couponScopeEnum('scope').default('all_orders').notNull(), // 'all_orders', 'specific_seller', 'specific_product', 'category'
+  sellerId: integer('seller_id').references(() => sellersPgTable.id), // For specific_seller scope
+  productId: integer('product_id').references(() => products.id), // For specific_product scope
+  categoryId: integer('category_id').references(() => categories.id), // For category scope
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
