@@ -324,19 +324,19 @@ export const deliveryBatches = pgTable("delivery_batches", {
 // 16. cartItems - users, products, sellersPgTable को संदर्भित करता है
 export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
-  //userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  //productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
-  //sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
   quantity: integer("quantity").notNull().default(1),
   priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(),
   totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull().$type<number>(),
   sessionId: text("session_id"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-//}, (table) => {
-//  return {
-//    unqUserProduct: unique("unq_user_product").on(table.userId, table.productId),
-//  };
+}, (table) => {
+  return {
+    unqUserProduct: unique("unq_user_product").on(table.userId, table.productId),
+  };
 });
 
 
