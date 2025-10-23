@@ -165,12 +165,12 @@ export const orderTrackingRelations = relations(schema.orderTracking, ({ one }) 
   masterOrder: one(schema.orders, {
     fields: [schema.orderTracking.masterOrderId],
     references: [schema.orders.id],
-    optional: true,
+   // optional: true,
   }),
   deliveryBatch: one(schema.deliveryBatches, {
     fields: [schema.orderTracking.deliveryBatchId],
     references: [schema.deliveryBatches.id],
-    optional: true,
+  //  optional: true,
   }),
   updatedBy: one(schema.users, {
     fields: [schema.orderTracking.updatedBy],
