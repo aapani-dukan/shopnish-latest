@@ -1,10 +1,10 @@
 // backend/src/shared/backend/tables.ts
 
 import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm"; // ✅ relations को इम्पोर्ट करें (यह ठीक है कि यहाँ सीधे उपयोग नहीं किया गया)
+import { relations } from "drizzle-orm"; // यह ठीक है कि यहाँ सीधे उपयोग नहीं किया गया
 
 // =========================================================================
-// Enums - इन्हें सबसे पहले रखें
+// Enums - इन्हें हमेशा सबसे पहले रखें
 // =========================================================================
 
 export const masterOrderStatusEnum = pgEnum('master_order_status', [
@@ -31,7 +31,7 @@ export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed_am
 export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_seller', 'specific_product', 'category']);
 
 // =========================================================================
-// Core User & Seller Tables (यहाँ क्रम महत्वपूर्ण है)
+// Core Tables (सबसे कम निर्भरता से सबसे अधिक निर्भरता तक)
 // =========================================================================
 
 // 1. users - किसी को संदर्भित नहीं करता
@@ -56,7 +56,56 @@ export const users = pgTable("users", {
   lastActivityAt: timestamp("last_activity_at").defaultNow(),
 });
 
-// 2. deliveryAddresses - users को संदर्भित करता है
+// 2. categories - किसी को संदर्भित नहीं करता
+export const categories = pgTable("categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  nameHindi: text("name_hindi"),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  image: text("image"),
+  isActive: boolean("is_active").default(true),
+  sortOrder: integer("sort_order").default(0),
+});
+
+// 3. deliveryAreas - किसी को संदर्भित नहीं करता
+export const deliveryAreas = pgTable("delivery_areas", {
+  id: serial("id").primaryKey(),
+  areaName: text("area_name").notNull(),
+  pincode: text("pincode").notNull(),
+  city: text("city").notNull().default("Unknown"),
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
+  freeDeliveryAbove: decimal("free_delivery_above", { precision: 10, scale: 2 }),
+  isActive: boolean("is_active").default(true),
+});
+
+// 4. promoCodes - किसी को संदर्भित नहीं करता
+export const promoCodes = pgTable("promo_codes", {
+  id: serial("id").primaryKey(),
+  code: text("code").unique().notNull(),
+  discountType: discountTypeEnum("discount_type").notNull(),
+  discountValue: decimal("discount_value", { precision: 5, scale: 2 }).notNull().$type<number>(),
+  minOrderValue: decimal("min_order_value", { precision: 10, scale: 2 }).$type<number>(),
+  maxDiscountValue: decimal("max_discount_value", { precision: 10, scale: 2 }).$type<number>(),
+  usageLimit: integer("usage_limit").default(1),
+  usedCount: integer("used_count").default(0),
+  expiryDate: timestamp("expiry_date"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// 5. serviceCategories - किसी को संदर्भित नहीं करता
+export const serviceCategories = pgTable("service_categories", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  description: text("description"),
+  image: text("image"),
+  isActive: boolean("is_active").default(true),
+});
+
+// 6. deliveryAddresses - users को संदर्भित करता है
 export const deliveryAddresses = pgTable('delivery_addresses', {
   id: serial('id').primaryKey(),
   userId: integer('user_id').references(() => users.id, { onDelete: 'cascade' }),
@@ -74,7 +123,7 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-// 3. sellersPgTable - users को संदर्भित करता है
+// 7. sellersPgTable - users को संदर्भित करता है
 export const sellersPgTable = pgTable("sellers", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").unique().notNull().references(() => users.id),
@@ -100,7 +149,42 @@ export const sellersPgTable = pgTable("sellers", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 4. stores - sellersPgTable को संदर्भित करता है
+// 8. deliveryBoys - users को संदर्भित करता है
+export const deliveryBoys = pgTable("delivery_boys", {
+  id: serial("id").primaryKey(),
+  firebaseUid: text("firebase_uid").unique(),
+  userId: integer("user_id").unique().notNull().references(() => users.id),
+  email: text("email").unique().notNull(),
+  name: text("name"),
+  phone: text("phone"),
+  approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
+  vehicleType: text("vehicle_type").notNull(),
+  vehicleNumber: text("vehicle_number"),
+  licenseNumber: text("license_number"),
+  aadharNumber: text("aadhar_number"),
+  isAvailable: boolean("is_available").default(true),
+  currentLat: decimal("current_lat", { precision: 10, scale: 8 }),
+  currentLng: decimal("current_lng", { precision: 11, scale: 8 }),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("5.0"),
+  totalDeliveries: integer("total_deliveries").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at"),
+});
+
+// 9. services - serviceCategories को संदर्भित करता है
+export const services = pgTable("services", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id").references(() => serviceCategories.id),
+  name: text("name").notNull(),
+  description: text("description"),
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  image: text("image"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// 10. stores - sellersPgTable को संदर्भित करता है
 export const stores = pgTable("stores", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").references(() => sellersPgTable.id),
@@ -119,19 +203,8 @@ export const stores = pgTable("stores", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 5. categories - किसी को संदर्भित नहीं करता
-export const categories = pgTable("categories", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  nameHindi: text("name_hindi"),
-  slug: text("slug").notNull().unique(),
-  description: text("description"),
-  image: text("image"),
-  isActive: boolean("is_active").default(true),
-  sortOrder: integer("sort_order").default(0),
-});
 
-// 6. products - sellersPgTable, stores, categories को संदर्भित करता है
+// 11. products - sellersPgTable, stores, categories को संदर्भित करता है
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
@@ -162,58 +235,22 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 7. deliveryAreas - किसी को संदर्भित नहीं करता
-export const deliveryAreas = pgTable("delivery_areas", {
-  id: serial("id").primaryKey(),
-  areaName: text("area_name").notNull(),
-  pincode: text("pincode").notNull(),
-  city: text("city").notNull().default("Unknown"),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
-  freeDeliveryAbove: decimal("free_delivery_above", { precision: 10, scale: 2 }),
-  isActive: boolean("is_active").default(true),
-});
 
-// 8. deliveryBoys - users को संदर्भित करता है
-export const deliveryBoys = pgTable("delivery_boys", {
+// 12. serviceProviders - users, services को संदर्भित करता है
+export const serviceProviders = pgTable("service_providers", {
   id: serial("id").primaryKey(),
-  firebaseUid: text("firebase_uid").unique(),
   userId: integer("user_id").unique().notNull().references(() => users.id),
-  email: text("email").unique().notNull(),
-  name: text("name"),
-  phone: text("phone"),
-  approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
-  vehicleType: text("vehicle_type").notNull(),
-  vehicleNumber: text("vehicle_number"),
-  licenseNumber: text("license_number"),
-  aadharNumber: text("aadhar_number"),
+  serviceId: integer("service_id").references(() => services.id),
+  description: text("description"),
+  experienceYears: integer("experience_years"),
+  rating: decimal("rating", { precision: 3, scale: 2 }).default("0.0"),
   isAvailable: boolean("is_available").default(true),
-  currentLat: decimal("current_lat", { precision: 10, scale: 8 }),
-  currentLng: decimal("current_lng", { precision: 11, scale: 8 }),
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("5.0"),
-  totalDeliveries: integer("total_deliveries").default(0),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at"),
-});
-
-// 9. cartItems - users, products, sellersPgTable को संदर्भित करता है
-export const cartItems = pgTable("cart_items", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
-  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
-  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
-  quantity: integer("quantity").notNull().default(1),
-  priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  sessionId: text("session_id"),
+  approvalStatus: approvalStatusEnum("approval_status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => {
-  return {
-    unqUserProduct: unique("unq_user_product").on(table.userId, table.productId),
-  };
 });
 
-// 10. orders - users, deliveryAddresses को संदर्भित करता है
+// 13. orders - users, deliveryAddresses को संदर्भित करता है
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
   orderNumber: text("order_number").notNull().unique(),
@@ -226,8 +263,6 @@ export const orders = pgTable("orders", {
   deliveryLat: decimal("delivery_lat", { precision: 10, scale: 7 }).$type<number>().default('0.0'),
   deliveryLng: decimal("delivery_lng", { precision: 10, scale: 7 }).$type<number>().default('0.0'),
   deliveryInstructions: text("delivery_instructions"),
-  // deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id), // यह कॉलम यहां नहीं होना चाहिए, subOrders में होगा
-  // sellerId: integer("seller_id").references(() => sellersPgTable.id), // यह कॉलम यहां नहीं होना चाहिए, subOrders में होगा
   deliveryStatus: deliveryStatusEnum("delivery_status").default('pending').notNull(),
   deliveryOtp: text("delivery_otp"),
   deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
@@ -250,7 +285,7 @@ export const orders = pgTable("orders", {
   };
 });
 
-// 11. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
+// 14. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
 export const subOrders = pgTable("sub_orders", {
   id: serial("id").primaryKey(),
   masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
@@ -271,7 +306,7 @@ export const subOrders = pgTable("sub_orders", {
   };
 });
 
-// 12. deliveryBatches - orders, deliveryBoys, deliveryAddresses को संदर्भित करता है
+// 15. deliveryBatches - orders, deliveryBoys, deliveryAddresses को संदर्भित करता है
 export const deliveryBatches = pgTable("delivery_batches", {
     id: serial("id").primaryKey(),
     masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
@@ -286,7 +321,26 @@ export const deliveryBatches = pgTable("delivery_batches", {
     updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 13. orderItems - subOrders, orders, sellersPgTable, users, products को संदर्भित करता है
+// 16. cartItems - users, products, sellersPgTable को संदर्भित करता है
+export const cartItems = pgTable("cart_items", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
+  quantity: integer("quantity").notNull().default(1),
+  priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  totalPrice: decimal("total_price", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  sessionId: text("session_id"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => {
+  return {
+    unqUserProduct: unique("unq_user_product").on(table.userId, table.productId),
+  };
+});
+
+
+// 17. orderItems - subOrders, orders, sellersPgTable, users, products को संदर्भित करता है
 export const orderItems = pgTable("order_items", {
   id: serial("id").primaryKey(),
   subOrderId: integer("sub_order_id").notNull().references(() => subOrders.id, { onDelete: 'cascade' }),
@@ -305,72 +359,7 @@ export const orderItems = pgTable("order_items", {
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
 });
 
-// 14. orderTracking - orders, deliveryBatches, users को संदर्भित करता है
-export const orderTracking = pgTable("order_tracking", {
-  id: serial("id").primaryKey(),
-  masterOrderId: integer("master_order_id").references(() => orders.id, { onDelete: 'cascade' }),
-  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id, { onDelete: 'cascade' }),
-  status: text("status").notNull(), // यहाँ एक अलग enum या string हो सकता है
-  timestamp: timestamp("timestamp").defaultNow().notNull(),
-  location: text("location"),
-  updatedBy: integer("updated_by").references(() => users.id), // कौन अपडेट कर रहा है (admin, seller, delivery-boy)
-  notes: text("notes"),
-});
-
-// 15. promoCodes - किसी को संदर्भित नहीं करता (लेकिन यह orders के साथ लिंक हो सकता है)
-export const promoCodes = pgTable("promo_codes", {
-  id: serial("id").primaryKey(),
-  code: text("code").unique().notNull(),
-  discountType: discountTypeEnum("discount_type").notNull(),
-  discountValue: decimal("discount_value", { precision: 5, scale: 2 }).notNull().$type<number>(),
-  minOrderValue: decimal("min_order_value", { precision: 10, scale: 2 }).$type<number>(),
-  maxDiscountValue: decimal("max_discount_value", { precision: 10, scale: 2 }).$type<number>(),
-  usageLimit: integer("usage_limit").default(1),
-  usedCount: integer("used_count").default(0),
-  expiryDate: timestamp("expiry_date"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 16. serviceCategories - किसी को संदर्भित नहीं करता
-export const serviceCategories = pgTable("service_categories", {
-  id: serial("id").primaryKey(),
-  name: text("name").notNull(),
-  slug: text("slug").notNull().unique(),
-  description: text("description"),
-  image: text("image"),
-  isActive: boolean("is_active").default(true),
-});
-
-// 17. services - serviceCategories को संदर्भित करता है
-export const services = pgTable("services", {
-  id: serial("id").primaryKey(),
-  categoryId: integer("category_id").references(() => serviceCategories.id),
-  name: text("name").notNull(),
-  description: text("description"),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  image: text("image"),
-  isActive: boolean("is_active").default(true),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 18. serviceProviders - users, services को संदर्भित करता है
-export const serviceProviders = pgTable("service_providers", {
-  id: serial("id").primaryKey(),
-  userId: integer("user_id").unique().notNull().references(() => users.id),
-  serviceId: integer("service_id").references(() => services.id),
-  description: text("description"),
-  experienceYears: integer("experience_years"),
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("0.0"),
-  isAvailable: boolean("is_available").default(true),
-  approvalStatus: approvalStatusEnum("approval_status").default("pending"),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-
-// 19. serviceBookings - users, serviceProviders, services को संदर्भित करता है
+// 18. serviceBookings - users, serviceProviders, services को संदर्भित करता है
 export const serviceBookings = pgTable("service_bookings", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").notNull().references(() => users.id),
@@ -384,7 +373,7 @@ export const serviceBookings = pgTable("service_bookings", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 20. reviews - users, products, orders को संदर्भित करता है
+// 19. reviews - users, products, orders को संदर्भित करता है
 export const reviews = pgTable("reviews", {
   id: serial("id").primaryKey(),
   customerId: integer("customer_id").notNull().references(() => users.id),
@@ -397,8 +386,20 @@ export const reviews = pgTable("reviews", {
   updatedAt: timestamp("updated_at").defaultNow(),
 });
 
-// 21. coupons - sellersPgTable, products, categories को संदर्भित करता है
-export const couponsPgTable = pgTable('coupons', { // आपके द्वारा प्रदान किया गया नाम 'couponsPgTable' बरकरार रखा गया
+// 20. orderTracking - orders, deliveryBatches, users को संदर्भित करता है
+export const orderTracking = pgTable("order_tracking", {
+  id: serial("id").primaryKey(),
+  masterOrderId: integer("master_order_id").references(() => orders.id, { onDelete: 'cascade' }),
+  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id, { onDelete: 'cascade' }),
+  status: text("status").notNull(),
+  timestamp: timestamp("timestamp").defaultNow().notNull(),
+  location: text("location"),
+  updatedBy: integer("updated_by").references(() => users.id),
+  notes: text("notes"),
+});
+
+// 21. couponsPgTable - sellersPgTable, products, categories को संदर्भित करता है
+export const couponsPgTable = pgTable('coupons', {
   id: serial('id').primaryKey(),
   code: varchar('code', { length: 255 }).unique().notNull(),
   description: text('description'),
