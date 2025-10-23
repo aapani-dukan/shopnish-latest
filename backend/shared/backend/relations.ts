@@ -73,10 +73,10 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
   category: one(schema.categories, { fields: [schema.couponsPgTable.categoryId], references: [schema.categories.id] }),
 }));
 
-export const cartItemRelations = relations(schema.cartItems, ({ one }) => ({
-  user: one(schema.users, {
-    fields: [schema.cartItems.userId],
-    references: [schema.users.id],
+//export const cartItemRelations = relations(schema.cartItems, ({ one }) => ({
+ // user: one(schema.users, {
+ //   fields: [schema.cartItems.userId],
+   // references: [schema.users.id],
   }),
  // product: one(schema.products, { // ✅ यहाँ भी schema.products का उपयोग करें
 //    fields: [schema.cartItems.productId],
