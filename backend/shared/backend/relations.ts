@@ -77,7 +77,7 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
  // user: one(schema.users, {
  //   fields: [schema.cartItems.userId],
    // references: [schema.users.id],
-  }),
+ // }),
  // product: one(schema.products, { // ✅ यहाँ भी schema.products का उपयोग करें
 //    fields: [schema.cartItems.productId],
 //    references: [schema.products.id],
