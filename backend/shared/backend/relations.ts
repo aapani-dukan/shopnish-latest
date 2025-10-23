@@ -1,264 +1,238 @@
 // backend/src/shared/backend/relations.ts
 
 import { relations } from 'drizzle-orm';
-import {
-  users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
-  deliveryAddresses, orders, subOrders, deliveryBatches, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews,couponsPgTable // ✅ subOrders और deliveryBatches को इम्पोर्ट करें
-} from './schema'; // ✅ अब 'tables' की जगह 'schema' होना चाहिए अगर सभी टेबल एक ही फ़ाइल में हैं
+// ✅ सभी स्कीमा ऑब्जेक्ट्स को एक साथ इम्पोर्ट करें
+import * as schema from './schema';
 
 // --- Drizzle ORM Relations ---
 
-export const usersRelations = relations(users, ({ one, many }) => ({
-  sellerProfile: one(sellersPgTable, {
-    fields: [users.id],
-    references: [sellersPgTable.userId],
+export const usersRelations = relations(schema.users, ({ one, many }) => ({
+  sellerProfile: one(schema.sellersPgTable, {
+    fields: [schema.users.id],
+    references: [schema.sellersPgTable.userId],
   }),
-  orders: many(orders), // ✅ Master Orders
-  reviews: many(reviews),
-  serviceProviders: many(serviceProviders),
-  serviceBookings: many(serviceBookings),
-  cartItems: many(cartItems),
-  // deliveryBoys: many(deliveryBoys), // यदि user भी deliveryBoys हो सकता है तो यह पहले से है
+  orders: many(schema.orders),
+  reviews: many(schema.reviews),
+  serviceProviders: many(schema.serviceProviders),
+  serviceBookings: many(schema.serviceBookings),
+  cartItems: many(schema.cartItems),
 }));
 
-export const sellersRelations = relations(sellersPgTable, ({ one, many }) => ({
-  user: one(users, {
-    fields: [sellersPgTable.userId],
-    references: [users.id],
+export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
+  user: one(schema.users, {
+    fields: [schema.sellersPgTable.userId],
+    references: [schema.users.id],
   }),
-  products: many(products),
-  stores: many(stores),
-  subOrders: many(subOrders), // ✅ NEW: अब seller subOrders से लिंक होगा
+  products: many(schema.products),
+  stores: many(schema.stores),
+  subOrders: many(schema.subOrders),
 }));
 
-export const storesRelations = relations(stores, ({ one, many }) => ({
-  seller: one(sellersPgTable, {
-    fields: [stores.sellerId],
-    references: [sellersPgTable.id],
+export const storesRelations = relations(schema.stores, ({ one, many }) => ({
+  seller: one(schema.sellersPgTable, {
+    fields: [schema.stores.sellerId],
+    references: [schema.sellersPgTable.id],
   }),
-  products: many(products),
-  subOrders: many(subOrders), // ✅ NEW: स्टोर subOrders से लिंक होगा
+  products: many(schema.products),
+  subOrders: many(schema.subOrders),
 }));
 
-export const categoriesRelations = relations(categories, ({ many }) => ({
-  products: many(products),
-  // serviceCategories: many(serviceCategories), // ✅ यदि categories और serviceCategories के बीच सीधा संबंध है तो यह ठीक है
+export const categoriesRelations = relations(schema.categories, ({ many }) => ({
+  products: many(schema.products),
 }));
 
-export const productsRelations = relations(products, ({ one, many }) => ({
-  seller: one(sellersPgTable, {
-    fields: [products.sellerId],
-    references: [sellersPgTable.id],
+export const productsRelations = relations(schema.products, ({ one, many }) => ({
+  seller: one(schema.sellersPgTable, {
+    fields: [schema.products.sellerId],
+    references: [schema.sellersPgTable.id],
   }),
-  store: one(stores, {
-    fields: [products.storeId],
-    references: [stores.id],
+  store: one(schema.stores, {
+    fields: [schema.products.storeId],
+    references: [schema.stores.id],
   }),
-  category: one(categories, {
-    fields: [products.categoryId],
-    references: [categories.id],
+  category: one(schema.categories, {
+    fields: [schema.products.categoryId],
+    references: [schema.categories.id],
   }),
-  cartItems: many(cartItems),
-  orderItems: many(orderItems), // ✅ orderItems अभी भी product से लिंक होगा
-  reviews: many(reviews),
+  cartItems: many(schema.cartItems),
+  orderItems: many(schema.orderItems),
+  reviews: many(schema.reviews),
 }));
 
-export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => ({
-  user: one(users, {
-    fields: [deliveryBoys.userId],
-    references: [users.id],
+export const deliveryBoysRelations = relations(schema.deliveryBoys, ({ one, many }) => ({
+  user: one(schema.users, {
+    fields: [schema.deliveryBoys.userId],
+    references: [schema.users.id],
   }),
-  deliveryBatches: many(deliveryBatches), // ✅ NEW: डिलीवरी बॉय deliveryBatches से लिंक होगा
+  deliveryBatches: many(schema.deliveryBatches),
 }));
 
-export const couponRelations = relations(couponsPgTable, ({ one }) => ({
-  seller: one(sellersPgTable, { fields: [couponsPgTable.sellerId], references: [sellersPgTable.id] }),
-  product: one(products, { fields: [couponsPgTable.productId], references: [products.id] }),
-  category: one(categories, { fields: [couponsPgTable.categoryId], references: [categories.id] }),
+export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
+  seller: one(schema.sellersPgTable, { fields: [schema.couponsPgTable.sellerId], references: [schema.sellersPgTable.id] }),
+  product: one(schema.products, { fields: [schema.couponsPgTable.productId], references: [schema.products.id] }),
+  category: one(schema.categories, { fields: [schema.couponsPgTable.categoryId], references: [schema.categories.id] }),
 }));
 
-export const cartItemRelations = relations(cartItems, ({ one }) => ({
-  user: one(users, {
-    fields: [cartItems.userId],
-    references: [users.id],
+export const cartItemRelations = relations(schema.cartItems, ({ one }) => ({
+  user: one(schema.users, {
+    fields: [schema.cartItems.userId],
+    references: [schema.users.id],
   }),
-  product: one(products, { // ✅ यहाँ से '()' हटा दें
-    fields: [cartItems.productId],
-    references: [products.id],
+  product: one(schema.products, { // ✅ यहाँ भी schema.products का उपयोग करें
+    fields: [schema.cartItems.productId],
+    references: [schema.products.id],
   }),
-  seller: one(sellersPgTable, {
-    fields: [cartItems.sellerId],
-    references: [sellersPgTable.id],
+  seller: one(schema.sellersPgTable, {
+    fields: [schema.cartItems.sellerId],
+    references: [schema.sellersPgTable.id],
   }),
 }));
 
-export const deliveryAddressesRelations = relations(deliveryAddresses, ({ one, many }) => ({
-  user: one(users, {
-    fields: [deliveryAddresses.userId],
-    references: [users.id],
+export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
+  user: one(schema.users, {
+    fields: [schema.deliveryAddresses.userId],
+    references: [schema.users.id],
   }),
-  orders: many(orders), // ✅ Master Orders
-  deliveryBatches: many(deliveryBatches), // ✅ NEW: डिलीवरी एड्रेस deliveryBatches से लिंक होगा
+  orders: many(schema.orders),
+  deliveryBatches: many(schema.deliveryBatches),
 }));
 
-// =========================================================================
-// NEW/UPDATED Order & Delivery Relations
-// =========================================================================
-
-export const ordersRelations = relations(orders, ({ many, one }) => ({
-  customer: one(users, {
-    fields: [orders.customerId],
-    references: [users.id],
+export const ordersRelations = relations(schema.orders, ({ many, one }) => ({
+  customer: one(schema.users, {
+    fields: [schema.orders.customerId],
+    references: [schema.users.id],
   }),
-  // ✅ REMOVED: orders.seller, orders.deliveryBoy
-  deliveryAddress: one(deliveryAddresses, {
-    fields: [orders.deliveryAddressId],
-    references: [deliveryAddresses.id],
+  deliveryAddress: one(schema.deliveryAddresses, {
+    fields: [schema.orders.deliveryAddressId],
+    references: [schema.deliveryAddresses.id],
   }),
-  subOrders: many(subOrders),       // ✅ NEW: मास्टर ऑर्डर के कई सब-ऑर्डर
-  deliveryBatches: many(deliveryBatches), // ✅ NEW: मास्टर ऑर्डर के कई डिलीवरी बैच
-  tracking: many(orderTracking),    // ✅ Master Order tracking
-  reviews: many(reviews),           // ✅ Master Order reviews
+  subOrders: many(schema.subOrders),
+  deliveryBatches: many(schema.deliveryBatches),
+  tracking: many(schema.orderTracking),
+  reviews: many(schema.reviews),
 }));
 
-export const subOrdersRelations = relations(subOrders, ({ one, many }) => ({ // ✅ NEW: subOrders Relations
-  masterOrder: one(orders, {
-    fields: [subOrders.masterOrderId],
-    references: [orders.id],
+export const subOrdersRelations = relations(schema.subOrders, ({ one, many }) => ({
+  masterOrder: one(schema.orders, {
+    fields: [schema.subOrders.masterOrderId],
+    references: [schema.orders.id],
   }),
-  seller: one(sellersPgTable, {
-    fields: [subOrders.sellerId],
-    references: [sellersPgTable.id],
+  seller: one(schema.sellersPgTable, {
+    fields: [schema.subOrders.sellerId],
+    references: [schema.sellersPgTable.id],
   }),
-  store: one(stores, {
-    fields: [subOrders.storeId],
-    references: [stores.id],
+  store: one(schema.stores, {
+    fields: [schema.subOrders.storeId],
+    references: [schema.stores.id],
   }),
-  deliveryBatch: one(deliveryBatches, { // ✅ NEW: subOrder एक deliveryBatch से लिंक होगा
-    fields: [subOrders.deliveryBatchId],
-    references: [deliveryBatches.id],
-    optional: true, // क्योंकि self-delivery वाले subOrder का कोई batch नहीं होगा
+  deliveryBatch: one(schema.deliveryBatches, {
+    fields: [schema.subOrders.deliveryBatchId],
+    references: [schema.deliveryBatches.id],
+    optional: true,
   }),
-  orderItems: many(orderItems), // एक सब-ऑर्डर के कई आइटम
+  orderItems: many(schema.orderItems),
 }));
 
-export const deliveryBatchesRelations = relations(deliveryBatches, ({ one, many }) => ({ // ✅ NEW: deliveryBatches Relations
-    masterOrder: one(orders, {
-        fields: [deliveryBatches.masterOrderId],
-        references: [orders.id],
+export const deliveryBatchesRelations = relations(schema.deliveryBatches, ({ one, many }) => ({
+    masterOrder: one(schema.orders, {
+        fields: [schema.deliveryBatches.masterOrderId],
+        references: [schema.orders.id],
     }),
-    deliveryBoy: one(deliveryBoys, {
-        fields: [deliveryBatches.deliveryBoyId],
-        references: [deliveryBoys.id],
-        optional: true, // क्योंकि बैच को तुरंत डिलीवरी बॉय असाइन नहीं किया जा सकता
+    deliveryBoy: one(schema.deliveryBoys, {
+        fields: [schema.deliveryBatches.deliveryBoyId],
+        references: [schema.deliveryBoys.id],
+        optional: true,
     }),
-    customerDeliveryAddress: one(deliveryAddresses, {
-        fields: [deliveryBatches.customerDeliveryAddressId],
-        references: [deliveryAddresses.id],
+    customerDeliveryAddress: one(schema.deliveryAddresses, {
+        fields: [schema.deliveryBatches.customerDeliveryAddressId],
+        references: [schema.deliveryAddresses.id],
     }),
-    subOrders: many(subOrders), // एक बैच में कई सब-ऑर्डर
+    subOrders: many(schema.subOrders),
 }));
 
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
-  subOrder: one(subOrders, { // ✅ UPDATED: orderItems अब subOrder से लिंक होगा
-    fields: [orderItems.subOrderId],
-    references: [subOrders.id],
+export const orderItemsRelations = relations(schema.orderItems, ({ one }) => ({
+  subOrder: one(schema.subOrders, {
+    fields: [schema.orderItems.subOrderId],
+    references: [schema.subOrders.id],
   }),
-  product: one(products, {
-    fields: [orderItems.productId],
-    references: [products.id],
-  }),
-  // ✅ REMOVED: orderItems.seller (क्योंकि subOrder पहले से ही seller को संदर्भित करता है)
-}));
-
-export const orderTrackingRelations = relations(orderTracking, ({ one }) => ({
-  masterOrder: one(orders, { // ✅ UPDATED: masterOrder से लिंक
-    fields: [orderTracking.masterOrderId],
-    references: [orders.id],
-    optional: true, // यदि केवल deliveryBatch को ट्रैक करना है
-  }),
-  deliveryBatch: one(deliveryBatches, { // ✅ NEW: deliveryBatch से लिंक
-    fields: [orderTracking.deliveryBatchId],
-    references: [deliveryBatches.id],
-    optional: true, // यदि केवल masterOrder को ट्रैक करना है
-  }),
-  updatedBy: one(users, {
-    fields: [orderTracking.updatedBy],
-    references: [users.id],
+  product: one(schema.products, {
+    fields: [schema.orderItems.productId],
+    references: [schema.products.id],
   }),
 }));
 
-// =========================================================================
-// Other Existing Relations (कोई बड़ा बदलाव नहीं)
-// =========================================================================
-
-export const promoCodesRelations = relations(promoCodes, ({ many }) => ({
-  // orders: many(orders), // ✅ यदि promoCodes सीधे orders से लिंक होते हैं
-}));
-
-export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
-  services: many(services),
-}));
-
-export const servicesRelations = relations(services, ({ one, many }) => ({
-  category: one(serviceCategories, {
-    fields: [services.categoryId],
-    references: [serviceCategories.id],
+export const orderTrackingRelations = relations(schema.orderTracking, ({ one }) => ({
+  masterOrder: one(schema.orders, {
+    fields: [schema.orderTracking.masterOrderId],
+    references: [schema.orders.id],
+    optional: true,
   }),
-  serviceProviders: many(serviceProviders),
-  serviceBookings: many(serviceBookings),
-}));
-
-export const serviceProvidersRelations = relations(serviceProviders, ({ one, many }) => ({
-  user: one(users, {
-    fields: [serviceProviders.userId],
-    references: [users.id],
+  deliveryBatch: one(schema.deliveryBatches, {
+    fields: [schema.orderTracking.deliveryBatchId],
+    references: [schema.deliveryBatches.id],
+    optional: true,
   }),
-  service: one(services, {
-    fields: [serviceProviders.serviceId],
-    references: [services.id],
-  }),
-  serviceBookings: many(serviceBookings),
-}));
-
-export const serviceBookingsRelations = relations(serviceBookings, ({ one }) => ({
-  customer: one(users, {
-    fields: [serviceBookings.customerId],
-    references: [users.id],
-  }),
-  serviceProvider: one(serviceProviders, {
-    fields: [serviceBookings.serviceProviderId],
-    references: [serviceProviders.id],
-  }),
-  service: one(services, {
-    fields: [serviceBookings.serviceId],
-    references: [services.id],
+  updatedBy: one(schema.users, {
+    fields: [schema.orderTracking.updatedBy],
+    references: [schema.users.id],
   }),
 }));
-export const reviewsRelations = relations(reviews, ({ one }) => ({
-  customer: one(users, {
-    fields: [reviews.customerId],
-    references: [users.id],
-  }),
-  product: one(products, {
-    fields: [reviews.productId],
-    references: [products.id],
-  }),
-  order: one(orders, {
-    fields: [reviews.orderId],
-    references: [orders.id],
-  }),
-  // ❌ इन दोनों संबंधों को हटा दें अगर reviews टेबल में deliveryBoyId और deliveryAddressId कॉलम नहीं हैं
-  // deliveryBoy: one(deliveryBoys, {
-  //   fields: [reviews.deliveryBoyId], // यह undefined होगा
-  //   references: [deliveryBoys.id],
-  //   optional: true,
-  // }),
-  // deliveryAddress: one(deliveryAddresses, {
-  //   fields: [reviews.deliveryAddressId], // यह undefined होगा
-  //   references: [deliveryAddresses.id],
-  //   optional: true,
-  // }),
+
+export const promoCodesRelations = relations(schema.promoCodes, ({ many }) => ({
+  // orders: many(schema.orders),
 }));
 
+export const serviceCategoriesRelations = relations(schema.serviceCategories, ({ many }) => ({
+  services: many(schema.services),
+}));
+
+export const servicesRelations = relations(schema.services, ({ one, many }) => ({
+  category: one(schema.serviceCategories, {
+    fields: [schema.services.categoryId],
+    references: [schema.serviceCategories.id],
+  }),
+  serviceProviders: many(schema.serviceProviders),
+  serviceBookings: many(schema.serviceBookings),
+}));
+
+export const serviceProvidersRelations = relations(schema.serviceProviders, ({ one, many }) => ({
+  user: one(schema.users, {
+    fields: [schema.serviceProviders.userId],
+    references: [schema.users.id],
+  }),
+  service: one(schema.services, {
+    fields: [schema.serviceProviders.serviceId],
+    references: [schema.services.id],
+  }),
+  serviceBookings: many(schema.serviceBookings),
+}));
+
+export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
+  customer: one(schema.users, {
+    fields: [schema.serviceBookings.customerId],
+    references: [schema.users.id],
+  }),
+  serviceProvider: one(schema.serviceProviders, {
+    fields: [schema.serviceBookings.serviceProviderId],
+    references: [schema.serviceProviders.id],
+  }),
+  service: one(schema.services, {
+    fields: [schema.serviceBookings.serviceId],
+    references: [schema.services.id],
+  }),
+}));
+
+export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
+  customer: one(schema.users, {
+    fields: [schema.reviews.customerId],
+    references: [schema.users.id],
+  }),
+  product: one(schema.products, {
+    fields: [schema.reviews.productId],
+    references: [schema.products.id],
+  }),
+  order: one(schema.orders, {
+    fields: [schema.reviews.orderId],
+    references: [schema.orders.id],
+  }),
+}));
