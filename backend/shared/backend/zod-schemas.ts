@@ -386,4 +386,3 @@ export const insertReviewSchema = createInsertSchema(reviews, {
   createdAt: true,
   updatedAt: true,
 });
-
