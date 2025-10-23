@@ -141,7 +141,7 @@ export const deliveryBatchesRelations = relations(schema.deliveryBatches, ({ one
     deliveryBoy: one(schema.deliveryBoys, {
         fields: [schema.deliveryBatches.deliveryBoyId],
         references: [schema.deliveryBoys.id],
-        optional: true,
+     //   optional: true,
     }),
     customerDeliveryAddress: one(schema.deliveryAddresses, {
         fields: [schema.deliveryBatches.customerDeliveryAddressId],
