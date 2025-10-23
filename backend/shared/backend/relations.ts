@@ -86,7 +86,7 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
 //    fields: [schema.cartItems.sellerId],
 //    references: [schema.sellersPgTable.id],
 //  }),
-}));
+// }));
 
 export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
   user: one(schema.users, {
