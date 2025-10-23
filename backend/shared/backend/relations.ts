@@ -207,7 +207,7 @@ export const serviceProvidersRelations = relations(schema.serviceProviders, ({ o
   serviceBookings: many(schema.serviceBookings),
 }));
 
-export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
+{/*export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.serviceBookings.customerId],
     references: [schema.users.id],
@@ -221,7 +221,7 @@ export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one
     references: [schema.services.id],
   }),
 }));
-
+*/}
 {/*export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.reviews.customerId],
