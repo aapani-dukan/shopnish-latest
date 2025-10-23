@@ -51,12 +51,6 @@ export const insertCategorySchema = createInsertSchema(categories).omit({
   id: true,
 });
 
-import { z } from "zod";
-import { subOrders, deliveryBatches, couponsPgTable } from "./tables";
-
-// -------------------
-// SubOrders
-// -------------------
 export const insertSubOrderSchema = z.object({
   masterOrderId: z.number().int(),
   subOrderNumber: z.string(),
@@ -82,7 +76,7 @@ export const insertDeliveryBatchesSchema = z.object({
 });
 
 
-export const insertCouponSchema = z.object({
+export const insertCouponsPgTableSchema = z.object({
   code: z.string(),
   description: z.string().optional().nullable(),
   discountType: z.string(),
