@@ -1,6 +1,6 @@
 // backend/src/shared/backend/relations.ts
 
-{/*import { relations } from 'drizzle-orm';
+import { relations } from 'drizzle-orm';
 // ✅ सभी स्कीमा ऑब्जेक्ट्स को एक साथ इम्पोर्ट करें
 import * as schema from './schema';
 
@@ -17,8 +17,8 @@ export const usersRelations = relations(schema.users, ({ one, many }) => ({
   serviceBookings: many(schema.serviceBookings),
   cartItems: many(schema.cartItems),
 }));
-*/}
-{/*export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
+
+export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
   user: one(schema.users, {
     fields: [schema.sellersPgTable.userId],
     references: [schema.users.id],
@@ -40,8 +40,8 @@ export const storesRelations = relations(schema.stores, ({ one, many }) => ({
 export const categoriesRelations = relations(schema.categories, ({ many }) => ({
   products: many(schema.products),
 }));
-*/}
-{/*export const productsRelations = relations(schema.products, ({ one, many }) => ({
+
+export const productsRelations = relations(schema.products, ({ one, many }) => ({
   seller: one(schema.sellersPgTable, {
     fields: [schema.products.sellerId],
     references: [schema.sellersPgTable.id],
@@ -72,8 +72,8 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
   product: one(schema.products, { fields: [schema.couponsPgTable.productId], references: [schema.products.id] }),
   category: one(schema.categories, { fields: [schema.couponsPgTable.categoryId], references: [schema.categories.id] }),
 }));
-*/}
-{/*export const cartItemRelations = relations(schema.cartItems, ({ one }) => ({
+
+export const cartItemRelations = relations(schema.cartItems, ({ one }) => ({
   user: one(schema.users, {
     fields: [schema.cartItems.userId],
     references: [schema.users.id],
@@ -87,8 +87,8 @@ export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
     references: [schema.sellersPgTable.id],
   }),
 }));
-*/}
-{/*export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
+
+export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
   user: one(schema.users, {
     fields: [schema.deliveryAddresses.userId],
     references: [schema.users.id],
@@ -206,8 +206,8 @@ export const serviceProvidersRelations = relations(schema.serviceProviders, ({ o
   }),
   serviceBookings: many(schema.serviceBookings),
 }));
-*/}
-{/*export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
+
+export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.serviceBookings.customerId],
     references: [schema.users.id],
@@ -221,8 +221,8 @@ export const serviceProvidersRelations = relations(schema.serviceProviders, ({ o
     references: [schema.services.id],
   }),
 }));
-*/}
-{/*export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
+
+export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
   customer: one(schema.users, {
     fields: [schema.reviews.customerId],
     references: [schema.users.id],
@@ -235,4 +235,4 @@ export const serviceProvidersRelations = relations(schema.serviceProviders, ({ o
     fields: [schema.reviews.orderId],
     references: [schema.orders.id],
   }), 
-})); */}
+})); 
