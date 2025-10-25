@@ -7,11 +7,17 @@ import { eq, and } from 'drizzle-orm';
 import { z } from 'zod'; // Validation के लिए Zod
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken'; // Auth middleware
 import { requireAuth } from '../server/middleware/authMiddleware'; // Auth middleware
-
+import axios from 'axios';
 // Services/Utils - ये तुम्हारे locationService.ts से आते हैं
 import { geocodeAddress, reverseGeocode, isWithinServiceArea, calculateDeliveryCharges } from '../services/locationService';
 
 const addressRouter = Router(); // Express Router इंस्टेंस
+const schema = z.object({
+  fullName: z.string().min(1),
+  latitude: z.number(),
+  longitude: z.number(),
+});
+
 
 // --- Schemas for Validation ---
 const ProcessLocationSchema = z.object({
@@ -51,12 +57,12 @@ addressRouter.post(
   '/process-current-location',
   async (req: Request, res: Response) => {
     try {
-      console.log("[DEBUG] addressRoutes: Starting process-current-location handler."); // नया लॉग
+      console.log("[DEBUG] addressRoutes: Zod validation faild for  process-current-location handler."); // नया लॉग
       // Zod validation
       const validation = ProcessLocationSchema.safeParse(req.body);
       if (!validation.success) {
-        console.error("[DEBUG] addressRoutes: Zod validation failed for process-current-location.", validation.error.errors); // नया लॉग
-        return res.status(400).json({ errors: validation.error.errors });
+        console.error("[DEBUG] addressRoutes: Zod validation failed for process-current-location.", validation.error.issues); // नया लॉग
+        return res.status(400).json({ errors: validation.error.issues });
       }
       const { latitude, longitude } = validation.data;
       console.log(`[DEBUG] addressRoutes: Validated coords: Lat ${latitude}, Lng ${longitude}`); // नया लॉग
@@ -115,8 +121,8 @@ addressRouter.get(
 
       const userAddresses = await db.select()
         .from(deliveryAddresses)
-        .where(eq(deliveryAddresses.userId, userId))
-        .orderBy(deliveryAddresses.isDefault ? 'desc' : 'asc', deliveryAddresses.createdAt);
+        .where(eq(deliveryAddresses.userId, Number(userId)))
+  
 
       return res.status(200).json(userAddresses);
     } catch (error) {
@@ -133,19 +139,24 @@ addressRouter.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.firebaseUid;
-      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
 
       // Zod validation
       const validation = CreateAddressSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ errors: validation.error.errors });
+        // validation.error.issues is the correct property
+        return res.status(400).json({ errors: validation.error.issues });
       }
+
       const newAddressData = validation.data;
 
+      // अगर नया address default है तो पहले सारे default हटाएं
       if (newAddressData.isDefault) {
         await db.update(deliveryAddresses)
           .set({ isDefault: false })
-          .where(eq(deliveryAddresses.userId, userId));
+          .where(eq(deliveryAddresses.userId, Number(req.user?.id || "0")));
       }
 
       const [newAddress] = await db.insert(deliveryAddresses)
@@ -177,32 +188,54 @@ addressRouter.put(
       // Zod validation
       const validation = UpdateAddressSchema.safeParse(req.body);
       if (!validation.success) {
-        return res.status(400).json({ errors: validation.error.errors });
+        return res.status(400).json({ errors: validation.error.issues });
       }
       const updateData = validation.data;
 
 
       const existingAddress = await db.select()
         .from(deliveryAddresses)
-        .where(and(eq(deliveryAddresses.id, addressId), eq(deliveryAddresses.userId, userId)));
+        const userIdNum = Number(userId); // userId string है तो number में बदलें
+
+await db
+  .update(deliveryAddresses)
+  .set({ isDefault: false })
+  .where(
+    and(
+      eq(deliveryAddresses.id, addressId),
+      eq(deliveryAddresses.userId, userIdNum) // number type
+    )
+  );
 
       if (existingAddress.length === 0) {
         return res.status(404).json({ message: 'Address not found or unauthorized' });
       }
 
-      if (updateData.isDefault === true) {
-        await db.update(deliveryAddresses)
-          .set({ isDefault: false })
-          .where(eq(deliveryAddresses.userId, userId));
-      }
+     if (updateData.isDefault) {
+  await db.update(deliveryAddresses)
+    .set({ isDefault: false })
+    .where(eq(deliveryAddresses.userId, Number(userId)));
+}
 
       const [updatedAddress] = await db.update(deliveryAddresses)
-        .set({
-          ...updateData,
-          updatedAt: new Date(),
-        })
-        .where(and(eq(deliveryAddresses.id, addressId), eq(deliveryAddresses.userId, userId)))
-        .returning();
+  .set({
+    fullName: updateData.fullName,
+    addressLine1: updateData.addressLine1,
+    addressLine2: updateData.addressLine2,
+    city: updateData.city,
+    state: updateData.state,
+    postalCode: updateData.pincode,
+    latitude: updateData.latitude,
+    longitude: updateData.longitude,
+    label: updateData.label,
+    isDefault: updateData.isDefault,
+    updatedAt: new Date(),
+  })
+  .where(and(
+    eq(deliveryAddresses.id, addressId),
+    eq(deliveryAddresses.userId, Number(userId))
+  ))
+  .returning();
 
       if (!updatedAddress) {
         return res.status(500).json({ message: 'Failed to update address' });
@@ -228,7 +261,7 @@ addressRouter.delete(
       const addressId = Number(req.params.id);
 
       const [deletedAddress] = await db.delete(deliveryAddresses)
-        .where(and(eq(deliveryAddresses.id, addressId), eq(deliveryAddresses.userId, userId)))
+        .where(and(eq(deliveryAddresses.id, addressId), eq(deliveryAddresses.userId, Number(req.user?.id))))
         .returning();
 
       if (!deletedAddress) {

@@ -59,6 +59,7 @@ export const users = pgTable("users", {
 // 2. categories - किसी को संदर्भित नहीं करता
 export const categories = pgTable("categories", {
   id: serial("id").primaryKey(),
+  sellerId: integer("seller_id"),
   name: text("name").notNull(),
   nameHindi: text("name_hindi"),
   slug: text("slug").notNull().unique(),
@@ -77,6 +78,7 @@ export const deliveryAreas = pgTable("delivery_areas", {
   deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull(),
   freeDeliveryAbove: decimal("free_delivery_above", { precision: 10, scale: 2 }),
   isActive: boolean("is_active").default(true),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });
 
 // 4. promoCodes - किसी को संदर्भित नहीं करता
@@ -296,6 +298,7 @@ export const subOrders = pgTable("sub_orders", {
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
   deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().default('0.0').$type<number>(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id),
   estimatedPreparationTime: text("estimated_preparation_time"),
   isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false),
   createdAt: timestamp("created_at").defaultNow(),

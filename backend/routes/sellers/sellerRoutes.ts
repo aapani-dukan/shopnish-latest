@@ -23,7 +23,7 @@ import {
 } from '../../shared/backend/schema';
 import { requireSellerAuth } from '../../server/middleware/authMiddleware';
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
-import { eq, desc, and, exists, inArray } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
+import { eq, desc, and, exists, inArray, sql } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
 import multer from 'multer';
 import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
@@ -247,21 +247,35 @@ sellerRouter.post('/categories', requireSellerAuth, async (req: AuthenticatedReq
       return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
     }
 
-    const [newCategory] = await db.insert(categories).values({
-      name,
-      description: description || null,
-      sellerId: sellerId, // ✅ sellerId असाइन करें
-    }).returning();
+    
+sellerRouter.post("/add-category", async (req, res) => {
+  try {
+    const { name, description } = req.body;
+    const sellerId = req.user.id; // logged-in seller का id
 
+    // Category object तैयार करना
+    const newCategoryData = {
+      name,
+      slug: name.toLowerCase().replace(/\s+/g, "-"), // simple slug
+      description: description || null,
+      sellerId: sellerId, // number assign directly
+    };
+
+    // DB में insert करना
+    const [newCategory] = await db.insert(categories)
+      .values(newCategoryData)
+      .returning();
+
+    // Socket event emit करना (अगर real-time चाहिए)
     getIO().emit("category:created", newCategory);
 
     return res.status(201).json(newCategory);
+
   } catch (error: any) {
-    console.error('❌ Error in POST /api/sellers/categories:', error);
-    return res.status(500).json({ error: 'Failed to create category.' });
+    console.error('❌ Error in adding category:', error);
+    return res.status(500).json({ error: "Something went wrong" });
   }
 });
-
 
 // ✅ GET /api/sellers/products
 sellerRouter.get('/products', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {

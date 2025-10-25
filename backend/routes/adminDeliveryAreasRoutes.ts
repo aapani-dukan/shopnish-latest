@@ -1,27 +1,41 @@
-import { Router } from 'express';
+// backend/routes/adminDeliveryAreasRoutes.ts
+
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { validateRequest } from '../server/middleware/validation';
 import { db } from '../server/db';
 import { deliveryAreas } from '../shared/backend/schema';
-import { eq, like, and } from 'drizzle-orm';
-import { verifyToken } from '../server/middleware/verifyToken'; // ऑथेंटिकेशन
-import { authorize } from '../server/middleware/authorize'; // ऑथराइजेशन
+import { eq } from 'drizzle-orm';
+import { verifyToken } from '../server/middleware/verifyToken';
+import { authorize } from '../server/middleware/authorize';
+import { validateRequest } from '../server/middleware/validation';
+import {
+  updateDeliveryAreaExpressSchema,
+  deleteDeliveryAreaExpressSchema,
+} from '../shared/backend/express-validation-schema';
 
 const adminDeliveryAreasRouter = Router();
 
-// Zod स्कीमा को परिभाषित करें ताकि आने वाले डेटा को मान्य किया जा सके
+// ✅ Create schema (Zod)
 const createDeliveryAreaSchema = z.object({
   body: z.object({
     areaName: z.string().min(1, "Area name is required."),
     pincode: z.string().min(4, "Pincode must be at least 4 digits.").max(10, "Pincode cannot exceed 10 digits."),
     city: z.string().min(1, "City is required."),
-    state: z.string().min(1, "State is required."),
-    deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.").optional().default('0.00'),
-    freeDeliveryAbove: z.string().regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.").optional().default('0.00'),
+    deliveryCharge: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.")
+      .optional()
+      .default("0.00"),
+    freeDeliveryAbove: z
+      .string()
+      .regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.")
+      .optional()
+      .default("0.00"),
     isActive: z.boolean().optional().default(true),
   }),
 });
 
+// ✅ Update schema (Zod)
 const updateDeliveryAreaSchema = z.object({
   params: z.object({
     id: z.string().regex(/^\d+$/, "ID must be a number."),
@@ -30,14 +44,13 @@ const updateDeliveryAreaSchema = z.object({
     areaName: z.string().min(1, "Area name is required.").optional(),
     pincode: z.string().min(4, "Pincode must be at least 4 digits.").max(10, "Pincode cannot exceed 10 digits.").optional(),
     city: z.string().min(1, "City is required.").optional(),
-    state: z.string().min(1, "State is required.").optional(),
-    deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.").optional(),
-    freeDeliveryAbove: z.string().regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.").optional(),
+    deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be valid.").optional(),
+    freeDeliveryAbove: z.string().regex(/^\d+(\.\d{1,2})?$/, "Free delivery must be valid.").optional(),
     isActive: z.boolean().optional(),
   }),
 });
 
-// GET: सभी डिलीवरी एरिया प्राप्त करें (एडमिन के लिए)
+// ✅ GET: All delivery areas
 adminDeliveryAreasRouter.get(
   '/',
   verifyToken,
@@ -53,12 +66,18 @@ adminDeliveryAreasRouter.get(
   }
 );
 
-// GET: ID द्वारा एकल डिलीवरी एरिया प्राप्त करें
+// ✅ GET: Single delivery area by ID
 adminDeliveryAreasRouter.get(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(z.object({ params: z.object({ id: z.string().regex(/^\d+$/, "ID must be a number.") }) })),
+  validateRequest(
+    z.object({
+      params: z.object({
+        id: z.string().regex(/^\d+$/, "ID must be a number."),
+      }),
+    }) as any
+  ),
   async (req, res) => {
     try {
       const id = parseInt(req.params.id);
@@ -67,6 +86,7 @@ adminDeliveryAreasRouter.get(
       if (area.length === 0) {
         return res.status(404).json({ message: "Delivery area not found." });
       }
+
       return res.status(200).json(area[0]);
     } catch (error) {
       console.error(`[adminDeliveryAreasRoutes] Error fetching delivery area with ID ${req.params.id}:`, error);
@@ -75,30 +95,32 @@ adminDeliveryAreasRouter.get(
   }
 );
 
-// POST: नया डिलीवरी एरिया बनाएं
+// ✅ POST: Create new delivery area
 adminDeliveryAreasRouter.post(
   '/',
   verifyToken,
   authorize(['admin']),
-  validateRequest(createDeliveryAreaSchema),
+  validateRequest(createDeliveryAreaSchema as any),
   async (req, res) => {
     try {
-      const { areaName, pincode, city, state, deliveryCharge, freeDeliveryAbove, isActive } = req.body;
+      const { areaName, pincode, city, deliveryCharge, freeDeliveryAbove, isActive } = req.body;
 
       const existingArea = await db.select().from(deliveryAreas).where(eq(deliveryAreas.pincode, pincode));
       if (existingArea.length > 0) {
         return res.status(409).json({ message: "Delivery area with this pincode already exists." });
       }
 
-      const [newArea] = await db.insert(deliveryAreas).values({
-        areaName,
-        pincode,
-        city,
-        state,
-        deliveryCharge,
-        freeDeliveryAbove,
-        isActive,
-      }).returning(); // newly inserted row को वापस लौटाता है
+      const [newArea] = await db
+        .insert(deliveryAreas)
+        .values({
+          areaName,
+          pincode,
+          city,
+          deliveryCharge,
+          freeDeliveryAbove,
+          isActive,
+        })
+        .returning();
 
       return res.status(201).json({ message: "Delivery area created successfully.", area: newArea });
     } catch (error) {
@@ -108,19 +130,20 @@ adminDeliveryAreasRouter.post(
   }
 );
 
-// PUT: मौजूदा डिलीवरी एरिया को अपडेट करें
+// ✅ PUT: Update delivery area
 adminDeliveryAreasRouter.put(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(updateDeliveryAreaSchema),
+  validateRequest(updateDeliveryAreaExpressSchema),
   async (req, res) => {
     try {
       const id = parseInt(req.params.id);
       const updateData = req.body;
 
-      const [updatedArea] = await db.update(deliveryAreas)
-        .set({ ...updateData, updatedAt: new Date() }) // updatedAt को भी अपडेट करें
+      const [updatedArea] = await db
+        .update(deliveryAreas)
+        .set({ ...updateData, updatedAt: new Date() })
         .where(eq(deliveryAreas.id, id))
         .returning();
 
@@ -136,17 +159,18 @@ adminDeliveryAreasRouter.put(
   }
 );
 
-// DELETE: डिलीवरी एरिया को हटाएं
+// ✅ DELETE: Remove delivery area
 adminDeliveryAreasRouter.delete(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(z.object({ params: z.object({ id: z.string().regex(/^\d+$/, "ID must be a number.") }) })),
+  validateRequest(deleteDeliveryAreaExpressSchema),
   async (req, res) => {
     try {
       const id = parseInt(req.params.id);
 
-      const [deletedArea] = await db.delete(deliveryAreas)
+      const [deletedArea] = await db
+        .delete(deliveryAreas)
         .where(eq(deliveryAreas.id, id))
         .returning();
 
@@ -163,4 +187,3 @@ adminDeliveryAreasRouter.delete(
 );
 
 export default adminDeliveryAreasRouter;
-        

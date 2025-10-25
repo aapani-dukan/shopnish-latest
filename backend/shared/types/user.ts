@@ -19,7 +19,9 @@ export interface User {
   // Optional: Seller-specific details
   seller?: {
     approvalStatus: z.infer<typeof approvalStatusEnum>;
+       
   } | null;
+   
 }
 
 // AuthenticatedUser interface (delivery boy support सहित)

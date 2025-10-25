@@ -110,6 +110,7 @@ export const ordersRelations = relations(schema.orders, ({ many, one }) => ({
   deliveryBatches: many(schema.deliveryBatches),
   tracking: many(schema.orderTracking),
   reviews: many(schema.reviews),
+  orderItems: many(schema.orderItems),
 }));
 
 export const subOrdersRelations = relations(schema.subOrders, ({ one, many }) => ({
@@ -125,12 +126,16 @@ export const subOrdersRelations = relations(schema.subOrders, ({ one, many }) =>
     fields: [schema.subOrders.storeId],
     references: [schema.stores.id],
   }),
- // deliveryBatch: one(schema.deliveryBatches, {
- //   fields: [schema.subOrders.deliveryBatchId],
-//    references: [schema.deliveryBatches.id],
-//    optional: true,
-//  }),
-//  orderItems: many(schema.orderItems),
+  orderItems: many(schema.orderItems, {
+    
+    relationName: 'orderItems',
+  }),
+  deliveryBatch: one(schema.deliveryBatches, {
+    fields: [schema.subOrders.deliveryBatchId],
+   references: [schema.deliveryBatches.id],
+    
+  }),
+  
  }));
 
 export const deliveryBatchesRelations = relations(schema.deliveryBatches, ({ one, many }) => ({

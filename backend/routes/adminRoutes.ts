@@ -10,9 +10,9 @@ import {
   deliveryBatches, // Delivery batches
   orderItems, // Items within sub-orders
   products,
-  deliveryBoysPgTable, // ✅ Corrected deliveryBoys table name
+  deliveryBoys, // ✅ Corrected deliveryBoys table name
   sellersPgTable, // ✅ Corrected sellers table name
-  deliveryAddressPgTable, // ✅ Added for complete address details
+  deliveryAddressP, // ✅ Added for complete address details
   masterOrderStatusEnum, // ✅ Master order status enum
   subOrderStatusEnum, // ✅ Sub-order status enum
   deliveryStatusEnum, // ✅ Delivery batch status enum
@@ -24,7 +24,7 @@ import { uploadImage } from '../server/cloudStorage';
 import { AuthenticatedRequest } from '../server/middleware/verifyToken';
 import { v4 as uuidv4 } from "uuid";
 import { authorize } from '../server/middleware/authorize'; // ✅ Assuming authorize middleware is preferred
-import { validateRequest } from '../server/middleware/validateRequest';
+import { validateRequest } from '../server/middleware/validation';
 import { z } from 'zod'; // ✅ For category validation
 
 const adminRouter = Router();
