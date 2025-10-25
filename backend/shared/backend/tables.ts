@@ -123,6 +123,7 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
   label: text('label'),
   isDefault: boolean('is_default').default(false),
   createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
 });
 
 // 7. sellersPgTable - users को संदर्भित करता है

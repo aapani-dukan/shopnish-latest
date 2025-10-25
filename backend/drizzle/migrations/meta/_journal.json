@@ -36,6 +36,13 @@
       "when": 1761072705486,
       "tag": "0004_cool_odin",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1761360170898,
+      "tag": "0005_slim_sentinels",
+      "breakpoints": true
     }
   ]
 }
