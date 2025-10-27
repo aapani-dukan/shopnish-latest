@@ -1,5 +1,5 @@
 // backend/server/controllers/sellerController.ts
-import { Router, Response, NextFunction } from 'express';
+import {Express, Router, Response, NextFunction } from 'express';
 import { db } from '../../server/db';
 import {
   sellersPgTable,

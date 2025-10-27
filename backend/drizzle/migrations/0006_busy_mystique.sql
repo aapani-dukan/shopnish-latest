@@ -1,0 +1,1 @@
+ALTER TABLE "delivery_addresses" ADD COLUMN "updated_at" timestamp DEFAULT now();
