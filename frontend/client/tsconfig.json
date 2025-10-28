@@ -1,37 +1,42 @@
-// shopnish-seprate/frontend/client/tsconfig.json (संशोधित)
 {
   "compilerOptions": {
-    "target": "ES2022", // Corrected: ES2022
+    "target": "ES2022",
     "useDefineForClassFields": true,
-    "lib": ["DOM", "DOM.Iterable", "ES2022"], // Corrected: ES2022
-    "module": "ESNext", // Corrected: ESNext
+    "lib": ["DOM", "DOM.Iterable", "ES2022"],
+    "module": "ESNext",
     "skipLibCheck": true,
 
-    /* Bundler mode */
     "moduleResolution": "bundler",
     "allowImportingTsExtensions": true,
     "resolveJsonModule": true,
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-   "types": ["vite/client"],   
-    /* Linting */
+    "types": ["vite/client"],
+
     "strict": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
-    // 👇 यहाँ नए बदलाव शुरू होते हैं
-    "baseUrl": "./src", // ✅ client/src फोल्डर को बेस URL के रूप में सेट करें
-                        //  यह '@' एलियास के लिए स्टैंडर्ड है।
+    "baseUrl": "./src",
     "paths": {
-      "@/*": ["./*"],    // ✅ 'src' के अंदर की चीज़ों के लिए @ एलियास
-      "shared/*": ["../../shared/*"] // ✅ shared/ फोल्डर के लिए एलियास
+      "@/*": ["./*"],
+      "shared/*": ["../../shared/*"]
     },
-    // 👆 यहाँ नए बदलाव खत्म होते हैं
-    "allowSyntheticDefaultImports": true, // यह भी महत्वपूर्ण है
-    "esModuleInterop": true // यह भी बहुत महत्वपूर्ण है, खासकर React और अन्य CommonJS पैकेजों के लिए
+
+    "allowSyntheticDefaultImports": true,
+    "esModuleInterop": true
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts","vite-env.d.ts"], // ✅ अधिक सटीक रूप से 'src' फ़ाइलों को शामिल करें
-  "references": [{ "path": "./tsconfig.node.json" }]
+
+  "include": [
+    "src/**/*.ts",
+    "src/**/*.tsx",
+    "src/**/*.d.ts",
+    "vite-env.d.ts"
+  ],
+
+  "references": [
+    { "path": "./tsconfig.node.json" }
+  ]
 }
