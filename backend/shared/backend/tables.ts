@@ -11,7 +11,7 @@ export const masterOrderStatusEnum = pgEnum('master_order_status', [
   'pending', 'confirmed', 'partially_fulfilled', 'fulfilled', 'cancelled', 'failed'
 ]);
 export const subOrderStatusEnum = pgEnum('sub_order_status', [
-  'pending', 'accepted', 'preparing', 'ready_for_pickup', 'cancelled', 'rejected'
+  'pending', 'accepted', 'preparing', 'ready_for_pickup', 'cancelled', 'rejected','delivered_by_seller'
 ]);
 export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
   "pending", "processing", "shipped", "delivered", "cancelled", "returned"
@@ -67,6 +67,7 @@ export const categories = pgTable("categories", {
   image: text("image"),
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
 });
 
 // 3. deliveryAreas - किसी को संदर्भित नहीं करता
@@ -394,12 +395,17 @@ export const reviews = pgTable("reviews", {
 export const orderTracking = pgTable("order_tracking", {
   id: serial("id").primaryKey(),
   masterOrderId: integer("master_order_id").references(() => orders.id, { onDelete: 'cascade' }),
+    subOrderId: integer("sub_order_id")
+    .references(() => subOrders.id, { onDelete: "cascade" }),
+
   deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id, { onDelete: 'cascade' }),
   status: text("status").notNull(),
   timestamp: timestamp("timestamp").defaultNow().notNull(),
   location: text("location"),
   updatedBy: integer("updated_by").references(() => users.id),
+    updatedByRole: text("updated_by_role"),
   notes: text("notes"),
+  message: text("message"),
 });
 
 // 21. couponsPgTable - sellersPgTable, products, categories को संदर्भित करता है
