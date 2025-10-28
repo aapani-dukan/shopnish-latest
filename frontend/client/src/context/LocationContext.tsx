@@ -1,5 +1,4 @@
 // client/src/context/LocationContext.tsx
-
 import React, {
   createContext,
   useContext,
@@ -17,7 +16,7 @@ interface LatLng {
   lng: number;
 }
 
-interface ProcessedLocation extends LatLng {
+export interface ProcessedLocation extends LatLng {
   address: string;
   pincode: string;
   inServiceArea: boolean;
@@ -33,34 +32,28 @@ interface ProcessedLocation extends LatLng {
   fullName?: string;
 }
 
+// --- Context Interface ---
 interface LocationContextType {
   currentLocation: ProcessedLocation | null;
-  setCurrentLocation: React.Dispatch<
-    React.SetStateAction<ProcessedLocation | null>
-  >;
+  setCurrentLocation: React.Dispatch<React.SetStateAction<ProcessedLocation | null>>;
   loadingLocation: boolean;
+  setLoadingLocation: React.Dispatch<React.SetStateAction<boolean>>;
   error: string | null;
   fetchCurrentGeolocation: () => Promise<void>;
-  processLocation: (lat: number, lng: number) => Promise<void>;
+  processLocation: (lat: number, lng: number) => Promise<ProcessedLocation>;
   savedAddresses: ProcessedLocation[];
   loadSavedAddresses: () => Promise<void>;
   setSelectedAddress: (address: ProcessedLocation) => void;
-  setLoadingLocation: React.Dispatch<React.SetStateAction<boolean>>;
 }
-
-const LocationContext = createContext<LocationContextType | undefined>(
-  undefined
-);
 
 interface LocationProviderProps {
   children: ReactNode;
 }
 
-export const LocationProvider: React.FC<LocationProviderProps> = ({
-  children,
-}) => {
-  const [currentLocation, setCurrentLocation] =
-    useState<ProcessedLocation | null>(null);
+const LocationContext = createContext<LocationContextType | undefined>(undefined);
+
+export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) => {
+  const [currentLocation, setCurrentLocation] = useState<ProcessedLocation | null>(null);
   const [savedAddresses, setSavedAddresses] = useState<ProcessedLocation[]>([]);
   const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -75,35 +68,34 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
 
   // --- Fetch and process user location from backend ---
   const processLocation = useCallback(
-    async (lat: number, lng: number) => {
+    async (lat: number, lng: number): Promise<ProcessedLocation> => {
       setLoadingLocation(true);
       setError(null);
+
       try {
         const response = await axios.post<ProcessedLocation>(
           `${API_BASE_URL}/api/addresses/process-current-location`,
-          {
-            latitude: lat,
-            longitude: lng,
-          }
+          { latitude: lat, longitude: lng }
         );
 
-        // Normalize backend keys
-        const data = {
+        const locationData: ProcessedLocation = {
           ...response.data,
-          lat: response.data.lat ?? response.data.lat,
-          lng: response.data.lng ?? response.data.lng,
+          lat: response.data.lat ?? lat,
+          lng: response.data.lng ?? lng,
         };
 
-        setCurrentLocation(data);
+        setCurrentLocation(locationData);
+        localStorage.setItem("userLat", String(locationData.lat));
+        localStorage.setItem("userLng", String(locationData.lng));
+        localStorage.setItem("userAddress", locationData.address);
+        localStorage.setItem("userPincode", locationData.pincode);
+        localStorage.setItem("userServiceArea", String(locationData.inServiceArea));
 
-        localStorage.setItem("userLat", String(data.lat));
-        localStorage.setItem("userLng", String(data.lng));
-        localStorage.setItem("userAddress", data.address);
-        localStorage.setItem("userPincode", data.pincode);
-        localStorage.setItem("userServiceArea", String(data.inServiceArea));
+        return locationData;
       } catch (err) {
         console.error("Error processing location:", err);
         setError("लोकेशन प्रोसेस करने में असमर्थ।");
+        throw err;
       } finally {
         setLoadingLocation(false);
       }
@@ -115,14 +107,27 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
   const fetchCurrentGeolocation = useCallback(async () => {
     setLoadingLocation(true);
     setError(null);
+
     if (navigator.geolocation) {
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-          await processLocation(latitude, longitude);
+
+          try {
+            const locationData = await processLocation(latitude, longitude);
+
+            if (locationData?.address)
+              localStorage.setItem("userAddress", locationData.address);
+            if (locationData?.pincode)
+              localStorage.setItem("userPincode", locationData.pincode);
+          } catch {
+            setError("लोकेशन प्रोसेस करने में असमर्थ।");
+          } finally {
+            setLoadingLocation(false);
+          }
         },
         (geoError) => {
-          console.error("Geolocation Error: ", geoError);
+          console.error("Geolocation Error:", geoError);
           setError("लोकेशन प्राप्त करने में असमर्थ। कृपया अनुमति दें।");
           setLoadingLocation(false);
         },
@@ -155,10 +160,9 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
           inServiceArea: storedServiceArea === "true",
         });
         setLoadingLocation(false);
-        return;
+      } else {
+        await fetchCurrentGeolocation();
       }
-
-      await fetchCurrentGeolocation();
     };
 
     loadInitialLocation();
@@ -175,9 +179,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
     try {
       const response = await axios.get<ProcessedLocation[]>(
         `${API_BASE_URL}/api/addresses/user`,
-        {
-          headers: { Authorization: `Bearer ${token}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
       setSavedAddresses(response.data);
     } catch (err) {
@@ -194,9 +196,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
     localStorage.setItem(
       "userAddress",
       address.addressLine1
-        ? `${address.addressLine1}, ${address.city ?? ""} - ${
-            address.pincode ?? ""
-          }`
+        ? `${address.addressLine1}, ${address.city ?? ""} - ${address.pincode ?? ""}`
         : address.address
     );
     localStorage.setItem("userPincode", address.pincode);
@@ -208,13 +208,13 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({
       currentLocation,
       setCurrentLocation,
       loadingLocation,
+      setLoadingLocation,
       error,
       fetchCurrentGeolocation,
       processLocation,
       savedAddresses,
       loadSavedAddresses,
       setSelectedAddress,
-      setLoadingLocation,
     }),
     [
       currentLocation,
