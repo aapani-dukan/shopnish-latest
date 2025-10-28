@@ -14,7 +14,7 @@
     "isolatedModules": true,
     "noEmit": true,
     "jsx": "react-jsx",
-
+   "types": ["vite/client"],   
     /* Linting */
     "strict": true,
     "noUnusedLocals": true,
@@ -32,6 +32,6 @@
     "allowSyntheticDefaultImports": true, // यह भी महत्वपूर्ण है
     "esModuleInterop": true // यह भी बहुत महत्वपूर्ण है, खासकर React और अन्य CommonJS पैकेजों के लिए
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts"], // ✅ अधिक सटीक रूप से 'src' फ़ाइलों को शामिल करें
+  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts","vite-env.d.ts"], // ✅ अधिक सटीक रूप से 'src' फ़ाइलों को शामिल करें
   "references": [{ "path": "./tsconfig.node.json" }]
 }
