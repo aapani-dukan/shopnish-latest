@@ -41,11 +41,12 @@ export interface User {
   sellerProfile?: SellerInfo | null;
 deliveryBoyId?: number | null; 
   idToken?: string;
+  isAdmin: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
-  isLoadingAuth: boolean;
+ isLoadingAuth : boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
   error: AuthError | null;

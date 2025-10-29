@@ -1,6 +1,6 @@
 // client/src/pages/home.tsx
 
-import React, { useState, useEffect } from "react"; 
+import { useState, useEffect } from "react"; 
 import { useQuery } from "@tanstack/react-query"; 
 import { useLocation as useRouterLocation, Link } from "react-router-dom"; 
 import { useLocation } from '../context/LocationContext'; 
@@ -15,62 +15,90 @@ import ProductCard from "@/components/product-card";
 import Footer from "@/components/footer"; 
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth'; 
-import LocationDisplay from '../components/locationdisplay'; 
+import  LocationDisplay  from '@/components/LocationDisplay'; 
+// --- Helper function to safely get error message from an unknown error type ---
+// ✅ यह function कंपोनेंट के बाहर होना चाहिए
+function getErrorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === 'string') {
+    return error;
+  }
+  return "An unexpected error occurred.";
+}
 
-// Add URLSearchParams import for older environments if needed
-// import { URLSearchParams } from 'url'; 
-
-// --- Interfaces ---
-interface Category { // ✅ interfaces का नामकरण सही करें
+// --- interfaces ---
+interface Category {
   id: number;
   name: string;
   slug: string;
+
   description: string | null;
   image: string | null;
 }
-
-interface Product { // ✅ interfaces का नामकरण सही करें
+interface Product {
   id: number;
   name: string;
   description: string | null;
   price: string;
-  originalPrice: string | null; // ✅ originalPrice का नामकरण सही करें
+  originalPrice: string | null;
   image: string;
   brand: string | null;
+  busnessName: string
   rating: string | null;
-  reviewCount: number | null; // ✅ reviewCount का नामकरण सही करें
+  rejectionReason?: string;
+  reviewCount: number | null;
+deliveryPincodes?:string[];
+stock: number;      
+  sellerId: number;   
+  seller: Seller;   
+   unit?: string;
+storwIs: number;
+  categoryName: string | null;
+
+
 }
 
+interface Seller {
+  id: number;
+  userId: string;
+  businessName: string;
+  approvalStatus: "pending" | "approved" | "rejected";
+}
+
+
 // Function to fetch categories
-const fetchCategories = async (): Promise<Category[]> => { // ✅ function का नामकरण सही करें
+async function fetchCategories(): Promise<Category[]> {
   const response = await axios.get('/api/categories');
   return response.data;
-};
+}
+  
 
-export default function Home() { // ✅ function का नामकरण सही करें
-  const { user } = useAuth(); // ✅ useAuth का नामकरण सही करें
-  const routerLocation = useRouterLocation(); // ✅ useRouterLocation का उपयोग करें
-  const urlParams = new URLSearchParams(routerLocation.search); // ✅ URLSearchParams का नामकरण सही करें
-  const categoryParam = urlParams.get('category'); // ✅ categoryParam का नामकरण सही करें
-  const searchParam = urlParams.get('search'); // ✅ searchParam का नामकरण सही करें
 
-  // ✅ LocationContext से useLocation हुक का उपयोग करें
+export default function Home() {
+  const { user } = useAuth();
+  const routerLocation = useRouterLocation();
+  const urlParams = new URLSearchParams(routerLocation.search);
+  const categoryParam = urlParams.get('category');
+  const searchParam = urlParams.get('search');
+
   const { 
     currentLocation, 
     loadingLocation, 
     error: locationError,
-    fetchCurrentGeolocation // यदि आप चाहें तो इसे मैन्युअल रूप से ट्रिगर कर सकते हैं
+    fetchCurrentGeolocation
   } = useLocation();
 
-  const [selectedCategory, setSelectedCategory] = useState<number | null>( // ✅ useState का नामकरण सही करें
+  const [selectedCategory, setSelectedCategory] = useState<number | null>(
     categoryParam ? parseInt(categoryParam) : null
   );
-  const [searchQuery, setSearchQuery] = useState(searchParam || ""); // ✅ useState का नामकरण सही करें
-  const [priceFilter, setPriceFilter] = useState<string[]>([]); // ✅ useState का नामकरण सही करें
-  const [sortBy, setSortBy] = useState("best-match"); // ✅ useState का नामकरण सही करें
+  const [searchQuery, setSearchQuery] = useState(searchParam || "");
+  const [priceFilter, setPriceFilter] = useState<string[]>([]);
+  const [sortBy, setSortBy] = useState("best-match");
 
   // Update filters when URL changes
-  useEffect(() => { // ✅ useEffect का नामकरण सही करें
+  useEffect(() => {
     const currentUrlParams = new URLSearchParams(routerLocation.search);
     const newCategoryParam = currentUrlParams.get('category');
     const newSearchParam = currentUrlParams.get('search');
@@ -82,95 +110,85 @@ export default function Home() { // ✅ function का नामकरण स�
   // Categories data fetching
   const { 
     data: categories = [], 
-    isLoading: categoriesLoading, // ✅ isLoading का नामकरण सही करें
-    error: categoriesError // ✅ error का नामकरण सही करें
-  } = useQuery<Category[]>({ // ✅ useQuery का नामकरण सही करें
+    isLoading: categoriesLoading,
+    error: categoriesError
+  } = useQuery<Category[]>({
     queryKey: ['categories'], 
-    queryFn: fetchCategories, // ✅ fetchCategories का नामकरण सही करें
+    queryFn: fetchCategories,
   });
 
   // Product data fetching
   const { 
     data: products = [], 
-    isLoading: productsLoading, // ✅ isLoading का नामकरण सही करें
-    error: productsError // ✅ error का नामकरण सही करें
-  } = useQuery<Product[]>({ // ✅ useQuery का नामकरण सही करें
-    // ✅ QueryKey में currentLocation को ट्रैक करें
+    isLoading: productsLoading,
+    error: productsError
+  } = useQuery<Product[]>({
     queryKey: ['products', selectedCategory, searchQuery, currentLocation], 
     queryFn: async () => {
       const params = new URLSearchParams();
       
-      // 1. यदि स्थान डेटा मौजूद नहीं है, तो एक स्पष्ट एरर थ्रो करें (जैसा कि बैकएंड अपेक्षित करता है)
       if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
-          throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
+          throw new Error("Location data not initialized properly.");
       }
 
-      // 2. आवश्यक स्थान पैरामीटर्स जोड़ें
       params.append('pincode', currentLocation.pincode.toString());
       params.append('lat', currentLocation.lat.toString());
       params.append('lng', currentLocation.lng.toString());
       
-      // 3. मौजूदा फ़िल्टर जोड़ें
       if (selectedCategory) params.append('categoryId', selectedCategory.toString());
       if (searchQuery) params.append('search', searchQuery);
       
       const response = await fetch(`/api/products?${params}`);
       
       if (!response.ok) {
-        // ✅ बैकएंड से एरर मैसेज पढ़ें (जैसा कि 400 प्रतिक्रिया में आ रहा है)
         const errorData = await response.json();
         throw new Error(errorData.message || 'Failed to fetch products');
       }
       return response.json();
     },
     
-    enabled: !!currentLocation?.pincode && !loadingLocation, 
+    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation, 
   });
 
   // Featured products data fetching
-  
-const { 
-  data: featuredProducts = [], 
-  isLoading: featuredProductsLoading, 
-  error: featuredProductsError 
-} = useQuery<Product[]>({
-  queryKey: ['featuredProducts', currentLocation], // ✅ यहाँ currentLocation जोड़ें
-  queryFn: async () => {
-    const params = new URLSearchParams();
+  const { 
+    data: featuredProducts = [], 
+    isLoading: featuredProductsLoading, 
+    error: featuredProductsError 
+  } = useQuery<Product[]>({
+    queryKey: ['featuredProducts', currentLocation],
+    queryFn: async () => {
+      const params = new URLSearchParams();
 
-    // ✅ currentLocation से lat/lng/pincode का उपयोग करें
-    if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
-        throw new Error("Customer location (pincode, lat, lng) is required for filtering featured products.");
-    }
+      if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
+          throw new Error("Location data not initialized properly.");
+      }
 
-    // ✅ सक्रिय currentLocation से पैरामीटर्स जोड़ें
-    params.append('pincode', currentLocation.pincode.toString());
-    params.append('lat', currentLocation.lat.toString());
-    params.append('lng', currentLocation.lng.toString());
-    
-    params.append('featured', 'true'); // यह पहले से था
+      params.append('pincode', currentLocation.pincode.toString());
+      params.append('lat', currentLocation.lat.toString());
+      params.append('lng', currentLocation.lng.toString());
+      
+      params.append('featured', 'true');
 
-    const response = await fetch(`/api/products?${params.toString()}`); // ✅ .toString() जोड़ें
-    if (!response.ok) {
-      const errorData = await response.json();
-      throw new Error(errorData.message || 'Failed to fetch featured products');
-    }
-    return response.json();
-  },
-  // ✅ तभी फ़ेच करें जब location data उपलब्ध हो और लोड हो गया हो
-  enabled: !!currentLocation?.pincode && !loadingLocation, 
-});
+      const response = await fetch(`/api/products?${params.toString()}`);
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.message || 'Failed to fetch featured products');
+      }
+      return response.json();
+    },
+    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation, 
+  });
   
 
   // Handle loading and error states at the top level for a better UX
-  // ✅ LocationContext से लोडिंग स्टेट्स को भी शामिल करें
   if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
     return (
       <div className="min-h-screen bg-neutral-50">
         <div className="max-w-7xl mx-auto px-4 py-8">
           <Skeleton className="h-16 w-full mb-8" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => ( // ✅ Array का नामकरण सही करें
+            {[...Array(8)].map((_, i) => (
               <Skeleton key={i} className="h-80 w-full" />
             ))}
           </div>
@@ -180,19 +198,23 @@ const {
   }
 
   // Consolidated error checks here
-  // ✅ LocationContext से एरर को भी शामिल करें
   if (locationError || categoriesError || productsError || featuredProductsError) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-600">
         <p>Error loading content: {
-          (locationError?.message || categoriesError?.message || productsError?.message || featuredProductsError?.message || "Unknown error")
+          // ✅ FIX: getErrorMessage helper function का उपयोग करें
+          getErrorMessage(locationError) || 
+          getErrorMessage(categoriesError) || 
+          getErrorMessage(productsError) || 
+          getErrorMessage(featuredProductsError) || 
+          "Unknown error"
         }</p>
       </div>
     );
   }
 
   // यदि currentLocation उपलब्ध नहीं है (और कोई लोडिंग/एरर नहीं है), तो यूजर को प्रॉम्प्ट करें
-  if (!currentLocation?.pincode) {
+  if (!currentLocation?.pincode && !loadingLocation) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-700">
         <p className="text-lg">Please select your delivery location to see products.</p>
@@ -217,7 +239,7 @@ const {
       }
     });
   });
-
+ 
   const handlePriceFilterChange = (range: string, checked: boolean) => { // ✅ handlePriceFilterChange का नामकरण सही करें
     if (checked) {
       setPriceFilter(prev => [...prev, range]); // ✅ setPriceFilter का नामकरण सही करें
