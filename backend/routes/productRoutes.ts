@@ -460,6 +460,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => { // 
       customerPincode,
       customerLat,
       customerLng,
+      lat,
+      lng,
+      pincode,
       minPrice,
       maxPrice,
       sortBy = 'createdAt',
@@ -471,7 +474,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => { // 
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
-
+    const effectivePincode = (pincode as string) || (customerPincode as string);
+    const effectiveLat = parseFloat((lat as string) || (customerLat as string));
+    const effectiveLng = parseFloat((lng as string) || (customerLng as string));
+    
     // ग्राहक के स्थान की जानकारी आवश्यक है (यदि तुम स्थान-आधारित फ़िल्टरिंग का उपयोग करना चाहते हो)
     if (!customerPincode || !customerLat || !customerLng) {
       return res.status(400).json({ message: "Customer location (pincode, lat, lng) is required for filtering." });
