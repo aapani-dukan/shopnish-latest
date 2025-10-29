@@ -1,5 +1,3 @@
-// client/src/pages/home.tsx
-
 import { useState, useEffect } from "react"; 
 import { useQuery } from "@tanstack/react-query"; 
 import { useLocation as useRouterLocation, Link } from "react-router-dom"; 
@@ -8,56 +6,28 @@ import { Filter, ArrowRight, ShieldIcon } from "lucide-react";
 import { Button } from "@/components/ui/button"; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
-
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/product-card"; 
 import Footer from "@/components/footer"; 
 import axios from 'axios';
 import { useAuth } from '@/hooks/useAuth'; 
-import  LocationDisplay  from '@/components/LocationDisplay'; 
-// --- Helper function to safely get error message from an unknown error type ---
-// ✅ यह function कंपोनेंट के बाहर होना चाहिए
+import LocationDisplay from '@/components/LocationDisplay'; 
+
+// --- Helper function ---
 function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) {
-    return error.message;
-  }
-  if (typeof error === 'string') {
-    return error;
-  }
+  if (error instanceof Error) return error.message;
+  if (typeof error === 'string') return error;
   return "An unexpected error occurred.";
 }
 
-// --- interfaces ---
+// --- Interfaces ---
 interface Category {
   id: number;
   name: string;
   slug: string;
-
   description: string | null;
   image: string | null;
-}
-interface Product {
-  id: number;
-  name: string;
-  description: string | null;
-  price: string;
-  originalPrice: string | null;
-  image: string;
-  brand: string | null;
-  busnessName: string
-  rating: string | null;
-  rejectionReason?: string;
-  reviewCount: number | null;
-deliveryPincodes?:string[];
-stock: number;      
-  sellerId: number;   
-  seller: Seller;   
-   unit?: string;
-storwIs: number;
-  categoryName: string | null;
-
-
 }
 
 interface Seller {
@@ -67,14 +37,32 @@ interface Seller {
   approvalStatus: "pending" | "approved" | "rejected";
 }
 
+interface Product {
+  id: number;
+  name: string;
+  description: string | null;
+  price: string;
+  originalPrice: string | null;
+  image: string;
+  brand: string | null;
+  busnessName: string;
+  rating: string | null;
+  rejectionReason?: string;
+  reviewCount: number | null;
+  deliveryPincodes?: string[];
+  stock: number;      
+  sellerId: number;   
+  seller: Seller;   
+  unit?: string;
+  storwIs: number;
+  categoryName: string | null;
+}
 
-// Function to fetch categories
+// --- Fetch categories ---
 async function fetchCategories(): Promise<Category[]> {
   const response = await axios.get('/api/categories');
   return response.data;
 }
-  
-
 
 export default function Home() {
   const { user } = useAuth();
@@ -107,81 +95,55 @@ export default function Home() {
     setSearchQuery(newSearchParam || "");
   }, [routerLocation.search]);
 
-  // Categories data fetching
-  const { 
-    data: categories = [], 
-    isLoading: categoriesLoading,
-    error: categoriesError
-  } = useQuery<Category[]>({
+  // --- Categories data fetching ---
+  const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
     queryKey: ['categories'], 
     queryFn: fetchCategories,
   });
 
-  // Product data fetching
-  const { 
-    data: products = [], 
-    isLoading: productsLoading,
-    error: productsError
-  } = useQuery<Product[]>({
-    queryKey: ['products', selectedCategory, searchQuery, currentLocation], 
+  // --- Products fetching using Axios ---
+  const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
+    queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      
-      if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
-          throw new Error("Location data not initialized properly.");
+      if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
+        throw new Error("Location data not initialized properly.");
       }
 
+      const params = new URLSearchParams();
       params.append('pincode', currentLocation.pincode.toString());
       params.append('lat', currentLocation.lat.toString());
       params.append('lng', currentLocation.lng.toString());
-      
       if (selectedCategory) params.append('categoryId', selectedCategory.toString());
       if (searchQuery) params.append('search', searchQuery);
-      
-      const response = await fetch(`/api/products?${params}`);
-      
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch products');
-      }
-      return response.json();
+      if (sortBy) params.append('sortBy', sortBy);
+
+      const response = await axios.get(`/api/products?${params.toString()}`);
+      return response.data;
     },
-    
-    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation, 
+    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation,
   });
 
-  // Featured products data fetching
-  const { 
-    data: featuredProducts = [], 
-    isLoading: featuredProductsLoading, 
-    error: featuredProductsError 
-  } = useQuery<Product[]>({
+  // --- Featured products fetching using Axios ---
+  const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery<Product[]>({
     queryKey: ['featuredProducts', currentLocation],
     queryFn: async () => {
-      const params = new URLSearchParams();
-
-      if (!currentLocation || !currentLocation.pincode || !currentLocation.lat || !currentLocation.lng) {
-          throw new Error("Location data not initialized properly.");
+      if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
+        throw new Error("Location data not initialized properly.");
       }
 
+      const params = new URLSearchParams();
       params.append('pincode', currentLocation.pincode.toString());
       params.append('lat', currentLocation.lat.toString());
       params.append('lng', currentLocation.lng.toString());
-      
       params.append('featured', 'true');
 
-      const response = await fetch(`/api/products?${params.toString()}`);
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.message || 'Failed to fetch featured products');
-      }
-      return response.json();
+      const response = await axios.get(`/api/products?${params.toString()}`);
+      return response.data;
     },
-    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation, 
+    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation,
   });
-  
 
-  // Handle loading and error states at the top level for a better UX
+  // --- Loading UI ---
   if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
     return (
       <div className="min-h-screen bg-neutral-50">
@@ -197,12 +159,11 @@ export default function Home() {
     );
   }
 
-  // Consolidated error checks here
+  // --- Error Handling ---
   if (locationError || categoriesError || productsError || featuredProductsError) {
     return (
       <div className="min-h-screen flex items-center justify-center text-red-600">
         <p>Error loading content: {
-          // ✅ FIX: getErrorMessage helper function का उपयोग करें
           getErrorMessage(locationError) || 
           getErrorMessage(categoriesError) || 
           getErrorMessage(productsError) || 
@@ -213,22 +174,20 @@ export default function Home() {
     );
   }
 
-  // यदि currentLocation उपलब्ध नहीं है (और कोई लोडिंग/एरर नहीं है), तो यूजर को प्रॉम्प्ट करें
+  // --- If no location set ---
   if (!currentLocation?.pincode && !loadingLocation) {
     return (
       <div className="min-h-screen flex items-center justify-center text-gray-700">
         <p className="text-lg">Please select your delivery location to see products.</p>
-        {/* यहाँ आप एक बटन जोड़ सकते हैं जो लोकेशन चयनकर्ता कंपोनेंट को खोलता है */}
       </div>
     );
   }
 
-
-  const filteredProducts = products.filter(product => { // ✅ filteredProducts का नामकरण सही करें
-    if (priceFilter.length === 0) return true; // ✅ priceFilter का नामकरण सही करें
-    
-    const price = parseFloat(product.price); // ✅ parseFloat का नामकरण सही करें
-    return priceFilter.some(range => { // ✅ priceFilter का नामकरण सही करें
+  // --- Price Filter ---
+  const filteredProducts = products.filter(product => {
+    if (priceFilter.length === 0) return true;
+    const price = parseFloat(product.price);
+    return priceFilter.some(range => {
       switch (range) {
         case 'under-250': return price < 250;
         case '250-500': return price >= 250 && price < 500;
@@ -239,27 +198,23 @@ export default function Home() {
       }
     });
   });
- 
-  const handlePriceFilterChange = (range: string, checked: boolean) => { // ✅ handlePriceFilterChange का नामकरण सही करें
-    if (checked) {
-      setPriceFilter(prev => [...prev, range]); // ✅ setPriceFilter का नामकरण सही करें
-    } else {
-      setPriceFilter(prev => prev.filter(r => r !== range)); // ✅ setPriceFilter का नामकरण सही करें
-    }
+
+  const handlePriceFilterChange = (range: string, checked: boolean) => {
+    if (checked) setPriceFilter(prev => [...prev, range]);
+    else setPriceFilter(prev => prev.filter(r => r !== range));
   };
 
-  const scrollToProducts = () => { // ✅ scrollToProducts का नामकरण सही करें
-    document.getElementById('products-section')?.scrollIntoView({ behavior: 'smooth' }); // ✅ getElementById का नामकरण सही करें
+  const scrollToProducts = () => {
+    document.getElementById('products-section')?.scrollIntoView({ behavior: 'smooth' });
   };
-  
-  // ✅ Updated admin login button logic
-  const renderAdminButton = () => { // ✅ renderAdminButton का नामकरण सही करें
-    if (user?.isAdmin) { // ✅ isAdmin का नामकरण सही करें
+
+  const renderAdminButton = () => {
+    if (user?.isAdmin) {
       return (
         <div className="absolute top-4 right-4">
-          <Button asChild> {/* ✅ Button का नामकरण सही करें */}
+          <Button asChild>
             <Link to="/admin-login">
-              <ShieldIcon className="mr-2 h-4 w-4" /> {/* ✅ ShieldIcon का नामकरण सही करें */}
+              <ShieldIcon className="mr-2 h-4 w-4" />
               एडमिन लॉगिन
             </Link>
           </Button>
@@ -269,11 +224,10 @@ export default function Home() {
     return null;
   };
 
+  // --- UI ---
   return (
     <div className="min-h-screen bg-neutral-50">
       {renderAdminButton()}
-
-      {/* Hero section - only show on home page without filters */}
       {!selectedCategory && !searchQuery && (
         <section className="bg-gradient-to-r from-primary to-orange-500 text-white py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -285,12 +239,8 @@ export default function Home() {
                 <p className="text-xl mb-8 text-orange-100">
                   Discover millions of products from trusted sellers with fast delivery and great prices.
                 </p>
-                <Button // ✅ Button का नामकरण सही करें
-                  onClick={scrollToProducts}
-                  size="lg"
-                  className="bg-white text-primary hover:bg-gray-100 font-semibold"
-                >
-                  Start shopping <ArrowRight className="ml-2 h-5 w-5" /> {/* ✅ ArrowRight का नामकरण सही करें */}
+                <Button onClick={scrollToProducts} size="lg" className="bg-white text-primary hover:bg-gray-100 font-semibold">
+                  Start shopping <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </div>
               <div className="relative">
@@ -304,8 +254,7 @@ export default function Home() {
           </div>
         </section>
       )}
-     
-      {/* Featured categories - only show on home page */}
+
       {!selectedCategory && !searchQuery && (
         <section className="py-16 bg-white">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -334,20 +283,19 @@ export default function Home() {
         </section>
       )}
 
-      {/* Product catalog */}
       <main id="products-section" className="py-16">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filters sidebar */}
+            {/* Filters Sidebar */}
             <aside className="lg:w-64 flex-shrink-0">
-              <Card className="sticky top-24"> {/* ✅ Card का नामकरण सही करें */}
-                <CardContent className="p-6"> {/* ✅ CardContent का नामकरण सही करें */}
+              <Card className="sticky top-24">
+                <CardContent className="p-6">
                   <h4 className="text-lg font-semibold mb-4 flex items-center">
-                    <Filter className="mr-2 h-5 w-5" /> {/* ✅ Filter का नामकरण सही करें */}
+                    <Filter className="mr-2 h-5 w-5" />
                     Filters
                   </h4>
                   
-                  {/* Price range */}
+                  {/* Price Range */}
                   <div className="mb-6">
                     <h5 className="font-medium mb-3">Price Range</h5>
                     <div className="space-y-2">
@@ -356,15 +304,13 @@ export default function Home() {
                         { id: '250-500', label: '₹250 - ₹500' },
                         { id: '500-1000', label: '₹500 - ₹1000' },
                         { id: '1000-5000', label: '₹1000 - ₹5000' },
-                        { id: 'over-5000', label: '₹ Over 5000' },
+                        { id: 'over-5000', label: 'Over ₹5000' },
                       ].map((range) => (
                         <div key={range.id} className="flex items-center space-x-2">
-                          <Checkbox // ✅ Checkbox का नामकरण सही करें
+                          <Checkbox
                             id={range.id}
                             checked={priceFilter.includes(range.id)}
-                            onCheckedChange={(checked) => // ✅ onCheckedChange का नामकरण सही करें
-                              handlePriceFilterChange(range.id, checked as boolean)
-                            }
+                            onCheckedChange={(checked) => handlePriceFilterChange(range.id, checked as boolean)}
                           />
                           <label htmlFor={range.id} className="text-sm cursor-pointer">
                             {range.label}
@@ -379,10 +325,10 @@ export default function Home() {
                     <h5 className="font-medium mb-3">Categories</h5>
                     <div className="space-y-2">
                       <div className="flex items-center space-x-2">
-                        <Checkbox // ✅ Checkbox का नामकरण सही करें
+                        <Checkbox
                           id="all-categories"
                           checked={!selectedCategory}
-                          onCheckedChange={() => setSelectedCategory(null)} // ✅ onCheckedChange का नामकरण सही करें
+                          onCheckedChange={() => setSelectedCategory(null)}
                         />
                         <label htmlFor="all-categories" className="text-sm cursor-pointer">
                           All Categories
@@ -390,10 +336,10 @@ export default function Home() {
                       </div>
                       {categories.map((category) => (
                         <div key={category.id} className="flex items-center space-x-2">
-                          <Checkbox // ✅ Checkbox का नामकरण सही करें
+                          <Checkbox
                             id={`category-${category.id}`}
                             checked={selectedCategory === category.id}
-                            onCheckedChange={() => // ✅ onCheckedChange का नामकरण सही करें
+                            onCheckedChange={() =>
                               setSelectedCategory(selectedCategory === category.id ? null : category.id)
                             }
                           />
@@ -408,9 +354,8 @@ export default function Home() {
               </Card>
             </aside>
 
-            {/* Product grid */}
+            {/* Product Grid */}
             <div className="flex-1">
-              {/* Sort and view options */}
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-2xl font-bold text-neutral-900">
                   {searchQuery ? `Search results for "${searchQuery}"` : 
@@ -418,22 +363,21 @@ export default function Home() {
                    'Featured Products'}
                 </h3>
                 <div className="flex items-center space-x-4">
-                  <Select value={sortBy} onValueChange={setSortBy}> {/* ✅ Select का नामकरण सही करें */}
-                    <SelectTrigger className="w-48"> {/* ✅ SelectTrigger का नामकरण सही करें */}
-                      <SelectValue placeholder="Sort by" /> {/* ✅ SelectValue का नामकरण सही करें */}
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-48">
+                      <SelectValue placeholder="Sort by" />
                     </SelectTrigger>
-                    <SelectContent> {/* ✅ SelectContent का नामकरण सही करें */}
-                      <SelectItem value="best-match">Best Match</SelectItem> {/* ✅ SelectItem का नामकरण सही करें */}
-                      <SelectItem value="price-low">Price: Low to High</SelectItem> {/* ✅ SelectItem का नामकरण सही करें */}
-                      <SelectItem value="price-high">Price: High to Low</SelectItem> {/* ✅ SelectItem का नामकरण सही करें */}
-                      <SelectItem value="rating">Customer Rating</SelectItem> {/* ✅ SelectItem का नामकरण सही करें */}
-                      <SelectItem value="newest">Newest First</SelectItem> {/* ✅ SelectItem का नामकरण सही करें */}
+                    <SelectContent>
+                      <SelectItem value="best-match">Best Match</SelectItem>
+                      <SelectItem value="price-low">Price: Low to High</SelectItem>
+                      <SelectItem value="price-high">Price: High to Low</SelectItem>
+                      <SelectItem value="rating">Customer Rating</SelectItem>
+                      <SelectItem value="newest">Newest First</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
-              {/* Product grid */}
               {productsLoading ? (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
                   {[...Array(8)].map((_, i) => (
@@ -443,7 +387,7 @@ export default function Home() {
               ) : filteredProducts.length === 0 ? (
                 <div className="text-center py-12">
                   <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
-                  <Button // ✅ Button का नामकरण सही करें
+                  <Button
                     onClick={() => {
                       setSelectedCategory(null);
                       setSearchQuery("");
@@ -470,4 +414,4 @@ export default function Home() {
       <Footer />
     </div>
   );
-}
+                        }
