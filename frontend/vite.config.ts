@@ -1,4 +1,4 @@
-// frontend/client/vite.config.ts
+
 
 import { defineConfig } from "vite"; // ✅ 'defineConfig' का 'C' capital करें
 import react from "@vitejs/plugin-react"; // ✅ सही package name '@vitejs/plugin-react'
@@ -15,7 +15,7 @@ export default defineConfig({
   // इस specific situation के लिए, अगर vite.config.ts 'client' के अंदर है, तो 'root: .' सही हो सकता है।
   // लेकिन यह सुनिश्चित करने के लिए कि बिल्ड कमांड कहाँ से चलता है,
   // हम मानेंगे कि बिल्ड कमांड 'frontend' से चलता है और 'client' को root के रूप में बताना होगा।
-  root: path.resolve(__dirname), // ✅ यह Vite को बताता है कि रूट फोल्डर वही है जहाँ यह vite.config.ts फाइल है, यानि 'frontend/client'
+  root: 'client', // ✅ यह Vite को बताता है कि रूट फोल्डर वही है जहाँ यह vite.config.ts फाइल है, यानि 'frontend/client'
 
   resolve: {
     alias: {
@@ -42,10 +42,6 @@ export default defineConfig({
     // ✅ 'outdir' को 'outDir' करें।
     // 'frontend/client/dist' में बिल्ड करने के लिए path.resolve(__dirname, 'dist') का उपयोग करें।
     // यदि आप 'frontend/dist/public' में बिल्ड करना चाहते हैं, तो path.resolve(__dirname, '../../dist/public') होगा।
-    outDir: path.resolve(__dirname, '../../dist/public'), // ✅ सही relative path यदि आप frontend/dist/public चाहते हैं
-    emptyOutDir: true, // ✅ 'emptyoutdir' को 'emptyOutDir' करें
-    sourcemap: true,
-    chunkSizeWarningLimit: 1000, // ✅ 'chunksizewarninglimit' को 'chunkSizeWarningLimit' करें
   },
   optimizeDeps: {
     include: ["react-google-maps/api"],
