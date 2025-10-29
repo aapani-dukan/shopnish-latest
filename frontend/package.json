@@ -1,3 +1,9 @@
+{
+  "name": "shopnish-frontend",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+
 "scripts": {
   "dev": "vite --config client/vite.config.ts",
   "build": "vite build --config client/vite.config.ts",
