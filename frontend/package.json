@@ -1,16 +1,14 @@
 {
-  "name": "shopnish-frontend",
-  "private": true,
-  "version": "1.0.0",
-  "type": "module",
-
-"scripts": {
-  "dev": "vite --config client/vite.config.ts",
-  "build": "vite build --config client/vite.config.ts",
-  "preview": "vite preview --config client/vite.config.ts",
-  "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0"
-},
-                              "dependencies": {
+      "name": "shopnish-frontend",
+        "private": true,
+          "version": "1.0.0",
+            "type": "module",
+              "scripts": {
+                  "dev": "cd client && vite",
+                      "build": "cd client && vite build",
+                          "lint": "eslint . --ext ts,tsx --report-unused-disable-directives --max-warnings 0",
+                              "preview": "cd client && vite preview"
+                                },                      "dependencies": {
                                   "@hookform/resolvers": "^3.10.0",
                                       "@radix-ui/react-accordion": "^1.2.4",
                                           "@radix-ui/react-alert-dialog": "^1.1.7",
