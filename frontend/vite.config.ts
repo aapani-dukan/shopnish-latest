@@ -1,4 +1,4 @@
-// frontend/client/vite.config.ts
+// frontend/vite.config.ts
 
 import { defineConfig } from "vite"; // ✅ 'defineConfig' का 'C' capital करें
 import react from "@vitejs/plugin-react"; // ✅ सही package name '@vitejs/plugin-react'
