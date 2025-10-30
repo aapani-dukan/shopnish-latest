@@ -140,18 +140,22 @@ const { data: products = [], isLoading: productsLoading, error: productsError } 
 });
 
 // ✅ Featured products fetching (similar handling)
+// ✅ Featured products fetching (similar handling)
 const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } =
   useQuery<Product[]>({
     queryKey: ['featuredProducts', currentLocation],
     queryFn: async () => {
-      if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
+      // ✨ fallback default location अगर user location नहीं मिली
+      const safeLocation = currentLocation || { pincode: '323001', lat: 25.4454386, lng: 75.6655767 };
+
+      if (!safeLocation.pincode || !safeLocation.lat || !safeLocation.lng) {
         throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
       }
 
       const params = new URLSearchParams({
-        pincode: currentLocation.pincode.toString(),
-        lat: currentLocation.lat.toString(),
-        lng: currentLocation.lng.toString(),
+        pincode: safeLocation.pincode.toString(),
+        lat: safeLocation.lat.toString(),
+        lng: safeLocation.lng.toString(),
         featured: 'true',
       });
 
