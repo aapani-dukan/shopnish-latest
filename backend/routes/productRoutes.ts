@@ -532,12 +532,16 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
             console.warn(`[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing shop location or max distance. Skipping.`);
         }
       } else {
-        // यह विक्रेता पिनकोड-आधारित डिलीवरी का उपयोग करता है
-        if (seller.deliveryPincodes && JSON.parse(seller.deliveryPincodes as string).includes(customerPincode as string)) { // ✅ JSON.parse for deliveryPincodes
-          deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
-        }
-      }
+  // यह विक्रेता पिनकोड-आधारित डिलीवरी का उपयोग करता है
+  try {
+    const deliveryPincodes = JSON.parse(seller.deliveryPincodes as string);
+    if (Array.isArray(deliveryPincodes) && deliveryPincodes.includes(customerPincode)) {
+      deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
     }
+  } catch (err) {
+    console.warn(`[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`, err);
+  }
+      }
 
     await Promise.all(distanceCheckPromises);
 
