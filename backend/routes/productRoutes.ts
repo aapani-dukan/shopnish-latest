@@ -506,7 +506,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     // 1. सभी स्वीकृत सेलर्स को उनकी डिलीवरी प्राथमिकताओं के साथ Fetch करें
     const allApprovedSellers = await db.select()
       .from(sellersPgTable)
-      .where(eq(sellersPgTable.isVerified, true)); // ✅ केवल Verified सेलर्स के प्रोडक्ट दिखाएं
+      .where(eq(sellersPgTable.approvalStatus, "approved")); // 🔥 केवल Approved Sellers के प्रोडक्ट दिखाएं
 
     const deliverableSellerIds: number[] = [];
     const distanceCheckPromises: Promise<void>[] = [];
