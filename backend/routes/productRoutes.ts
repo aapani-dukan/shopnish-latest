@@ -478,13 +478,14 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => { // 
     const effectiveLat = parseFloat((lat as string) || (customerLat as string));
     const effectiveLng = parseFloat((lng as string) || (customerLng as string));
     
-    // ग्राहक के स्थान की जानकारी आवश्यक है (यदि तुम स्थान-आधारित फ़िल्टरिंग का उपयोग करना चाहते हो)
-    if (!customerPincode || !customerLat || !customerLng) {
-      return res.status(400).json({ message: "Customer location (pincode, lat, lng) is required for filtering." });
+       // ✅ Customer location check
+    if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
+      return res.status(400).json({
+        message: "Customer location (pincode, lat, lng) is required for filtering.",
+      });
     }
 
-    const parsedCustomerLat = parseFloat(customerLat as string);
-    const parsedCustomerLng = parseFloat(customerLng as string);
+    
 
     // 1. सभी स्वीकृत सेलर्स को उनकी डिलीवरी प्राथमिकताओं के साथ Fetch करें
     const allApprovedSellers = await db.select()
