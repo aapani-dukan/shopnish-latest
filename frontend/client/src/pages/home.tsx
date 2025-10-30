@@ -102,86 +102,110 @@ export default function Home() {
   });
 
   // --- Products fetching using Axios ---
-  const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
-    queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
-    queryFn: async () => {
-      if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
-        throw new Error("Location data not initialized properly.");
-      }
+  // ✅ Updated Products & Featured Products fetching with better location handling
 
-      const params = new URLSearchParams();
-      params.append('pincode', currentLocation.pincode.toString());
-      params.append('lat', currentLocation.lat.toString());
-      params.append('lng', currentLocation.lng.toString());
-      if (selectedCategory) params.append('categoryId', selectedCategory.toString());
-      if (searchQuery) params.append('search', searchQuery);
-      if (sortBy) params.append('sortBy', sortBy);
+const isLocationReady =
+  !!currentLocation?.pincode &&
+  !!currentLocation?.lat &&
+  !!currentLocation?.lng &&
+  !loadingLocation;
 
-      const response = await axios.get(`/api/products?${params.toString()}`);
-      return response.data;
-    },
-    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation,
-  });
+const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
+  queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
+  queryFn: async () => {
+    if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
+      throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
+    }
 
-  // --- Featured products fetching using Axios ---
-  const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery<Product[]>({
+    const params = new URLSearchParams({
+      pincode: currentLocation.pincode.toString(),
+      lat: currentLocation.lat.toString(),
+      lng: currentLocation.lng.toString(),
+    });
+
+    if (selectedCategory) params.append('categoryId', selectedCategory.toString());
+    if (searchQuery) params.append('search', searchQuery);
+    if (sortBy) params.append('sortBy', sortBy);
+
+    const response = await axios.get(`/api/products?${params.toString()}`);
+    return response.data;
+  },
+  enabled: isLocationReady,
+  retry: (failureCount, error: any) => {
+    // retry only if location was not ready
+    if (error?.message?.includes('location')) return failureCount < 3;
+    return false;
+  },
+  retryDelay: 1000,
+});
+
+// ✅ Featured products fetching (similar handling)
+const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } =
+  useQuery<Product[]>({
     queryKey: ['featuredProducts', currentLocation],
     queryFn: async () => {
       if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
-        throw new Error("Location data not initialized properly.");
+        throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
       }
 
-      const params = new URLSearchParams();
-      params.append('pincode', currentLocation.pincode.toString());
-      params.append('lat', currentLocation.lat.toString());
-      params.append('lng', currentLocation.lng.toString());
-      params.append('featured', 'true');
+      const params = new URLSearchParams({
+        pincode: currentLocation.pincode.toString(),
+        lat: currentLocation.lat.toString(),
+        lng: currentLocation.lng.toString(),
+        featured: 'true',
+      });
 
       const response = await axios.get(`/api/products?${params.toString()}`);
       return response.data;
     },
-    enabled: !!currentLocation?.pincode && !!currentLocation?.lat && !!currentLocation?.lng && !loadingLocation,
+    enabled: isLocationReady,
+    retry: (failureCount, error: any) => {
+      if (error?.message?.includes('location')) return failureCount < 3;
+      return false;
+    },
+    retryDelay: 1000,
   });
 
-  // --- Loading UI ---
-  if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
-    return (
-      <div className="min-h-screen bg-neutral-50">
-        <div className="max-w-7xl mx-auto px-4 py-8">
-          <Skeleton className="h-16 w-full mb-8" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-80 w-full" />
-            ))}
-          </div>
+// ✅ Loading State
+if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
+  return (
+    <div className="min-h-screen bg-neutral-50">
+      <div className="max-w-7xl mx-auto px-4 py-8">
+        <Skeleton className="h-16 w-full mb-8" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(8)].map((_, i) => (
+            <Skeleton key={i} className="h-80 w-full" />
+          ))}
         </div>
       </div>
-    );
-  }
+    </div>
+  );
+}
 
-  // --- Error Handling ---
-  if (locationError || categoriesError || productsError || featuredProductsError) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-red-600">
-        <p>Error loading content: {
-          getErrorMessage(locationError) || 
-          getErrorMessage(categoriesError) || 
-          getErrorMessage(productsError) || 
-          getErrorMessage(featuredProductsError) || 
-          "Unknown error"
-        }</p>
-      </div>
-    );
-  }
+// ✅ Error Handling
+if (locationError || categoriesError || productsError || featuredProductsError) {
+  return (
+    <div className="min-h-screen flex items-center justify-center text-red-600">
+      <p>
+        Error loading content:{' '}
+        {getErrorMessage(locationError) ||
+          getErrorMessage(categoriesError) ||
+          getErrorMessage(productsError) ||
+          getErrorMessage(featuredProductsError) ||
+          'Unknown error'}
+      </p>
+    </div>
+  );
+}
 
-  // --- If no location set ---
-  if (!currentLocation?.pincode && !loadingLocation) {
-    return (
-      <div className="min-h-screen flex items-center justify-center text-gray-700">
-        <p className="text-lg">Please select your delivery location to see products.</p>
-      </div>
-    );
-  }
+// ✅ No Location Set
+if (!isLocationReady && !loadingLocation) {
+  return (
+    <div className="min-h-screen flex items-center justify-center text-gray-700">
+      <p className="text-lg">Please select your delivery location to see products.</p>
+    </div>
+  );
+}
 
   // --- Price Filter ---
   const filteredProducts = products.filter(product => {
