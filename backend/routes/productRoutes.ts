@@ -540,8 +540,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     }
   } catch (err) {
     console.warn(`[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`, err);
-  }
-      }
+   }
+ }
+}      
 
     await Promise.all(distanceCheckPromises);
 
