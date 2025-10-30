@@ -451,8 +451,11 @@ router.put('/admin/:productId/reject', verifyToken,requireAdminAuth , async (req
 // =========================================================================
 
 // GET /api/products (यह सभी प्रोडक्ट्स को लिस्ट करता है, अब स्थान, फ़िल्टर, सर्च, सॉर्ट, पेजिंग के आधार पर फ़िल्टर किया गया)
-router.get('/', async (req: Request, res: Response, next: NextFunction) => { // ✅ NextFunction जोड़ा
+
+// GET /api/products
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   console.log("📄 [API] Received request to get all products for customer view.");
+
   try {
     const {
       categoryId,
@@ -474,12 +477,25 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => { // 
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
-    const effectivePincode = (pincode as string) || (customerPincode as string);
-    const effectiveLat = parseFloat((lat as string) || (customerLat as string));
-    const effectiveLng = parseFloat((lng as string) || (customerLng as string));
-    
-       // ✅ Customer location check
+
+    // ✅ Explicit string conversion for all possible fields
+    const effectivePincode =
+      (pincode?.toString() || customerPincode?.toString() || "").trim();
+
+    // ✅ Safer numeric parsing
+    const effectiveLatStr = lat?.toString() || customerLat?.toString() || "";
+    const effectiveLngStr = lng?.toString() || customerLng?.toString() || "";
+
+    const effectiveLat = effectiveLatStr ? parseFloat(effectiveLatStr) : NaN;
+    const effectiveLng = effectiveLngStr ? parseFloat(effectiveLngStr) : NaN;
+
+    // ✅ Customer location check (after safe parsing)
     if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
+      console.log("❌ Invalid or missing location parameters:", {
+        effectivePincode,
+        effectiveLat,
+        effectiveLng,
+      });
       return res.status(400).json({
         message: "Customer location (pincode, lat, lng) is required for filtering.",
       });
