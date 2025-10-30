@@ -504,58 +504,88 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     
 
     // 1. सभी स्वीकृत सेलर्स को उनकी डिलीवरी प्राथमिकताओं के साथ Fetch करें
-    const allApprovedSellers = await db.select()
-      .from(sellersPgTable)
-      .where(eq(sellersPgTable.approvalStatus, "approved")); // 🔥 केवल Approved Sellers के प्रोडक्ट दिखाएं
+    // 1. सभी स्वीकृत सेलर्स को उनकी डिलीवरी प्राथमिकताओं के साथ Fetch करें
+const allApprovedSellers = await db
+  .select()
+  .from(sellersPgTable)
+  .where(eq(sellersPgTable.approvalStatus, "approved")); // 🔥 केवल Approved Sellers के प्रोडक्ट दिखाएं
 
-    const deliverableSellerIds: number[] = [];
-    const distanceCheckPromises: Promise<void>[] = [];
+// ✅ हमेशा array initialize रखो
+const deliverableSellerIds: number[] = [];
+const distanceCheckPromises: Promise<void>[] = [];
 
-    for (const seller of allApprovedSellers) {
-      if (!seller.id) continue;
+for (const seller of allApprovedSellers) {
+  if (!seller?.id || !seller?.userId) continue;
 
-      if (seller.isDistanceBasedDelivery) {
-        // यह विक्रेता दूरी-आधारित डिलीवरी का उपयोग करता है
-        if (seller.latitude && seller.longitude && seller.deliveryRadius !== null && seller.deliveryRadius !== undefined) {
-          distanceCheckPromises.push((async () => {
-            const distance = calculateDistanceKm(
-              seller.latitude,
-              seller.longitude,
-              parsedCustomerLat,
-              parsedCustomerLng
-            );
-            if (distance !== null && distance <= seller.deliveryRadius!) {
-              deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
-            }
-          })());
-        } else {
-            console.warn(`[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing shop location or max distance. Skipping.`);
-        }
-      } else {
-  // यह विक्रेता पिनकोड-आधारित डिलीवरी का उपयोग करता है
-  try {
-    const deliveryPincodes = JSON.parse(seller.deliveryPincodes as string);
-    if (Array.isArray(deliveryPincodes) && deliveryPincodes.includes(customerPincode)) {
-      deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
+  if (seller.isDistanceBasedDelivery) {
+    // यह विक्रेता दूरी-आधारित डिलीवरी का उपयोग करता है
+    if (
+      seller.latitude &&
+      seller.longitude &&
+      seller.deliveryRadius !== null &&
+      seller.deliveryRadius !== undefined
+    ) {
+      distanceCheckPromises.push(
+        (async () => {
+          const distance = calculateDistanceKm(
+            seller.latitude,
+            seller.longitude,
+            parsedCustomerLat,
+            parsedCustomerLng
+          );
+          if (distance !== null && distance <= seller.deliveryRadius!) {
+            deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
+          }
+        })()
+      );
+    } else {
+      console.warn(
+        `[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing shop location or max distance. Skipping.`
+      );
     }
-  } catch (err) {
-    console.warn(`[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`, err);
-   }
- }
-}      
+  } else {
+    // ✅ यह विक्रेता पिनकोड-आधारित डिलीवरी का उपयोग करता है
+    try {
+      const parsedPincodes = JSON.parse(
+        seller.deliveryPincodes as string
+      );
 
-    await Promise.all(distanceCheckPromises);
-
-    // यदि कोई भी विक्रेता डिलीवर नहीं कर सकता है, तो खाली सूची लौटाएं
-    if (deliverableSellerIds.length === 0) {
-      return res.status(200).json({
-        page: pageNum,
-        limit: limitNum,
-        total: 0,
-        totalPages: 0,
-        products: [],
-      });
+      if (
+        Array.isArray(parsedPincodes) &&
+        parsedPincodes.includes(customerPincode)
+      ) {
+        deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
+      }
+    } catch (err) {
+      console.warn(
+        `[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`,
+        err
+      );
     }
+  }
+}
+
+// ✅ सभी distance-check async tasks को पूरा होने दो
+await Promise.all(distanceCheckPromises);
+
+// ✅ Extra Safety Check — ताकि filter error दोबारा न आए
+if (!Array.isArray(deliverableSellerIds)) {
+  console.error("deliverableSellerIds is not an array!", deliverableSellerIds);
+  return res.status(500).json({
+    message: "Internal error: invalid deliverable seller list",
+  });
+}
+
+// ✅ यदि कोई भी विक्रेता डिलीवर नहीं कर सकता है, तो खाली सूची लौटाएं
+if (deliverableSellerIds.length === 0) {
+  return res.status(200).json({
+    page: pageNum,
+    limit: limitNum,
+    total: 0,
+    totalPages: 0,
+    products: [],
+  });
+}
 
     const whereClauses = [
       inArray(products.sellerId, deliverableSellerIds), // ✅ नया फ़िल्टर: डिलीवर करने वाले सेलर्स के उत्पाद
