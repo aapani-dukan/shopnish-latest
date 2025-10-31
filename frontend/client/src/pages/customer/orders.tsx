@@ -80,7 +80,7 @@ export default function CustomerOrdersPage() {
   const { data: orders, isLoading, isError, error } = useQuery<CustomerOrder[]>({
     queryKey: ["customerOrders"],
     queryFn: async () => {
-      const response = await apiRequest("get", "/api/customer/orders");
+      const response = await apiRequest("get", "/api/orders");
       return response as CustomerOrder[];
     },
   });
