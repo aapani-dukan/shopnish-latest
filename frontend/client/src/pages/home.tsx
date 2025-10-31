@@ -211,21 +211,29 @@ if (!isLocationReady && !loadingLocation) {
   );
 }
 
-  // --- Price Filter ---
-  const filteredProducts = products.filter(product => {
-    if (priceFilter.length === 0) return true;
-    const price = parseFloat(product.price);
-    return priceFilter.some(range => {
-      switch (range) {
-        case 'under-250': return price < 250;
-        case '250-500': return price >= 250 && price < 500;
-        case '500-1000': return price >= 500 && price < 1000;
-        case '1000-5000': return price >= 1000 && price < 5000;
-        case 'over-5000': return price >= 5000;
-        default: return true;
-      }
-    });
-  });
+// --- Price Filter ---
+const filteredProducts = Array.isArray(products)
+  ? products.filter(product => {
+      if (priceFilter.length === 0) return true;
+      const price = parseFloat(product.price);
+      return priceFilter.some(range => {
+        switch (range) {
+          case "under-250":
+            return price < 250;
+          case "250-500":
+            return price >= 250 && price < 500;
+          case "500-1000":
+            return price >= 500 && price < 1000;
+          case "1000-5000":
+            return price >= 1000 && price < 5000;
+          case "over-5000":
+            return price >= 5000;
+          default:
+            return true;
+        }
+      });
+    })
+  : [];
 
   const handlePriceFilterChange = (range: string, checked: boolean) => {
     if (checked) setPriceFilter(prev => [...prev, range]);
