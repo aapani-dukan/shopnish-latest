@@ -544,7 +544,7 @@ adminRouter.patch('/users/:userId', authorize(['admin']), validateRequest(update
           .set({ approvalStatus: updateData.approvalStatus || approvalStatusEnum.enumValues[1] }) // Default to approved if not specified
           .where(eq(sellersPgTable.userId, userId));
       } else if (updateData.role === userRoleEnum.enumValues[2] /* 'delivery_boy' */) {
-        await db.update(deliveryBoysPgTable)
+        await db.update(deliveryBoysPgTabl)
           .set({ approvalStatus: updateData.approvalStatus || approvalStatusEnum.enumValues[1] }) // Default to approved if not specified
           .where(eq(deliveryBoysPgTable.userId, userId));
       }
@@ -553,9 +553,9 @@ adminRouter.patch('/users/:userId', authorize(['admin']), validateRequest(update
           await db.update(sellersPgTable)
               .set({ approvalStatus: approvalStatusEnum.enumValues[2] /* 'rejected' */ })
               .where(eq(sellersPgTable.userId, userId));
-          await db.update(deliveryBoysPgTable)
+          await db.update(deliveryBoys)
               .set({ approvalStatus: approvalStatusEnum.enumValues[2] /* 'rejected' */ })
-              .where(eq(deliveryBoysPgTable.userId, userId));
+              .where(eq(deliveryBoys.userId, userId));
       }
     }
 
