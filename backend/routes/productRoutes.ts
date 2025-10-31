@@ -530,8 +530,8 @@ for (const seller of allApprovedSellers) {
           const distance = calculateDistanceKm(
             seller.latitude,
             seller.longitude,
-            parsedCustomerLat,
-            parsedCustomerLng
+            effectiveLat,
+            effectiveLng
           );
           if (distance !== null && distance <= seller.deliveryRadius!) {
             deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
