@@ -12,7 +12,7 @@ import {
   products,
   deliveryBoys, // ✅ Corrected deliveryBoys table name
   sellersPgTable, // ✅ Corrected sellers table name
-  deliveryAddressP, // ✅ Added for complete address details
+  deliveryAddresses, // ✅ Added for complete address details
   masterOrderStatusEnum, // ✅ Master order status enum
   subOrderStatusEnum, // ✅ Sub-order status enum
   deliveryStatusEnum, // ✅ Delivery batch status enum
@@ -26,7 +26,7 @@ import { v4 as uuidv4 } from "uuid";
 import { authorize } from '../server/middleware/authorize'; // ✅ Assuming authorize middleware is preferred
 import { validateRequest } from '../server/middleware/validation';
 import { z } from 'zod'; // ✅ For category validation
-
+import { orderTracking } from "../shared/backend/schema";
 const adminRouter = Router();
 const upload = multer({ dest: 'uploads/' });
 
