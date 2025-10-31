@@ -559,8 +559,8 @@ adminRouter.patch('/users/:userId', authorize(['admin']), validateRequest(update
       }
     }
 
-
-    return res.status(200).json({ message: "User updated successfully.", user: updatedUser[0] });
+return res.status(200).json({ message: "User updated successfully.", user: updatedUser });
+    
 
   } catch (error: any) {
     console.error(`❌ Error updating user ${req.params.userId}:`, error);
