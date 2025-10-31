@@ -518,10 +518,11 @@ for (const seller of allApprovedSellers) {
   if (!seller?.id || !seller?.userId) continue;
 
   if (seller.isDistanceBasedDelivery) {
-    // यह विक्रेता दूरी-आधारित डिलीवरी का उपयोग करता है
     if (
-      seller.latitude &&
-      seller.longitude &&
+      typeof seller.latitude === "number" &&
+      typeof seller.longitude === "number" &&
+      !isNaN(effectiveLat) &&
+      !isNaN(effectiveLng) &&
       seller.deliveryRadius !== null &&
       seller.deliveryRadius !== undefined
     ) {
@@ -534,33 +535,23 @@ for (const seller of allApprovedSellers) {
             effectiveLng
           );
           if (distance !== null && distance <= seller.deliveryRadius!) {
-            deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
+            deliverableSellerIds.push(seller.userId);
           }
         })()
       );
     } else {
       console.warn(
-        `[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing shop location or max distance. Skipping.`
+        `[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing or invalid location. Skipping.`
       );
     }
   } else {
-    // ✅ यह विक्रेता पिनकोड-आधारित डिलीवरी का उपयोग करता है
     try {
-      const parsedPincodes = JSON.parse(
-        seller.deliveryPincodes as string
-      );
-
-      if (
-        Array.isArray(parsedPincodes) &&
-        parsedPincodes.includes(customerPincode)
-      ) {
-        deliverableSellerIds.push(seller.userId); // ✅ विक्रेता का User ID जोड़ें
+      const parsedPincodes = JSON.parse(seller.deliveryPincodes as string);
+      if (Array.isArray(parsedPincodes) && parsedPincodes.includes(effectivePincode)) {
+        deliverableSellerIds.push(seller.userId);
       }
     } catch (err) {
-      console.warn(
-        `[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`,
-        err
-      );
+      console.warn(`[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`, err);
     }
   }
 }
