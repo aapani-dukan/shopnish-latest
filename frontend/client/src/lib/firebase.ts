@@ -300,3 +300,4 @@ export const checkBrowserCompatibility = (): {
 export { app };
 export { signOutUser as logout };
 export const signInWithGooglePopup = () => signInWithGoogle(true);
+export const firebaseApp = initializeApp(firebaseConfig);
