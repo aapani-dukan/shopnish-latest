@@ -3,71 +3,68 @@ import { useNavigate } from "react-router-dom";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Shield } from "lucide-react";
-import { getAuth, signInWithCustomToken } from "firebase/auth";
+import {getAuth, signInWithEmailAndPassword, onAuthStateChanged} from "firebase/auth";
+import { firebaseApp } from "@/lib/firebase";
 
-export default function AdminLogin() {
-  const navigate = useNavigate();
-  const { toast } = useToast();
-  const [password, setPassword] = useState("");
-  const [loading, setLoading] = useState(false);
-  
-  // ✅ लॉगिन के बाद नेविगेट करने के लिए useEffect का उपयोग करें
+export default function AdminLogin() { // ✅ 'AdminLogin'
+  const navigate = useNavigate(); // ✅ 'useNavigate'
+  const { toast } = useToast(); // ✅ 'useToast'
+  const [email, setEmail] = useState(""); // ✅ Email state जोड़ा
+  const [password, setPassword] = useState(""); // ✅ 'setPassword'
+  const [loading, setLoading] = useState(false); // ✅ 'setLoading'
+  const auth = getAuth(firebaseApp); // ✅ Firebase app को getAuth में पास करें
+
   useEffect(() => {
-    const auth = getAuth();
-    const unsubscribe = auth.onAuthStateChanged((user) => {
+    const unsubscribe = onAuthStateChanged(auth, async (user) => {
       if (user) {
-        // ✅ अगर उपयोगकर्ता लॉग इन है, तो डैशबोर्ड पर नेविगेट करें
-        navigate("/admin/dashboard", { replace: true });
+        try {
+          const idTokenResult = await user.getIdTokenResult();
+          if (idTokenResult.claims.admin) {
+            navigate("/admin/dashboard", { replace: true });
+          } else {
+            await auth.signOut();
+            toast({
+              title: "Access Denied",
+              description: "You are not authorized to access the admin panel.",
+              variant: "destructive",
+            });
+          }
+        } catch (error: any) {
+          console.error("Error checking admin claims:", error);
+          toast({
+            title: "Authentication Error",
+            description: error.message || "Failed to verify admin status.",
+            variant: "destructive",
+          });
+          setLoading(false); 
+        }
+      } else {
+        setLoading(false); 
       }
     });
     return () => unsubscribe();
-  }, [navigate]);
+  }, [navigate, toast, auth]);
 
 
-  const handleLogin = async () => {
+  const handleLogin = async () => { // ✅ 'handleLogin'
     setLoading(true);
     try {
-      const res = await fetch("/api/auth/admin-login", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password }),
-      });
-      
-      const data = await res.json();
-      
-      if (!res.ok) {
-        throw new Error(data.message || "Login failed");
-      }
-      
-      const { customToken } = data;
-      
-      const auth = getAuth();
-      await signInWithCustomToken(auth, customToken);
-      
-      const idToken = await auth.currentUser?.getIdToken(true);
-      if (idToken) {
-        localStorage.setItem("authToken", idToken);
-      } else {
-        throw new Error("Failed to retrieve ID token");
-      }
+      await signInWithEmailAndPassword(auth, email, password);
       
       toast({
         title: "Login Successful",
-        description: "Welcome Admin!",
+        description: "Verifying admin access...",
       });
-      
-      // ✅ अब यहां से नेविगेट करने की जरूरत नहीं है, useEffect इसे संभालेगा
       
     } catch (err: any) {
       toast({
         title: "Login Failed",
-        description: err.message,
+        description: err.message || "An unknown error occurred during login.",
         variant: "destructive",
       });
-    } finally {
-      setLoading(false);
+      setLoading(false); 
     }
   };
   
@@ -79,23 +76,33 @@ export default function AdminLogin() {
             <Shield className="h-8 w-8 text-primary" />
           </div>
           <CardTitle className="text-2xl">एडमिन एक्सेस</CardTitle>
-          <p className="text-muted-foreground">
+          <CardDescription className="text-muted-foreground">
             विक्रेता और उत्पाद प्रबंधन के लिए सुरक्षित एडमिन पैनल
-          </p>
+          </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="space-y-4">
             <Input
+              type="email"
+              placeholder="Admin Email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={loading}
+              autoComplete="email"
+            />
+            <Input
               type="password"
-              placeholder="Enter Admin Password"
+              placeholder="Admin Password"
               value={password}
               onChange={(e) => setPassword(e.target.value)}
+              disabled={loading}
+              autoComplete="current-password"
             />
             <Button
               onClick={handleLogin}
               className="w-full"
               size="lg"
-              disabled={loading}
+              disabled={loading || !email || !password}
             >
               {loading ? "Logging in..." : "एडमिन पैनल में प्रवेश करें"}
             </Button>
