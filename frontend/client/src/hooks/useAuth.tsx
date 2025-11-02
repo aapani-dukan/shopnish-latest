@@ -80,7 +80,10 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const fetchAndSyncBackendUser = useCallback(async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
     setIsLoadingAuth(true);
     let dbUserData = null;
-    const idToken = await fbUser.getIdToken(forceRefreshIdToken); // Use forceRefreshIdToken
+    status
+    const idTokenResult = await fbUser.getIdTokenResult(forceRefreshIdToken); // Get the result to access claims
+    const idToken = idTokenResult.token; // Get the token itself
+    const isAdminFromFirebase = idTokenResult.claims.admin === true; // Check the admin claim from Firebase
 
     try {
       // ✅ 1. attempt to fetch existing user data
@@ -130,7 +133,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
             idToken,
             sellerProfile: dbUserData.sellerProfile || null,
             deliveryBoyId: dbUserData.deliveryBoyId || null,
-            isAdmin: dbUserData.role === "admin",
+            isAdmin: isAdminFromFirebase, // Determine isAdmin directly from Firebase claim
         };
 
         // Only update state if user data has actually changed to prevent unnecessary re-renders
