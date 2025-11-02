@@ -176,7 +176,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient, user]);
+}, [fetchAndSyncBackendUser, queryClient]);
 
   const signIn = useCallback(
     async (usePopup: boolean = false): Promise<FirebaseUser | null> => {
