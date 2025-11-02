@@ -182,10 +182,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     });
 
     return () => unsubscribe();
-  }, [fetchAndSyncBackendUser, queryClient, user]); // ✅ camelCase
+  }, [fetchAndSyncBackendUser, queryClient, user]); 
 
-// ... (बाकी सभी functions और useCallback को camelCase में ठीक करें) ...
-/ --- Google Sign In Handler (No change) ---
   const signIn = useCallback(
     async (usePopup: boolean = false): Promise<FirebaseUser | null> => {
       setIsLoadingAuth(true);
