@@ -1,4 +1,4 @@
-// ✅ client/src/components/admin-guard.tsx (सुधार)
+// ✅ client/src/components/admin-guard.tsx
 import React, { useEffect, useState } from "react";
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,40 +10,55 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => {
   const [isChecking, setIsChecking] = useState(true);
 
   useEffect(() => {
+    // ⚡ केवल तब चेक करो जब user load हो चुका हो
+    if (isLoadingAuth) return;
+    if (!user?.idToken) {
+      setIsAuthenticated(false);
+      setIsChecking(false);
+      return;
+    }
+
+    let cancelled = false;
     const checkAdminSession = async () => {
       try {
-        if (!user?.idToken) {
-          setIsAuthenticated(false);
-          return;
-        }
         const userData = await apiRequest(
           "GET",
           "/api/users/me",
           undefined,
           user.idToken
         );
-        
-        if (userData.role === "admin") {
-          setIsAuthenticated(true);
+
+        if (!cancelled) {
+          setIsAuthenticated(userData.role === "admin");
         }
       } catch (e) {
-        console.error("Failed to check admin session:", e);
-        setIsAuthenticated(false);
+        if (!cancelled) {
+          console.error("Failed to check admin session:", e);
+          setIsAuthenticated(false);
+        }
       } finally {
-        setIsChecking(false);
+        if (!cancelled) setIsChecking(false);
       }
     };
-    checkAdminSession();
-  }, [user?.idToken]);
 
+    checkAdminSession();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [user?.idToken, isLoadingAuth]); // dependency सही रखी लेकिन controlled
+
+  // ✅ Loading phase: redirect नहीं करना
   if (isLoadingAuth || isChecking) {
-    return <div>Loading...</div>;
+    return <div className="text-center py-10">Loading...</div>;
   }
 
+  // ✅ जब confirm हो जाए कि admin नहीं है
   if (!isAuthenticated) {
     return <Navigate to="/admin-login" replace />;
   }
 
+  // ✅ सब ठीक है → children दिखाओ
   return <>{children}</>;
 };
 
