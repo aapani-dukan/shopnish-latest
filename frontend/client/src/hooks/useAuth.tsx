@@ -162,8 +162,11 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
         fbUser ? fbUser.email : "null"
       );
 
-      if (fbUser) {
-        const shouldFetch = !user || user.uid !== fbUser.uid || (!user.idToken || (Date.now() / 1000 - (fbUser as any).metadata.lastSignInTime / 1000 > 3600)); 
+      if (!user || user.uid !== fbUser.uid) {
+  await fetchAndSyncBackendUser(fbUser, true);
+} else {
+  setIsLoadingAuth(false);
+      }
         
         if (shouldFetch) {
             // ✅ forceRefreshIdToken: true यहाँ भी पास करना चाहिए अगर token stale है
