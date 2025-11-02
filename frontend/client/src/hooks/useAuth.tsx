@@ -185,7 +185,143 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [fetchAndSyncBackendUser, queryClient, user]); // ✅ camelCase
 
 // ... (बाकी सभी functions और useCallback को camelCase में ठीक करें) ...
+/ --- Google Sign In Handler (No change) ---
+  const signIn = useCallback(
+    async (usePopup: boolean = false): Promise<FirebaseUser | null> => {
+      setIsLoadingAuth(true);
+      setAuthError(null);
+      try {
+        const fbUser = await firebaseSignInWithGoogle(usePopup);
+        if (fbUser) {
+          await fetchAndSyncBackendUser(fbUser);
+        }
+        return fbUser;
+      } catch (err: any) {
+        setAuthError(err as AuthError);
+        setIsLoadingAuth(false);
+        throw err;
+      }
+    },
+    [fetchAndSyncBackendUser]
+  );
+  
+  // --- Email/Password Sign In Handler (No change) ---
+  const signInWithEmailAndPassword = useCallback(
+    async (email: string, password: string): Promise<FirebaseUser | null> => {
+      setIsLoadingAuth(true);
+      setAuthError(null);
+      try {
+        const fbUser = await firebaseSignInWithEmail(email, password);
+        if (fbUser) {
+          await fetchAndSyncBackendUser(fbUser);
+        }
+        return fbUser;
+      } catch (err: any) {
+        setAuthError(err as AuthError);
+        setIsLoadingAuth(false);
+        throw err;
+      }
+    },
+    [fetchAndSyncBackendUser]
+  );
+  
+  // --- Email/Password Sign Up Handler (No change) ---
+  const signUpWithEmailAndPassword = useCallback(
+    async (email: string, password: string): Promise<FirebaseUser | null> => {
+      setIsLoadingAuth(true);
+      setAuthError(null);
+      try {
+        const fbUser = await firebaseSignUpWithEmail(email, password);
+        return fbUser; 
+      } catch (err: any) {
+        setAuthError(err as AuthError);
+        setIsLoadingAuth(false);
+        throw err;
+      }
+    },
+    [] 
+  );
 
+  // --- 🚀 New: Password Reset Handler ---
+  const resetPassword = useCallback(
+    async (email: string): Promise<void> => {
+      setAuthError(null);
+      try {
+        // Call the imported Firebase utility function
+        await firebaseSendPasswordResetEmail(email);
+        // Do not set loading state here, as it's a non-auth flow
+      } catch (err: any) {
+        setAuthError(err as AuthError);
+        throw err;
+      }
+    },
+    [] 
+  );
+
+
+  // --- Sign Out Handler (No change) ---
+  const signOut = useCallback(async (): Promise<void> => {
+    try {
+      await signOutUser();
+      console.log("✅ User signed out.");
+      setAuthError(null);
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      queryClient.clear();
+    } catch (err: any) {
+      setAuthError(err as AuthError);
+      throw err;
+    }
+  }, [queryClient]);
+
+  // --- Refetch User Handler (No change) ---
+  const refetchUser = useCallback(async () => {
+    setIsLoadingAuth(true);
+    const fbUser = auth.currentUser;
+    if (fbUser) {
+      await fetchAndSyncBackendUser(fbUser);
+    } else {
+      setIsLoadingAuth(false);
+    }
+  }, [fetchAndSyncBackendUser]);
+
+  // --- Backend Login Handler (No change) ---
+  const backendLogin = useCallback(
+    async (email: string, password: string): Promise<User> => {
+      setAuthError(null);
+      setIsLoadingAuth(true);
+      try {
+        const res = await apiRequest("POST", "/api/delivery/login", {
+          email,
+          password,
+        });
+        const backendUser = res.user;
+        if (!backendUser)
+          throw new Error("Invalid user data received from backend.");
+        const newUserData: User = {
+          id: backendUser.id,
+          email: backendUser.email,
+          name: backendUser.name,
+          role: backendUser.role,
+          sellerProfile: backendUser.sellerProfile || null,
+deliveryBoyId: backendUser.deliveryBoyId || null, 
+        };
+        setUser(newUserData);
+        setIsAuthenticated(true);
+        setIsAdmin(newUserData.role === "admin");
+        console.log("✅ Delivery backend login success:", newUserData);
+        setIsLoadingAuth(false);
+        return newUserData;
+      } catch (err: any) {
+        console.error("❌ Delivery backend login failed:", err);
+        setAuthError(err as AuthError);
+        setIsLoadingAuth(false);
+        throw err;
+      }
+    },
+    []
+  );
   const authContextValue = useMemo( // ✅ camelCase
     () => ({
       user,
