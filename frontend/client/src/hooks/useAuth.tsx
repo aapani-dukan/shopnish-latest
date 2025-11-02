@@ -157,23 +157,30 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   checkRedirectResult();
 
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-    console.log("onAuthStateChanged triggered. fbUser:", fbUser ? fbUser.email : "null");
+  console.log("onAuthStateChanged triggered. fbUser:", fbUser ? fbUser.email : "null");
 
-    if (fbUser) {
-      if (!user || user.uid !== fbUser.uid) {
-        await fetchAndSyncBackendUser(fbUser, true);
-      } else {
-        setIsLoadingAuth(false);
-      }
+  if (fbUser) {
+    // ✅ यहाँ guard डालो:
+    if (!fbUser.email) {
+      console.warn("⚠️ Firebase user has no email, skipping fetch.");
+      return;
+    }
+
+    // ✅ अब fetch तभी चलेगा जब email confirm हो और uid नया हो
+    if (!user || user.uid !== fbUser.uid) {
+      await fetchAndSyncBackendUser(fbUser, true);
     } else {
-      console.warn("❌ No Firebase user. Clearing state.");
-      setUser(null);
-      setIsAuthenticated(false);
-      setIsAdmin(false);
-      queryClient.clear();
       setIsLoadingAuth(false);
     }
-  });
+  } else {
+    console.warn("❌ No Firebase user. Clearing state.");
+    setUser(null);
+    setIsAuthenticated(false);
+    setIsAdmin(false);
+    queryClient.clear();
+    setIsLoadingAuth(false);
+  }
+});
 
   return () => unsubscribe();
 }, [fetchAndSyncBackendUser, queryClient]);
