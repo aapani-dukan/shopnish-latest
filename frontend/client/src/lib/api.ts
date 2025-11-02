@@ -15,7 +15,7 @@ const api = axios.create({
     const user = auth.currentUser;
     if (user) {
       try {
-        const token = await user.getIdToken(true);
+        const token = await user.getIdToken();
         if (token) {
           config.headers.Authorization = `Bearer ${token}`;
           console.log("📤 [API.ts] Sending request:", config.url, "with Auth:", config.headers.Authorization);
