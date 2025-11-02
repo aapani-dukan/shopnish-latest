@@ -1,65 +1,42 @@
 // ✅ client/src/components/admin-guard.tsx
-import React, { useEffect, useState } from "react";
-import { Navigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { apiRequest } from "@/lib/queryClient";
+import React, { useEffect, useState } from "react"; // ✅ camelCase
+import { useNavigate } from "react-router-dom"; // ✅ useNavigate hook का उपयोग करें
+import { useAuth } from "../hooks/useAuth"; // ✅ Correct relative path, camelCase
+// apiRequest अब admin status check करने के लिए आवश्यक नहीं है, इसलिए इसे हटा दिया गया है
+// import { apiRequest } from "../lib/queryclient"; 
 
-const AdminGuard = ({ children }: { children: React.ReactNode }) => {
-  const { user, isLoadingAuth } = useAuth();
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
-  const [isChecking, setIsChecking] = useState(true);
+const AdminGuard = ({ children }: { children: React.ReactNode }) => { // ✅ camelCase
+  // ✅ IMPORTANT: isAdmin को useAuth से destructure करें
+  const { user, isLoadingAuth, isAuthenticated, isAdmin } = useAuth(); // ✅ camelCase
+  const navigate = useNavigate(); // ✅ useNavigate hook
+
+  // 🚀 AdminGuard अब अपनी खुद की authenticated state को नहीं रखेगा
+  //    यह सीधे AuthContext से isAuthenticated और isAdmin पर निर्भर करेगा
+  // const [isAuthenticated, setIsAuthenticated] = useState(false); // अब इसकी जरूरत नहीं
+  // const [isChecking, setIsChecking] = useState(true); // अब इसकी जरूरत नहीं
 
   useEffect(() => {
-    // ⚡ केवल तब चेक करो जब user load हो चुका हो
+    // ⚡ केवल तब चेक करो जब AuthContext लोडिंग खत्म कर चुका हो
     if (isLoadingAuth) return;
-    if (!user?.idToken) {
-      setIsAuthenticated(false);
-      setIsChecking(false);
-      return;
+
+    // यदि authenticated नहीं है या admin नहीं है, तो redirect करें
+    if (!isAuthenticated || !isAdmin) {
+      console.warn("AdminGuard: User not authenticated or not an admin. Redirecting to /admin-login.");
+      navigate("/admin-login", { replace: true });
     }
+    // यदि authenticated और admin है, तो कुछ नहीं करें, children render होंगे
+    
+  }, [isLoadingAuth, isAuthenticated, isAdmin, navigate]); // Dependencies updated
 
-    let cancelled = false;
-    const checkAdminSession = async () => {
-      try {
-        const userData = await apiRequest(
-          "GET",
-          "/api/users/me",
-          undefined,
-          user.idToken
-        );
-
-        if (!cancelled) {
-          setIsAuthenticated(userData.role === "admin");
-        }
-      } catch (e) {
-        if (!cancelled) {
-          console.error("Failed to check admin session:", e);
-          setIsAuthenticated(false);
-        }
-      } finally {
-        if (!cancelled) setIsChecking(false);
-      }
-    };
-
-    checkAdminSession();
-
-    return () => {
-      cancelled = true;
-    };
-  }, [user?.idToken, isLoadingAuth]); // dependency सही रखी लेकिन controlled
-
-  // ✅ Loading phase: redirect नहीं करना
-  if (isLoadingAuth || isChecking) {
-    return <div className="text-center py-10">Loading...</div>;
+  // ✅ Loading phase: redirect नहीं करना, Loading UI दिखाएं
+  //    अब 'isChecking' state की आवश्यकता नहीं है
+  if (isLoadingAuth) {
+    return <div className="text-center py-10">Loading Admin Panel...</div>; // ✅ className
   }
 
-  // ✅ जब confirm हो जाए कि admin नहीं है
-  if (!isAuthenticated) {
-    return <Navigate to="/admin-login" replace />;
-  }
-
-  // ✅ सब ठीक है → children दिखाओ
+  // ✅ यदि isAuthenticated और isAdmin दोनों true हैं, तो children render करें
+  //    यदि useEffect में redirect हो गया है, तो यह block execute नहीं होगा।
   return <>{children}</>;
 };
 
-export default AdminGuard;
+export default AdminGuard; // ✅ camelCase
