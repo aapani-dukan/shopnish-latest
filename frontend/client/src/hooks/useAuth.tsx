@@ -76,19 +76,20 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   // ✅ Consolidated logic for fetching and syncing backend user (No change)
-  const fetchAndSyncBackendUser = useCallback(async (fbUser: FirebaseUser) => {
+    // ✅ consolidated logic for fetching and syncing backend user (UPDATED)
+  const fetchAndSyncBackendUser = useCallback(async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
     setIsLoadingAuth(true);
     let dbUserData = null;
-    const idToken = await fbUser.getIdToken(true);
+    const idToken = await fbUser.getIdToken(forceRefreshIdToken); // Use forceRefreshIdToken
 
     try {
-      // ✅ 1. Attempt to fetch existing user data
+      // ✅ 1. attempt to fetch existing user data
       const res = await apiRequest("GET", "/api/users/me");
       dbUserData = res.user || res;
       console.log("✅ Backend user data fetched:", dbUserData);
     } catch (e: any) {
       if (e.status === 404) {
-        // ✅ 2. If 404, attempt to create a new user
+        // ✅ 2. if 404, attempt to create a new user
         console.warn("User not found on backend. Attempting initial login.");
         try {
           const res = await apiRequest("POST", "/api/auth/initial-login", {
@@ -118,63 +119,73 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
       }
     }
 
-    // ✅ 3. If we have data, set the state
+    // ✅ 3. if we have data, set the state (UPDATED LOGIC to prevent loop)
     if (dbUserData) {
-      const newUserData: User = {
-        uid: fbUser.uid,
-        id: dbUserData.id,
-        email: fbUser.email || dbUserData.email,
-        name: fbUser.displayName || dbUserData.name,
-        role: dbUserData.role || "customer",
-        idToken,
-        sellerProfile: dbUserData.sellerProfile || null,
-deliveryBoyId: dbUserData.deliveryBoyId || null, 
-      };
-      setUser(newUserData);
-      setIsAuthenticated(true);
-      setIsAdmin(newUserData.role === "admin");
+        const newUserData: User = {
+            uid: fbUser.uid,
+            id: dbUserData.id,
+            email: fbUser.email || dbUserData.email,
+            name: fbUser.displayName || dbUserData.name,
+            role: dbUserData.role || "customer",
+            idToken,
+            sellerProfile: dbUserData.sellerProfile || null,
+            deliveryBoyId: dbUserData.deliveryBoyId || null,
+            isAdmin: dbUserData.role === "admin",
+        };
+
+        // Only update state if user data has actually changed to prevent unnecessary re-renders
+        if (!user || user.uid !== newUserData.uid || user.idToken !== newUserData.idToken || user.role !== newUserData.role) {
+            setUser(newUserData);
+            setIsAuthenticated(true);
+            setIsAdmin(newUserData.role === "admin");
+        }
     }
 
     setIsLoadingAuth(false);
-  }, []);
+  }, [user]); // <-- DEPENDENCY ARRAY: 'user' को जोड़ा गया
+  
 
   // ✅ Firebase + Backend sync Listener (No change)
   useEffect(() => {
-    const checkRedirectResult = async () => {
+    const checkRedirectResult = async () => { // ✅ checkRedirectResult
       try {
-        await firebaseHandleRedirectResult();
+        await firebaseHandleRedirectResult(); // ✅ firebaseHandleRedirectResult
       } catch (error) {
         console.error("Error handling redirect result:", error);
       }
     };
     checkRedirectResult();
 
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => { // ✅ onAuthStateChanged, fbUser
       console.log(
         "onAuthStateChanged triggered. fbUser:",
         fbUser ? fbUser.email : "null"
       );
 
       if (fbUser) {
-        // Only run fetchAndSync if user data is not yet loaded
-        if (!user || user.uid !== fbUser.uid) {
-            await fetchAndSyncBackendUser(fbUser);
+        // Only run fetchAndSync if user data is not yet loaded OR if the UID has changed (new user)
+        // OR if the ID token might be expired (check if user.idToken is present/fresh)
+        // We pass forceRefreshIdToken: true if the current user object doesn't have a fresh token.
+        const shouldFetch = !user || user.uid !== fbUser.uid || (!user.idToken || (Date.now() / 1000 - (fbUser as any).metadata.lastSignInTime / 1000 > 3600)); // Simple check for expired token (approx 1 hour)
+        
+        if (shouldFetch) {
+            await fetchAndSyncBackendUser(fbUser, shouldFetch); 
         } else {
             // Already authenticated and synced, just update loading state
-            setIsLoadingAuth(false);
+            setIsLoadingAuth(false); 
         }
       } else {
         console.warn("❌ No Firebase user. Clearing state.");
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-        queryClient.clear();
-        setIsLoadingAuth(false);
+        setUser(null); 
+        setIsAuthenticated(false); 
+        setIsAdmin(false); 
+        queryClient.clear(); 
+        setIsLoadingAuth(false); 
       }
     });
 
     return () => unsubscribe();
-  }, [fetchAndSyncBackendUser, queryClient, user]); 
+  }, [fetchAndSyncBackendUser, queryClient, user]); // ✅ DEPENDENCY ARRAY UPDATED: Add 'user' here
 
   // --- Google Sign In Handler (No change) ---
   const signIn = useCallback(
