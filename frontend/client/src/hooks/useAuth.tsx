@@ -146,43 +146,37 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, [user]); // 'user' dependency
 
 // ... (onAuthStateChanged useEffect) ...
-  useEffect(() => { // ✅ camelCase
-    const checkRedirectResult = async () => { // ✅ camelCase
-      try {
-        await firebaseHandleRedirectResult(); // ✅ camelCase
-      } catch (error) {
-        console.error("Error handling redirect result:", error);
-      }
-    };
-    checkRedirectResult();
+  useEffect(() => {
+  const checkRedirectResult = async () => {
+    try {
+      await firebaseHandleRedirectResult();
+    } catch (error) {
+      console.error("Error handling redirect result:", error);
+    }
+  };
+  checkRedirectResult();
 
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => { // ✅ camelCase
-      console.log(
-        "onAuthStateChanged triggered. fbUser:",
-        fbUser ? fbUser.email : "null"
-      );
+  const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+    console.log("onAuthStateChanged triggered. fbUser:", fbUser ? fbUser.email : "null");
 
+    if (fbUser) {
       if (!user || user.uid !== fbUser.uid) {
-  await fetchAndSyncBackendUser(fbUser, true);
-} else {
-  setIsLoadingAuth(false);
-      }
-         
-        } else {
-            setIsLoadingAuth(false); 
-        }
+        await fetchAndSyncBackendUser(fbUser, true);
       } else {
-        console.warn("❌ No Firebase user. Clearing state.");
-        setUser(null); 
-        setIsAuthenticated(false); 
-        setIsAdmin(false); 
-        queryClient.clear(); 
-        setIsLoadingAuth(false); 
+        setIsLoadingAuth(false);
       }
-    });
+    } else {
+      console.warn("❌ No Firebase user. Clearing state.");
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      queryClient.clear();
+      setIsLoadingAuth(false);
+    }
+  });
 
-    return () => unsubscribe();
-  }, [fetchAndSyncBackendUser, queryClient, user]); 
+  return () => unsubscribe();
+}, [fetchAndSyncBackendUser, queryClient, user]);
 
   const signIn = useCallback(
     async (usePopup: boolean = false): Promise<FirebaseUser | null> => {
