@@ -167,10 +167,7 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 } else {
   setIsLoadingAuth(false);
       }
-        
-        if (shouldFetch) {
-            // ✅ forceRefreshIdToken: true यहाँ भी पास करना चाहिए अगर token stale है
-            await fetchAndSyncBackendUser(fbUser, true); 
+         
         } else {
             setIsLoadingAuth(false); 
         }
