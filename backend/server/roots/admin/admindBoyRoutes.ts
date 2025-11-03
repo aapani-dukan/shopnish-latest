@@ -228,12 +228,12 @@ adminDeliveryBoysRouter.patch(
         return res.status(400).json({ error: 'Invalid Delivery Boy ID.' });
       }
 
-      const [existingDeliveryBoy] = await db.query.deliveryBoysPgTable.findMany({ where: eq(deliveryBoysPgTable.id, deliveryBoyId) });
+      const [existingDeliveryBoy] = await db.query.deliveryBoys.findMany({ where: eq(deliveryBoys.id, deliveryBoyId) });
       if (!existingDeliveryBoy) {
         return res.status(404).json({ message: 'Delivery boy not found.' });
       }
 
-      const finalUpdateData: Partial<typeof deliveryBoysPgTable.$inferInsert> = {
+      const finalUpdateData: Partial<typeof deliveryBoys.$inferInsert> = {
         ...updateData,
         updatedAt: new Date(),
       };
@@ -241,9 +241,9 @@ adminDeliveryBoysRouter.patch(
       // Remove undefined values to avoid setting fields to undefined in DB
       Object.keys(finalUpdateData).forEach(key => finalUpdateData[key as keyof typeof finalUpdateData] === undefined && delete finalUpdateData[key as keyof typeof finalUpdateData]);
 
-      const [updatedDeliveryBoy] = await db.update(deliveryBoysPgTable)
+      const [updatedDeliveryBoy] = await db.update(deliveryBoys)
         .set(finalUpdateData)
-        .where(eq(deliveryBoysPgTable.id, deliveryBoyId))
+        .where(eq(deliveryBoys.id, deliveryBoyId))
         .returning();
 
       if (!updatedDeliveryBoy) {
@@ -289,8 +289,8 @@ adminDeliveryBoysRouter.delete('/:id', authorize(['admin']), validateRequest(del
   try {
     const deliveryBoyId = parseInt(req.params.id);
 
-    const [deletedDeliveryBoy] = await db.delete(deliveryBoysPgTable)
-      .where(eq(deliveryBoysPgTable.id, deliveryBoyId))
+    const [deletedDeliveryBoy] = await db.delete(deliveryBoys)
+      .where(eq(deliveryBoys.id, deliveryBoyId))
       .returning();
 
     if (!deletedDeliveryBoy) {
