@@ -44,7 +44,7 @@ const updateDeliveryBoyBodySchema = z.object({
  */
 adminDeliveryBoysRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const allDeliveryBoys = await db.query.deliveryBoysPgTable.findMany({
+    const allDeliveryBoys = await db.query.deliveryBoys.findMany({
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true }
@@ -66,8 +66,8 @@ adminDeliveryBoysRouter.get('/', authorize(['admin']), async (req: Authenticated
  */
 adminDeliveryBoysRouter.get('/pending', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const pendingApplications = await db.query.deliveryBoysPgTable.findMany({
-      where: eq(deliveryBoysPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
+    const pendingApplications = await db.query.deliveryBoys.findMany({
+      where: eq(deliveryBoys.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -87,8 +87,8 @@ adminDeliveryBoysRouter.get('/pending', authorize(['admin']), async (req: Authen
  */
 adminDeliveryBoysRouter.get('/approved', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const approvedDeliveryBoys = await db.query.deliveryBoysPgTable.findMany({
-      where: eq(deliveryBoysPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
+    const approvedDeliveryBoys = await db.query.deliveryBoys.findMany({
+      where: eq(deliveryBoys.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -109,8 +109,8 @@ adminDeliveryBoysRouter.get('/approved', authorize(['admin']), async (req: Authe
 adminDeliveryBoysRouter.get('/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const deliveryBoyId = parseInt(req.params.id);
-    const [deliveryBoy] = await db.query.deliveryBoysPgTable.findMany({
-      where: eq(deliveryBoysPgTable.id, deliveryBoyId),
+    const [deliveryBoy] = await db.query.deliveryBoys.findMany({
+      where: eq(deliveryBoys.id, deliveryBoyId),
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, approvalStatus: true }
@@ -138,15 +138,15 @@ adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequ
   try {
     const deliveryBoyId = Number(req.params.id);
 
-    const [deliveryBoy] = await db.select().from(deliveryBoysPgTable).where(eq(deliveryBoysPgTable.id, deliveryBoyId));
+    const [deliveryBoy] = await db.select().from(deliveryBoys).where(eq(deliveryBoys.id, deliveryBoyId));
     if (!deliveryBoy) {
       return res.status(404).json({ message: 'Delivery boy not found.' });
     }
 
     const [approved] = await db
-      .update(deliveryBoysPgTable)
+      .update(deliveryBoys)
       .set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date(), rejectionReason: null }) // 'approved'
-      .where(eq(deliveryBoysPgTable.id, deliveryBoyId))
+      .where(eq(deliveryBoys.id, deliveryBoyId))
       .returning();
 
     // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
@@ -178,15 +178,15 @@ adminDeliveryBoysRouter.patch('/reject/:id', authorize(['admin']), validateReque
     const deliveryBoyId = Number(req.params.id);
     const { reason } = req.body;
 
-    const [deliveryBoy] = await db.select().from(deliveryBoysPgTable).where(eq(deliveryBoysPgTable.id, deliveryBoyId));
+    const [deliveryBoy] = await db.select().from(deliveryBoys).where(eq(deliveryBoys.id, deliveryBoyId));
     if (!deliveryBoy) {
       return res.status(404).json({ message: 'Delivery boy not found.' });
     }
 
     const [rejected] = await db
-      .update(deliveryBoysPgTable)
+      .update(deliveryBoys)
       .set({ approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date(), rejectionReason: reason || null }) // 'rejected'
-      .where(eq(deliveryBoysPgTable.id, deliveryBoyId))
+      .where(eq(deliveryBoys.id, deliveryBoyId))
       .returning();
 
     // संबंधित यूज़र का अप्रूवल स्टेटस 'rejected' और भूमिका 'customer' पर अपडेट करें
