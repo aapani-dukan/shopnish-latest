@@ -131,57 +131,83 @@ const AdminDashboard: React.FC = () => {
   });
 
   // Mutations (Existing logic for approval/rejection remains, but consider moving to VendorDetails page)
-  const approveVendorMutation = useMutation({
-    mutationFn: (vendorId: number) => api.post(`/api/admin/vendors/${vendorId}/approve`),
-    onSuccess: () => {
-      toast({ title: "Vendor Approved" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] });
-      queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] });
+  // mutations (existing logic for approval/rejection remains, but consider moving to vendordetails page)
+  const approveVendorMutation = useMutation({ // ✅ camelCase
+    // ✅ FIX 1: Change to PATCH method and correct URL path
+    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/approve/${vendorId}`),
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Vendor approved" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); // ✅ queryKey is an object
+      queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error approving vendor:", error);
+      toast({ title: "Failed to approve vendor", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
 
-  const rejectVendorMutation = useMutation({
-    mutationFn: (vendorId: number) => api.post(`/api/admin/vendors/${vendorId}/reject`, { reason: "Not Eligible" }),
-    onSuccess: () => {
-      toast({ title: "Vendor Rejected" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] });
+  const rejectVendorMutation = useMutation({ // ✅ camelCase
+    // ✅ FIX 2: Change to PATCH method and correct URL path
+    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/reject/${vendorId}`, { reason: "not eligible" }),
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Vendor rejected" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error rejecting vendor:", error);
+      toast({ title: "Failed to reject vendor", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
 
-  const approveProductMutation = useMutation({
+  const approveProductMutation = useMutation({ // ✅ camelCase
     mutationFn: (productId: number) => api.post(`/api/admin/products/${productId}/approve`),
-    onSuccess: () => {
-      toast({ title: "Product Approved" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingproducts"] });
-      queryClient.invalidateQueries({ queryKey: ["adminapprovedproducts"] });
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Product approved" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingproducts"] }); // ✅ queryKey is an object
+      queryClient.invalidateQueries({ queryKey: ["adminapprovedproducts"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error approving product:", error);
+      toast({ title: "Failed to approve product", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
 
-  const rejectProductMutation = useMutation({
-    mutationFn: (productId: number) => api.post(`/api/admin/products/${productId}/reject`, { reason: "Not Eligible" }),
-    onSuccess: () => {
-      toast({ title: "Product Rejected" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingproducts"] });
+  const rejectProductMutation = useMutation({ // ✅ camelCase
+    mutationFn: (productId: number) => api.post(`/api/admin/products/${productId}/reject`, { reason: "not eligible" }),
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Product rejected" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingproducts"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error rejecting product:", error);
+      toast({ title: "Failed to reject product", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
 
-  const approveDeliveryBoyMutation = useMutation({
+  const approveDeliveryBoyMutation = useMutation({ // ✅ camelCase
     mutationFn: (deliveryBoyId: number) => api.post(`/api/admin/deliveryboys/${deliveryBoyId}/approve`),
-    onSuccess: () => {
-      toast({ title: "Delivery Boy Approved" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingdeliveryboys"] });
-      queryClient.invalidateQueries({ queryKey: ["adminapproveddeliveryboys"] });
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Delivery boy approved" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingdeliveryboys"] }); // ✅ queryKey is an object
+      queryClient.invalidateQueries({ queryKey: ["adminapproveddeliveryboys"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error approving delivery boy:", error);
+      toast({ title: "Failed to approve delivery boy", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
 
-  const rejectDeliveryBoyMutation = useMutation({
-    mutationFn: (deliveryBoyId: number) => api.post(`/api/admin/deliveryboys/${deliveryBoyId}/reject`, { reason: "Not Eligible" }),
-    onSuccess: () => {
-      toast({ title: "Delivery Boy Rejected" });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingdeliveryboys"] });
+  const rejectDeliveryBoyMutation = useMutation({ // ✅ camelCase
+    mutationFn: (deliveryBoyId: number) => api.post(`/api/admin/deliveryboys/${deliveryBoyId}/reject`, { reason: "not eligible" }),
+    onSuccess: () => { // ✅ camelCase
+      toast({ title: "Delivery boy rejected" }); // ✅ camelCase
+      queryClient.invalidateQueries({ queryKey: ["adminpendingdeliveryboys"] }); // ✅ queryKey is an object
     },
+    onError: (error) => { // ✅ Add error handling
+      console.error("Error rejecting delivery boy:", error);
+      toast({ title: "Failed to reject delivery boy", description: error.message || "An unexpected error occurred.", variant: "destructive" });
+    }
   });
-
   // Render content based on active tab
   const renderContent = () => {
     switch (activeTab) {
