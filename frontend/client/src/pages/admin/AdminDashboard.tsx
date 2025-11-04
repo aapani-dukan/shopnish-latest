@@ -184,7 +184,8 @@ const AdminDashboard: React.FC = () => {
   });
 
   const approveDeliveryBoyMutation = useMutation({
-    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/${deliveryBoyId}/approve`), // ✅ CORRECTED METHOD (PATCH) AND URL PATH
+    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/approve/${deliveryBoyId}`), 
+    
     onSuccess: () => {
       toast({ title: "Delivery boy approved" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingDeliveryBoys"] });
@@ -197,7 +198,7 @@ const AdminDashboard: React.FC = () => {
   });
 
   const rejectDeliveryBoyMutation = useMutation({
-    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/${deliveryBoyId}/reject`, { reason: "not eligible" }), // ✅ CORRECTED METHOD (PATCH) AND URL PATH
+    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/reject/${deliveryBoyId}`, { reason: "not eligible" }), // ✅ CORRECTED METHOD (PATCH) AND URL PATH
     onSuccess: () => {
       toast({ title: "Delivery boy rejected" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingDeliveryBoys"] });
