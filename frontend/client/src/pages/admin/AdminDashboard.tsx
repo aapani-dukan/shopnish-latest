@@ -307,7 +307,7 @@ const AdminDashboard: React.FC = () => {
                 </div>
               ))
             ) : (
-              <p className="text-gray-500">कोई भी पेंडिंग डिलीवरी बॉय नहीं है।</p> {/* ✅ className */}
+              <p className="text-gray-500">कोई भी पेंडिंग डिलीवरी बॉय नहीं है।</p> 
             )}
           </div>
         );
@@ -315,15 +315,15 @@ const AdminDashboard: React.FC = () => {
       case "approved-deliveryboys": // ✅ activeTab
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Approved Delivery Boys</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Approved Delivery Boys</h2> 
             {Array.isArray(approvedDeliveryBoys) && approvedDeliveryBoys.length > 0 ? ( // ✅ Array.isArray, approvedDeliveryBoys
               approvedDeliveryBoys.map((dboy) => ( // ✅ approvedDeliveryBoys
-                <div key={dboy.id} className="bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
+                <div key={dboy.id} className="bg-white p-2 rounded mb-2 shadow-sm"> 
                   <span>{dboy.name}</span>
                 </div>
               ))
             ) : (
-              <p className="text-gray-500">कोई भी अप्रूव्ड डिलीवरी बॉय नहीं है।</p> {/* ✅ className */}
+              <p className="text-gray-500">कोई भी अप्रूव्ड डिलीवरी बॉय नहीं है।</p> 
             )}
           </div>
         );
@@ -340,10 +340,10 @@ const AdminDashboard: React.FC = () => {
   };
 
   return (
-    <div className="p-4 bg-gray-50 min-h-screen font-inter"> {/* ✅ className */}
-      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1> {/* ✅ className */}
-      <div className="flex flex-wrap gap-4 mb-6"> {/* ✅ className */}
-        <Button variant={activeTab === "pending-vendors" ? "default" : "outline"} onClick={() => setActiveTab("pending-vendors")}>Pending Vendors</Button> {/* ✅ Button, setActiveTab */}
+    <div className="p-4 bg-gray-50 min-h-screen font-inter"> 
+      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1> 
+      <div className="flex flex-wrap gap-4 mb-6"> 
+        <Button variant={activeTab === "pending-vendors" ? "default" : "outline"} onClick={() => setActiveTab("pending-vendors")}>Pending Vendors</Button> 
         <Button variant={activeTab === "approved-vendors" ? "default" : "outline"} onClick={() => setActiveTab("approved-vendors")}>Approved Vendors</Button>
         <Button variant={activeTab === "pending-products" ? "default" : "outline"} onClick={() => setActiveTab("pending-products")}>Pending Products</Button>
         <Button variant={activeTab === "approved-products" ? "default" : "outline"} onClick={() => setActiveTab("approved-products")}>Approved Products</Button>
