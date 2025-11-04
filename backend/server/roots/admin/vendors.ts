@@ -53,7 +53,7 @@ const updateSellerBodySchema = z.object({
  */
 adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const allSellers = await db.query.SellersPgTable.findMany({
+    const allSellers = await db.query.sellersPgTable.findMany({
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true }
@@ -74,8 +74,8 @@ adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedReque
  */
 adminVendorsRouter.get('/pending', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const pendingSellers = await db.query.SellersPgTable.findMany({
-      where: eq(SellersPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
+    const pendingSellers = await db.query.sellersPgTable.findMany({
+      where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -94,8 +94,8 @@ adminVendorsRouter.get('/pending', authorize(['admin']), async (req: Authenticat
  */
 adminVendorsRouter.get('/approved', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const approvedSellers = await db.query.SellersPgTable.findMany({
-      where: eq(SellersPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
+    const approvedSellers = await db.query.sellersPgTable.findMany({
+      where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -115,8 +115,8 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
 adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
-    const [seller] = await db.query.SellersPgTable.findMany({
-      where: eq(SellersPgTable.id, sellerId),
+    const [seller] = await db.query.sellersPgTable.findMany({
+      where: eq(sellersPgTable.id, sellerId),
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, approvalStatus: true }
@@ -142,20 +142,20 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
   try {
     const sellerId = Number(req.params.id);
 
-    const [seller] = await db.select().from(SellersPgTable).where(eq(SellersPgTable.id, sellerId));
+    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
     const [approved] = await db
-      .update(SellersPgTable)
+      .update(sellersPgTable)
       .set({
         approvalStatus: approvalStatusEnum.enumValues[1], // ✅ CONFIRMED FIX: Using enum value
         approvedAt: new Date(),
         updatedAt: new Date(),
         rejectionReason: null
       })
-      .where(eq(SellersPgTable.id, sellerId))
+      .where(eq(sellersPgTable.id, sellerId))
       .returning();
 
     // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
@@ -192,19 +192,19 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
     const sellerId = Number(req.params.id);
     const { reason } = req.body;
 
-    const [seller] = await db.select().from(SellersPgTable).where(eq(SellersPgTable.id, sellerId));
+    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
     const [rejected] = await db
-      .update(SellersPgTable)
+      .update(sellersPgTable)
       .set({
         approvalStatus: approvalStatusEnum.enumValues[2], // ✅ CONFIRMED FIX: Using enum value
         updatedAt: new Date(),
         rejectionReason: reason || null
       })
-      .where(eq(SellersPgTable.id, sellerId))
+      .where(eq(sellersPgTable.id, sellerId))
       .returning();
 
     await db.update(users)
@@ -252,7 +252,7 @@ adminVendorsRouter.patch(
         return res.status(400).json({ error: 'Invalid seller ID.' });
       }
 
-      const [existingSeller] = await db.query.SellersPgTable.findMany({ where: eq(SellersPgTable.id, sellerId) });
+      const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
       if (!existingSeller) {
         return res.status(404).json({ message: 'Seller not found.' });
       }
@@ -270,16 +270,16 @@ adminVendorsRouter.patch(
         updateData.deliveryRadius = parseInt(updateData.deliveryRadius);
       }
 
-      const finalUpdateData: Partial<typeof SellersPgTable.$inferInsert> = {
+      const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = {
         ...updateData,
         updatedAt: new Date(),
       };
 
       Object.keys(finalUpdateData).forEach(key => finalUpdateData[key as keyof typeof finalUpdateData] === undefined && delete finalUpdateData[key as keyof typeof finalUpdateData]);
 
-      const [updatedSeller] = await db.update(SellersPgTable)
+      const [updatedSeller] = await db.update(sellersPgTable)
         .set(finalUpdateData)
-        .where(eq(SellersPgTable.id, sellerId))
+        .where(eq(sellersPgTable.id, sellerId))
         .returning();
 
       if (!updatedSeller) {
@@ -319,8 +319,8 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
   try {
     const sellerId = parseInt(req.params.id);
 
-    const [deletedSeller] = await db.delete(SellersPgTable)
-      .where(eq(SellersPgTable.id, sellerId))
+    const [deletedSeller] = await db.delete(sellersPgTable)
+      .where(eq(sellersPgTable.id, sellerId))
       .returning();
 
     if (!deletedSeller) {
