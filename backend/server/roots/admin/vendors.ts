@@ -2,7 +2,7 @@
 import { Router, Response } from 'express';
 import { db } from '../../db';
 import {
-  SellersPgTable, // ✅ Confirmed: This is the correct import for the Drizzle table
+  sellersPgTable, // ✅ Confirmed: This is the correct import for the Drizzle table
   users,
   approvalStatusEnum, // ✅ The enum definition
   userRoleEnum,
