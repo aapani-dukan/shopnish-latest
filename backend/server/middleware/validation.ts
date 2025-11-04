@@ -2,27 +2,12 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, checkSchema, Schema } from 'express-validator';
-
-/**
- * मिडलवेयर जो दिए गए स्कीमा के आधार पर रिक्वेस्ट डेटा को वैलिडेट करता है।
- * वैलिडेशन नियमों को परिभाषित करने के लिए express-validator का उपयोग करता है।
- *
- * रूट में उपयोग का उदाहरण:
- * router.post(
- * '/users',
- * validateRequest(userCreationSchema),
- * userController.createUser
- * );
- */
 export const validateRequest = (schema: Schema) => {
+  const validationChecks = checkSchema(schema);
   return async (req: Request, res: Response, next: NextFunction) => {
     // स्कीमा में परिभाषित वैलिडेशन चेक को अप्लाई करें
     // Promise.all का उपयोग करें ताकि सभी वैलिडेशन चेक समानांतर में चल सकें
-    await Promise.all(
-      Object.values(schema).map((validationChain) =>
-        validationChain.run(req)
-      )
-    );
+    await Promise.all(validationChecks.map(validation => validation.run(req)));
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
