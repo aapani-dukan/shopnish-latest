@@ -1,13 +1,27 @@
 // server/middleware/validation.ts
 
+
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, checkSchema, Schema } from 'express-validator';
+
 export const validateRequest = (schema: Schema) => {
+  // checkSchema एक एरे ऑफ मिडलवेयर्स लौटाता है।
+  // इन्हें 'validationChecks' के रूप में रखें।
   const validationChecks = checkSchema(schema);
+
   return async (req: Request, res: Response, next: NextFunction) => {
-    // स्कीमा में परिभाषित वैलिडेशन चेक को अप्लाई करें
+    // प्रत्येक वैलिडेशन चेक को क्रमिक रूप से चलाएं
     // Promise.all का उपयोग करें ताकि सभी वैलिडेशन चेक समानांतर में चल सकें
-    await Promise.all(validationChecks.map(validation => validation.run(req)));
+    // लेकिन प्रत्येक validation.run(req) को await करने के बजाय,
+    // express-validator के मिडलवेयर को एक-एक करके लागू करें
+    for (let i = 0; i < validationChecks.length; i++) {
+      const validation = validationChecks[i];
+      // validation.run(req) खुद एक प्रॉमिस लौटाता है जिसे await किया जा सकता है
+      await validation.run(req);
+    }
+    // Alternatively, if you want to run them in parallel and ensure all promises resolve
+    // await Promise.all(validationChecks.map(validation => validation.run(req)));
+
 
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -17,10 +31,8 @@ export const validateRequest = (schema: Schema) => {
   };
 };
 
-// --- उदाहरण स्कीमा (तुम इन्हें विशिष्ट रूट्स के लिए परिभाषित करोगे) ---
 
-// उदाहरण: नया उपयोगकर्ता बनाने के लिए स्कीमा
-// ध्यान दें: इस स्कीमा को तुम अपनी आवश्यकतानुसार अपडेट कर सकते हो।
+
 export const createUserSchema: Schema = {
   email: {
     isEmail: {
