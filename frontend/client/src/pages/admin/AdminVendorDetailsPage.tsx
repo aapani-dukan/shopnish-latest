@@ -5,7 +5,7 @@
 import React, { useState, useEffect } from "react"; // Added useEffect
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom"; // Added useNavigate
-import { toast } from "../../hooks/use-toast"; // Corrected path
+import { toast as useToastHook } from "../../hooks/use-toast"; 
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
@@ -31,7 +31,7 @@ interface Seller { // Renamed from seller to Seller for consistency
 const AdminVendorDetailsPage: React.FC = () => { // Renamed component
   const { id } = useParams<{ id: string }>(); // Get seller ID from URL params
   const sellerId = Number(id);
-  const { toast } = toast(); // Corrected useToast hook
+  const { toast } = useToastHook(); 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
