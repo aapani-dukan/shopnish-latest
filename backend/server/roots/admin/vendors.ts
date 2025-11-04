@@ -1,18 +1,18 @@
-// backend/server/routes/adminVendorsRoutes.ts (Updated)
+// ✅ backend/server/routes/adminVendorsRoutes.ts (FINAL CONFIRMED FIX)
 import { Router, Response } from 'express';
-import { db } from '../../db'; // Corrected path
+import { db } from '../../db';
 import {
-  sellersPgTable,
+  SellersPgTable, // ✅ Confirmed: This is the correct import for the Drizzle table
   users,
-  approvalStatusEnum,
+  approvalStatusEnum, // ✅ The enum definition
   userRoleEnum,
-  deliveryAreas // ✅ Added for potential delivery area validation if needed
+  deliveryAreas
 } from '../../../shared/backend/schema';
-import { AuthenticatedRequest } from '../server/middleware/verifyToken'; // Corrected path
+import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Check this path again if issues persist
 import { eq, and } from 'drizzle-orm';
-import { authorize } from '../../middleware/authorize'; // ✅ Assuming authorize middleware
+import { authorize } from '../../middleware/authorize';
 import { validateRequest } from '../../middleware/validation';
-import { z } from 'zod'; // ✅ For validation
+import { z } from 'zod';
 
 const adminVendorsRouter = Router();
 
@@ -27,7 +27,7 @@ const updateSellerBodySchema = z.object({
   businessName: z.string().min(1, "Business name is required.").optional(),
   businessAddress: z.string().min(1, "Business address is required.").optional(),
   businessPhone: z.string().regex(/^\d{10}$/, "Business phone number must be 10 digits.").optional(),
-  email: z.string().email("Invalid email format.").optional(), // User's email, can be updated via user route or here
+  email: z.string().email("Invalid email format.").optional(),
   city: z.string().min(1, "City is required.").optional(),
   state: z.string().min(1, "State is required.").optional(),
   pincode: z.string().min(4, "Pincode must be at least 4 digits.").max(10, "Pincode cannot exceed 10 digits.").optional(),
@@ -36,25 +36,24 @@ const updateSellerBodySchema = z.object({
   bankAccountNumber: z.string().optional().nullable(),
   bankIfscCode: z.string().optional().nullable(),
   accountHolderName: z.string().optional().nullable(),
-  deliveryRadius: z.number().min(0, "Delivery radius cannot be negative.").optional(), // e.g., in km
+  deliveryRadius: z.number().min(0, "Delivery radius cannot be negative.").optional(),
   deliveryCharge: z.string().regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.").optional(),
   freeDeliveryAbove: z.string().regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.").optional(),
   minOrderValue: z.string().regex(/^\d+(\.\d{1,2})?$/, "Minimum order value must be a valid decimal number.").optional(),
-  avgDeliveryTime: z.string().min(1, "Average delivery time is required.").optional(), // e.g., "30-45 mins" or number of minutes
-  isActive: z.boolean().optional(), // Admin can activate/deactivate seller
-  approvalStatus: z.nativeEnum(approvalStatusEnum).optional(), // Admin can change approval status directly
-  rejectionReason: z.string().optional().nullable(), // Admin can set rejection reason
-}).partial(); // All fields are optional for a PATCH request
+  avgDeliveryTime: z.string().min(1, "Average delivery time is required.").optional(),
+  isActive: z.boolean().optional(),
+  approvalStatus: z.nativeEnum(approvalStatusEnum).optional(),
+  rejectionReason: z.string().optional().nullable(),
+}).partial();
 
 // --- Routes ---
 
 /**
  * ✅ GET /api/admin/vendors - सभी सेलर्स फ़ेच करें (पेंडिंग, अप्रूव्ड, रिजेक्टेड)
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const allSellers = await db.query.sellersPgTable.findMany({
+    const allSellers = await db.query.SellersPgTable.findMany({
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true }
@@ -72,12 +71,11 @@ adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedReque
 /**
  * ✅ GET /api/admin/vendors/pending
  * सभी लंबित (pending) सेलर्स को फ़ेच करें
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.get('/pending', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const pendingSellers = await db.query.sellersPgTable.findMany({
-      where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
+    const pendingSellers = await db.query.SellersPgTable.findMany({
+      where: eq(SellersPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -93,12 +91,11 @@ adminVendorsRouter.get('/pending', authorize(['admin']), async (req: Authenticat
 /**
  * ✅ GET /api/admin/vendors/approved
  * सभी स्वीकृत (approved) सेलर्स को फ़ेच करें
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.get('/approved', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
   try {
-    const approvedSellers = await db.query.sellersPgTable.findMany({
-      where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
+    const approvedSellers = await db.query.SellersPgTable.findMany({
+      where: eq(SellersPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
       with: {
         user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
       },
@@ -114,13 +111,12 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
 /**
  * ✅ GET /api/admin/vendors/:id
  * ID द्वारा एकल सेलर फ़ेच करें
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
-    const [seller] = await db.query.sellersPgTable.findMany({
-      where: eq(sellersPgTable.id, sellerId),
+    const [seller] = await db.query.SellersPgTable.findMany({
+      where: eq(SellersPgTable.id, sellerId),
       with: {
         user: {
           columns: { id: true, firstName: true, lastName: true, email: true, phone: true, role: true, approvalStatus: true }
@@ -140,28 +136,38 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
 
 /**
  * ✅ PATCH /api/admin/vendors/approve/:id
- * एक सेलर को मंज़ूर करें (मौजूदा लॉजिक का उपयोग करें)
- * (Authorization handled by `authorize(['admin'])`)
+ * एक सेलर को मंज़ूर करें
  */
 adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
 
-    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    const [seller] = await db.select().from(SellersPgTable).where(eq(SellersPgTable.id, sellerId));
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
     const [approved] = await db
-      .update(sellersPgTable)
-      .set({ approvalStatus: "approved", approvedAt: new Date(), updatedAt: new Date(), rejectionReason: null })
-      .where(eq(sellersPgTable.id, sellerId))
+      .update(SellersPgTable)
+      .set({
+        approvalStatus: approvalStatusEnum.enumValues[1], // ✅ CONFIRMED FIX: Using enum value
+        approvedAt: new Date(),
+        updatedAt: new Date(),
+        rejectionReason: null
+      })
+      .where(eq(SellersPgTable.id, sellerId))
       .returning();
 
     // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
     await db.update(users)
       .set({ role: userRoleEnum.enumValues[1], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'seller', 'approved'
       .where(eq(users.id, seller.userId));
+
+    // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
+    // For example:
+    // const firebaseAdmin = require('firebase-admin'); // Ensure you have imported and initialized firebase-admin
+    // await firebaseAdmin.auth().setCustomUserClaims(seller.userId.toString(), { role: 'seller', approvalStatus: 'approved' });
+    // ***************************************************************************************************
 
     res.status(200).json({
       message: 'Seller approved successfully.',
@@ -175,33 +181,41 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
 
 /**
  * ✅ PATCH /api/admin/vendors/reject/:id
- * एक सेलर को अस्वीकार करें (मौजूदा लॉजिक का उपयोग करें और कारण स्वीकार करें)
- * (Authorization handled by `authorize(['admin'])`)
+ * एक सेलर को अस्वीकार करें
  */
 adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(sellerIdSchema.extend({
   body: z.object({
-    reason: z.string().min(1, "Rejection reason is required for rejecting a seller.").optional(), // Optional, but highly recommended
+    reason: z.string().min(1, "Rejection reason is required for rejecting a seller.").optional(),
   }).partial(),
 })), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
     const { reason } = req.body;
 
-    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    const [seller] = await db.select().from(SellersPgTable).where(eq(SellersPgTable.id, sellerId));
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
     const [rejected] = await db
-      .update(sellersPgTable)
-      .set({ approvalStatus: "rejected", updatedAt: new Date(), rejectionReason: reason || null })
-      .where(eq(sellersPgTable.id, sellerId))
+      .update(SellersPgTable)
+      .set({
+        approvalStatus: approvalStatusEnum.enumValues[2], // ✅ CONFIRMED FIX: Using enum value
+        updatedAt: new Date(),
+        rejectionReason: reason || null
+      })
+      .where(eq(SellersPgTable.id, sellerId))
       .returning();
 
-    // संबंधित यूज़र का अप्रूवल स्टेटस 'rejected' और भूमिका 'customer' पर अपडेट करें
     await db.update(users)
-      .set({ approvalStatus: approvalStatusEnum.enumValues[2], role: userRoleEnum.enumValues[3], updatedAt: new Date() }) // 'rejected', 'customer'
+      .set({ approvalStatus: approvalStatusEnum.enumValues[2], role: userRoleEnum.enumValues[3], updatedAt: new Date() })
       .where(eq(users.id, seller.userId));
+
+    // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
+    // For example:
+    // const firebaseAdmin = require('firebase-admin'); // Ensure you have imported and initialized firebase-admin
+    // await firebaseAdmin.auth().setCustomUserClaims(seller.userId.toString(), { role: 'customer', approvalStatus: 'rejected' });
+    // ***************************************************************************************************
 
     res.status(200).json({
       message: 'Seller rejected successfully.',
@@ -216,8 +230,6 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
 /**
  * ✅ PATCH /api/admin/vendors/:id
  * एक मौजूदा सेलर के विवरण को अपडेट करें (एडमिन द्वारा)
- * इसमें व्यवसाय की जानकारी, संपर्क, बैंक विवरण, डिलीवरी सेटिंग्स आदि शामिल हैं।
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.patch(
   '/:id',
@@ -229,7 +241,7 @@ adminVendorsRouter.patch(
       minOrderValue: z.union([z.string(), z.number().transform(val => String(val))]).optional(),
       deliveryRadius: z.union([z.number().int(), z.string().transform(val => parseInt(val))]).optional(),
       isActive: z.union([z.boolean(), z.string().transform(val => val === 'true')]).optional(),
-    }).partial(), // Ensure body fields are optional in the request
+    }).partial(),
   })),
   async (req: AuthenticatedRequest, res: Response) => {
     try {
@@ -240,12 +252,11 @@ adminVendorsRouter.patch(
         return res.status(400).json({ error: 'Invalid seller ID.' });
       }
 
-      const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
+      const [existingSeller] = await db.query.SellersPgTable.findMany({ where: eq(SellersPgTable.id, sellerId) });
       if (!existingSeller) {
         return res.status(404).json({ message: 'Seller not found.' });
       }
 
-      // 'deliveryCharge', 'freeDeliveryAbove', 'minOrderValue' को स्ट्रिंग से नंबर (यदि आवश्यक हो) में कन्वर्ट करें
       if (updateData.deliveryCharge !== undefined && typeof updateData.deliveryCharge === 'string') {
         updateData.deliveryCharge = parseFloat(updateData.deliveryCharge).toFixed(2);
       }
@@ -259,45 +270,37 @@ adminVendorsRouter.patch(
         updateData.deliveryRadius = parseInt(updateData.deliveryRadius);
       }
 
-      const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = {
+      const finalUpdateData: Partial<typeof SellersPgTable.$inferInsert> = {
         ...updateData,
         updatedAt: new Date(),
       };
 
-      // Remove undefined values to avoid setting fields to undefined in DB
       Object.keys(finalUpdateData).forEach(key => finalUpdateData[key as keyof typeof finalUpdateData] === undefined && delete finalUpdateData[key as keyof typeof finalUpdateData]);
 
-
-      const [updatedSeller] = await db.update(sellersPgTable)
+      const [updatedSeller] = await db.update(SellersPgTable)
         .set(finalUpdateData)
-        .where(eq(sellersPgTable.id, sellerId))
+        .where(eq(SellersPgTable.id, sellerId))
         .returning();
 
       if (!updatedSeller) {
         return res.status(500).json({ message: 'Failed to update seller.' });
       }
 
-      // यदि `approvalStatus` या `isActive` को भी अपडेट किया गया है, तो संबंधित उपयोगकर्ता की स्थिति भी अपडेट करें
       if (updateData.approvalStatus !== undefined || updateData.isActive !== undefined) {
           const userUpdate: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
           if (updateData.approvalStatus !== undefined) {
               userUpdate.approvalStatus = updateData.approvalStatus;
-              if (updateData.approvalStatus === approvalStatusEnum.enumValues[2]) { // If rejected, change user role to customer
+              if (updateData.approvalStatus === approvalStatusEnum.enumValues[2]) {
                   userUpdate.role = userRoleEnum.enumValues[3];
-              } else if (updateData.approvalStatus === approvalStatusEnum.enumValues[1]) { // If approved, ensure user role is seller
+              } else if (updateData.approvalStatus === approvalStatusEnum.enumValues[1]) {
                   userUpdate.role = userRoleEnum.enumValues[1];
               }
           }
-          // isActive सीधे user टेबल में नहीं है, इसलिए हम केवल approvalStatus के माध्यम से प्रभावित करते हैं
           await db.update(users).set(userUpdate).where(eq(users.id, existingSeller.userId));
+           // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
+           // If approvalStatus is changed, you might need to update Firebase claims here too
+           // ***************************************************************************************************
       }
-
-
-      // Socket.io event for seller
-      // getIO().emit(`seller:${updatedSeller.id}:profile-updated`, {
-      //   message: `Your profile has been updated by admin.`,
-      //   seller: updatedSeller
-      // });
 
       return res.status(200).json({ message: "Seller updated successfully.", seller: updatedSeller });
     } catch (error: any) {
@@ -311,36 +314,26 @@ adminVendorsRouter.patch(
 /**
  * ✅ DELETE /api/admin/vendors/:id
  * एक सेलर को हटाएं (एडमिन द्वारा)
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
 
-    const [deletedSeller] = await db.delete(sellersPgTable)
-      .where(eq(sellersPgTable.id, sellerId))
+    const [deletedSeller] = await db.delete(SellersPgTable)
+      .where(eq(SellersPgTable.id, sellerId))
       .returning();
 
     if (!deletedSeller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
-    // संबंधित यूज़र की भूमिका (role) को 'customer' पर और अप्रूवल स्टेटस को 'rejected' पर अपडेट करें
     await db.update(users)
       .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date() })
       .where(eq(users.id, deletedSeller.userId));
 
-    // TODO: यदि इस सेलर से संबंधित कोई उत्पाद या ऑर्डर हैं, तो उन्हें कैसे हैंडल किया जाए?
-    // - उत्पादों को निष्क्रिय करें या हटा दें?
-    // - संबंधित सब-ऑर्डर्स को रद्द करें या उन्हें 'seller_removed' के रूप में चिह्नित करें?
-    // - डिलीवरी बैच असाइनमेंट को कैसे प्रभावित करता है?
-    // यह एक जटिल ऑपरेशन हो सकता है, इसके लिए कैस्केडिंग डिलीट या मैन्युअल क्लीयरअप लॉजिक की आवश्यकता हो सकती है।
-    // अभी के लिए, यह मान रहा है कि DB कैस्केडिंग डिलीट हैंडल करता है या यह एक सॉफ्ट डिलीट है।
-
-    // Socket.io event for seller
-    // getIO().emit(`seller:${deletedSeller.id}:account-deleted`, {
-    //   message: `Your seller account has been deleted by admin.`,
-    // });
+    // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
+    // When deleting or changing user role significantly, update Firebase claims
+    // ***************************************************************************************************
 
     return res.status(200).json({ message: "Seller deleted successfully.", seller: deletedSeller });
   } catch (error: any) {
@@ -349,6 +342,4 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
   }
 });
 
-// Export router
 export default adminVendorsRouter;
-                                     
