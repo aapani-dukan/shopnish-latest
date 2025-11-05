@@ -11,7 +11,7 @@ import {
 } from '../shared/backend/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { AuthenticatedRequest } from '../server/middleware/verifyToken.ts';
-import { requireAuth } from '../server/middleware/authMiddleware.ts
+import { requireAuth } from '../server/middleware/authMiddleware.ts';
 import { getIO } from '../server/socket.ts';
 
 const cartRouter = Router();
@@ -180,23 +180,24 @@ cartRouter.post('/add', requireAuth, async (req: AuthenticatedRequest, res: Resp
       item = updatedItem[0];
     } else {
       const newTotalPrice = priceAtAdded * quantity; // कुल मूल्य की गणना करें
- if (!users?.id) {
-
+ if (!userId) {
   throw new Error("User not authenticated");
-      const newItem = await db
-        .insert(cartItems)
-        .values({
-          userId: userId,
-          productId,
-          quantity,
-          priceAtAdded: priceAtAdded, // ✅ priceAtAdded उपयोग करें
-          totalPrice: newTotalPrice, // ✅ totalPrice सेट करें
-          sellerId, // ✅ sellerId सेट करें
-          createdAt: new Date(),
-          updatedAt: new Date(), // ✅ updatedAt सेट करें
-        })
-        .returning();
-      item = newItem[0];
+}
+
+const newItem = await db
+  .insert(cartItems)
+  .values({
+    userId,
+    productId,
+    quantity,
+    priceAtAdded,
+    totalPrice: newTotalPrice,
+    sellerId,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  })
+  .returning();
+item = newItem[0];
     }
 
     getIO().emit("cart:updated", { userId: userId }); // userId के साथ भेजें
