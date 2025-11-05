@@ -11,6 +11,7 @@ import {
 } from '../shared/backend/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
 import { AuthenticatedRequest, requireAuth } from '../server/middleware/verifyToken.ts';
+import { requireAuth } from '../server/middleware/authMiddleware.ts
 import { getIO } from '../server/socket.ts';
 
 const cartRouter = Router();
