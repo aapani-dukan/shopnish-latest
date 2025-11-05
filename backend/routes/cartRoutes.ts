@@ -180,7 +180,9 @@ cartRouter.post('/add', requireAuth, async (req: AuthenticatedRequest, res: Resp
       item = updatedItem[0];
     } else {
       const newTotalPrice = priceAtAdded * quantity; // कुल मूल्य की गणना करें
+ if (!users?.id) {
 
+  throw new Error("User not authenticated");
       const newItem = await db
         .insert(cartItems)
         .values({
