@@ -10,7 +10,7 @@ import {
   sellersPgTable, // ✅ sellersPgTable इम्पोर्ट करें अगर sellerId को संदर्भित कर रहे हो
 } from '../shared/backend/schema.ts';
 import { eq, and, inArray } from 'drizzle-orm';
-import { AuthenticatedRequest, requireAuth } from '../server/middleware/authMiddleware.ts';
+import { AuthenticatedRequest, requireAuth } from '../server/middleware/verifyToken.ts';
 import { getIO } from '../server/socket.ts';
 
 const cartRouter = Router();
