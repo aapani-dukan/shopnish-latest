@@ -1,44 +1,53 @@
 // backend/routes/adminDeliveryAreasRoutes.ts
 
 import { Router, Request, Response, NextFunction } from 'express';
-import { z } from 'zod';
+import { z } from 'zod'; // ✅ Zod अभी भी यहाँ उपयोग किया जाएगा
 import { db } from '../server/db';
 import { deliveryAreas } from '../shared/backend/schema';
 import { eq } from 'drizzle-orm';
 import { verifyToken } from '../server/middleware/verifyToken';
 import { authorize } from '../server/middleware/authorize';
-import { validateRequest } from '../server/middleware/validation';
-import {
-  updateDeliveryAreaExpressSchema,
-  deleteDeliveryAreaExpressSchema,
-} from '../shared/backend/express-validation-schema';
+import { validateRequest } from '../server/middleware/validation'; // ✅ हाइब्रिड validateRequest
+// express-validation-schema से अब कुछ भी आयात करने की आवश्यकता नहीं है यदि आप Zod का उपयोग कर रहे हैं।
+// यदि आप अभी भी कुछ express-validator स्कीमा का उपयोग करते हैं, तो उन्हें यहाँ आयात करें।
 
 const adminDeliveryAreasRouter = Router();
 
-// ✅ Create schema (Zod)
-const createDeliveryAreaSchema = z.object({
-  body: z.object({
-    areaName: z.string().min(1, "Area name is required."),
-    pincode: z.string().min(4, "Pincode must be at least 4 digits.").max(10, "Pincode cannot exceed 10 digits."),
-    city: z.string().min(1, "City is required."),
-    deliveryCharge: z
-      .string()
-      .regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.")
-      .optional()
-      .default("0.00"),
-    freeDeliveryAbove: z
-      .string()
-      .regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.")
-      .optional()
-      .default("0.00"),
-    isActive: z.boolean().optional().default(true),
+// ✅ Create schema (Zod) - अब 'body' के बजाय सीधा ऑब्जेक्ट जो 'body' को वैलिडेट करेगा
+const createDeliveryAreaBodySchema = z.object({
+  areaName: z.string().min(1, "Area name is required."),
+  pincode: z.string().min(4, "Pincode must be at least 4 digits.").max(10, "Pincode cannot exceed 10 digits."),
+  city: z.string().min(1, "City is required."),
+  deliveryCharge: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Delivery charge must be a valid decimal number.")
+    .optional()
+    .default("0.00"),
+  freeDeliveryAbove: z
+    .string()
+    .regex(/^\d+(\.\d{1,2})?$/, "Free delivery amount must be a valid decimal number.")
+    .optional()
+    .default("0.00"),
+  isActive: z.boolean().optional().default(true),
+});
+
+// ✅ GET /:id के लिए Zod स्कीमा
+const getDeliveryAreaByIdZodSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "ID must be a number.").transform(Number), // ✅ ID को नंबर में बदलें
   }),
 });
 
+// ✅ POST / के लिए Zod स्कीमा
+const createDeliveryAreaZodSchema = z.object({
+  body: createDeliveryAreaBodySchema, // ✅ सीधे बॉडी स्कीमा का उपयोग करें
+});
+
+
 // ✅ Update schema (Zod)
-const updateDeliveryAreaSchema = z.object({
+const updateDeliveryAreaZodSchema = z.object({
   params: z.object({
-    id: z.string().regex(/^\d+$/, "ID must be a number."),
+    id: z.string().regex(/^\d+$/, "ID must be a number.").transform(Number), // ✅ ID को नंबर में बदलें
   }),
   body: z.object({
     areaName: z.string().min(1, "Area name is required.").optional(),
@@ -49,6 +58,14 @@ const updateDeliveryAreaSchema = z.object({
     isActive: z.boolean().optional(),
   }),
 });
+
+// ✅ DELETE /:id के लिए Zod स्कीमा
+const deleteDeliveryAreaZodSchema = z.object({
+  params: z.object({
+    id: z.string().regex(/^\d+$/, "ID must be a number.").transform(Number), // ✅ ID को नंबर में बदलें
+  }),
+});
+
 
 // ✅ GET: All delivery areas
 adminDeliveryAreasRouter.get(
@@ -71,16 +88,11 @@ adminDeliveryAreasRouter.get(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(
-    z.object({
-      params: z.object({
-        id: z.string().regex(/^\d+$/, "ID must be a number."),
-      }),
-    }) as any
-  ),
+  validateRequest(getDeliveryAreaByIdZodSchema), // ✅ Zod स्कीमा का उपयोग करें (Zod part of validateRequest will handle this)
   async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // Zod के transform() के कारण req.params.id अब एक संख्या होगी
+      const id = req.params.id as any as number; // Type assertion since Zod transforms it
       const area = await db.select().from(deliveryAreas).where(eq(deliveryAreas.id, id));
 
       if (area.length === 0) {
@@ -100,9 +112,11 @@ adminDeliveryAreasRouter.post(
   '/',
   verifyToken,
   authorize(['admin']),
-  validateRequest(createDeliveryAreaSchema as any),
+  validateRequest(createDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {
     try {
+      // req.body पहले ही Zod द्वारा वैलिडेट हो चुका होगा
+      // Zod के default() के कारण deliveryCharge और freeDeliveryAbove अभी भी string होंगे, उन्हें number में बदलें
       const { areaName, pincode, city, deliveryCharge, freeDeliveryAbove, isActive } = req.body;
 
       const existingArea = await db.select().from(deliveryAreas).where(eq(deliveryAreas.pincode, pincode));
@@ -116,8 +130,8 @@ adminDeliveryAreasRouter.post(
           areaName,
           pincode,
           city,
-          deliveryCharge,
-          freeDeliveryAbove,
+          deliveryCharge: parseFloat(deliveryCharge), // ✅ String से Number में बदलें
+          freeDeliveryAbove: parseFloat(freeDeliveryAbove), // ✅ String से Number में बदलें
           isActive,
         })
         .returning();
@@ -135,11 +149,16 @@ adminDeliveryAreasRouter.put(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(updateDeliveryAreaExpressSchema),
+  validateRequest(updateDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
-      const updateData = req.body;
+      // req.params.id और req.body पहले ही Zod द्वारा वैलिडेट और ट्रांसफॉर्म हो चुके होंगे
+      const id = req.params.id as any as number;
+      let updateData = req.body;
+
+      // सुनिश्चित करें कि numeric fields को number में पार्स किया गया है, यदि वे मौजूद हैं
+      if (updateData.deliveryCharge !== undefined) updateData.deliveryCharge = parseFloat(updateData.deliveryCharge);
+      if (updateData.freeDeliveryAbove !== undefined) updateData.freeDeliveryAbove = parseFloat(updateData.freeDeliveryAbove);
 
       const [updatedArea] = await db
         .update(deliveryAreas)
@@ -164,10 +183,11 @@ adminDeliveryAreasRouter.delete(
   '/:id',
   verifyToken,
   authorize(['admin']),
-  validateRequest(deleteDeliveryAreaExpressSchema),
+  validateRequest(deleteDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {
     try {
-      const id = parseInt(req.params.id);
+      // req.params.id पहले ही Zod द्वारा वैलिडेट और ट्रांसफॉर्म हो चुका होगा
+      const id = req.params.id as any as number;
 
       const [deletedArea] = await db
         .delete(deliveryAreas)
