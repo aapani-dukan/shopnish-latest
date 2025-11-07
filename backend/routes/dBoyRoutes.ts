@@ -1,6 +1,7 @@
 // backend/server/routes/dBoyRoutes.ts
-import { Router, Request, Response } from "express";
-import { db } from "../server/db";
+
+import { Router, Request, Response } from 'express';
+import { db } from '../server/db';
 import {
   deliveryBoys,
   users,
@@ -11,508 +12,490 @@ import {
   orders,
   masterOrderStatusEnum,
   orderTracking,
-  sellersPgTable,
+  sellers, // 'sellersPgTable' को 'sellers' में बदल दिया गया है
   approvalStatusEnum,
   userRoleEnum,
-} from "../shared/backend/schema";
-import { eq, and, not, desc, inArray } from "drizzle-orm";
-import { AuthenticatedRequest, verifyToken } from "../server/middleware/verifyToken";
-import { requireDeliveryBoyAuth } from "../server/middleware/authMiddleware";
-import { getIO } from "../server/socket";
-import { sendSms, sendWhatsappMessage } from "../server/lib/whatsappHelpers";
-import { generateOTP } from "../server/util/otp";
+} from '../shared/backend/schema';
+import { eq, and, not, desc, asc, inArray, isNull } from 'drizzle-orm';
+import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
+import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
+import { getIO } from '../server/socket';
+import { sendWhatsappMessage } from '../server/lib/whatsappHelpers'; // ✅ केवल WhatsApp मैसेज का उपयोग
+import { generateOTP } from '../server/util/otp'; // ✅ 'generateOTP' सही नाम है
+// sendSms को हटा दिया गया है
 
 const router = Router();
 
+// ---
 /**
- * Delivery Boy Registration
- * POST /api/delivery-boys/register
+ * ✅ Delivery Boy Registration
+ * /api/delivery-boys/register
  */
-router.post("/register", async (req: Request, res: Response) => {
+router.post('/register', async (req: Request, res: Response) => {
   try {
     const { email, firebaseUid, fullName, phone, vehicleType } = req.body;
     if (!email || !firebaseUid || !fullName || !phone || !vehicleType) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    let newDeliveryBoy: any = null;
-
-    // find existing user by email
+    let newDeliveryBoy;
     const existingUser = await db.query.users.findFirst({ where: eq(users.email, email) });
 
     if (existingUser) {
-      // check if already a delivery boy
-      const existingDeliveryBoy = await db.query.deliveryBoys.findFirst({
-        where: eq(deliveryBoys.userId, existingUser.id),
-      });
+      const existingDeliveryBoy = await db.query.deliveryBoys.findFirst({ where: eq(deliveryBoys.userId, existingUser.id) });
+      if (existingDeliveryBoy) return res.status(409).json({ message: "User already registered as delivery boy." });
 
-      if (existingDeliveryBoy) {
-        return res.status(409).json({ message: "User already registered as delivery boy." });
-      }
-
-      // insert into deliveryBoys table (only columns expected by schema)
-      const insertObj: any = {
+      [newDeliveryBoy] = await db.insert(deliveryBoys).values({
         userId: existingUser.id,
+        firebaseUid,
+        email,
         name: fullName,
         phone,
         vehicleType,
         approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
-      };
+      }).returning();
 
-      // if schema has firebaseUid/email fields for deliveryBoys, they will be ignored by DB if not present,
-      // but Drizzle will error if field doesn't exist — so we only pass likely columns.
-      const inserted = await db.insert(deliveryBoys).values(insertObj).returning();
-      newDeliveryBoy = inserted?.[0];
-
-      // update existing user's role and approvalStatus (users table likely has role & approvalStatus)
+      // Update existing user's role and approvalStatus
       await db.update(users)
         .set({
           role: userRoleEnum.enumValues[2], // 'delivery_boy'
           approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
-          firstName: fullName.split(" ")[0] || null,
-          lastName: fullName.split(" ").slice(1).join(" ") || null,
+          firstName: fullName.split(' ')[0] || null,
+          lastName: fullName.split(' ').slice(1).join(' ') || null,
           phone: phone || null,
         })
         .where(eq(users.id, existingUser.id));
+
     } else {
-      // create new user record
-      // NOTE: many schemas require password; if your users table requires 'password', ensure it's nullable in schema
-      const userInsertObj: any = {
+      // ✅ 'users' स्कीमा में 'password' कॉलम हटा दिया गया है
+      const [newUser] = await db.insert(users).values({
         firebaseUid,
         email,
-        firstName: fullName.split(" ")[0] || null,
-        lastName: fullName.split(" ").slice(1).join(" ") || null,
-        phone,
-        role: userRoleEnum.enumValues[2],
-        approvalStatus: approvalStatusEnum.enumValues[0],
-      };
+        firstName: fullName.split(' ')[0] || null,
+        lastName: fullName.split(' ').slice(1).join(' ') || null,
+        phone: phone,
+        role: userRoleEnum.enumValues[3], // ✅ userRoleEnum[3] = 'delivery-boy'
+        approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
+      }).returning();
 
-      const createdUsers = await db.insert(users).values(userInsertObj).returning();
-      const newUser = createdUsers?.[0];
       if (!newUser) return res.status(500).json({ message: "Failed to create new user." });
 
-      const delInsertObj: any = {
+      [newDeliveryBoy] = await db.insert(deliveryBoys).values({
         userId: newUser.id,
+        firebaseUid,
+        email,
         name: fullName,
         phone,
         vehicleType,
-        approvalStatus: approvalStatusEnum.enumValues[0],
-      };
-
-      const inserted = await db.insert(deliveryBoys).values(delInsertObj).returning();
-      newDeliveryBoy = inserted?.[0];
+        approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
+      }).returning();
     }
 
     if (!newDeliveryBoy) return res.status(500).json({ message: "Failed to submit application." });
 
-    // notify admin panel
     getIO().emit("admin:update", { type: "delivery-boy-register", data: newDeliveryBoy });
-
     return res.status(201).json(newDeliveryBoy);
+
   } catch (error: any) {
     console.error("❌ DeliveryBoy registration error:", error);
-    return res.status(500).json({ message: error?.message || "Internal server error." });
+    res.status(500).json({ message: error.message });
   }
 });
 
+// ---
 /**
- * Login
- * POST /api/delivery-boys/login  (uses verifyToken middleware)
+ * ✅ Login
+ * /api/delivery-boys/login
  */
-router.post("/login", verifyToken, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/login', verifyToken, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
     const email = req.user?.email;
 
     if (!firebaseUid || !email) return res.status(401).json({ message: "Authentication failed." });
 
-    // fetch delivery boy by user firebaseUid or by userId
     const deliveryBoy = await db.query.deliveryBoys.findFirst({
-      where: eq(deliveryBoys.firebaseUid ?? deliveryBoys.userId, firebaseUid as any),
-      with: { user: true as any },
-    }).catch(async () => {
-      // fallback: find by linked user record if firebaseUid not available on deliveryBoys table
-      const byUser = await db.query.deliveryBoys.findFirst({
-        where: eq(deliveryBoys.userId, req.user?.id ?? -1),
-        with: { user: true as any },
-      });
-      return byUser;
+      where: eq(deliveryBoys.firebaseUid, firebaseUid),
+      with: { user: true }
     });
 
-    if (!deliveryBoy || deliveryBoy.approvalStatus !== approvalStatusEnum.enumValues[1]) {
+    if (!deliveryBoy || deliveryBoy.approvalStatus !== approvalStatusEnum.enumValues[1] /* 'approved' */) {
       return res.status(404).json({ message: "Account not found or not approved." });
     }
 
-    // ensure linked user role is delivery_boy
-    if (!deliveryBoy.user || deliveryBoy.user.role !== userRoleEnum.enumValues[2]) {
-      if (deliveryBoy.userId) {
-        await db.update(users).set({ role: userRoleEnum.enumValues[2] }).where(eq(users.id, deliveryBoy.userId));
-      }
+    if (!deliveryBoy.user || deliveryBoy.user.role !== userRoleEnum.enumValues[3] /* 'delivery-boy' */) { // ✅ userRoleEnum[3] = 'delivery-boy'
+      await db.update(users).set({ role: userRoleEnum.enumValues[3] as any }).where(eq(users.id, deliveryBoy.userId)); // ✅ 'as any' for enum update
     }
 
-    return res.status(200).json({ message: "Login successful", user: deliveryBoy });
+    res.status(200).json({ message: "Login successful", user: deliveryBoy });
+
   } catch (error: any) {
     console.error("❌ Login error:", error);
-    return res.status(500).json({ message: "Failed to authenticate." });
+    res.status(500).json({ message: "Failed to authenticate." });
   }
 });
 
+// ---
 /**
- * GET /api/delivery-boys/me
- * fetch delivery boy profile for logged-in delivery boy
+ * ✅ GET Delivery Boy Profile
+ * /api/delivery-boys/me
  */
-router.get("/me", requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/me', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized: Missing user data." });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized: Missing user data.' });
+    }
 
-    const profile = await db.select().from(deliveryBoys).where(eq(deliveryBoys.userId, userId)).limit(1).then(r => r[0]);
-    if (!profile) return res.status(404).json({ error: "Delivery Boy profile not found." });
+    const [deliveryBoyProfile] = await db
+      .select()
+      .from(deliveryBoys)
+      .where(eq(deliveryBoys.userId, userId));
 
-    return res.status(200).json(profile);
+    if (!deliveryBoyProfile) {
+      return res.status(404).json({ error: 'Delivery Boy profile not found.' });
+    }
+
+    return res.status(200).json(deliveryBoyProfile);
   } catch (error: any) {
-    console.error("❌ Error in GET /api/delivery-boys/me:", error);
-    return res.status(500).json({ error: "Internal server error." });
+    console.error('❌ Error in GET /api/delivery-boys/me:', error);
+    return res.status(500).json({ error: 'Internal server error.' });
   }
 });
 
+
+// ---
 /**
- * GET /api/delivery-boys/batches
- * assigned batches for logged-in delivery boy
+ * ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
+ * /api/delivery-boys/batches
  */
-router.get("/batches", requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
-    if (!userId) return res.status(401).json({ error: "Unauthorized." });
+    if (!userId) {
+      return res.status(401).json({ error: 'Unauthorized.' });
+    }
 
-    const profile = await db.select().from(deliveryBoys).where(eq(deliveryBoys.userId, userId)).limit(1).then(r => r[0]);
-    if (!profile) return res.status(404).json({ error: "Delivery Boy profile not found." });
-    const deliveryBoyId = profile.id;
+    const [deliveryBoyProfile] = await db
+      .select()
+      .from(deliveryBoys)
+      .where(eq(deliveryBoys.userId, userId));
+
+    if (!deliveryBoyProfile) {
+      return res.status(404).json({ error: 'Delivery Boy profile not found.' });
+    }
+    const deliveryBoyId = deliveryBoyProfile.id;
 
     const assignedBatches = await db.query.deliveryBatches.findMany({
       where: and(
         eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
-        not(inArray(deliveryBatches.status, [deliveryStatusEnum.enumValues[4], deliveryStatusEnum.enumValues[5]]))
+        not(inArray(deliveryBatches.status, [deliveryStatusEnum.enumValues[5], deliveryStatusEnum.enumValues[8]])) // 'delivered', 'cancelled'
       ),
       with: {
         subOrders: {
           with: {
             masterOrder: {
               with: {
-                // customer removed by request — instead include customer fields nested under masterOrder if available
+                customer: {
+                  columns: { id: true, firstName: true, lastName: true, phone: true }
+                },
                 deliveryAddress: true,
-              },
+              }
             },
             seller: {
-              columns: { id: true, businessName: true, businessAddress: true, businessPhone: true },
+              columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
             },
             orderItems: {
               with: {
                 product: {
-                  columns: { id: true, name: true, image: true, price: true, unit: true },
-                },
-              },
-            },
-          },
-        },
+                  columns: { id: true, name: true, image: true, price: true, unit: true }
+                }
+              }
+            }
+          }
+        }
       },
       orderBy: desc(deliveryBatches.createdAt),
     });
 
-    // parse deliveryAddress if string
-    const formattedBatches = assignedBatches.map((batch) => {
-      const subOrdersParsed = (batch.subOrders || []).map((so: any) => {
-        const master = so.masterOrder || {};
-        let parsedDeliveryAddress: any = master.deliveryAddress ?? {};
+    const formattedBatches = assignedBatches.map(batch => {
+      const parsedSubOrders = batch.subOrders.map(subOrder => {
+        let parsedDeliveryAddress = {};
         try {
-          if (typeof master.deliveryAddress === "string") {
-            parsedDeliveryAddress = JSON.parse(master.deliveryAddress);
+          if (subOrder.masterOrder?.deliveryAddress) {
+            parsedDeliveryAddress = JSON.parse(subOrder.masterOrder.deliveryAddress as string);
           }
         } catch (e) {
-          console.warn("Failed to parse deliveryAddress for subOrder", so.id, e);
+          console.warn(`Failed to parse deliveryAddress JSON for sub-order ${subOrder.id}:`, e);
         }
         return {
-          ...so,
+          ...subOrder,
           masterOrder: {
-            ...master,
+            ...subOrder.masterOrder,
             deliveryAddress: parsedDeliveryAddress,
           },
         };
       });
+
       return {
         ...batch,
-        subOrders: subOrdersParsed,
+        subOrders: parsedSubOrders,
       };
     });
 
     return res.status(200).json({ batches: formattedBatches });
   } catch (error: any) {
-    console.error("❌ Error in GET /api/delivery-boys/batches:", error);
-    return res.status(500).json({ error: "Failed to fetch delivery batches." });
+    console.error('❌ Error in GET /api/delivery-boys/batches:', error);
+    return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
 });
 
+
+// ---
 /**
- * PATCH /api/delivery-boys/batches/:batchId/status
- * update batch status — OTP generate/send when picked_up, OTP verify for delivered, update suborders/orderTracking/master order
+ * ✅ Update Delivery Batch Status (Picked Up / In Transit / Delivered / Failed)
+ * /api/delivery-boys/batches/:batchId/status
  */
-router.patch("/batches/:batchId/status", requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    const batchId = parseInt(req.params.batchId);
-    const { status: newStatus, otp } = req.body;
+router.patch(
+  '/batches/:batchId/status',
+  requireDeliveryBoyAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const batchId = parseInt(req.params.batchId);
+      const { status: newStatus, otp } = req.body;
 
-    if (!userId) return res.status(401).json({ error: "Unauthorized." });
-    if (isNaN(batchId)) return res.status(400).json({ error: "Invalid delivery batch ID." });
-    if (!newStatus || !Object.values(deliveryStatusEnum.enumValues).includes(newStatus)) {
-      return res.status(400).json({ error: "Invalid or missing status provided." });
-    }
-
-    // verify delivery boy profile
-    const profile = await db.select().from(deliveryBoys).where(eq(deliveryBoys.userId, userId)).limit(1).then(r => r[0]);
-    if (!profile) return res.status(404).json({ error: "Delivery Boy profile not found." });
-    const deliveryBoyId = profile.id;
-
-    // fetch existing batch and its subOrders + masterOrder
-    const existingBatch = await db.query.deliveryBatches.findFirst({
-      where: and(eq(deliveryBatches.id, batchId), eq(deliveryBatches.deliveryBoyId, deliveryBoyId)),
-      with: {
-        subOrders: {
-          with: {
-            masterOrder: {
-              columns: { id: true, customerId: true, deliveryAddress: true },
-            },
-          },
-        },
-      },
-    });
-
-    if (!existingBatch) {
-      return res.status(403).json({ error: "Not authorized to update this delivery batch or batch not found." });
-    }
-
-    const currentStatus = existingBatch.status;
-
-    // valid transitions map (kept same logic)
-    const validStatusTransitions: { [k: string]: string[] } = {
-      pending: [],
-      ready_for_pickup: [deliveryStatusEnum.enumValues[2], deliveryStatusEnum.enumValues[5]],
-      picked_up: [deliveryStatusEnum.enumValues[3], deliveryStatusEnum.enumValues[5]],
-      in_transit: [deliveryStatusEnum.enumValues[4], deliveryStatusEnum.enumValues[5]],
-    };
-
-    if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
-      return res.status(400).json({ error: `Invalid status transition from '${currentStatus}' to '${newStatus}'.` });
-    }
-
-    // OTP verification for 'delivered'
-    if (newStatus === deliveryStatusEnum.enumValues[4]) {
-      if (!otp) return res.status(400).json({ error: "OTP is required to mark as delivered." });
-      if (existingBatch.deliveryOtp && otp !== existingBatch.deliveryOtp) {
-        return res.status(401).json({ error: "Invalid OTP." });
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized.' });
       }
-    } else if (newStatus === deliveryStatusEnum.enumValues[2] && !existingBatch.deliveryOtp) {
-      // 'picked_up' and no OTP existed → generate and send
-      const generatedOtp = generateOTP();
-      // update delivery batch: set otp and sentAt if those columns exist — guarded by try/catch
-      try {
-        await db.update(deliveryBatches).set({ deliveryOtp: generatedOtp }).where(eq(deliveryBatches.id, batchId));
-      } catch (e) {
-        // if schema doesn't have deliveryOtp column, ignore
-        console.warn("Could not set deliveryOtp on deliveryBatches (maybe column missing).", e);
+      if (isNaN(batchId)) {
+        return res.status(400).json({ error: 'Invalid delivery batch ID.' });
+      }
+      // ✅ deliveryStatusEnum में 'delivered' (इंडेक्स 5) और 'cancelled' (इंडेक्स 8) है
+      if (!newStatus || !Object.values(deliveryStatusEnum.enumValues).includes(newStatus as any)) {
+        return res.status(400).json({ error: 'Invalid or missing status provided.' });
       }
 
-      // send OTP to customer (phone may be nested under masterOrder.customer.phone or masterOrder.deliveryAddress)
-      const firstSub = existingBatch.subOrders?.[0];
-      const customerPhone =
-        firstSub?.masterOrder?.deliveryAddress?.phone ??
-        firstSub?.masterOrder?.customer?.phone ??
-        (typeof firstSub?.masterOrder?.deliveryAddress === "string" ? (() => {
-          try {
-            const parsed = JSON.parse(firstSub.masterOrder.deliveryAddress);
-            return parsed?.phone;
-          } catch { return undefined; }
-        })() : undefined);
+      const [deliveryBoyProfile] = await db
+        .select()
+        .from(deliveryBoys)
+        .where(eq(deliveryBoys.userId, userId));
 
-      if (customerPhone) {
-        const message = `Your OTP for order delivery is: ${generatedOtp}. Please provide this to the delivery person.`;
-        try {
-          await sendSms(customerPhone, message);
-        } catch (e) {
-          console.warn("Failed to send SMS OTP:", e);
-        }
-        try {
-          await sendWhatsappMessage(customerPhone, message);
-        } catch (e) {
-          console.warn("Failed to send WhatsApp OTP:", e);
-        }
-        console.log(`[NOTIFICATION] Sent OTP to customer ${customerPhone}`);
+      if (!deliveryBoyProfile) {
+        return res.status(404).json({ error: 'Delivery Boy profile not found.' });
       }
-    } else if (newStatus === deliveryStatusEnum.enumValues[5]) {
-      console.log(`[INFO] Delivery batch ${batchId} cancelled by delivery boy ${deliveryBoyId}`);
-    }
+      const deliveryBoyId = deliveryBoyProfile.id;
 
-    // Transaction: update batch, add orderTracking, update subOrders & master order if needed
-    await db.transaction(async (tx) => {
-      // 1) Update delivery batch status (guarded fields)
-      const updateObj: any = { status: newStatus, updatedAt: new Date() };
-      if (newStatus === deliveryStatusEnum.enumValues[4]) {
-        // attempt to set deliveredAt if column exists
-        try {
-          updateObj.deliveredAt = new Date();
-        } catch { /* ignore */ }
-      }
-
-      const updatedBatchRes = await tx.update(deliveryBatches).set(updateObj).where(eq(deliveryBatches.id, batchId)).returning();
-      const updatedBatch = updatedBatchRes?.[0];
-      if (!updatedBatch) throw new Error("Failed to update delivery batch status.");
-
-      // 2) Insert an orderTracking entry (only safe fields)
-      const trackingObj: any = {
-        status: newStatus,
-        timestamp: new Date(),
-        message: `Delivery batch status updated to '${newStatus}' by delivery boy.`,
-      };
-      // include deliveryBatchId if column exists
-      try {
-        trackingObj.deliveryBatchId = batchId;
-      } catch { /* ignore */ }
-
-      // include masterOrderId if available on first subOrder
-      const masterOrderId = existingBatch.subOrders?.[0]?.masterOrder?.id;
-      if (masterOrderId) trackingObj.masterOrderId = masterOrderId;
-
-      // attempt insert (guarded — if schema rejects unknown props it will throw)
-      try {
-        await tx.insert(orderTracking).values(trackingObj);
-      } catch (e) {
-        console.warn("orderTracking insert failed (schema mismatch?). Attempting minimal insert.", e);
-        // try minimal fallback
-        try {
-          await tx.insert(orderTracking).values({
-            status: newStatus,
-            timestamp: new Date(),
-            message: trackingObj.message,
-          });
-        } catch (err) {
-          console.warn("Minimal orderTracking insert also failed:", err);
-        }
-      }
-
-      // 3) If delivered or cancelled → update subOrders statuses and create tracking per subOrder
-      if ([deliveryStatusEnum.enumValues[4], deliveryStatusEnum.enumValues[5]].includes(newStatus)) {
-        const subOrderIdsInBatch = (existingBatch.subOrders || []).map((so: any) => so.id).filter(Boolean);
-        if (subOrderIdsInBatch.length > 0) {
-          // determine new subOrder status
-          const subOrderStatus = newStatus === deliveryStatusEnum.enumValues[4]
-            ? (subOrderStatusEnum.enumValues[6] ?? subOrderStatusEnum.enumValues[5]) // 'delivered_by_delivery_boy' ideally
-            : (subOrderStatusEnum.enumValues[5] ?? subOrderStatusEnum.enumValues[4]); // 'cancelled' fallback
-
-          // update subOrders (guarded)
-          try {
-            await tx.update(subOrders).set({ status: subOrderStatus, updatedAt: new Date() }).where(inArray(subOrders.id, subOrderIdsInBatch));
-          } catch (e) {
-            console.warn("Failed to update subOrders statuses (schema mismatch?)", e);
-          }
-
-          // per-suborder tracking inserts (guarded)
-          for (const soId of subOrderIdsInBatch) {
-            const subTracking: any = {
-              status: subOrderStatus,
-              timestamp: new Date(),
-              message: `Sub-order status updated to '${subOrderStatus}' by delivery boy.`,
-            };
-            try {
-              subTracking.subOrderId = soId;
-              if (masterOrderId) subTracking.masterOrderId = masterOrderId;
-              await tx.insert(orderTracking).values(subTracking);
-            } catch (e) {
-              console.warn("Failed to insert suborder tracking (schema mismatch?) for subOrder", soId, e);
-            }
-          }
-
-          // 4) Evaluate master order status: if all suborders finalized → set master order
-          if (masterOrderId) {
-            const allRelatedSubOrders = await tx.query.subOrders.findMany({
-              where: eq(subOrders.masterOrderId, masterOrderId),
-              columns: { id: true, status: true },
-            });
-
-            const allSubOrdersFinalized = allRelatedSubOrders.every((so: any) =>
-              [subOrderStatusEnum.enumValues[5], subOrderStatusEnum.enumValues[6], subOrderStatusEnum.enumValues[7]].includes(so.status)
-            );
-
-            if (allSubOrdersFinalized) {
-              const masterOrderStatus = allRelatedSubOrders.every((so: any) =>
-                [subOrderStatusEnum.enumValues[5], subOrderStatusEnum.enumValues[6]].includes(so.status)
-              ) ? masterOrderStatusEnum.enumValues[3] : masterOrderStatusEnum.enumValues[4]; // delivered / cancelled
-
-              try {
-                await tx.update(orders).set({ status: masterOrderStatus, updatedAt: new Date() }).where(eq(orders.id, masterOrderId));
-                // add tracking for master order
-                await tx.insert(orderTracking).values({
-                  masterOrderId,
-                  status: masterOrderStatus,
-                  timestamp: new Date(),
-                  message: `Master order status updated to '${masterOrderStatus}' as all sub-orders are finalized.`,
-                });
-                // emit master-order update
-                getIO().emit(`master-order:${masterOrderId}:status-updated`, {
-                  status: masterOrderStatus,
-                  message: `Master order status updated to '${masterOrderStatus}'.`,
-                });
-              } catch (e) {
-                console.warn("Failed to update master order or tracking (schema mismatch?)", e);
+      const existingBatch = await db.query.deliveryBatches.findFirst({
+        where: and(
+          eq(deliveryBatches.id, batchId),
+          eq(deliveryBatches.deliveryBoyId, deliveryBoyId)
+        ),
+        with: {
+          subOrders: {
+            with: {
+              masterOrder: {
+                columns: { id: true, customerId: true, deliveryAddress: true },
+                with: {
+                  customer: {
+                    columns: { phone: true }
+                  }
+                }
+              },
+              seller: {
+                columns: { id: true }
               }
             }
           }
         }
+      });
+
+      if (!existingBatch) {
+        return res.status(403).json({ error: 'Not authorized to update this delivery batch or batch not found.' });
       }
 
-      // 5) Emit sockets to customer, delivery boy, sellers
-      const customerId = existingBatch.subOrders?.[0]?.masterOrder?.customerId;
-      if (customerId) {
+      const currentStatus = existingBatch.status;
+      const validStatusTransitions: { [key: string]: string[] } = {
+        'pending': [],
+        'assigned': [deliveryStatusEnum.enumValues[2], deliveryStatusEnum.enumValues[8]], // 'out_for_pickup', 'cancelled'
+        'out_for_pickup': [deliveryStatusEnum.enumValues[3], deliveryStatusEnum.enumValues[8]], // 'picked_up', 'cancelled'
+        'picked_up': [deliveryStatusEnum.enumValues[4], deliveryStatusEnum.enumValues[8]], // 'out_for_delivery', 'cancelled'
+        'out_for_delivery': [deliveryStatusEnum.enumValues[5], deliveryStatusEnum.enumValues[8], deliveryStatusEnum.enumValues[6]], // 'delivered', 'cancelled', 'failed'
+        'delivered': [],
+        'failed': [],
+        'exepted': [],
+        'cancelled': [],
+      };
+
+      if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
+        return res.status(400).json({ error: `Invalid status transition from '${currentStatus}' to '${newStatus}'.` });
+      }
+
+      // OTP वेरिफिकेशन केवल 'delivered' स्टेटस (इंडेक्स 5) के लिए
+      if (newStatus === deliveryStatusEnum.enumValues[5] /* 'delivered' */) {
+        if (!otp) {
+          return res.status(400).json({ error: 'OTP is required to mark as delivered.' });
+        }
+        if (otp !== existingBatch.deliveryOtp) {
+          return res.status(401).json({ error: 'Invalid OTP.' });
+        }
+      } else if (newStatus === deliveryStatusEnum.enumValues[3] /* 'picked_up' */ && !existingBatch.deliveryOtp) {
+        // यदि 'picked_up' पर पहली बार अपडेट हो रहा है और OTP जेनरेट नहीं हुआ है, तो जेनरेट करें
+        const generatedOtp = generateOTP();
+        await db.update(deliveryBatches)
+          .set({ deliveryOtp: generatedOtp, deliveryOtpSentAt: new Date() })
+          .where(eq(deliveryBatches.id, batchId));
+        existingBatch.deliveryOtp = generatedOtp;
+
+        // ग्राहक को WhatsApp के माध्यम से OTP भेजें
+        const customerPhone = existingBatch.subOrders[0]?.masterOrder?.customer?.phone;
+        if (customerPhone) {
+          const message = `Your OTP for order delivery is: ${generatedOtp}. Please provide this to the delivery person.`;
+          await sendWhatsappMessage(customerPhone, message); // ✅ केवल WhatsApp
+          console.log(`[NOTIFICATION] Sent OTP to customer ${customerPhone}: ${message}`);
+        }
+
+      } else if (newStatus === deliveryStatusEnum.enumValues[8] /* 'cancelled' */) {
+        console.log(`[INFO] Delivery batch ${batchId} cancelled by delivery boy ${deliveryBoyId}`);
+      }
+
+      await db.transaction(async (tx) => {
+        // 1. डिलीवरी बैच की स्थिति अपडेट करें
+        const [updatedBatch] = await tx.update(deliveryBatches)
+          .set({
+            status: newStatus as any,
+            updatedAt: new Date(),
+            deliveredAt: newStatus === deliveryStatusEnum.enumValues[5] ? new Date() : existingBatch.deliveredAt, // deliveredAt सेट करें
+          })
+          .where(eq(deliveryBatches.id, batchId))
+          .returning();
+
+        if (!updatedBatch) {
+          throw new Error('Failed to update delivery batch status.');
+        }
+
+        // 2. orderTracking में एक नई एंट्री जोड़ें
+        await tx.insert(orderTracking).values({
+          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
+          deliveryBatchId: batchId,
+          status: newStatus as any,
+          updatedByUserId: userId,
+          updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+          timestamp: new Date(),
+          message: `Delivery batch status updated to '${newStatus}' by delivery boy.`,
+        });
+
+        // 3. यदि बैच 'delivered' (इंडेक्स 5) या 'cancelled' (इंडेक्स 8) हो गया है, तो संबंधित subOrders और Master Order को भी अपडेट करें
+        if (newStatus === deliveryStatusEnum.enumValues[5] /* 'delivered' */ || newStatus === deliveryStatusEnum.enumValues[8] /* 'cancelled' */) {
+          const subOrderIdsInBatch = existingBatch.subOrders.map(so => so.id);
+
+          // ✅ subOrderStatusEnum में 'cancelled' (इंडेक्स 4) पर है।
+          const subOrderStatus = newStatus === deliveryStatusEnum.enumValues[5]
+            ? subOrderStatusEnum.enumValues[6] /* 'delivered_by_delivery_boy' */
+            : subOrderStatusEnum.enumValues[4]; /* 'cancelled' */
+
+          // सभी संबंधित subOrders को 'delivered_by_delivery_boy' या 'cancelled' पर अपडेट करें
+          await tx.update(subOrders)
+            .set({ status: subOrderStatus as any, updatedAt: new Date() })
+            .where(inArray(subOrders.id, subOrderIdsInBatch));
+
+          // प्रत्येक subOrder के लिए orderTracking एंट्री
+          for (const so of existingBatch.subOrders) {
+            await tx.insert(orderTracking).values({
+              masterOrderId: so.masterOrder.id,
+              subOrderId: so.id,
+              status: subOrderStatus as any,
+              updatedByUserId: userId,
+              updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+              timestamp: new Date(),
+              message: `Sub-order status updated to '${subOrderStatus}' by delivery boy.`,
+            });
+          }
+
+          // मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें
+          const masterOrderId = existingBatch.subOrders[0].masterOrder.id;
+          const allRelatedSubOrders = await tx.query.subOrders.findMany({
+            where: eq(subOrders.masterOrderId, masterOrderId),
+            columns: {
+              id: true,
+              status: true,
+            }
+          });
+
+          // जाँचें कि क्या मास्टर ऑर्डर के सभी sub-orders 'delivered_by_seller' (इंडेक्स 6), 'delivered_by_delivery_boy' (इंडेक्स 6), या 'cancelled' (इंडेक्स 4) हैं
+          const allSubOrdersFinalized = allRelatedSubOrders.every(so =>
+            so.status === subOrderStatusEnum.enumValues[5] || // delivered_by_seller
+            so.status === subOrderStatusEnum.enumValues[6] || // delivered_by_delivery_boy
+            so.status === subOrderStatusEnum.enumValues[4]    // cancelled
+          );
+
+          if (allSubOrdersFinalized) {
+            // masterOrderStatusEnum में 'fulfilled' (इंडेक्स 3) और 'cancelled' (इंडेक्स 4) है
+            const masterOrderStatus = allRelatedSubOrders.every(so =>
+              so.status === subOrderStatusEnum.enumValues[5] ||
+              so.status === subOrderStatusEnum.enumValues[6]
+            ) ? masterOrderStatusEnum.enumValues[3] /* 'fulfilled' */
+              : masterOrderStatusEnum.enumValues[4] /* 'cancelled' */;
+
+            await tx.update(orders)
+              .set({ status: masterOrderStatus as any, updatedAt: new Date() })
+              .where(eq(orders.id, masterOrderId));
+
+            await tx.insert(orderTracking).values({
+              masterOrderId: masterOrderId,
+              status: masterOrderStatus as any,
+              updatedByUserId: userId,
+              updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+              timestamp: new Date(),
+              message: `Master order status updated to '${masterOrderStatus}' as all sub-orders are finalized.`,
+            });
+            getIO().emit(`master-order:${masterOrderId}:status-updated`, {
+              status: masterOrderStatus,
+              message: `Master order status updated to '${masterOrderStatus}'.`,
+            });
+          }
+        }
+
+        // Socket.io: कस्टमर को रियल-time अपडेट भेजें
+        const customerId = existingBatch.subOrders[0].masterOrder.customerId;
         getIO().emit(`user:${customerId}:order-update`, {
           deliveryBatchId: batchId,
           status: newStatus,
-          masterOrderId: existingBatch.subOrders?.[0]?.masterOrder?.id,
+          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
           message: `Your delivery is now '${newStatus}'.`,
         });
-      }
+        // डिलीवरी बॉय को भी अपडेट भेजें
+        getIO().emit(`delivery-boy:${deliveryBoyId}:batch-update`, {
+          deliveryBatchId: batchId,
+          status: newStatus,
+          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
+        });
+        // सेलर को भी सूचित करें
+        for (const subOrder of existingBatch.subOrders) {
+          getIO().emit(`seller:${subOrder.seller.id}:order-update`, {
+            subOrderId: subOrder.id,
+            status: subOrderStatusEnum.enumValues[6], // यह मानते हुए कि यह 'delivered_by_delivery_boy' या 'cancelled' होगा
+            masterOrderId: existingBatch.subOrders[0].masterOrder.id,
+          });
+        }
 
 
+        return res.status(200).json({
+          message: 'Delivery batch status updated successfully.',
+          deliveryBatch: updatedBatch,
+          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
+        });
 
-      getIO().emit(`delivery-boy:${deliveryBoyId}:batch-update`, {
-        deliveryBatchId: batchId,
-        status: newStatus,
-        masterOrderId: existingBatch.subOrders?.[0]?.masterOrder?.id,
       });
 
-      for (const subOrder of existingBatch.subOrders || []) {
-        try {
-          getIO().emit(`seller:${subOrder.sellerId}:order-update`, {
-            subOrderId: subOrder.id,
-            status: subOrderStatusEnum.enumValues[6],
-            masterOrderId: existingBatch.subOrders[0]?.masterOrder?.id,
-          });
-        } catch (e) {
-          // ignore per-seller emit errors
-        }
-      }
-
-      return;
-    });
-
-    return res.status(200).json({
-      message: "Delivery batch status updated successfully.",
-      // Note: returning updatedBatch from transaction would require capturing; keep simple response
-      deliveryBatchId: batchId,
-    });
-  } catch (error: any) {
-    console.error("❌ Error in PATCH /api/delivery-boys/batches/:batchId/status:", error);
-    return res.status(500).json({ error: error?.message || "Failed to update delivery batch status." });
+    } catch (error: any) {
+      console.error('❌ Error in PATCH /api/delivery-boys/batches/:batchId/status:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update delivery boy location.' });
+    }
   }
-});
+);
 
+
+// Export router
 export default router;
-  
+        
