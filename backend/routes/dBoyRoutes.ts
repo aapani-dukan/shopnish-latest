@@ -20,7 +20,7 @@ import { eq, and, not, desc, asc, inArray, isNull } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
-import { sendWhatsappMessage } from '../server/lib/whatsappHelpers'; // ✅ केवल WhatsApp मैसेज का उपयोग
+import { sendWhatsAppMessage } from '../server/lib/whatsAppHelpers'; // ✅ केवल WhatsApp मैसेज का उपयोग
 import { generateOTP } from '../server/util/otp'; // ✅ 'generateOTP' सही नाम है
 // sendSms को हटा दिया गया है
 
