@@ -1,37 +1,69 @@
-// server/middleware/validation.ts
-
+// backend/server/middleware/validation.ts
 
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, checkSchema, Schema } from 'express-validator';
+import { ZodSchema, ZodError } from 'zod'; // ✅ Zod से आयात करें
 
-export const validateRequest = (schema: Schema) => {
-  // checkSchema एक एरे ऑफ मिडलवेयर्स लौटाता है।
-  // इन्हें 'validationChecks' के रूप में रखें।
-  const validationChecks = checkSchema(schema);
+// ✅ validateRequest फ़ंक्शन को संशोधित करें ताकि यह ZodSchema और express-validator Schema दोनों को स्वीकार कर सके
+export const validateRequest = (schema: Schema | ZodSchema<any>) => {
+  // ZodSchema में 'parse' मेथड होता है। यदि यह मौजूद है, तो यह एक Zod स्कीमा है।
+  if ('parse' in schema && typeof schema.parse === 'function') {
+    const zodSchema = schema as ZodSchema<any>;
 
-  return async (req: Request, res: Response, next: NextFunction) => {
-    // प्रत्येक वैलिडेशन चेक को क्रमिक रूप से चलाएं
-    // Promise.all का उपयोग करें ताकि सभी वैलिडेशन चेक समानांतर में चल सकें
-    // लेकिन प्रत्येक validation.run(req) को await करने के बजाय,
-    // express-validator के मिडलवेयर को एक-एक करके लागू करें
-    for (let i = 0; i < validationChecks.length; i++) {
-      const validation = validationChecks[i];
-      // validation.run(req) खुद एक प्रॉमिस लौटाता है जिसे await किया जा सकता है
-      await validation.run(req);
-    }
-    // Alternatively, if you want to run them in parallel and ensure all promises resolve
-    // await Promise.all(validationChecks.map(validation => validation.run(req)));
+    return (req: Request, res: Response, next: NextFunction) => {
+      try {
+        // Zod द्वारा req.body, req.params, req.query को वैलिडेट करें
+        // Zod स्कीमा को पूरे req ऑब्जेक्ट पर लागू करने के लिए, स्कीमा को इस प्रकार बनाना होगा:
+        // z.object({
+        //   body: z.object(...),
+        //   params: z.object(...),
+        //   query: z.object(...),
+        // })
+        zodSchema.parse({
+          body: req.body,
+          params: req.params,
+          query: req.query,
+        });
+        next();
+      } catch (error) {
+        if (error instanceof ZodError) {
+          // ZodError को express-validator जैसा फॉर्मेट करें
+          const formattedErrors = error.errors.map(err => ({
+            msg: err.message,
+            param: err.path.join('.'), // path को एक स्ट्रिंग के रूप में जॉइन करें
+            location: err.path[0], // 'body', 'params', 'query'
+          }));
+          return res.status(400).json({ errors: formattedErrors });
+        }
+        console.error("Zod validation error:", error);
+        return res.status(500).json({ message: "Internal server error during validation." });
+      }
+    };
+  } else {
+    // यदि यह Zod स्कीमा नहीं है, तो इसे express-validator स्कीमा मानें
+    const expressValidatorSchema = schema as Schema;
+    const validationChecks = checkSchema(expressValidatorSchema);
 
+    return async (req: Request, res: Response, next: NextFunction) => {
+      for (let i = 0; i < validationChecks.length; i++) {
+        const validation = validationChecks[i];
+        await validation.run(req);
+      }
 
-    const errors = validationResult(req);
-    if (!errors.isEmpty()) {
-      return res.status(400).json({ errors: errors.array() });
-    }
-    next();
-  };
+      const errors = validationResult(req);
+      if (!errors.isEmpty()) {
+        return res.status(400).json({ errors: errors.array() });
+      }
+      next();
+    };
+  }
 };
 
-
+// =================================================================
+// नीचे express-validator स्कीमा परिभाषाएँ हैं।
+// आप इन्हें इसी फ़ाइल में रख सकते हैं या अलग फ़ाइलों में ले जा सकते हैं
+// और यहाँ आयात कर सकते हैं।
+// =================================================================
 
 export const createUserSchema: Schema = {
   email: {
@@ -47,16 +79,13 @@ export const createUserSchema: Schema = {
     },
   },
   role: {
-    // यहाँ userRoleEnum से मान्य भूमिकाएं होनी चाहिए
     isIn: {
-      options: [['CUSTOMER', 'SELLER', 'ADMIN', 'DELIVERY_BOY']], // userRoleEnum.enumValues का उपयोग करें
+      options: [['CUSTOMER', 'SELLER', 'ADMIN', 'DELIVERY_BOY']],
       errorMessage: 'Invalid user role',
     },
   },
-  // अन्य फ़ील्ड्स जैसे नाम, फ़ोन, आदि
 };
 
-// उदाहरण: प्लेटफ़ॉर्म सेटिंग्स को अपडेट करने के लिए स्कीमा
 export const updatePlatformSettingsSchema: Schema = {
   defaultDeliveryRadiusKm: {
     optional: true,
@@ -92,7 +121,6 @@ export const updatePlatformSettingsSchema: Schema = {
   },
 };
 
-// उदाहरण: विक्रेता सेटिंग्स को अपडेट करने के लिए स्कीमा
 export const updateVendorSettingsSchema: Schema = {
   deliveryRadiusKm: {
     optional: true,
@@ -107,7 +135,6 @@ export const updateVendorSettingsSchema: Schema = {
     isArray: {
       errorMessage: 'Delivery pincodes must be an array of strings.',
     },
-    // कस्टम सैनिटाइज़र यह सुनिश्चित करने के लिए कि पिनकोड स्ट्रिंग हैं
     customSanitizer: {
       options: (value) => {
         if (!Array.isArray(value)) return value;
@@ -133,7 +160,6 @@ export const updateVendorSettingsSchema: Schema = {
   },
 };
 
-// उदाहरण: उत्पाद सेटिंग्स को अपडेट करने के लिए स्कीमा
 export const updateProductSettingsSchema: Schema = {
   deliveryPincodes: {
     optional: true,
