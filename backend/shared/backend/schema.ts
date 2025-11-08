@@ -67,6 +67,8 @@ export type OrderWithDeliveryBoy = OrderWithItems & {
   // 1. डिलीवरी बॉय की जानकारी (deliveryBoyId के साथ joined)
   deliveryBoy?: {
     id: number;
+        paymentMethod: string; 
+  paymentStatus: string; 
     name: string | null;
     phone: string | null;
   } | null;
