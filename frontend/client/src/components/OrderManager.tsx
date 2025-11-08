@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 // ✅ Assuming these types are correctly defined in shared/backend/schema
-import  { Seller, OrderWithItems, subOrderStatusEnum } from "shared/backend/schema";
+import  { Seller, OrderWithItems, subOrderStatusEnum , OrderWithDeliveryBoy} from "shared/backend/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/useSocket";
@@ -14,13 +14,13 @@ import { useEffect } from "react";
 // ✅ Extend OrderWithItems for consistency, assuming deliveryBoy is part of the order response
 //    If deliveryBoy is NOT part of OrderWithItems in schema, this is correct.
 //    If it IS, then OrderWithItems should be updated in schema directly.
-interface OrderWithDeliveryBoy extends OrderWithItems {
-  deliveryBoy?: { // ✅ Corrected to camelCase
-    id: number;
-    name: string;
-    phone: string;
-  };
-}
+//interface OrderWithDeliveryBoy extends OrderWithItems {
+//  deliveryBoy?: { // ✅ Corrected to camelCase
+ //   id: number;
+ //   name: string;
+//    phone: string;
+//  };
+//}
 
 interface OrderManagerProps {
   orders: OrderWithDeliveryBoy[]; // ✅ Using the extended interface
