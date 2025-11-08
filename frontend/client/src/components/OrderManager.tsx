@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 // ✅ Assuming these types are correctly defined in shared/backend/schema
-import type { Seller, OrderWithItems, subOrderStatusEnum } from "shared/backend/schema";
+import  { Seller, OrderWithItems, subOrderStatusEnum } from "shared/backend/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/useSocket";
