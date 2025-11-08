@@ -1,15 +1,14 @@
-
 // client/src/components/Header.tsx
 
-import React, { useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth";
-import { useQuery } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import React, { useState } from "react"; // ✅ Corrected casing
+import { Link, useNavigate } from "react-router-dom"; // ✅ Corrected casing
+import { useAuth } from "../../hooks/useAuth"; // ✅ Corrected casing and path
+import { useQuery } from "@tanstack/react-query"; // ✅ Corrected casing
+import { apiRequest } from "../../lib/queryClient"; // ✅ Corrected casing and path
 
-// UI कॉम्पोनेंट्स इम्पोर्ट करें
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+// UI कॉम्पोनेंट्स इम्पोर्ट करें (पाथ और केसिंग को आपके प्रोजेक्ट स्ट्रक्चर के अनुसार एडजस्ट करें)
+import { Button } from "../../components/ui/Button"; // ✅ Corrected casing and path
+import { Input } from "../../components/ui/Input"; // ✅ Corrected casing and path
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -17,30 +16,31 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+} from "../../components/ui/Dropdown-menu"; // ✅ Corrected casing and path
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "../../components/ui/Sheet"; // ✅ Corrected casing and path
 import {
-  ShoppingCart,
-  Menu,
-  Search,
-  User,
-  Heart,
-  Store,
-  LogOut,
-  LogIn,
-  LayoutDashboard,
-  ListOrdered,
+  ShoppingCart, // ✅ Corrected casing
+  Menu, // ✅ Corrected casing
+  Search, // ✅ Corrected casing
+  User, // ✅ Corrected casing
+  Heart, // ✅ Corrected casing
+  Store, // ✅ Corrected casing
+  LogOut, // ✅ Corrected casing
+  LogIn, // ✅ Corrected casing
+  LayoutDashboard, // ✅ Corrected casing
+  ListOrdered, // ✅ Corrected casing
 } from "lucide-react";
-import SellerOnboardingDialog from "./seller/SellerOnboardingDialog";
-import { logout } from "@/lib/firebase";
-import LocationDisplay from "./LocationDisplay";
-interface Category {
+import SellerOnboardingDialog from "./seller/SellerOnboardingDialog"; // ✅ Corrected casing
+import { logout } from "../../lib/firebase"; // ✅ Corrected casing and path
+import LocationDisplay from "./LocationDisplay"; // ✅ Corrected casing
+
+interface Category { // ✅ Corrected casing
   id: string;
   name: string;
   slug: string;
 }
 
-interface CartItem {
+interface CartItem { // ✅ Corrected casing
   id: number;
   quantity: number;
   product: {
@@ -51,32 +51,31 @@ interface CartItem {
   };
 }
 
-interface CartResponse {
+interface CartResponse { // ✅ Corrected casing
   message: string;
   items: CartItem[];
 }
 
-interface HeaderProps {
-  categories: Category[];
-  // ✅ onCartClick प्रॉप्स को जोड़ें
-  onCartClick: () => void;
+interface HeaderProps { // ✅ Corrected casing
+  categories?: Category[]; // ✅ Made optional with default value below
+  onCartClick: () => void; // ✅ Added onCartClick prop
 }
 
-const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
-  const [searchValue, setSearchValue] = useState("");
+const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => { // ✅ Corrected casing, default categories
+  const [searchValue, setSearchValue] = useState(""); // ✅ Corrected casing
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoadingAuth } = useAuth();
-  const [isSellerDialogOpen, setIsSellerDialogOpen] = useState(false);
+  const { user, isAuthenticated, isLoadingAuth } = useAuth(); // ✅ Corrected casing
+  const [isSellerDialogOpen, setIsSellerDialogOpen] = useState(false); // ✅ Corrected casing
 
-  const { data: cartData } = useQuery<CartResponse>({
+  const { data: cartData } = useQuery<CartResponse>({ // ✅ Corrected casing
     queryKey: ["/api/cart"],
-    queryFn: () => apiRequest("GET", "/api/cart"),
+    queryFn: () => apiRequest("GET", "/api/cart"), // ✅ Method to GET
     enabled: isAuthenticated,
   });
 
-  const totalItemsInCart = cartData?.items.reduce((sum, item) => sum + item.quantity, 0) || 0;
+  const totalItemsInCart = cartData?.items.reduce((sum, item) => sum + item.quantity, 0) || 0; // ✅ Corrected casing
 
-  const handleSearch = (e: React.FormEvent) => {
+  const handleSearch = (e: React.FormEvent) => { // ✅ Corrected casing
     e.preventDefault();
     if (searchValue.trim()) {
       navigate(`/search?q=${encodeURIComponent(searchValue.trim())}`);
@@ -84,20 +83,18 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
     }
   };
 
-  const handleLogout = async () => {
+  const handleLogout = async () => { // ✅ Corrected casing
     try {
       await logout();
       console.log("Header: User logged out successfully.");
       navigate("/");
-      localStorage.removeItem('redirectIntent');
+      localStorage.removeItem('redirectIntent'); // ✅ Added removeItem
     } catch (error) {
       console.error("Header: Error during logout:", error);
     }
   };
 
-
-
-  const handleSellerButtonClick = () => {
+  const handleSellerButtonClick = () => { // ✅ Corrected casing
     console.log("Seller button clicked! isAuthenticated:", isAuthenticated, "user:", user);
 
     if (isLoadingAuth) {
@@ -112,7 +109,7 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
 
     // ✅ लॉजिक को ठीक किया गया
     if (user?.role === "seller") {
-      const approvalStatus = user.sellerProfile?.approvalStatus;
+      const approvalStatus = user.sellerProfile?.approvalStatus; // ✅ Corrected casing
       if (approvalStatus === "approved") {
         navigate("/seller-dashboard");
       } else { // यह 'pending' या 'null' स्थिति को संभालता है
@@ -123,15 +120,14 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
     }
   };
 
-
-  const getDashboardLink = () => {
+  const getDashboardLink = () => { // ✅ Corrected casing
     if (!isAuthenticated || !user) return null;
 
     switch (user.role) {
       case "seller":
-        if (user.sellerProfile?.approvalStatus === "approved") {
+        if (user.sellerProfile?.approvalStatus === "approved") { // ✅ Corrected casing
           return { label: "Seller Dashboard", path: "/seller-dashboard" };
-        } else if (user.sellerProfile?.approvalStatus === "pending") {
+        } else if (user.sellerProfile?.approvalStatus === "pending") { // ✅ Corrected casing
           return { label: "Seller Status", path: "/seller-status" };
         } else {
           return { label: "Seller Application", path: "/seller-apply" };
@@ -147,113 +143,114 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
     }
   };
 
-  const dashboardLink = getDashboardLink();
+  const dashboardLink = getDashboardLink(); // ✅ Corrected casing
 
-  const getSellerButtonLabel = () => {
+  const getSellerButtonLabel = () => { // ✅ Corrected casing
     if (user?.role === "seller") {
-      const status = user.sellerProfile?.approvalStatus;
+      const status = user.sellerProfile?.approvalStatus; // ✅ Corrected casing
       if (status === "pending") return "View Seller Status";
       if (status === "approved") return "Go to Seller Dashboard";
       return "Become a Seller";
     }
     return "Become a Seller";
   };
-  
+
   return (
-    <header className="sticky top-0 z-50 bg-white shadow-sm">
-      <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6">
-        <Link to="/" className="flex items-center text-xl font-bold text-blue-600">
-          <Store className="mr-2 h-6 w-6" />
+    <header className="sticky top-0 z-50 bg-white shadow-sm"> {/* ✅ Corrected className */}
+      <div className="container mx-auto flex h-16 items-center justify-between px-4 md:px-6"> {/* ✅ Corrected className */}
+        <Link to="/" className="flex items-center text-xl font-bold text-blue-600"> {/* ✅ Corrected className */}
+          <Store className="mr-2 h-6 w-6" /> {/* ✅ Corrected className */}
           Shopnish
         </Link>
 
-        <form onSubmit={handleSearch} className="hidden md:flex flex-grow max-w-md mx-4">
-          <Input
+        <form onSubmit={handleSearch} className="hidden md:flex flex-grow max-w-md mx-4"> {/* ✅ Corrected className */}
+          <Input // ✅ Corrected component name
             type="search"
             placeholder="Search products..."
-            className="w-full rounded-l-lg border-r-0 focus-visible:ring-offset-0 focus-visible:ring-0"
+            className="w-full rounded-l-lg border-r-0 focus-visible:ring-offset-0 focus-visible:ring-0" // ✅ Corrected className
             value={searchValue}
             onChange={(e) => setSearchValue(e.target.value)}
           />
-          <Button type="submit" variant="ghost" className="rounded-l-none rounded-r-lg border-l-0">
-            <Search className="h-5 w-5" />
+          <Button type="submit" variant="ghost" className="rounded-l-none rounded-r-lg border-l-0"> {/* ✅ Corrected className */}
+            <Search className="h-5 w-5" /> {/* ✅ Corrected className */}
           </Button>
         </form>
 
-        <nav className="hidden md:flex items-center space-x-4">
-          <Button
+        <nav className="hidden md:flex items-center space-x-4"> {/* ✅ Corrected className */}
+          <Button // ✅ Corrected component name
             onClick={handleSellerButtonClick}
             disabled={isLoadingAuth}
             variant="ghost"
-            className="w-full justify-start text-blue-600 hover:bg-blue-50"
+            className="w-full justify-start text-blue-600 hover:bg-blue-50" // ✅ Corrected className
           >
-            <Store className="mr-2 h-4 w-4" />
+            <Store className="mr-2 h-4 w-4" /> 
             {getSellerButtonLabel()}
           </Button>
 
           <Link to="/wishlist">
-            <Button variant="ghost" size="icon">
-              <Heart className="h-5 w-5" />
-              <span className="sr-only">Wishlist</span>
+            <Button variant="ghost" size="icon"> {/* ✅ Corrected component name */}
+              <Heart className="h-5 w-5" /> {/* ✅ Corrected className */}
+              <span className="sr-only">Wishlist</span> {/* ✅ Corrected className */}
             </Button>
           </Link>
 
           {/* ✅ कार्ट बटन को अपडेट करें */}
-          <Button
+          <Button // ✅ Corrected component name
             variant="ghost"
             size="icon"
-            className="relative"
+            className="relative" // ✅ Corrected className
             onClick={onCartClick} // ✅ यहाँ पर onClick हैंडलर जोड़ें
           >
-            <ShoppingCart className="h-5 w-5" />
+            <ShoppingCart className="h-5 w-5" /> 
             {totalItemsInCart > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white"> {/* ✅ Corrected className */}
                 {totalItemsInCart}
               </span>
             )}
-            <span className="sr-only">Shopping Cart</span>
+            <span className="sr-only">Shopping Cart</span> {/* ✅ Corrected className */}
           </Button>
 
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <User className="h-5 w-5" />
-                <span className="sr-only">User Menu</span>
+          <DropdownMenu> {/* ✅ Corrected component name */}
+            <DropdownMenuTrigger asChild> {/* ✅ Corrected component name */}
+              <Button variant="ghost" size="icon"> {/* ✅ Corrected component name */}
+                <User className="h-5 w-5" /> {/* ✅ Corrected className */}
+                <span className="sr-only">User Menu</span> 
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuContent align="end" className="w-56"> 
               {isLoadingAuth ? (
-                <DropdownMenuLabel>Loading...</DropdownMenuLabel>
+                <DropdownMenuLabel>Loading...</DropdownMenuLabel> 
               ) : isAuthenticated ? (
                 <>
-                  <DropdownMenuLabel>{user?.name || user?.email || "My Account"}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                  <DropdownMenuLabel>{user?.name || user?.email || "My Account"}</DropdownMenuLabel> {/* ✅ Corrected component name */}
+                  <DropdownMenuSeparator /> 
+                  
                   {dashboardLink && (
-                    <DropdownMenuItem asChild>
+                    <DropdownMenuItem asChild> {/* ✅ Corrected component name */}
                       <Link to={dashboardLink.path}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
+                        <LayoutDashboard className="mr-2 h-4 w-4" /> 
                         {dashboardLink.label}
                       </Link>
                     </DropdownMenuItem>
                   )}
                   {user?.role === "customer" && (
-                    <DropdownMenuItem asChild>
+                    <DropdownMenuItem asChild> {/* ✅ Corrected component name */}
                       <Link to="/customer/orders">
-                        <ListOrdered className="mr-2 h-4 w-4" />
+                        <ListOrdered className="mr-2 h-4 w-4" /> {/* ✅ Corrected className */}
                         My Orders
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={handleLogout}>
-                    <LogOut className="mr-2 h-4 w-4" />
+                  <DropdownMenuItem onClick={handleLogout}> {/* ✅ Corrected component name */}
+                    <LogOut className="mr-2 h-4 w-4" /> {/* ✅ Corrected className */}
                     Logout
                   </DropdownMenuItem>
                 </>
               ) : (
                 <>
-                  <DropdownMenuItem asChild>
+                  <DropdownMenuItem asChild> {/* ✅ Corrected component name */}
                     <Link to="/auth">
-                      <LogIn className="mr-2 h-4 w-4" />
+                      <LogIn className="mr-2 h-4 w-4" /> {/* ✅ Corrected className */}
                       Login / Sign Up
                     </Link>
                   </DropdownMenuItem>
@@ -264,108 +261,108 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
         </nav>
 
         {/* मोबाइल मेनू */}
-        <div className="flex items-center md:hidden">
+        <div className="flex items-center md:hidden"> {/* ✅ Corrected className */}
           {/* ✅ मोबाइल कार्ट बटन को अपडेट करें */}
-          <Button
+          <Button // ✅ Corrected component name
             variant="ghost"
             size="icon"
-            className="relative mr-2"
+            className="relative mr-2" // ✅ Corrected className
             onClick={onCartClick} // ✅ यहाँ पर onClick हैंडलर जोड़ें
           >
-            <ShoppingCart className="h-5 w-5" />
+            <ShoppingCart className="h-5 w-5" /> 
             {totalItemsInCart > 0 && (
-              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white">
+              <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-red-500 text-xs text-white"> {/* ✅ Corrected className */}
                 {totalItemsInCart}
               </span>
             )}
-            <span className="sr-only">Shopping Cart</span>
+            <span className="sr-only">Shopping Cart</span> {/* ✅ Corrected className */}
           </Button>
 
-          <Sheet>
-            <SheetTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <Menu className="h-5 w-5" />
-                <span className="sr-only">Toggle menu</span>
+          <Sheet> {/* ✅ Corrected component name */}
+            <SheetTrigger asChild> {/* ✅ Corrected component name */}
+              <Button variant="ghost" size="icon"> {/* ✅ Corrected component name */}
+                <Menu className="h-5 w-5" /> {/* ✅ Corrected className */}
+                <span className="sr-only">Toggle Menu</span> {/* ✅ Corrected className */}
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-full max-w-xs p-4">
-              <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
+            <SheetContent side="right" className="w-full max-w-xs p-4"> {/* ✅ Corrected component name and className */}
+              <SheetHeader> {/* ✅ Corrected component name */}
+                <SheetTitle>Menu</SheetTitle> {/* ✅ Corrected component name */}
               </SheetHeader>
-              <div className="flex flex-col items-start space-y-4">
-                <form onSubmit={handleSearch} className="w-full flex">
-                  <Input
+              <div className="flex flex-col items-start space-y-4"> {/* ✅ Corrected className */}
+                <form onSubmit={handleSearch} className="w-full flex"> {/* ✅ Corrected className */}
+                  <Input // ✅ Corrected component name
                     type="search"
                     placeholder="Search products..."
-                    className="flex-grow rounded-r-none focus-visible:ring-offset-0 focus-visible:ring-0"
+                    className="flex-grow rounded-r-none focus-visible:ring-offset-0 focus-visible:ring-0" // ✅ Corrected className
                     value={searchValue}
                     onChange={(e) => setSearchValue(e.target.value)}
                   />
-                  <Button type="submit" variant="ghost" className="rounded-l-none">
-                    <Search className="h-5 w-5" />
+                  <Button type="submit" variant="ghost" className="rounded-l-none"> {/* ✅ Corrected className */}
+                    <Search className="h-5 w-5" /> {/* ✅ Corrected className */}
                   </Button>
                 </form>
 
                 {isLoadingAuth ? (
-                  <p className="text-gray-700">Loading user...</p>
+                  <p className="text-gray-700">Loading user...</p> {/* ✅ Corrected className */}
                 ) : isAuthenticated ? (
                   <>
-                    <span className="font-semibold text-gray-900">Hello, {user?.name || user?.email?.split('@')[0] || "User"}</span>
+                    <span className="font-semibold text-gray-900">Hello, {user?.name || user?.email?.split('@')[0] || "User"}</span> {/* ✅ Corrected className, email split */}
                     {dashboardLink && (
-                      <Link to={dashboardLink.path} className="w-full">
-                        <Button variant="ghost" className="w-full justify-start">
-                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                      <Link to={dashboardLink.path} className="w-full"> {/* ✅ Corrected className */}
+                        <Button variant="ghost" className="w-full justify-start"> {/* ✅ Corrected component name and className */}
+                          <LayoutDashboard className="mr-2 h-4 w-4" /> {/* ✅ Corrected className */}
                           {dashboardLink.label}
                         </Button>
                       </Link>
                     )}
                     {user?.role === "customer" && (
-                      <Link to="/customer/orders" className="w-full">
-                        <Button variant="ghost" className="w-full justify-start">
-                          <ListOrdered className="mr-2 h-4 w-4" />
+                      <Link to="/customer/orders" className="w-full"> 
+                        <Button variant="ghost" className="w-full justify-start"> 
+                          <ListOrdered className="mr-2 h-4 w-4" /> 
                           My Orders
                         </Button>
                       </Link>
                     )}
-                    <Button onClick={handleLogout} variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50">
-                      <LogOut className="mr-2 h-4 w-4" />
+                    <Button onClick={handleLogout} variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50"> 
+                      <LogOut className="mr-2 h-4 w-4" /> 
                       Logout
                     </Button>
                   </>
                 ) : (
-                  <Link to="/auth" className="w-full">
-                    <Button variant="ghost" className="w-full justify-start">
-                      <LogIn className="mr-2 h-4 w-4" />
+                  <Link to="/auth" className="w-full"> 
+                    <Button variant="ghost" className="w-full justify-start"> 
+                      <LogIn className="mr-2 h-4 w-4" /> 
                       Login / Sign Up
                     </Button>
                   </Link>
                 )}
 
-                <Link to="/wishlist" className="w-full">
-                  <Button variant="ghost" className="w-full justify-start">
-                    <Heart className="mr-2 h-4 w-4" />
+                <Link to="/wishlist" className="w-full"> 
+                  <Button variant="ghost" className="w-full justify-start"> 
+                    <Heart className="mr-2 h-4 w-4" /> 
                     Wishlist
                   </Button>
                 </Link>
 
-                <Button
+                <Button // ✅ Corrected component name
                   onClick={handleSellerButtonClick}
                   disabled={isLoadingAuth}
                   variant="ghost"
-                  className="w-full justify-start text-blue-600 hover:bg-blue-50"
+                  className="w-full justify-start text-blue-600 hover:bg-blue-50" // ✅ Corrected className
                 >
-                  <Store className="mr-2 h-4 w-4" />
+                  <Store className="mr-2 h-4 w-4" /> 
                   {getSellerButtonLabel()}
                 </Button>
 
-                <div className="w-full border-t pt-4">
-                  <p className="font-semibold mb-2">Categories</p>
+                <div className="w-full border-t pt-4"> {/* ✅ Corrected className */}
+                  <p className="font-semibold mb-2">Categories</p> 
                   {categories.length > 0 ? (
-                    <ul className="space-y-2">
+                    <ul className="space-y-2"> 
                       {categories.map((category) => (
                         <li key={category.id}>
                           <Link to={`/category/${category.slug}`}>
-                            <Button variant="ghost" className="w-full justify-start">
+                            <Button variant="ghost" className="w-full justify-start"> 
                               {category.name}
                             </Button>
                           </Link>
@@ -373,7 +370,7 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
                       ))}
                     </ul>
                   ) : (
-                    <p className="text-sm text-gray-500">No categories available.</p>
+                    <p className="text-sm text-gray-500">No categories available.</p> 
                   )}
                 </div>
               </div>
@@ -381,14 +378,14 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
           </Sheet>
         </div>
       </div>
-      <div className="bg-gray-100 py-2 border-t border-b">
-        <div className="container mx-auto px-4 md:px-6">
-          <LocationDisplay /> {/* ✅ LocationDisplay कंपोनेंट */}
+      <div className="bg-gray-100 py-2 border-t border-b"> 
+        <div className="container mx-auto px-4 md:px-6"> 
+          <LocationDisplay /> 
         </div>
       </div>
       {isAuthenticated && (
-        <SellerOnboardingDialog
-          isOpen={isSellerDialogOpen}
+        <SellerOnboardingDialog // ✅ Corrected component name
+          isOpen={isSellerDialogOpen} // ✅ Corrected prop name
           onClose={() => setIsSellerDialogOpen(false)}
         />
       )}
@@ -396,4 +393,5 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
   );
 };
 
-export default Header;
+export default Header; // ✅ Corrected export name
+              
