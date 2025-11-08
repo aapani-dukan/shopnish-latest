@@ -181,12 +181,15 @@ const AddressBlock: React.FC<{
 
   const email = (details as Seller).email ?? null;
 
+// AddressBlock कॉम्पोनेंट के अंदर handleNavigate फ़ंक्शन
+
 const handleNavigate = () => {
     const addressString = `${addressLine}, ${city}, ${pincode}`;
     const query = encodeURIComponent(addressString);
     // ✅ Google Maps URL को सही फॉर्मेट में बदला गया
-    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank"); 
-  };
+    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+};
+
 
   const handleCall = () => {
     if (phone && phone !== "-") window.open(`tel:${phone}`);
