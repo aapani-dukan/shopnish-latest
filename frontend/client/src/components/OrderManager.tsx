@@ -204,7 +204,7 @@ export default function OrderManager({ // ✅ Consistent casing
             </div>
 
             {order.customer && order.deliveryAddress && ( // ✅ Consistent casing
-              <p className="text-sm">ग्राहक: <strong>{order.customer.firstName || order.deliveryAddress.fullName || "अज्ञात"}</strong></p> // ✅ Consistent casing
+              <p className="text-sm">ग्राहक: <strong>{order.customer.name || order.deliveryAddress.fullName || "अज्ञात"}</strong></p> // ✅ Consistent casing
             )}
 
             {order.deliveryBoy && ( // ✅ Consistent casing
