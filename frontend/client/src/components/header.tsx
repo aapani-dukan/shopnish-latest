@@ -304,7 +304,7 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => { //
                 </form>
 
                 {isLoadingAuth ? (
-                  <p className="text-gray-700">Loading user...</p> {/* ✅ Corrected className */}
+                  <p className="text-gray-700">Loading user...</p> 
                 ) : isAuthenticated ? (
                   <>
                     <span className="font-semibold text-gray-900">Hello, {user?.name || user?.email?.split('@')[0] || "User"}</span> {/* ✅ Corrected className, email split */}
