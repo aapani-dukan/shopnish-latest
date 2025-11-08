@@ -10,9 +10,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/useSocket";
 import { useEffect } from "react";
-import type { ButtonVariant } from '@/components/ui/button';
 
- import the Button variant types from Button.tsx
 // ✅ Extend OrderWithItems for consistency, assuming deliveryBoy is part of the order response
 //    If deliveryBoy is NOT part of OrderWithItems in schema, this is correct.
 //    If it IS, then OrderWithItems should be updated in schema directly.
