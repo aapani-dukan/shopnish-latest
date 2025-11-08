@@ -42,6 +42,8 @@ export type OrderItemWithProduct = {
     unit: string;
     brand?: string;
     stock: number;
+    paymentMethod: string; 
+  paymentStatus: string; 
   };
 };
 
@@ -56,6 +58,8 @@ export type OrderWithItems = {
     id: number;
     name: string;
     email: string;
+    paymentMethod: string; 
+  paymentStatus: string; 
   };
   items: OrderItemWithProduct[];
 };
