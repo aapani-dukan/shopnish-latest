@@ -118,7 +118,7 @@ export default function OrderManager({ // ✅ Consistent casing
       if (!validStatuses.includes(newStatus)) {
         throw new Error("Invalid order status provided."); // ✅ Using standard Error
       }
-      return await apiRequest("patch", `/api/sellers/orders/${orderId}/status`, { newStatus }); // ✅ Consistent casing
+      return await apiRequest("PATCH", `/api/sellers/orders/${orderId}/status`, { newStatus }); // ✅ Consistent casing
     },
     onSuccess: () => { // ✅ Consistent casing
       queryClient.invalidateQueries({ queryKey: ["/api/sellers/orders"] }); // ✅ Consistent casing
