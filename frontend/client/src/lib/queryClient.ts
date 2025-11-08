@@ -9,7 +9,7 @@ import { signOutUser } from "@/lib/firebase";
  * Axios स्वचालित रूप से हेडर में Firebase टोकन को इंटरसेप्टर के माध्यम से जोड़ता है।
  */
 export async function apiRequest(
-  method: "GET" | "POST" | "PUT" | "DELETE",
+  method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   path: string,
   data?: unknown | FormData
 ): Promise<any> {
