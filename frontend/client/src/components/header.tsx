@@ -381,8 +381,8 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
           </Sheet>
         </div>
       </div>
-      <div classname="bg-gray-100 py-2 border-t border-b">
-        <div classname="container mx-auto px-4 md:px-6">
+      <div className="bg-gray-100 py-2 border-t border-b">
+        <div className="container mx-auto px-4 md:px-6">
           <LocationDisplay /> {/* ✅ LocationDisplay कंपोनेंट */}
         </div>
       </div>
