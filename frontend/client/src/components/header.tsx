@@ -7,8 +7,8 @@ import { useQuery } from "@tanstack/react-query"; // ✅ Corrected casing
 import { apiRequest } from "../lib/queryClient"; // ✅ Corrected casing and path
 
 // UI कॉम्पोनेंट्स इम्पोर्ट करें (पाथ और केसिंग को आपके प्रोजेक्ट स्ट्रक्चर के अनुसार एडजस्ट करें)
-import { Button } from "../components/ui/Button"; // ✅ Corrected casing and path
-import { Input } from "../components/ui/Input"; // ✅ Corrected casing and path
+import { Button } from "../components/ui/button"; // ✅ Corrected casing and path
+import { Input } from "../components/ui/input"; // ✅ Corrected casing and path
 import {
   DropdownMenu,
   DropdownMenuContent,
