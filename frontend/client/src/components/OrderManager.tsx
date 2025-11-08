@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 // ✅ Assuming these types are correctly defined in shared/backend/schema
-import type { Seller, OrderWithItems, OrderStatusEnum } from "shared/backend/schema";
+import type { Seller, OrderWithItems, subOrderStatusEnum } from "shared/backend/schema";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useSocket } from "@/hooks/useSocket";
@@ -114,7 +114,7 @@ export default function OrderManager({ // ✅ Consistent casing
       // This assumes OrderStatusEnum is an object with a .enum property containing valid values
       // Example: OrderStatusEnum = { enum: ["pending", "accepted", ...] }
       // If schema exports an array directly, adjust this line.
-      const validStatuses = Object.values(OrderStatusEnum); 
+      const validStatuses = Object.values(subOrderStatusEnum); 
       if (!validStatuses.includes(newStatus)) {
         throw new Error("Invalid order status provided."); // ✅ Using standard Error
       }
