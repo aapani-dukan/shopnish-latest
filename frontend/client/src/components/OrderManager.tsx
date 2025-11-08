@@ -226,7 +226,7 @@ export default function OrderManager({ // ✅ Consistent casing
                 <div key={item.id} className="flex items-center space-x-4"> {/* ✅ Consistent casing */}
                   <img src={item.product?.image || "/placeholder.png"} alt={item.product?.name || item.product.name || "product"} className="w-12 h-12 object-cover rounded" /> {/* ✅ Consistent casing */}
                   <div>
-                    <p className="font-semibold">{item.product?.name || item.name || "अनाम उत्पाद"}</p> {/* ✅ Consistent casing */}
+                    <p className="font-semibold">{item.product?.name || item.product.name || "अनाम उत्पाद"}</p> {/* ✅ Consistent casing */}
                     <p className="text-sm text-gray-500">मात्रा: {item.quantity} × ₹{Number(item.unitPrice ?? item.product?.price ?? 0).toLocaleString()}</p> {/* ✅ Consistent casing and safe Number conversion */}
                   </div>
                 </div>
