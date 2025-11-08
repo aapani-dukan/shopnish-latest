@@ -2,13 +2,13 @@
 
 import React, { useState } from "react"; // ✅ Corrected casing
 import { Link, useNavigate } from "react-router-dom"; // ✅ Corrected casing
-import { useAuth } from "../../hooks/useAuth"; // ✅ Corrected casing and path
+import { useAuth } from "../hooks/useAuth"; // ✅ Corrected casing and path
 import { useQuery } from "@tanstack/react-query"; // ✅ Corrected casing
-import { apiRequest } from "../../lib/queryClient"; // ✅ Corrected casing and path
+import { apiRequest } from "../lib/queryClient"; // ✅ Corrected casing and path
 
 // UI कॉम्पोनेंट्स इम्पोर्ट करें (पाथ और केसिंग को आपके प्रोजेक्ट स्ट्रक्चर के अनुसार एडजस्ट करें)
-import { Button } from "../../components/ui/Button"; // ✅ Corrected casing and path
-import { Input } from "../../components/ui/Input"; // ✅ Corrected casing and path
+import { Button } from "../components/ui/Button"; // ✅ Corrected casing and path
+import { Input } from "../components/ui/Input"; // ✅ Corrected casing and path
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -16,7 +16,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuTrigger,
-} from "../../components/ui/Dropdown-menu"; // ✅ Corrected casing and path
+} from "../components/ui/Dropdown-menu"; // ✅ Corrected casing and path
 import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "../../components/ui/Sheet"; // ✅ Corrected casing and path
 import {
   ShoppingCart, // ✅ Corrected casing
@@ -31,7 +31,7 @@ import {
   ListOrdered, // ✅ Corrected casing
 } from "lucide-react";
 import SellerOnboardingDialog from "./seller/SellerOnboardingDialog"; // ✅ Corrected casing
-import { logout } from "../../lib/firebase"; // ✅ Corrected casing and path
+import { logout } from "../lib/firebase"; // ✅ Corrected casing and path
 import LocationDisplay from "./LocationDisplay"; // ✅ Corrected casing
 
 interface Category { // ✅ Corrected casing
