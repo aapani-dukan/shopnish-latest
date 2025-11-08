@@ -67,8 +67,6 @@ export type OrderWithDeliveryBoy = OrderWithItems & {
   // 1. डिलीवरी बॉय की जानकारी (deliveryBoyId के साथ joined)
   deliveryBoy?: {
     id: number;
-        paymentMethod: string; 
-  paymentStatus: string; 
     name: string | null;
     phone: string | null;
   } | null;
@@ -90,9 +88,15 @@ export type OrderWithDeliveryBoy = OrderWithItems & {
 
   // 3. डिलीवरी स्टेटस और सेलर ID (ऑर्डर टेबल से)
   deliveryStatus: typeof deliveryStatusEnum.enumValues[number];
-  sellerId: number; 
-};
+  sellerId: number;
 
+  // Payment related properties (optional)
+  paymentMethod?: string;
+  paymentStatus?: string;
+
+  // Total price, optional if sometimes missing
+  total?: number;
+};
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 
