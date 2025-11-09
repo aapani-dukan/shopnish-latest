@@ -86,19 +86,35 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
     staleTime: Infinity, // ✅ Corrected casing
   });
 
-  // product form
-  const productForm = useForm<z.infer<typeof productFormSchema>>({ // ✅ Corrected casing
-    resolver: zodResolver(productFormSchema), // ✅ Corrected casing
-    defaultValues: { // ✅ Corrected casing
-      name: "",
-      description: "",
-      price: undefined,
-      originalPrice: undefined, // ✅ Corrected to originalPrice
-      categoryId: undefined, // ✅ Changed from null to undefined for Zod number processing
-      stock: 0,
-      image: undefined, // ✅ Changed from images to image, and null to undefined
-    },
-  });
+  
+const productFormSchema = z.object({
+  name: z.string().optional(),
+  description: z.string().optional(),
+  price: z.number().optional(),
+  originalPrice: z.number().optional(),
+  categoryId: z.number().optional(),
+  stock: z.number().optional(),
+  image: z.string().optional(),
+  // ... आपके अन्य fields (जितने चाहिए add करें)
+});
+
+// स्कीमा से टाइप infer करें
+type FormInput = z.infer<typeof productFormSchema>;
+
+// Main hook/function में इसका पूरा इस्तेमाल:
+const productForm = useForm<FormInput>({
+  resolver: zodResolver(productFormSchema),
+  defaultValues: {
+    name: "",
+    description: "",
+    price: undefined,         // नंबर है तो undefined/null दे सकते हैं
+    originalPrice: undefined, // ऊपर को match करें
+    categoryId: undefined,    // नंबर है तो undefined
+    stock: 0,                 // अगर नंबर है और required नहीं, तो default 0 ठीक
+    image: undefined,         // string है, और optional, तो undefined
+    // ... अगर स्कीमा में और fields हैं तो यहाँ भी add करें
+  },
+});
 
   // category form
   const categoryForm = useForm<z.infer<typeof categoryFormSchema>>({ // ✅ Corrected casing
