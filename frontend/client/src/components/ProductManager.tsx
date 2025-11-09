@@ -148,7 +148,7 @@ if (data.image) {
 }
 
 // Append other fields, ensuring numbers are converted to string for FormData
-for (const key in data) {
+for (const key of Object.keys(data) as Array<keyof typeof data>) {
   // 'image' फ़ील्ड को छोड़ दें क्योंकि इसे अलग से हैंडल किया जाता है
   if (key === 'image') {
     continue;
