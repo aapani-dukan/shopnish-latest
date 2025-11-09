@@ -17,7 +17,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "../components/ui/dropdown-menu"; // ✅ Corrected casing and path
-import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "../../components/ui/sheet"; // ✅ Corrected casing and path
+import { Sheet, SheetContent, SheetTrigger, SheetHeader, SheetTitle } from "../components/ui/sheet"; // ✅ Corrected casing and path
 import {
   ShoppingCart, // ✅ Corrected casing
   Menu, // ✅ Corrected casing
