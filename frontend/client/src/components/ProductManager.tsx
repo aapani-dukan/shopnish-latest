@@ -19,7 +19,7 @@ import { Plus, Edit, Trash2, Info } from "lucide-react";
 import { z } from "zod";
 import { getAuth } from "firebase/auth"; // ✅ Corrected casing
 import { useState } from "react"; // ✅ Corrected casing
-import { ProductWithSeller} from "../interfaces/productWithSrller.tsx";
+import { ProductWithSeller} from "../interfaces/productWithSeller.tsx";
 // ✅ Updated ProductFormSchema for frontend use
 const productFormSchema = insertProductSchema.extend({
   // For update operations, image might not be required
@@ -74,7 +74,7 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
   // fetch seller's products
   const { data: products, isLoading: productsLoading, error: productsError } = useQuery<ProductWithSeller[]>({ // ✅ Corrected casing
     queryKey: ["/api/sellers/products"], // ✅ Corrected casing
-    queryFn: () => apiRequest("get", "/api/sellers/products"), // ✅ Corrected casing
+    queryFn: () => apiRequest("GET", "/api/sellers/products"), // ✅ Corrected casing
     enabled: !!seller?.id,
     staleTime: 5 * 60 * 1000, // ✅ Corrected casing
   });
@@ -82,7 +82,7 @@ export default function ProductManager({ seller }: ProductManagerProps) { // ✅
   // fetch categories for product form
   const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({ // ✅ Corrected casing
     queryKey: ["/api/categories"], // ✅ Corrected casing
-    queryFn: () => apiRequest("get", "/api/categories"), // ✅ Corrected casing
+    queryFn: () => apiRequest("GET", "/api/categories"), // ✅ Corrected casing
     staleTime: Infinity, // ✅ Corrected casing
   });
 
