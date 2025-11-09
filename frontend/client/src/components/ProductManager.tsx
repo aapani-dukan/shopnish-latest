@@ -321,251 +321,256 @@ for (const key of Object.keys(data) as Array<keyof typeof data>) {
     });
   };
 
-  return (
-    <Card> {/* ✅ Corrected component name */}
-      <CardHeader> {/* ✅ Corrected component name */}
-        <div className="flex justify-between items-center"> {/* ✅ Corrected className */}
-          <CardTitle>Your Products</CardTitle> {/* ✅ Corrected component name */}
-          <div className="flex gap-2"> {/* ✅ Corrected className */}
-            {seller.approvalStatus === "approved" ? ( // ✅ Corrected casing
+
+return (
+    <Card>
+      <CardHeader>
+        <div className="flex justify-between items-center">
+          <CardTitle>Your Products</CardTitle>
+          <div className="flex gap-2">
+            {seller.approvalStatus === "approved" ? (
               <>
-                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}> {/* ✅ Corrected casing */}
-                  <DialogTrigger asChild> {/* ✅ Corrected casing */}
-                    <Button variant="outline" onClick={() => { // ✅ Corrected component name and casing
-                      categoryForm.reset(); // ✅ Corrected casing
+                <Dialog open={isCategoryDialogOpen} onOpenChange={setIsCategoryDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button variant="outline" onClick={() => {
+                      categoryForm.reset();
                     }}>
-                      <Plus className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
-                      Create Category
+                      <span>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Create Category
+                      </span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent> {/* ✅ Corrected casing */}
-                    <DialogHeader> {/* ✅ Corrected casing */}
-                      <DialogTitle>Create New Category</DialogTitle> {/* ✅ Corrected casing */}
-                      <DialogDescription> {/* ✅ Corrected casing */}
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Create New Category</DialogTitle>
+                      <DialogDescription>
                         Add a new product category to organize your items.
                       </DialogDescription>
                     </DialogHeader>
-                    <Form {...categoryForm}> {/* ✅ Corrected component name */}
-                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4"> {/* ✅ Corrected casing */}
-                        <FormField // ✅ Corrected component name
+                    <Form {...categoryForm}>
+                      <form onSubmit={categoryForm.handleSubmit(onCategorySubmit)} className="space-y-4">
+                        <FormField
                           control={categoryForm.control}
                           name="name"
                           render={({ field }) => (
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Category Name</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Input {...field} /> {/* ✅ Corrected component name */}
+                            <FormItem>
+                              <FormLabel>Category Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <FormField // ✅ Corrected component name
+                        <FormField
                           control={categoryForm.control}
                           name="slug"
                           render={({ field }) => (
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Category Slug</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Input {...field} placeholder="e.g., electronics" /> {/* ✅ Corrected component name */}
+                            <FormItem>
+                              <FormLabel>Category Slug</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="e.g., electronics" />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <FormField // ✅ Corrected component name
+                        <FormField
                           control={categoryForm.control}
                           name="description"
                           render={({ field }) => (
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Description (Optional)</FormLabel> {/* ✅ Consistent casing */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Textarea {...field} /> {/* ✅ Corrected component name */}
+                            <FormItem>
+                              <FormLabel>Description (Optional)</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <FormField // ✅ Corrected component name
+                        <FormField
                           control={categoryForm.control}
                           name="image"
-                          render={({ field: { value, onChange, ...fieldProps } }) => ( // ✅ Corrected casing
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Category Image</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Input // ✅ Corrected component name
+                          render={({ field: { value, onChange, ...fieldProps } }) => (
+                            <FormItem>
+                              <FormLabel>Category Image</FormLabel>
+                              <FormControl>
+                                <Input
                                   {...fieldProps}
                                   type="file"
                                   accept="image/*"
-                                  onChange={(event) => onChange(event.target.files?.[0])} // ✅ Corrected casing
+                                  onChange={(event) => onChange(event.target.files?.[0])}
                                 />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <div className="flex justify-end space-x-2"> {/* ✅ Corrected className */}
-                          <Button // ✅ Corrected component name
+                        <div className="flex justify-end space-x-2">
+                          <Button
                             type="button"
                             variant="outline"
-                            onClick={() => setIsCategoryDialogOpen(false)} // ✅ Corrected casing
+                            onClick={() => setIsCategoryDialogOpen(false)}
                           >
                             Cancel
                           </Button>
-                          <Button type="submit"> {/* ✅ Corrected component name */}
-                            Create Category
+                          <Button type="submit" disabled={categoryMutation.isPending}>
+                            {categoryMutation.isPending ? "Creating..." : "Create Category"}
                           </Button>
                         </div>
                       </form>
                     </Form>
                   </DialogContent>
                 </Dialog>
-                <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}> {/* ✅ Corrected casing */}
-                  <DialogTrigger asChild> {/* ✅ Corrected casing */}
-                    <Button onClick={() => { // ✅ Corrected component name and casing
-                      setEditingProduct(null); // ✅ Corrected casing
-                      productForm.reset(); // ✅ Corrected casing
+                <Dialog open={isProductDialogOpen} onOpenChange={setIsProductDialogOpen}>
+                  <DialogTrigger asChild>
+                    <Button onClick={() => {
+                      setEditingProduct(null);
+                      productForm.reset();
                     }}>
-                      <Plus className="h-4 w-4 mr-2" /> {/* ✅ Corrected className */}
-                      Add Product
+                      <span>
+                        <Plus className="h-4 w-4 mr-2" />
+                        Add Product
+                      </span>
                     </Button>
                   </DialogTrigger>
-                  <DialogContent className="max-w-2xl"> {/* ✅ Corrected className */}
-                    <DialogHeader> {/* ✅ Corrected casing */}
-                      <DialogTitle> {/* ✅ Corrected casing */}
-                        {editingProduct ? "Edit Product" : "Add New Product"} {/* ✅ Consistent casing */}
+                  <DialogContent className="max-w-2xl">
+                    <DialogHeader>
+                      <DialogTitle>
+                        {editingProduct ? "Edit Product" : "Add New Product"}
                       </DialogTitle>
-                      <DialogDescription> {/* ✅ Corrected casing */}
+                      <DialogDescription>
                         {editingProduct ? "Update details for your product." : "Add a new product to your inventory."}
                       </DialogDescription>
                     </DialogHeader>
-                    <Form {...productForm}> {/* ✅ Corrected component name */}
-                      <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4"> {/* ✅ Corrected casing */}
-                        <FormField // ✅ Corrected component name
+                    <Form {...productForm}>
+                      <form onSubmit={productForm.handleSubmit(onProductSubmit)} className="space-y-4">
+                        <FormField
                           control={productForm.control}
                           name="name"
                           render={({ field }) => (
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Product Name</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Input {...field} /> {/* ✅ Corrected component name */}
+                            <FormItem>
+                              <FormLabel>Product Name</FormLabel>
+                              <FormControl>
+                                <Input {...field} />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <FormField // ✅ Corrected component name
+                        <FormField
                           control={productForm.control}
                           name="description"
                           render={({ field }) => (
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Description</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Textarea {...field} /> {/* ✅ Corrected component name */}
+                            <FormItem>
+                              <FormLabel>Description</FormLabel>
+                              <FormControl>
+                                <Textarea {...field} />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* ✅ Corrected className */}
-                          <FormField // ✅ Corrected component name
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
                             control={productForm.control}
                             name="price"
                             render={({ field }) => (
-                              <FormItem> {/* ✅ Corrected component name */}
-                                <FormLabel>Price (₹)</FormLabel> {/* ✅ Consistent casing */}
-                                <FormControl> {/* ✅ Corrected component name */}
-                                  <Input {...field} type="number" step="0.01" /> {/* ✅ Corrected component name */}
+                              <FormItem>
+                                <FormLabel>Price (₹)</FormLabel>
+                                <FormControl>
+                                  <Input {...field} type="number" step="0.01" />
                                 </FormControl>
-                                <FormMessage /> {/* ✅ Corrected component name */}
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
-                          <FormField // ✅ Corrected component name
+                          <FormField
                             control={productForm.control}
-                            name="originalPrice" // ✅ Corrected to originalPrice
+                            name="originalPrice"
                             render={({ field }) => (
-                              <FormItem> {/* ✅ Corrected component name */}
-                                <FormLabel>Original Price (₹) (Optional)</FormLabel> {/* ✅ Consistent casing */}
-                                <FormControl> {/* ✅ Corrected component name */}
-                                  <Input {...field} type="number" step="0.01" /> {/* ✅ Corrected component name */}
+                              <FormItem>
+                                <FormLabel>Original Price (₹) (Optional)</FormLabel>
+                                <FormControl>
+                                  <Input {...field} type="number" step="0.01" />
                                 </FormControl>
-                                <FormMessage /> {/* ✅ Corrected component name */}
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4"> {/* ✅ Corrected className */}
-                          <FormField // ✅ Corrected component name
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                          <FormField
                             control={productForm.control}
-                            name="categoryId" // ✅ Corrected to categoryId
+                            name="categoryId"
                             render={({ field }) => (
-                              <FormItem> {/* ✅ Corrected component name */}
-                                <FormLabel>Category</FormLabel> {/* ✅ Corrected component name */}
-                                <Select onValueChange={field.onChange} value={field.value?.toString()}> {/* ✅ Corrected casing */}
-                                  <FormControl> {/* ✅ Corrected component name */}
-                                    <SelectTrigger> {/* ✅ Corrected component name */}
-                                      <SelectValue placeholder="Select a category" /> {/* ✅ Corrected component name */}
+                              <FormItem>
+                                <FormLabel>Category</FormLabel>
+                                <Select onValueChange={field.onChange} value={field.value?.toString()}>
+                                  <FormControl>
+                                    <SelectTrigger>
+                                      <SelectValue placeholder="Select a category" />
                                     </SelectTrigger>
                                   </FormControl>
-                                  <SelectContent> {/* ✅ Corrected component name */}
+                                  <SelectContent>
                                     {categories?.map((category) => (
-                                      <SelectItem key={category.id} value={category.id.toString()}> {/* ✅ Corrected casing */}
+                                      <SelectItem key={category.id} value={category.id.toString()}>
                                         {category.name}
                                       </SelectItem>
                                     ))}
                                   </SelectContent>
                                 </Select>
-                                <FormMessage /> {/* ✅ Corrected component name */}
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
-                          <FormField // ✅ Corrected component name
+                          <FormField
                             control={productForm.control}
                             name="stock"
                             render={({ field }) => (
-                              <FormItem> {/* ✅ Corrected component name */}
-                                <FormLabel>Stock</FormLabel> {/* ✅ Corrected component name */}
-                                <FormControl> {/* ✅ Corrected component name */}
-                                  <Input {...field} type="number" /> {/* ✅ Corrected component name */}
+                              <FormItem>
+                                <FormLabel>Stock</FormLabel>
+                                <FormControl>
+                                  <Input {...field} type="number" />
                                 </FormControl>
-                                <FormMessage /> {/* ✅ Corrected component name */}
+                                <FormMessage />
                               </FormItem>
                             )}
                           />
                         </div>
-                        <FormField // ✅ Corrected component name
+                        <FormField
                           control={productForm.control}
                           name="image"
-                          render={({ field: { value, onChange, ...fieldProps } }) => ( // ✅ Corrected casing
-                            <FormItem> {/* ✅ Corrected component name */}
-                              <FormLabel>Product Image</FormLabel> {/* ✅ Corrected component name */}
-                              <FormControl> {/* ✅ Corrected component name */}
-                                <Input // ✅ Corrected component name
+                          render={({ field: { value, onChange, ...fieldProps } }) => (
+                            <FormItem>
+                              <FormLabel>Product Image</FormLabel>
+                              <FormControl>
+                                <Input
                                   {...fieldProps}
                                   type="file"
                                   accept="image/*"
-                                  onChange={(event) => onChange(event.target.files?.[0])} // ✅ Corrected casing
+                                  onChange={(event) => onChange(event.target.files?.[0])}
                                 />
                               </FormControl>
-                              <FormMessage /> {/* ✅ Corrected component name */}
+                              <FormMessage />
                             </FormItem>
                           )}
                         />
-                        <div className="flex justify-end space-x-2"> {/* ✅ Corrected className */}
-                          <Button // ✅ Corrected component name
+                        <div className="flex justify-end space-x-2">
+                          <Button
                             type="button"
                             variant="outline"
-                            onClick={() => { // ✅ Corrected casing
-                              setIsProductDialogOpen(false); // ✅ Corrected casing
-                              setEditingProduct(null); // ✅ Corrected casing
-                              productForm.reset(); // ✅ Corrected casing
+                            onClick={() => {
+                              setIsProductDialogOpen(false);
+                              setEditingProduct(null);
+                              productForm.reset();
                             }}
                           >
                             Cancel
                           </Button>
-                          <Button type="submit" disabled={productMutation.isPending}> 
-                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")} 
+                          <Button type="submit" disabled={productMutation.isPending}>
+                            {productMutation.isPending ? (editingProduct ? "Updating..." : "Adding...") : (editingProduct ? "Update Product" : "Add Product")}
                           </Button>
                         </div>
                       </form>
@@ -574,49 +579,49 @@ for (const key of Object.keys(data) as Array<keyof typeof data>) {
                 </Dialog>
               </>
             ) : (
-              <Badge variant="outline" className="text-orange-500"> 
-                <Info className="h-4 w-4 mr-2" /> 
+              <Badge variant="outline" className="text-orange-500">
+                <Info className="h-4 w-4 mr-2" />
                 Verify account to add products
               </Badge>
             )}
           </div>
         </div>
       </CardHeader>
-      <CardContent> {/* ✅ Corrected component name */}
-        {productsLoading ? ( // ✅ Corrected casing
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> 
-            {[...Array(3)].map((_, i) => ( // ✅ Corrected casing
-              <Skeleton key={i} className="h-48 w-full rounded-lg" /> // ✅ Corrected component name and className
+      <CardContent>
+        {productsLoading ? (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[...Array(3)].map((_, i) => (
+              <Skeleton key={i} className="h-48 w-full rounded-lg" />
             ))}
           </div>
-        ) : productsError ? ( // ✅ Corrected casing
-          <p className="text-red-500">Error loading products: {productsError.message}</p> // ✅ Corrected className and casing
+        ) : productsError ? (
+          <p className="text-red-500">Error loading products: {productsError.message}</p>
         ) : products && products.length === 0 ? (
-          <p className="text-muted-foreground">You haven't added any products yet.</p> 
+          <p className="text-muted-foreground">You haven't added any products yet.</p>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"> 
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {products?.map((product) => (
-              <Card key={product.id} className="relative group overflow-hidden"> 
-                {product.image && ( // Assuming `image` is a single string URL for display
+              <Card key={product.id} className="relative group overflow-hidden">
+                {product.image && (
                   <img
                     src={product.image}
                     alt={product.name}
-                    className="w-full h-40 object-cover rounded-t-lg" // ✅ Corrected className
+                    className="w-full h-40 object-cover rounded-t-lg"
                   />
                 )}
-                <CardContent className="p-4"> 
-                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4> 
-                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p> 
-                  <div className="flex justify-between items-center mt-2"> 
-                    <p className="text-lg font-bold text-primary">₹{product.price}</p> 
-                    <Badge variant="secondary">{product.stock} in stock</Badge> 
+                <CardContent className="p-4">
+                  <h4 className="font-semibold text-lg line-clamp-1">{product.name}</h4>
+                  <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+                  <div className="flex justify-between items-center mt-2">
+                    <p className="text-lg font-bold text-primary">₹{product.price}</p>
+                    <Badge variant="secondary">{product.stock} in stock</Badge>
                   </div>
-                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity"> 
-                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}> 
-                      <Edit className="h-4 w-4" /> 
+                  <div className="absolute top-2 right-2 flex space-x-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button variant="outline" size="icon" onClick={() => handleEditProduct(product)}>
+                      <Edit className="h-4 w-4" />
                     </Button>
-                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}> 
-                      <Trash2 className="h-4 w-4" /> 
+                    <Button variant="destructive" size="icon" onClick={() => handleDeleteProduct(product.id)}>
+                      <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 </CardContent>
