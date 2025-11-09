@@ -95,7 +95,16 @@ export const insertCategorySchema = createInsertSchema(categories, {
 }).omit({
   id: true,
 });
-
+// ✅ इस स्कीमा को यहां जोड़ें
+export const categoryFormInputSchema = z.object({
+    name: z.string().min(1, "Category name is required from body."),
+    slug: z.string().min(1, "Slug is required from body."),
+    description: z.string().optional().nullable(),
+    isActive: z.union([z.boolean(), z.literal('true'), z.literal('false')]).optional().transform(val => {
+        if (typeof val === 'string') return val === 'true';
+        return val;
+    }),
+});
 export const insertSubOrderSchema = createInsertSchema(subOrders, {
   masterOrderId: z.number().int(),
   subOrderNumber: z.string().min(1, "Sub order number is required"),
