@@ -140,24 +140,43 @@ const productForm = useForm<FormInput>({
       const formData = new FormData(); // ✅ Corrected casing
 
       // Append image if present
-      if (data.image) {
-        formData.append('image', data.image);
-      }
+      // Append image if present
+if (data.image) {
+  // सुनिश्चित करें कि data.image एक File या Blob ऑब्जेक्ट है
+  // यदि data.image एक string (URL) है, तो आपको इसे एक File ऑब्जेक्ट में बदलने का तरीका खोजना होगा
+  // (जो आमतौर पर सीधे FormData के लिए उपयुक्त नहीं होता है, जब तक कि वह एक file input से न आए)
+  formData.append('image', data.image as File); // ✅ type assertion: data.image को File के रूप में मानें
+}
 
-      // Append other fields, ensuring numbers are converted to string for FormData
-      for (const key in data) {
-        // Skip image field as it's handled separately, and don't append undefined values
-        if (data[key] !== null && data[key] !== undefined && key !== 'image') {
-          // Special handling for number fields that Zod has preprocessed to number
-          if (typeof data[key] === 'number') {
-            formData.append(key, String(data[key])); // Convert numbers to strings for FormData
-          } else if (typeof data[key] === 'boolean') {
-            formData.append(key, String(data[key])); // Convert booleans to strings
-          } else {
-            formData.append(key, data[key]);
-          }
-        }
-      }
+// Append other fields, ensuring numbers are converted to string for FormData
+for (const key in data) {
+  // 'image' फील्ड को छोड़ दें क्योंकि इसे अलग से हैंडल किया जाता है
+  if (key === 'image') {
+    continue;
+  }
+
+  const value = data[key];
+
+  // undefined या null मानों को छोड़ दें
+  if (value === null || value === undefined) {
+    continue;
+  }
+
+  // FormData.append() 'string', 'Blob', या 'File' मानों की अपेक्षा करता है।
+  // अन्य सभी को एक स्ट्रिंग में परिवर्तित किया जाना चाहिए।
+  if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
+    // यदि यह एक ऑब्जेक्ट है (लेकिन File/Blob नहीं), तो इसे JSON स्ट्रिंग में कनवर्ट करें।
+    // यह उन मामलों के लिए है जहाँ आपके स्कीमा में नेस्टेड ऑब्जेक्ट हो सकते हैं।
+    // यदि आपके Zod स्कीमा में कोई नेस्टेड ऑब्जेक्ट नहीं है जिसे आप ऐसे भेजना चाहते हैं,
+    // तो इस 'else if' ब्लॉक को हटा दें या अपनी विशिष्ट जरूरतों के अनुसार समायोजित करें।
+    formData.append(key, JSON.stringify(value));
+  } else {
+    // संख्याएँ, बूलियन, और स्ट्रिंग्स को स्ट्रिंग में कनवर्ट करें
+    // File/Blob ऑब्जेक्ट्स सीधे काम करेंगे
+    formData.append(key, String(value)); // ✅ 'String()' का उपयोग करके स्पष्ट रूपांतरण
+  }
+}
+      
 
       let response: Response;
       if (editingProduct) {
