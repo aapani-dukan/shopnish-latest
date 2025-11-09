@@ -7,6 +7,8 @@ export interface ProductWithSeller extends Product {
   // Product इंटरफ़ेस में गुम हुई प्रॉपर्टीज़ को यहाँ जोड़ें (या Product को ही ठीक करें)
   description?: string; // इसे वैकल्पिक मानें
   price: number; // इसे आवश्यक मानें
+  id: number;
+  name: string;
   originalPrice?: number; // इसे वैकल्पिक मानें
   categoryId: number; // इसे आवश्यक मानें
   stock: number; // इसे आवश्यक मानें
