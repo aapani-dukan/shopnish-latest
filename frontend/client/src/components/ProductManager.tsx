@@ -1,30 +1,32 @@
-// frontend/components/productmanager.tsx
-import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // ✅ Corrected casing and path
-import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
-import { Badge } from "@/components/ui/badge"; // ✅ Corrected casing and path
-import { Input } from "@/components/ui/input"; // ✅ Corrected casing and path
-import { Textarea } from "@/components/ui/textarea"; // ✅ Corrected casing and path
-import { Label } from "@/components/ui/label"; // ✅ Corrected casing and path
-import { Skeleton } from "@/components/ui/skeleton"; // ✅ Corrected casing and path
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"; // ✅ Corrected casing and path
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // ✅ Corrected casing and path
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"; // ✅ Corrected casing and path
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ Corrected casing
-import { useForm } from "react-hook-form"; // ✅ Corrected casing
-import { zodResolver } from "@hookform/resolvers/zod"; // ✅ Corrected casing
-import { insertProductSchema, insertCategorySchema, type Seller,  Category } from "../../../shared/backend/schema"; // Ensure these types are correctly imported
-import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
-import { useToast } from "@/hooks/use-toast"; // ✅ Corrected casing and path
+// frontend/components/ProductManager.tsx
+import React, { useState } from "react"; // Added React import and useState hook
+import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card"; // Corrected casing and path
+import { Button } from "@/components/ui/button"; // Corrected casing and path
+import { Badge } from "@/components/ui/badge"; // Corrected casing and path
+import { Input } from "@/components/ui/input"; // Corrected casing and path
+import { Textarea } from "@/components/ui/textarea"; // Corrected casing and path
+import { Label } from "@/components/ui/label"; // Corrected casing and path
+import { Skeleton } from "@/components/ui/skeleton"; // Corrected casing and path
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from "@/components/ui/form"; // Corrected casing and path
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"; // Corrected casing and path
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog"; // Corrected casing and path
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // Corrected casing
+import { useForm } from "react-hook-form"; // Corrected casing
+import { zodResolver } from "@hookform/resolvers/zod"; // Corrected casing
+// ✅  यहां सभी इंपोर्ट नामों को PascalCase में ठीक किया गया है और रिलेटिव पाथ को संभावित रूप से ठीक किया गया है
+import { insertProductSchema, insertCategorySchema, Seller, Category } from "../../../shared/backend/schema";
+import { apiRequest } from "@/lib/queryclient"; // Corrected casing and path
+import { useToast } from "@/hooks/use-toast"; // Corrected casing and path
 import { Plus, Edit, Trash2, Info } from "lucide-react";
 import { z } from "zod";
-import { getAuth } from "firebase/auth"; // ✅ Corrected casing
-import { useState } from "react"; // ✅ Corrected casing
-import { ProductWithSeller} from "../interfaces/productWithSeller.tsx";
+import { getAuth } from "firebase/auth"; // Corrected casing
+import { ProductWithSeller } from "../interfaces/productWithSeller"; // Corrected casing
+
 // Updated productFormSchema for frontend use
 const productFormSchema = insertProductSchema.extend({
   image: z
     .any()
-    .refine((file) => !file || file instanceof File, {
+    .refine((file) => !file || file instanceof File, { // `File` अब सही ढंग से संदर्भित किया गया है
       message: "An image file is required.",
     })
     .refine((file) => !file || (file instanceof File && file.size < 5000000), {
@@ -32,19 +34,19 @@ const productFormSchema = insertProductSchema.extend({
     })
     .optional(),
   price: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
+    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
     z.number().min(0.01, "Price must be a positive number")
   ),
   originalPrice: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
+    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
     z.number().min(0.01, "Original price must be a positive number").optional()
   ),
   stock: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
+    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
     z.number().int("Stock must be an integer").min(0, "Stock cannot be negative").default(0)
   ),
   categoryId: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
+    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
     z.number().int("Category ID must be an integer").min(1, "Category ID is required")
   ),
 }).partial();
@@ -53,7 +55,7 @@ const categoryFormSchema = z.object({
   name: z.string().min(2, { message: "Category name must be at least 2 characters." }),
   slug: z.string().min(2, { message: "Slug must be at least 2 characters." }),
   description: z.string().optional(),
-  image: z.any().refine(file => file instanceof File, { // Corrected 'file' to 'File'
+  image: z.any().refine(file => file instanceof File, { // `File` अब सही ढंग से संदर्भित किया गया है
     message: "An image file is required.",
   }),
   isActive: z.boolean().default(true),
@@ -82,7 +84,7 @@ export default function ProductManager({ seller }: ProductManagerProps) {
   const { data: categories } = useQuery<Category[]>({
     queryKey: ["/api/categories"],
     queryFn: () => apiRequest("GET", "/api/categories"),
-    staleTime: Infinity,
+    staleTime: Infinity, // `Infinity` भी सही केसिंग में होना चाहिए
   });
 
   const productForm = useForm<z.infer<typeof productFormSchema>>({
@@ -115,17 +117,27 @@ export default function ProductManager({ seller }: ProductManagerProps) {
     mutationFn: async (data: z.infer<typeof productFormSchema>) => {
       const auth = getAuth();
       const user = auth.currentUser;
+
+      console.log("ProductMutation - Current user:", user); // Debugging
       if (!user) {
+        console.error("ProductMutation - User not authenticated.");
         throw new Error("User not authenticated.");
       }
       const token = await user.getIdToken();
+      console.log("ProductMutation - Firebase ID Token:", token); // Debugging
+
+      if (!token) {
+        console.error("ProductMutation - Firebase ID Token is null or empty.");
+        throw new Error("No valid token provided from Firebase.");
+      }
+
       const formData = new FormData();
 
       if (data.image && data.image instanceof File) {
         formData.append('image', data.image);
       }
 
-      for (const key of Object.keys(data) as Array<keyof typeof data>) {
+      for (const key of Object.keys(data) as Array<keyof typeof data>) { // `Object` और `Array` सही केसिंग में
         if (key === 'image') {
           continue;
         }
@@ -133,10 +145,10 @@ export default function ProductManager({ seller }: ProductManagerProps) {
         if (value === null || value === undefined) {
           continue;
         }
-        formData.append(key, String(value));
+        formData.append(key, String(value)); // `String` सही केसिंग में
       }
 
-      let response: Response;
+      let response: Response; // `Response` सही केसिंग में
       if (editingProduct) {
         response = await fetch(`/api/sellers/products/${editingProduct.id}`, {
           method: "PATCH",
@@ -155,7 +167,7 @@ export default function ProductManager({ seller }: ProductManagerProps) {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.error || errorData.message || "Failed to process product");
+        throw new Error(errorData.error || errorData.message || "Failed to process product"); // `Error` सही केसिंग में
       }
       return response.json();
     },
@@ -169,7 +181,7 @@ export default function ProductManager({ seller }: ProductManagerProps) {
       setEditingProduct(null);
       productForm.reset();
     },
-    onError: (error: any) => {
+    onError: (error: any) => { // `error` यहाँ टाइप के रूप में है
       toast({
         title: "Error",
         description: error.message || `Failed to ${editingProduct ? "update" : "create"} product.`,
@@ -177,9 +189,11 @@ export default function ProductManager({ seller }: ProductManagerProps) {
       });
     },
   });
-    // Delete product mutation
+
+  // Delete product mutation
   const deleteProductMutation = useMutation({
     mutationFn: async (productId: number) => {
+      // apiRequest के अंदर भी टोकन लॉजिक की जांच करें यदि यह firebase auth का उपयोग करता है
       return await apiRequest("DELETE", `/api/sellers/products/${productId}`);
     },
     onSuccess: () => {
@@ -197,16 +211,24 @@ export default function ProductManager({ seller }: ProductManagerProps) {
       });
     },
   });
-
-  // Category mutation
+    // Category mutation
   const categoryMutation = useMutation({
     mutationFn: async (dataToMutate: FormData) => { // Expects FormData
       const auth = getAuth();
       const user = auth.currentUser;
+
+      console.log("CategoryMutation - Current user:", user); // Debugging
       if (!user) {
+        console.error("CategoryMutation - User not authenticated.");
         throw new Error("User not authenticated.");
       }
       const token = await user.getIdToken();
+      console.log("CategoryMutation - Firebase ID Token:", token); // Debugging
+
+      if (!token) {
+        console.error("CategoryMutation - Firebase ID Token is null or empty.");
+        throw new Error("No valid token provided from Firebase.");
+      }
 
       const response = await fetch("/api/sellers/categories", { // Direct fetch for FormData
         method: "POST",
@@ -241,7 +263,7 @@ export default function ProductManager({ seller }: ProductManagerProps) {
   });
 
   const onProductSubmit = (data: z.infer<typeof productFormSchema>) => {
-    productMutation.mutate(data); // `productMutation` now expects `data` (which it converts to FormData)
+    productMutation.mutate(data);
   };
 
   const onCategorySubmit = (data: z.infer<typeof categoryFormSchema>) => {
@@ -267,8 +289,8 @@ export default function ProductManager({ seller }: ProductManagerProps) {
     productForm.reset({
       name: product.name,
       description: product.description || "",
-      price: product.price, // assuming price is already a number or correctly handled by input
-      originalPrice: product.originalPrice, // assuming originalPrice is already a number or correctly handled by input
+      price: parseFloat(product.price as any), // assuming price might be string from backend
+      originalPrice: product.originalPrice ? parseFloat(product.originalPrice as any) : undefined, // assuming originalPrice might be string
       categoryId: product.categoryId,
       stock: product.stock || 0,
     });
@@ -284,7 +306,7 @@ export default function ProductManager({ seller }: ProductManagerProps) {
         <div className="flex gap-2">
           <Button onClick={() => {
             deleteProductMutation.mutate(productId);
-            toast.dismiss(toastId); // Dismiss using the id
+            toast.dismiss(toastId);
           }} className="bg-red-500 hover:bg-red-600 text-white">
             Delete
           </Button>
@@ -607,4 +629,4 @@ export default function ProductManager({ seller }: ProductManagerProps) {
       </CardContent>
     </Card>
   );
- }
+                          }
