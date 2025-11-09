@@ -20,23 +20,22 @@ import { z } from "zod";
 import { getAuth } from "firebase/auth"; // ✅ Corrected casing
 import { useState } from "react"; // ✅ Corrected casing
 import { ProductWithSeller} from "../interfaces/productWithSeller.tsx";
-// ✅ Updated ProductFormSchema for frontend use
-const productFormSchema = insertProductSchema.extend({
-  // For update operations, image might not be required
+// Updated productFormSchema for frontend use
+const productFormSchema = InsertProductSchema.extend({
   image: z
     .any()
-    .refine((file) => !file || file instanceof File, { // ✅ Make image optional for updates
+    .refine((file) => !file || file instanceof File, {
       message: "An image file is required.",
     })
-    .refine((file) => !file || file.size < 5000000, {
+    .refine((file) => !file || (file instanceof File && file.size < 5000000), {
       message: "Image size must be less than 5MB.",
     })
-    .optional(), // Make image optional
+    .optional(),
   price: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Price must be a positive number")
   ),
-  originalPrice: z.preprocess( // ✅ Corrected to originalPrice
+  originalPrice: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Original price must be a positive number").optional()
   ),
@@ -44,285 +43,261 @@ const productFormSchema = insertProductSchema.extend({
     (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Stock must be an integer").min(0, "Stock cannot be negative").default(0)
   ),
-  categoryId: z.preprocess( // ✅ Corrected to categoryId
+  categoryId: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Category ID must be an integer").min(1, "Category ID is required")
   ),
-}).partial(); // ✅ Make all fields partial for PATCH requests, as only changed fields are sent
+}).partial();
 
 const categoryFormSchema = z.object({
   name: z.string().min(2, { message: "Category name must be at least 2 characters." }),
   slug: z.string().min(2, { message: "Slug must be at least 2 characters." }),
   description: z.string().optional(),
-  image: z.any().refine(file => file instanceof File, { // ✅ Corrected to File
+  image: z.any().refine(file => file instanceof File, { // Corrected 'file' to 'File'
     message: "An image file is required.",
   }),
-  isActive: z.boolean().default(true), // ✅ Corrected to isActive
+  isActive: z.boolean().default(true),
 });
 
-interface ProductManagerProps { // ✅ Corrected casing
+interface ProductManagerProps {
   seller: Seller;
 }
 
-export default function ProductManager({ seller }: ProductManagerProps) { // ✅ Corrected casing
-  const { toast } = useToast(); // ✅ Corrected casing
-  const queryClient = useQueryClient(); // ✅ Corrected casing
-  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false); // ✅ Corrected casing
-  const [editingProduct, setEditingProduct] = useState<ProductWithSeller | null>(null); // ✅ Corrected casing
-  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false); // ✅ Corrected casing
+export default function ProductManager({ seller }: ProductManagerProps) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [isProductDialogOpen, setIsProductDialogOpen] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<ProductWithSeller | null>(null);
+  const [isCategoryDialogOpen, setIsCategoryDialogOpen] = useState(false);
 
-  // fetch seller's products
-  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<ProductWithSeller[]>({ // ✅ Corrected casing
-    queryKey: ["/api/sellers/products"], // ✅ Corrected casing
-    queryFn: () => apiRequest("GET", "/api/sellers/products"), // ✅ Corrected casing
+  // Fetch seller's products
+  const { data: products, isLoading: productsLoading, error: productsError } = useQuery<ProductWithSeller[]>({
+    queryKey: ["/api/sellers/products"],
+    queryFn: () => apiRequest("GET", "/api/sellers/products"),
     enabled: !!seller?.id,
-    staleTime: 5 * 60 * 1000, // ✅ Corrected casing
+    staleTime: 5 * 60 * 1000,
   });
 
-  // fetch categories for product form
-  const { data: categories, isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({ // ✅ Corrected casing
-    queryKey: ["/api/categories"], // ✅ Corrected casing
-    queryFn: () => apiRequest("GET", "/api/categories"), // ✅ Corrected casing
-    staleTime: Infinity, // ✅ Corrected casing
+  // Fetch categories for product form
+  const { data: categories } = useQuery<Category[]>({
+    queryKey: ["/api/categories"],
+    queryFn: () => apiRequest("GET", "/api/categories"),
+    staleTime: Infinity,
   });
 
-  
-const productFormSchema = z.object({
-  name: z.string().optional(),
-  description: z.string().optional(),
-  price: z.number().optional(),
-  originalPrice: z.number().optional(),
-  categoryId: z.number().optional(),
-  stock: z.number().optional(),
-  image: z.string().optional(),
-  // ... आपके अन्य fields (जितने चाहिए add करें)
-});
+  const productForm = useForm<z.infer<typeof productFormSchema>>({
+    resolver: zodResolver(productFormSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      price: undefined,
+      originalPrice: undefined,
+      categoryId: undefined,
+      stock: 0,
+      image: undefined,
+    },
+  });
 
-// स्कीमा से टाइप infer करें
-type FormInput = z.infer<typeof productFormSchema>;
-
-// Main hook/function में इसका पूरा इस्तेमाल:
-const productForm = useForm<FormInput>({
-  resolver: zodResolver(productFormSchema),
-  defaultValues: {
-    name: "",
-    description: "",
-    price: undefined,         // नंबर है तो undefined/null दे सकते हैं
-    originalPrice: undefined, // ऊपर को match करें
-    categoryId: undefined,    // नंबर है तो undefined
-    stock: 0,                 // अगर नंबर है और required नहीं, तो default 0 ठीक
-    image: undefined,         // string है, और optional, तो undefined
-    // ... अगर स्कीमा में और fields हैं तो यहाँ भी add करें
-  },
-});
-
-  // category form
-  const categoryForm = useForm<z.infer<typeof categoryFormSchema>>({ // ✅ Corrected casing
-    resolver: zodResolver(categoryFormSchema), // ✅ Corrected casing
-    defaultValues: { // ✅ Corrected casing
+  // Category form
+  const categoryForm = useForm<z.infer<typeof categoryFormSchema>>({
+    resolver: zodResolver(categoryFormSchema),
+    defaultValues: {
       name: "",
       slug: "",
       description: "",
       image: undefined,
-      isActive: true, // ✅ Corrected to isActive
+      isActive: true,
     },
   });
 
-  // ✅ Product Create/Update Mutation
-  const productMutation = useMutation({ // ✅ Corrected casing
+  // Product create/update mutation
+  const productMutation = useMutation({
     mutationFn: async (data: z.infer<typeof productFormSchema>) => {
       const auth = getAuth();
-      const user = auth.currentUser; // ✅ Corrected casing
+      const user = auth.currentUser;
       if (!user) {
-        throw new Error("User not authenticated."); // ✅ Corrected casing
+        throw new Error("User not authenticated.");
       }
-      const token = await user.getIdToken(); // ✅ Corrected casing
-      const formData = new FormData(); // ✅ Corrected casing
+      const token = await user.getIdToken();
+      const formData = new FormData();
 
-     // Append image if present
-if (data.image) {
-  // TypeScript अब जानता है कि data.image एक File हो सकता है (refine के कारण)
-  // यदि यह instanceof File चेक पास करता है, तो यह निश्चित रूप से एक File है।
-  // `as File` यहाँ सुरक्षित है क्योंकि स्कीमा ने इसे पहले ही मान्य कर दिया है।
-  formData.append('image', data.image as File); 
-}
+      if (data.image && data.image instanceof File) {
+        formData.append('image', data.image);
+      }
 
-// Append other fields, ensuring numbers are converted to string for FormData
-for (const key of Object.keys(data) as Array<keyof typeof data>) {
-  // 'image' फ़ील्ड को छोड़ दें क्योंकि इसे अलग से हैंडल किया जाता है
-  if (key === 'image') {
-    continue;
-  }
-
-  const value = data[key];
-
-  // undefined या null मानों को छोड़ दें
-  if (value === null || value === undefined) {
-    continue;
-  }
-
-  // FormData.append() 'string', 'Blob', या 'File' मानों की अपेक्षा करता है।
-  // अन्य सभी को एक स्ट्रिंग में परिवर्तित किया जाना चाहिए।
-  // आपका स्कीमा नंबर, स्ट्रिंग, बूलियन को आउटपुट करेगा, जो सभी 'String()' द्वारा संभाले जाते हैं।
-  // यदि आपके पास Zod स्कीमा में ऐसे नेस्टेड ऑब्जेक्ट्स हैं जिन्हें आप JSON के रूप में भेजना चाहते हैं
-  // (जो File/Blob नहीं हैं), तो उस तर्क को यहाँ जोड़ें, लेकिन वर्तमान स्कीमा के साथ,
-  // यह सीधे आवश्यक नहीं होना चाहिए।
-  
-  // यदि आप निश्चित हैं कि आपके स्कीमा से सभी गैर-छवि मान
-  // सीधे String() में कनवर्ट किए जा सकते हैं:
-  formData.append(key, String(value)); // ✅ 'String()' का उपयोग करके स्पष्ट रूपांतरण
-}
-
+      for (const key of Object.keys(data) as Array<keyof typeof data>) {
+        if (key === 'image') {
+          continue;
+        }
+        const value = data[key];
+        if (value === null || value === undefined) {
+          continue;
+        }
+        formData.append(key, String(value));
+      }
 
       let response: Response;
       if (editingProduct) {
-        // PATCH request for updating product
-        response = await fetch(`/api/sellers/products/${editingProduct.id}`, { // ✅ Use PATCH and product ID
+        response = await fetch(`/api/sellers/products/${editingProduct.id}`, {
           method: "PATCH",
           body: formData,
           headers: {
-            'Authorization': `Bearer ${token}` // Note: FormData doesn't like 'Content-Type': 'multipart/form-data' explicitly here. Fetch does it automatically.
+            'Authorization': `Bearer ${token}`
           },
         });
       } else {
-        // POST request for creating new product
         response = await fetch("/api/sellers/products", {
-          method: "POST", // ✅ Use POST for new product
+          method: "POST",
           body: formData,
           headers: { 'Authorization': `Bearer ${token}` },
         });
       }
 
       if (!response.ok) {
-        const errorData = await response.json(); // ✅ Corrected casing
-        throw new Error(errorData.error || errorData.message || "Failed to process product"); // ✅ Corrected casing
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || "Failed to process product");
       }
       return response.json();
     },
-    onSuccess: () => { // ✅ Corrected casing
-      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] }); // ✅ Invalidate seller's products, not general products
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] });
       toast({
-        title: editingProduct ? "Product Updated" : "Product Created", // ✅ Consistent casing
+        title: editingProduct ? "Product Updated" : "Product Created",
         description: `Product has been ${editingProduct ? "updated" : "created"} successfully.`,
       });
-      setIsProductDialogOpen(false); // ✅ Corrected casing
-      setEditingProduct(null); // ✅ Corrected casing
-      productForm.reset(); // ✅ Corrected casing
+      setIsProductDialogOpen(false);
+      setEditingProduct(null);
+      productForm.reset();
     },
-    onError: (error: any) => { // ✅ Corrected casing
+    onError: (error: any) => {
       toast({
-        title: "Error", // ✅ Consistent casing
+        title: "Error",
         description: error.message || `Failed to ${editingProduct ? "update" : "create"} product.`,
         variant: "destructive",
       });
     },
   });
-
-  // delete product mutation
-  const deleteProductMutation = useMutation({ // ✅ Corrected casing
-    mutationFn: async (productId: number) => { // ✅ Corrected casing
-      return await apiRequest("DELETE", `/api/sellers/products/${productId}`); // ✅ Use seller's product delete endpoint
+    // Delete product mutation
+  const deleteProductMutation = useMutation({
+    mutationFn: async (productId: number) => {
+      return await apiRequest("DELETE", `/api/sellers/products/${productId}`);
     },
-    onSuccess: () => { // ✅ Corrected casing
-      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] }); // ✅ Invalidate seller's products
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] });
       toast({
-        title: "Product Deleted", // ✅ Consistent casing
+        title: "Product Deleted",
         description: "Product has been deleted successfully.",
       });
     },
-    onError: (error: any) => { // ✅ Corrected casing
+    onError: (error: any) => {
       toast({
-        title: "Error", // ✅ Consistent casing
+        title: "Error",
         description: error.response?.data?.message || "Failed to delete product.",
         variant: "destructive",
       });
     },
   });
 
-  const categoryMutation = useMutation({ // ✅ Corrected casing
-    mutationFn: async (data: FormData) => { // ✅ Corrected casing
-      // Note: Backend endpoint for seller creating category is /api/sellers/categories
-      return await apiRequest("POST", "/api/sellers/categories", data);
+  // Category mutation
+  const categoryMutation = useMutation({
+    mutationFn: async (dataToMutate: FormData) => { // Expects FormData
+      const auth = getAuth();
+      const user = auth.currentUser;
+      if (!user) {
+        throw new Error("User not authenticated.");
+      }
+      const token = await user.getIdToken();
+
+      const response = await fetch("/api/sellers/categories", { // Direct fetch for FormData
+        method: "POST",
+        body: dataToMutate,
+        headers: {
+          'Authorization': `Bearer ${token}`
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || errorData.message || "Failed to create category");
+      }
+      return response.json();
     },
-    onSuccess: () => { // ✅ Corrected casing
-      queryClient.invalidateQueries({ queryKey: ["/api/categories"] }); // ✅ Corrected casing
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/categories"] });
       toast({
-        title: "Category Created", // ✅ Consistent casing
+        title: "Category Created",
         description: "Category has been created successfully.",
       });
-      setIsCategoryDialogOpen(false); // ✅ Corrected casing
-      categoryForm.reset(); // ✅ Corrected casing
+      setIsCategoryDialogOpen(false);
+      categoryForm.reset();
     },
-    onError: (error: any) => { // ✅ Corrected casing
+    onError: (error: any) => {
       toast({
-        title: "Error", // ✅ Consistent casing
-        description: error.response?.data?.message || "Failed to create category.",
+        title: "Error",
+        description: error.message || "Failed to create category.",
         variant: "destructive",
       });
     },
   });
 
-  const onProductSubmit = (data: z.infer<typeof productFormSchema>) => { // ✅ Corrected casing
-    productMutation.mutate(data); // ✅ Corrected casing
+  const onProductSubmit = (data: z.infer<typeof productFormSchema>) => {
+    productMutation.mutate(data); // `productMutation` now expects `data` (which it converts to FormData)
   };
 
-  const onCategorySubmit = (data: z.infer<typeof categoryFormSchema>) => { // ✅ Corrected casing
+  const onCategorySubmit = (data: z.infer<typeof categoryFormSchema>) => {
     if (!data.image) {
       toast({
-        title: "Error", // ✅ Consistent casing
+        title: "Error",
         description: "Please select an image for the category.",
         variant: "destructive",
       });
       return;
     }
-    const formData = new FormData(); // ✅ Corrected casing
+    const formData = new FormData();
     formData.append("name", data.name);
     formData.append("slug", data.slug);
     formData.append("description", data.description || "");
-    formData.append("image", data.image);
-    categoryMutation.mutate(formData); // ✅ Corrected casing
+    formData.append("image", data.image as File);
+    formData.append("isActive", String(data.isActive));
+    categoryMutation.mutate(formData);
   };
 
-  const handleEditProduct = (product: ProductWithSeller) => { // ✅ Corrected casing
-    setEditingProduct(product); // ✅ Corrected casing
-    // Pre-fill form with product data for editing
-    productForm.reset({ // ✅ Corrected casing
+  const handleEditProduct = (product: ProductWithSeller) => {
+    setEditingProduct(product);
+    productForm.reset({
       name: product.name,
       description: product.description || "",
-      price: parseFloat(product.price), // Convert string price to number for form
-      originalPrice: product.originalPrice ? parseFloat(product.originalPrice) : undefined, // ✅ Convert to number, handle optional
-      categoryId: product.categoryId, // ✅ Corrected casing
+      price: product.price, // assuming price is already a number or correctly handled by input
+      originalPrice: product.originalPrice, // assuming originalPrice is already a number or correctly handled by input
+      categoryId: product.categoryId,
       stock: product.stock || 0,
-      // Image is not pre-filled as file input cannot be programmatically set
-      // images: product.images || [], // If you had a multi-image component, this would be more complex
     });
-    setIsProductDialogOpen(true); // ✅ Corrected casing
+    setIsProductDialogOpen(true);
   };
 
-  const handleDeleteProduct = (productId: number) => { // ✅ Corrected casing
-    toast({
-      title: "Confirm Deletion", // ✅ Consistent casing
+  const handleDeleteProduct = (productId: number) => {
+    const toastId = toast({
+      title: "Confirm Deletion",
       description: "Are you sure you want to delete this product? This action cannot be undone.",
       variant: "destructive",
       action: (
-        <div className="flex gap-2"> {/* ✅ Corrected className */}
-          <Button onClick={() => { // ✅ Corrected component name and casing
-            deleteProductMutation.mutate(productId); // ✅ Corrected casing
-            toast.dismiss();
-          }} className="bg-red-500 hover:bg-red-600 text-white"> {/* ✅ Corrected className */}
+        <div className="flex gap-2">
+          <Button onClick={() => {
+            deleteProductMutation.mutate(productId);
+            toast.dismiss(toastId); // Dismiss using the id
+          }} className="bg-red-500 hover:bg-red-600 text-white">
             Delete
           </Button>
-          <Button onClick={() => toast.dismiss()} variant="outline"> {/* ✅ Corrected component name and casing */}
+          <Button onClick={() => toast.dismiss(toastId)} variant="outline">
             Cancel
           </Button>
         </div>
       ),
       duration: 10000,
-    });
+    }).id;
   };
 
-
-return (
+  return (
     <Card>
       <CardHeader>
         <div className="flex justify-between items-center">
@@ -632,4 +607,4 @@ return (
       </CardContent>
     </Card>
   );
-}
+ }
