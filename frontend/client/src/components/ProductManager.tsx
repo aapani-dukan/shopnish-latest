@@ -15,7 +15,7 @@ import { useForm } from "react-hook-form"; // Corrected casing
 import { zodResolver } from "@hookform/resolvers/zod"; // Corrected casing
 // ✅  यहां सभी इंपोर्ट नामों को PascalCase में ठीक किया गया है और रिलेटिव पाथ को संभावित रूप से ठीक किया गया है
 import { insertProductSchema, insertCategorySchema, Seller, Category } from "../../../shared/backend/schema";
-import { apiRequest } from "@/lib/queryclient"; // Corrected casing and path
+import { apiRequest } from "@/lib/queryClient"; // Corrected casing and path
 import { useToast } from "@/hooks/use-toast"; // Corrected casing and path
 import { Plus, Edit, Trash2, Info } from "lucide-react";
 import { z } from "zod";
