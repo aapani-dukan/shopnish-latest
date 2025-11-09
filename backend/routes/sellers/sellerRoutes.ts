@@ -29,8 +29,21 @@ import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
 import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, इसे .ts के साथ इम्पोर्ट करें
 
+import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 const sellerRouter = Router();
-const upload = multer({ dest: 'uploads/' });
+const upload = multer({
+  storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
+  limits: {
+    fileSize: 5 * 1024 * 1024, // 5MB फ़ाइल साइज़ लिमिट
+  },
+  fileFilter: (req, file, cb) => {
+    if (file.mimetype.startsWith('image/')) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only image files are allowed!'), false);
+    }
+  }
+});
 
 // ✅ POST /api/sellers/apply
 sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -218,78 +231,99 @@ sellerRouter.get("/orders", requireSellerAuth, async (req: AuthenticatedRequest,
 });
 
 
-// ✅ POST /api/sellers/categories (नई कैटेगरी बनाएं)
-sellerRouter.post('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
-  try {
-    const userId = req.user?.id;
-    if (!userId) {
-      return res.status(401).json({ error: 'Unauthorized.' });
-    }
-
-    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
-    if (!sellerProfile) {
-      return res.status(404).json({ error: 'Seller profile not found. Complete seller registration.' });
-    }
-    const sellerId = sellerProfile.id;
-
-    const { name, description } = req.body;
-
-    if (!name) {
-      return res.status(400).json({ error: 'Category name is required.' });
-    }
-
-    // सुनिश्चित करें कि इस सेलर के लिए समान नाम वाली कोई कैटेगरी पहले से मौजूद न हो
-    const [existingCategory] = await db.select()
-      .from(categories)
-      .where(and(eq(categories.name, name), eq(categories.sellerId, sellerId))); // ✅ sellerId के साथ चेक करें
-
-    if (existingCategory) {
-      return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
-    }
-
-
-
-    return res.status(200).json({ message: 'Validation successful. Ready to create category.' });
-
-      } catch (error) {
-          console.error('Error in creating category:', error);
-              return res.status(500).json({ error: 'Internal Server Error.' });
-                }
-                });
-
-
-    sellerRouter.post("/add-category", async (req: AuthenticatedRequest, res) => {
-      try {
-        if (!req.user) {
-          return res.status(401).json({ message: "Unauthorized" });
-        }
-
-        const { name, description } = req.body;
-        const sellerId = req.user.id; // logged-in seller का id
-
-        // Category object तैयार करना
-        const newCategoryData = {
-          name,
-          slug: name.toLowerCase().replace(/\s+/g, "-"), // simple slug
-          description: description || null,
-          sellerId: sellerId, // number assign directly
-        };
-
-        // DB में insert करना
-        const [newCategory] = await db.insert(categories)
-          .values(newCategoryData)
-          .returning();
-
-        // Socket event emit करना (अगर real-time चाहिए)
-        getIO().emit("category:created", newCategory);
-
-        return res.status(201).json(newCategory);
-
-      } catch (error: any) {
-        console.error('❌ Error in adding category:', error);
-        return res.status(500).json({ error: "Something went wrong" });
+sellerRouter.post(
+  '/categories',
+  requireSellerAuth,
+  upload.single('image'), // 🚨 यहां multer मिडलवेयर को जोड़ें, 'image' फ्रंटएंड से आने वाले फ़ील्ड का नाम है
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized.' });
       }
-    });
+
+      const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+      if (!sellerProfile) {
+        return res.status(404).json({ error: 'Seller profile not found. Complete seller registration.' });
+      }
+      const sellerId = sellerProfile.id;
+
+      // Multer अब req.body को पॉप्युलेट करेगा और फ़ाइल को req.file में रखेगा
+      const { name, slug, description, isActive } = req.body;
+      const imageFile = req.file; // अपलोड की गई इमेज फ़ाइल (अगर कोई है)
+
+      // ✅ Zod वैलिडेशन का उपयोग करें
+      const categoryDataParsed = await categoryFormInputSchema.safeParseAsync({
+        name,
+        slug,
+        description,
+        isActive: isActive === 'true' || isActive === true, // FormData से boolean string के रूप में आता है
+      });
+
+      if (!categoryDataParsed.success) {
+        console.error("Zod Validation Error:", categoryDataParsed.error);
+        // Multer द्वारा सहेजी गई किसी भी अस्थायी फ़ाइल को साफ करें यदि dest का उपयोग किया गया हो
+        if (req.file && upload.storage instanceof multer.diskStorage) { // यदि डिस्क स्टोरेज का उपयोग किया गया था
+          // fs.unlinkSync(req.file.path); // यदि आप dest: 'uploads/' का उपयोग कर रहे हैं
+        }
+        return res.status(400).json({ error: categoryDataParsed.error.errors[0].message });
+      }
+
+      const { data: validatedCategoryData } = categoryDataParsed;
+
+      // ✅ सुनिश्चित करें कि इमेज अपलोड के लिए है
+      if (!imageFile) {
+        return res.status(400).json({ error: 'Category image is required.' });
+      }
+
+      // ✅ इमेज को क्लाउड स्टोरेज पर अपलोड करें
+      // `uploadImage` फंक्शन आपके `cloudStorage.ts` में परिभाषित होना चाहिए
+      // यह फ़ंक्शन `req.file` (जो एक Buffer है) और एक फ़ाइल नाम/पाथ लेता है।
+      const fileName = `categories/${sellerId}/${uuidv4()}-${imageFile.originalname}`;
+      const imageUrl = await uploadImage(imageFile.buffer, fileName, imageFile.mimetype);
+
+      // सुनिश्चित करें कि इस सेलर के लिए समान नाम वाली कोई कैटेगरी पहले से मौजूद न हो
+      const [existingCategory] = await db.select()
+        .from(categories)
+        .where(and(eq(categories.name, validatedCategoryData.name), eq(categories.sellerId, sellerId)));
+
+      if (existingCategory) {
+        // इमेज को डिलीट करें क्योंकि कैटेगरी नहीं बन पाई
+        await deleteImage(fileName); // यदि deleteImage फंक्शन है
+        return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
+      }
+
+      // DB में insert करना
+      const [newCategory] = await db.insert(categories)
+        .values({
+          sellerId: sellerId,
+          name: validatedCategoryData.name,
+          slug: validatedCategoryData.slug,
+          description: validatedCategoryData.description,
+          image: imageUrl, // क्लाउड स्टोरेज से मिला URL
+          isActive: validatedCategoryData.isActive,
+        })
+        .returning();
+
+      if (!newCategory) {
+        // अगर DB में इंसर्ट फेल हुआ तो अपलोड की गई इमेज को डिलीट करें
+        await deleteImage(fileName);
+        return res.status(500).json({ error: 'Failed to create category.' });
+      }
+
+      getIO().emit("category:created", newCategory);
+
+      return res.status(201).json(newCategory); // ✅ 201 Created
+
+    } catch (error: any) {
+      console.error('Error in creating category:', error);
+      if (error instanceof multer.MulterError) {
+        return res.status(400).json({ error: error.message });
+      }
+      return res.status(500).json({ error: error.message || 'Internal Server Error.' });
+    }
+  }
+);
 
     // ✅ GET /api/sellers/products
     sellerRouter.get('/products', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
