@@ -242,7 +242,7 @@ for (const key of Object.keys(data) as Array<keyof typeof data>) {
   const categoryMutation = useMutation({ // ✅ Corrected casing
     mutationFn: async (data: FormData) => { // ✅ Corrected casing
       // Note: Backend endpoint for seller creating category is /api/sellers/categories
-      return await apiRequest("post", "/api/sellers/categories", data);
+      return await apiRequest("POST", "/api/sellers/categories", data);
     },
     onSuccess: () => { // ✅ Corrected casing
       queryClient.invalidateQueries({ queryKey: ["/api/categories"] }); // ✅ Corrected casing
