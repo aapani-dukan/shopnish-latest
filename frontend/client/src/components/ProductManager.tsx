@@ -221,7 +221,7 @@ for (const key of Object.keys(data) as Array<keyof typeof data>) {
   // delete product mutation
   const deleteProductMutation = useMutation({ // ✅ Corrected casing
     mutationFn: async (productId: number) => { // ✅ Corrected casing
-      return await apiRequest("delete", `/api/sellers/products/${productId}`); // ✅ Use seller's product delete endpoint
+      return await apiRequest("DELETE", `/api/sellers/products/${productId}`); // ✅ Use seller's product delete endpoint
     },
     onSuccess: () => { // ✅ Corrected casing
       queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] }); // ✅ Invalidate seller's products
