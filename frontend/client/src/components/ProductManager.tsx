@@ -139,18 +139,17 @@ const productForm = useForm<FormInput>({
       const token = await user.getIdToken(); // ✅ Corrected casing
       const formData = new FormData(); // ✅ Corrected casing
 
-      // Append image if present
-      // Append image if present
+     // Append image if present
 if (data.image) {
-  // सुनिश्चित करें कि data.image एक File या Blob ऑब्जेक्ट है
-  // यदि data.image एक string (URL) है, तो आपको इसे एक File ऑब्जेक्ट में बदलने का तरीका खोजना होगा
-  // (जो आमतौर पर सीधे FormData के लिए उपयुक्त नहीं होता है, जब तक कि वह एक file input से न आए)
-  formData.append('image', data.image as File); // ✅ type assertion: data.image को File के रूप में मानें
+  // TypeScript अब जानता है कि data.image एक File हो सकता है (refine के कारण)
+  // यदि यह instanceof File चेक पास करता है, तो यह निश्चित रूप से एक File है।
+  // `as File` यहाँ सुरक्षित है क्योंकि स्कीमा ने इसे पहले ही मान्य कर दिया है।
+  formData.append('image', data.image as File); 
 }
 
 // Append other fields, ensuring numbers are converted to string for FormData
 for (const key in data) {
-  // 'image' फील्ड को छोड़ दें क्योंकि इसे अलग से हैंडल किया जाता है
+  // 'image' फ़ील्ड को छोड़ दें क्योंकि इसे अलग से हैंडल किया जाता है
   if (key === 'image') {
     continue;
   }
@@ -164,19 +163,16 @@ for (const key in data) {
 
   // FormData.append() 'string', 'Blob', या 'File' मानों की अपेक्षा करता है।
   // अन्य सभी को एक स्ट्रिंग में परिवर्तित किया जाना चाहिए।
-  if (typeof value === 'object' && !(value instanceof File) && !(value instanceof Blob)) {
-    // यदि यह एक ऑब्जेक्ट है (लेकिन File/Blob नहीं), तो इसे JSON स्ट्रिंग में कनवर्ट करें।
-    // यह उन मामलों के लिए है जहाँ आपके स्कीमा में नेस्टेड ऑब्जेक्ट हो सकते हैं।
-    // यदि आपके Zod स्कीमा में कोई नेस्टेड ऑब्जेक्ट नहीं है जिसे आप ऐसे भेजना चाहते हैं,
-    // तो इस 'else if' ब्लॉक को हटा दें या अपनी विशिष्ट जरूरतों के अनुसार समायोजित करें।
-    formData.append(key, JSON.stringify(value));
-  } else {
-    // संख्याएँ, बूलियन, और स्ट्रिंग्स को स्ट्रिंग में कनवर्ट करें
-    // File/Blob ऑब्जेक्ट्स सीधे काम करेंगे
-    formData.append(key, String(value)); // ✅ 'String()' का उपयोग करके स्पष्ट रूपांतरण
-  }
+  // आपका स्कीमा नंबर, स्ट्रिंग, बूलियन को आउटपुट करेगा, जो सभी 'String()' द्वारा संभाले जाते हैं।
+  // यदि आपके पास Zod स्कीमा में ऐसे नेस्टेड ऑब्जेक्ट्स हैं जिन्हें आप JSON के रूप में भेजना चाहते हैं
+  // (जो File/Blob नहीं हैं), तो उस तर्क को यहाँ जोड़ें, लेकिन वर्तमान स्कीमा के साथ,
+  // यह सीधे आवश्यक नहीं होना चाहिए।
+  
+  // यदि आप निश्चित हैं कि आपके स्कीमा से सभी गैर-छवि मान
+  // सीधे String() में कनवर्ट किए जा सकते हैं:
+  formData.append(key, String(value)); // ✅ 'String()' का उपयोग करके स्पष्ट रूपांतरण
 }
-      
+
 
       let response: Response;
       if (editingProduct) {
