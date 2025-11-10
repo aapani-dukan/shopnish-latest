@@ -16,15 +16,16 @@ console.log("-------------------------------");
 const firebaseApps = getApps();
 let app;
 if (!firebaseApps.length) {
-  // ✅ यहां अतिरिक्त लॉग्स जोड़ें
   console.log("Initializing Firebase Admin SDK...");
   console.log("Project ID being used:", process.env.FIREBASE_PROJECT_ID);
   console.log("Client Email being used:", process.env.FIREBASE_CLIENT_EMAIL);
+  // ✅ यहां FIREBASE_STORAGE_BUCKET का मान लॉग करें
+  console.log("Storage Bucket being used:", process.env.FIREBASE_STORAGE_BUCKET); 
 
   const privateKey = process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n');
   
-  if (!process.env.FIREBASE_PROJECT_ID || !privateKey || !process.env.FIREBASE_CLIENT_EMAIL) {
-    console.error("❌ ERROR: Missing Firebase environment variables.");
+  if (!process.env.FIREBASE_PROJECT_ID || !privateKey || !process.env.FIREBASE_CLIENT_EMAIL || !process.env.FIREBASE_STORAGE_BUCKET) {
+    console.error("❌ ERROR: Missing Firebase environment variables (including Storage Bucket).");
     process.exit(1);
   }
 
@@ -36,7 +37,8 @@ if (!firebaseApps.length) {
 
   app = initializeApp({
     credential: cert(serviceAccount as any),
-    storageBucket: `${serviceAccount.projectId}.appspot.com`,
+    // ✅ इसे process.env.FIREBASE_STORAGE_BUCKET से बदलें
+    storageBucket: process.env.FIREBASE_STORAGE_BUCKET, 
   });
   console.log('✅ Firebase Admin SDK initialized successfully.');
 } else {
