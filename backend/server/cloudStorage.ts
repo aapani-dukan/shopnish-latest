@@ -12,27 +12,31 @@ import { Readable } from 'stream'; // Buffer को स्ट्रीम मे
 if (!getApps().length) { // यह सुनिश्चित करता है कि ऐप केवल एक बार इनिशियलाइज़ हो
   try {
     const firebaseConfig = {
-      projectId: process.env.FIREBASE_PROJECT_ID,
-      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // \n को सही से हैंडल करें
+      projectId: process.env.FIREBASE_PROJECT_ID,       // ✅ UPPERCASE
+      clientEmail: process.env.FIREBASE_CLIENT_EMAIL,   // ✅ UPPERCASE
+      privateKey: process.env.FIREBASE_PRIVATE_KEY?.replace(/\\n/g, '\n'), // ✅ UPPERCASE
     };
 
     // पर्यावरण चर की जांच करें
     if (!firebaseConfig.projectId || !firebaseConfig.clientEmail || !firebaseConfig.privateKey) {
       console.error("❌ Firebase Admin SDK: Missing required environment variables for credentials.");
-      // यदि क्रेडेंशियल अनुपलब्ध हैं, तो हमें एक त्रुटि फेंकनी होगी या ऐप को बंद करना होगा
-      // ताकि यह अनइनिशियलाइज़्ड SDK के साथ काम करने की कोशिश न करे।
       throw new Error("Firebase Admin SDK credentials are not fully provided in environment variables.");
     }
 
+    // ✅ DEBUGGING LOGS: इन मानों को लॉग करें जो SDK को मिल रहे हैं
+    console.log("DEBUG: Firebase Project ID from env:", process.env.FIREBASE_PROJECT_ID);
+    console.log("DEBUG: Firebase Client Email from env:", process.env.FIREBASE_CLIENT_EMAIL);
+    // Private Key को लॉग न करें क्योंकि यह संवेदनशील जानकारी है
+    console.log("DEBUG: Firebase Storage Bucket from env:", process.env.FIREBASE_STORAGE_BUCKET);
+
+
     initializeApp({
       credential: cert(firebaseConfig),
-      storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // सुनिश्चित करें कि यह आपके .env में सेट है
+      storageBucket: process.env.FIREBASE_STORAGE_BUCKET, // ✅ UPPERCASE
     });
     console.log("✅ Firebase Admin SDK initialized successfully.");
   } catch (error) {
     console.error("❌ Failed to initialize Firebase Admin SDK:", error);
-    // इनिशियलाइज़ेशन फेल होने पर एप्लिकेशन को रोकें, क्योंकि स्टोरेज काम नहीं करेगा
     process.exit(1);
   }
 }
@@ -60,7 +64,7 @@ export const uploadImage = async (buffer: Buffer, destinationPath: string, conte
     metadata: {
       contentType: contentType,
     },
-    resumable: false, // छोटे फ़ाइलों के लिए resumble को false करना बेहतर हो सकता है
+    resumable: false, // छोटे फ़ाइलों के लिए resumable को false करना बेहतर हो सकता है
   });
 
   return new Promise((resolve, reject) => {
