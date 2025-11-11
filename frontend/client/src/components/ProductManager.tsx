@@ -26,30 +26,31 @@ import { ProductWithSeller } from "../interfaces/productWithSeller"; // Correcte
 const productFormSchema = insertProductSchema.extend({
   image: z
     .any()
-    .refine((file) => !file || file instanceof File, { // `File` अब सही ढंग से संदर्भित किया गया है
+    .refine((file) => !file || file instanceof File, {
       message: "An image file is required.",
     })
     .refine((file) => !file || (file instanceof File && file.size < 5000000), {
       message: "Image size must be less than 5MB.",
     })
-    .optional(),
+    .optional(), // <--- यह अभी भी वैकल्पिक है
   price: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
+    (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Price must be a positive number")
   ),
   originalPrice: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
+    (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Original price must be a positive number").optional()
   ),
   stock: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
+    (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Stock must be an integer").min(0, "Stock cannot be negative").default(0)
   ),
   categoryId: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)), // `Number` अब सही ढंग से संदर्भित किया गया है
+    (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Category ID must be an integer").min(1, "Category ID is required")
   ),
-}).partial();
+}); // .partial() हटा दिया गया
+
 
 const categoryFormSchema = z.object({
   name: z.string().min(2, { message: "Category name must be at least 2 characters." }),
