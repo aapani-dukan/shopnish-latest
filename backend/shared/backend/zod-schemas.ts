@@ -161,7 +161,7 @@ export const insertCouponsPgTableSchema = createInsertSchema(couponsPgTable, {
 export const insertProductSchema = createInsertSchema(products, {
   sellerId: z.number().int().optional(), // Default in Drizzle, so optional here
   storeId: z.number().int().optional().nullable(),
-  categoryId: z.number().int().optional().nullable(),
+  
   name: z.string().min(1, "Product name is required"),
   nameHindi: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
