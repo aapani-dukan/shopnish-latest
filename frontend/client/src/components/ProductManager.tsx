@@ -23,23 +23,19 @@ import { getAuth } from "firebase/auth"; // Corrected casing
 import { ProductWithSeller } from "../interfaces/productWithSeller"; // Corrected casing
 
 // Updated productFormSchema for frontend use
-const productFormSchema = insertProductSchema.extend({
-  image: z
-    .any()
-    .refine((file) => !file || file instanceof File, {
-      message: "An image file is required.",
-    })
-    .refine((file) => !file || (file instanceof File && file.size < 5000000), {
-      message: "Image size must be less than 5MB.",
-    })
-    .optional(), // <--- यह अभी भी वैकल्पिक है
+
+export const productFormSchema = z.object({
+  name: z.string().min(1, "Product name is required"),
+  nameHindi: z.string().optional().nullable(), // अगर फॉर्म में है
+  description: z.string().optional().nullable(), // अगर फॉर्म में है
+  descriptionHindi: z.string().optional().nullable(), // अगर फॉर्म में है
   price: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(0.01, "Price must be a positive number")
   ),
   originalPrice: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
-    z.number().min(0.01, "Original price must be a positive number").optional()
+    z.number().min(0.01, "Original price must be a positive number").optional().nullable()
   ),
   stock: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
@@ -49,7 +45,29 @@ const productFormSchema = insertProductSchema.extend({
     (val) => (val === "" ? undefined : Number(val)),
     z.number().int("Category ID must be an integer").min(1, "Category ID is required")
   ),
-}); // .partial() हटा दिया गया
+  image: z
+    .any()
+    .refine((file) => !file || file instanceof File, {
+      message: "An image file is required.",
+    })
+    .refine((file) => !file || (file instanceof File && file.size < 5000000), {
+      message: "Image size must be less than 5MB.",
+    })
+    .optional(), // अगर फॉर्म में है और वैकल्पिक है
+  // ... कोई अन्य फ़ील्ड जो आपके फॉर्म में हैं
+  unit: z.string().optional().nullable(),
+  brand: z.string().optional().nullable(),
+  minOrderQty: z.number().int().optional().nullable(),
+  maxOrderQty: z.number().int().optional().nullable(),
+  isActive: z.boolean().optional().nullable(),
+  deliveryScope: z.string().optional().nullable(),
+  productDeliveryPincodes: z.array(z.string()).optional().nullable(),
+  productDeliveryRadiusKM: z.number().int().optional().nullable(),
+  estimatedDeliveryTime: z.string().optional().nullable(),
+
+  // यहाँ आपको sellerId, storeId, approvalStatus, approvedAt, rejectionReason को शामिल नहीं करना चाहिए
+  // क्योंकि वे आमतौर पर फॉर्म इनपुट नहीं होते हैं या सर्वर द्वारा हैंडल किए जाते हैं।
+});
 
 
 const categoryFormSchema = z.object({
