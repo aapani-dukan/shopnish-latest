@@ -142,7 +142,7 @@ adminProductsRouter.get('/:id', authorize(['admin']), validateRequest(productIdS
  * एक प्रोडक्ट को मंज़ूर करें (मौजूदा लॉजिक का उपयोग करें)
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminProductsRouter.patch('/approve/:id', authorize(['admin']), validateRequest(productIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminProductsRouter.patch('/:id/approve', authorize(['admin']), validateRequest(productIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const productId = Number(req.params.id);
 
@@ -178,7 +178,7 @@ adminProductsRouter.patch('/approve/:id', authorize(['admin']), validateRequest(
  * एक प्रोडक्ट को अस्वीकार करें (मौजूदा लॉजिक का उपयोग करें और कारण स्वीकार करें)
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminProductsRouter.patch('/reject/:id', authorize(['admin']), validateRequest(productIdSchema.extend({
+adminProductsRouter.patch('/:id/reject', authorize(['admin']), validateRequest(productIdSchema.extend({
   body: z.object({
     reason: z.string().min(1, "Rejection reason is required for rejecting a product.").optional(), // Optional, but highly recommended
   }).partial(),
