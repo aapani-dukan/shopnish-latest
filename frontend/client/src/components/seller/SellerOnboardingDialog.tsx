@@ -28,7 +28,7 @@ import {
   FormControl, // `FormControl` को uppercase किया गया
   FormMessage, // `FormMessage` को uppercase किया गया
 } from "@/components/ui/form"; // `form.js` के सभी कंपोनेंट को uppercase किया गया और पथ को सही किया गया
-import { apiRequest } from "@/lib/queryclient"; // `apiRequest` को uppercase किया गया और पथ को सही किया गया
+import { apiRequest } from "@/lib/queryClient"; // `apiRequest` को uppercase किया गया और पथ को सही किया गया
 
 // Google Maps API Key को .env फ़ाइल से लोड करें
 const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY; // आपको यह अपनी .env.local में जोड़ना होगा
