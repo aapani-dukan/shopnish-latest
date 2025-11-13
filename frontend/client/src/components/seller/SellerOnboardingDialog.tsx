@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea"; // `Textarea` को upperc
 import { useForm } from "react-hook-form"; // `useForm` को uppercase किया गया
 import { zodResolver } from "@hookform/resolvers/zod"; // `zodResolver` को uppercase किया गया
 import { z } from "zod";
-import { useToast } from "@/components/ui/use-toast"; // `useToast` को uppercase किया गया और पथ को सही किया गया
+import { useToast } from "@/hooks/use-toast"; // `useToast` को uppercase किया गया और पथ को सही किया गया
 import { useNavigate } from "react-router-dom"; // `useNavigate` को uppercase किया गया
 import { Loader2 } from "lucide-react"; // `Loader2` को uppercase किया गया
 import {
