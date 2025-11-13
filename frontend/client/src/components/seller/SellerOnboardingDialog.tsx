@@ -373,5 +373,3 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
     </Dialog>
   );
 }
-```http://googleusercontent.com/generated_image_content/0
-
