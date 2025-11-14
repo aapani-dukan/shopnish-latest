@@ -41,6 +41,7 @@ import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
 import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage'; 
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+import SellerProfileEdit from '@/components/seller/SellerProfileEdit';
 import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
 import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 function App() { // Capitalized App
@@ -135,7 +136,8 @@ function App() { // Capitalized App
               </AuthRedirectGuard>
             }
           />
-
+<Route 
+  path="/seller-profile/edit" element={<SellerProfileEdit />} />
           
           {/* यह /track-order/:orderId का सही स्थान है */}
           <Route 
