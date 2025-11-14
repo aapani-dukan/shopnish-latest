@@ -1,37 +1,38 @@
 "use client";
 
-import { useState, useEffect } from "react"; // `useState` और `useEffect` को lowercase किया गया
-import { useAuth } from "../../hooks/useAuth"; // `useAuth` को uppercase किया गया
-import { useMutation, useQueryClient } from "@tanstack/react-query"; // `useMutation`, `useQueryClient` को uppercase किया गया
+import { useState, useEffect } from "react";
+import { useAuth } from "../../hooks/useAuth";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
-  Dialog, // `Dialog` को uppercase किया गया
-  DialogContent, // `DialogContent` को uppercase किया गया
-  DialogHeader, // `DialogHeader` को uppercase किया गया
-  DialogTitle, // `DialogTitle` को uppercase किया गया
-  DialogFooter, // `DialogFooter` को uppercase किया गया
-  DialogDescription, // `DialogDescription` को uppercase किया गया
-} from "@/components/ui/dialog"; // `dialog` के सभी कंपोनेंट को uppercase किया गया और पथ को सही किया गया
-import { Button } from "@/components/ui/button"; // `Button` को uppercase किया गया और पथ को सही किया गया
-import { Input } from "@/components/ui/input"; // `Input` को uppercase किया गया और पथ को सही किया गया
-import { Textarea } from "@/components/ui/textarea"; // `Textarea` को uppercase किया गया और पथ को सही किया गया
-import { useForm } from "react-hook-form"; // `useForm` को uppercase किया गया
-import { zodResolver } from "@hookform/resolvers/zod"; // `zodResolver` को uppercase किया गया
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { useForm } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useToast } from "@/hooks/use-toast"; // `useToast` को uppercase किया गया और पथ को सही किया गया
-import { useNavigate } from "react-router-dom"; // `useNavigate` को uppercase किया गया
-import { Loader2 } from "lucide-react"; // `Loader2` को uppercase किया गया
+import { useToast } from "@/hooks/use-toast";
+import { useNavigate } from "react-router-dom";
+import { Loader2 } from "lucide-react";
 import {
-  Form, // `Form` को uppercase किया गया
-  FormField, // `FormField` को uppercase किया गया
-  FormItem, // `FormItem` को uppercase किया गया
-  FormLabel, // `FormLabel` को uppercase किया गया
-  FormControl, // `FormControl` को uppercase किया गया
-  FormMessage, // `FormMessage` को uppercase किया गया
-} from "@/components/ui/form"; // `form.js` के सभी कंपोनेंट को uppercase किया गया और पथ को सही किया गया
-import { apiRequest } from "@/lib/queryClient"; // `apiRequest` को uppercase किया गया और पथ को सही किया गया
+  Form,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormControl,
+  FormMessage,
+  FormDescription, // FormDescription भी जोड़ा गया
+} from "@/components/ui/form";
+import { apiRequest } from "@/lib/queryClient";
 
 // Google Maps API Key को .env फ़ाइल से लोड करें
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY; // आपको यह अपनी .env.local में जोड़ना होगा
+const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
 
 // 📦 Form Validation Schema
 const sellerFormSchema = z.object({
@@ -43,17 +44,17 @@ const sellerFormSchema = z.object({
   businessPhone: z.string().regex(/^\d{10}$/),
   gstNumber: z.string().max(15).optional(),
   bankAccountNumber: z.string().regex(/^\d{9,18}$/),
-  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/), // regex को uppercase किया गया
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/),
   deliveryRadius: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)), // `Number` को uppercase किया गया
+    (val) => (val === "" ? undefined : Number(val)),
     z.number().min(1).max(100)
   ),
   businessType: z.string().min(2).max(50),
-  latitude: z.number().min(-90).max(90).optional(), // optional किया गया ताकि initial render पर यह आवश्यक न हो
-  longitude: z.number().min(-180).max(180).optional(), // optional किया गया
+  latitude: z.number().min(-90).max(90).optional(), // Optional रखा गया
+  longitude: z.number().min(-180).max(180).optional(), // Optional रखा गया
 });
 
-type FormData = z.infer<typeof sellerFormSchema>; // `FormData` को uppercase किया गया
+type FormData = z.infer<typeof sellerFormSchema>;
 
 interface SellerOnboardingDialogProps {
   isOpen: boolean;
@@ -61,101 +62,101 @@ interface SellerOnboardingDialogProps {
 }
 
 // ✅ Custom Mutation Hook
-function useRegisterSeller(onClose: () => void, resetForm: () => void) { // `useRegisterSeller`, `onClose`, `resetForm` को uppercase किया गया
-  const { user } = useAuth(); // `useAuth` को uppercase किया गया
-  const { toast } = useToast(); // `useToast` को uppercase किया गया
-  const navigate = useNavigate(); // `useNavigate` को uppercase किया गया
-  const queryClient = useQueryClient(); // `useQueryClient` को uppercase किया गया
+function useRegisterSeller(onClose: () => void, resetForm: () => void) {
+  const { user } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
+  const queryClient = useQueryClient();
 
-  return useMutation<any, Error, FormData>({ // `useMutation`, `Error`, `FormData` को uppercase किया गया
-    mutationFn: async (formData) => { // `mutationFn` को camelCase किया गया, `formData` को camelCase किया गया
-      if (!user?.idToken || !user?.uid) { // `idToken` को camelCase किया गया
-        throw new Error("User not authenticated."); // `Error` को uppercase किया गया
+  return useMutation<any, Error, FormData>({
+    mutationFn: async (formData) => {
+      if (!user?.idToken || !user?.uid) {
+        throw new Error("User not authenticated.");
       }
 
       const payload = {
         ...formData,
-        firebaseUid: user.uid, // `firebaseUid` को camelCase किया गया
+        firebaseUid: user.uid,
         email: user.email,
         name: user.name,
       };
 
       try {
         const response = await apiRequest(
-          "POST", // `POST` को uppercase किया गया
+          "POST",
           "/api/sellers/apply",
           payload,
-          user.idToken // `idToken` को camelCase किया गया
+          user.idToken
         );
         return response;
       } catch (error: any) {
-        throw new Error(error.message || "Failed to register seller."); // `Error` को uppercase किया गया
+        throw new Error(error.message || "Failed to register seller.");
       }
     },
 
-    onSuccess: (data) => { // `onSuccess` को camelCase किया गया
+    onSuccess: (data) => {
       toast({
-        title: "Application Submitted!", // `Application Submitted!` को camelCase किया गया
+        title: "Application Submitted!",
         description:
           data?.message ||
-          "Your seller application was submitted successfully.", // `Your seller application was submitted successfully.` को camelCase किया गया
+          "Your seller application was submitted successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["sellerProfile", user?.uid] }); // `invalidateQueries` को camelCase किया गया, `queryKey` को camelCase किया गया
+      queryClient.invalidateQueries({ queryKey: ["sellerProfile", user?.uid] });
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
-      resetForm(); // `resetForm` को camelCase किया गया
-      onClose(); // `onClose` को camelCase किया गया
-      setTimeout(() => navigate("/seller-status"), 1500); // `setTimeout` को camelCase किया गया
+      resetForm();
+      onClose();
+      setTimeout(() => navigate("/seller-status"), 1500);
     },
 
-    onError: (error) => { // `onError` को camelCase किया गया
+    onError: (error) => {
       toast({
-        title: "Registration Failed", // `Registration Failed` को camelCase किया गया
-        description: error.message || "Something went wrong.", // `Something went wrong.` को camelCase किया गया
+        title: "Registration Failed",
+        description: error.message || "Something went wrong.",
         variant: "destructive",
       });
     },
   });
 }
 
-export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` को uppercase किया गया
-  isOpen, // `isOpen` को camelCase किया गया
-  onClose, // `onClose` को camelCase किया गया
-}: SellerOnboardingDialogProps) { // `SellerOnboardingDialogProps` को uppercase किया गया
-  const { user, isAuthenticated, isLoadingAuth } = useAuth(); // `isAuthenticated`, `isLoadingAuth` को camelCase किया गया
-  const { toast } = useToast(); // `useToast` को uppercase किया गया
-  const navigate = useNavigate(); // `useNavigate` को uppercase किया गया
+export default function SellerOnboardingDialog({
+  isOpen,
+  onClose,
+}: SellerOnboardingDialogProps) {
+  const { user, isAuthenticated, isLoadingAuth } = useAuth();
+  const { toast } = useToast();
+  const navigate = useNavigate();
 
-  const form = useForm<FormData>({ // `useForm`, `FormData` को uppercase किया गया
-    resolver: zodResolver(sellerFormSchema), // `zodResolver`, `sellerFormSchema` को uppercase किया गया
-    defaultValues: { // `defaultValues` को camelCase किया गया
-      businessName: "", // `businessName` को camelCase किया गया
-      businessType: "grocery", // `businessType` को camelCase किया गया
+  const form = useForm<FormData>({
+    resolver: zodResolver(sellerFormSchema),
+    defaultValues: {
+      businessName: "",
+      businessType: "grocery",
       description: "",
-      businessAddress: "", // `businessAddress` को camelCase किया गया
+      businessAddress: "",
       city: "",
       pincode: "",
-      businessPhone: "", // `businessPhone` को camelCase किया गया
-      gstNumber: "", // `gstNumber` को camelCase किया गया
-      bankAccountNumber: "", // `bankAccountNumber` को camelCase किया गया
-      ifscCode: "", // `ifscCode` को camelCase किया गया
-      deliveryRadius: 5, // `deliveryRadius` को camelCase किया गया
-      latitude: undefined, // डिफ़ॉल्ट मान जोड़ा गया
-      longitude: undefined, // डिफ़ॉल्ट मान जोड़ा गया
+      businessPhone: "",
+      gstNumber: "",
+      bankAccountNumber: "",
+      ifscCode: "",
+      deliveryRadius: 5,
+      latitude: undefined,
+      longitude: undefined,
     },
   });
 
-  const registerSellerMutation = useRegisterSeller(onClose, form.reset); // `registerSellerMutation` को camelCase किया गया, `useRegisterSeller` को uppercase किया गया
+  const registerSellerMutation = useRegisterSeller(onClose, form.reset);
 
-  const onSubmit = (data: FormData) => { // `onSubmit`, `FormData` को camelCase किया गया
+  const onSubmit = (data: FormData) => {
     if (
-      !isAuthenticated || // `isAuthenticated` को camelCase किया गया
-      isLoadingAuth || // `isLoadingAuth` को camelCase किया गया
+      !isAuthenticated ||
+      isLoadingAuth ||
       !user?.uid ||
-      !user?.idToken // `idToken` को camelCase किया गया
+      !user?.idToken
     ) {
       toast({
-        title: "Please Wait...", // `Please Wait...` को camelCase किया गया
-        description: "Authenticating user. Please try again.", // `Authenticating user. Please try again.` को camelCase किया गया
+        title: "Please Wait...",
+        description: "Authenticating user. Please try again.",
         variant: "default",
       });
       return;
@@ -165,7 +166,7 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
     if (data.latitude === undefined || data.longitude === undefined) {
       toast({
         title: "Location Missing",
-        description: "Please choose your current location or update it from your business address.",
+        description: "Please ensure your business address is valid so we can pinpoint its location (latitude/longitude).",
         variant: "destructive",
       });
       return;
@@ -174,42 +175,15 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
     registerSellerMutation.mutate(data);
   };
 
-  const handleClose = () => { // `handleClose` को camelCase किया गया
+  const handleClose = () => {
     form.reset();
-    onClose(); // `onClose` को camelCase किया गया
+    onClose();
   };
 
-  // ======================================================================
-  // 📍 यहाँ chooseCurrentLocation फ़ंक्शन को जोड़ें
-  const chooseCurrentLocation = () => {
-    if (navigator.geolocation) {
-      navigator.geolocation.getCurrentPosition(
-        (position) => {
-          const lat = position.coords.latitude;
-          const lng = position.coords.longitude;
-          form.setValue('latitude', lat);
-          form.setValue('longitude', lng);
-          toast({ title: "Location Captured", description: `Lat: ${lat}, Lng: ${lng}` });
-
-          // आप इस Lat/Lng को Geocoding API से रिवर्स-जियोकोड करके पता भी प्राप्त कर सकते हैं
-          // ताकि businessAddress, city, pincode को भी अपडेट किया जा सके।
-          // यदि आप ऐसा करना चाहते हैं, तो आपको एक `reverseGeocode` फ़ंक्शन की आवश्यकता होगी।
-        },
-        (error) => {
-          console.error("Geolocation error:", error);
-          toast({ title: "Location Error", description: "Unable to retrieve current location. Please allow location access.", variant: "destructive" });
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    } else {
-      toast({ title: "Geolocation Not Supported", description: "Your browser does not support Geolocation.", variant: "destructive" });
-    }
-  };
-
-  // 📍 यहाँ geocodeAddress फ़ंक्शन को जोड़ें
+  // 📍 Geocode Address फ़ंक्शन को जोड़ें
   const geocodeAddress = async (address: string) => {
     if (!GOOGLE_MAPS_API_KEY) {
-      toast({ title: "API Key Missing", description: "Google Maps API Key is not configured.", variant: "destructive" });
+      toast({ title: "API Key Missing", description: "Google Maps API Key is not configured in environment variables.", variant: "destructive" });
       return null;
     }
     try {
@@ -225,7 +199,7 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
         toast({ title: "Address Geocoded", description: `Lat: ${lat}, Lng: ${lng}` });
         return { lat, lng };
       } else {
-        toast({ title: "Geocoding Failed", description: "Could not find coordinates for the given address.", variant: "destructive" });
+        toast({ title: "Geocoding Failed", description: "Could not find coordinates for the given address. Please check your address, city, and pincode.", variant: "destructive" });
         return null;
       }
     } catch (error) {
@@ -241,8 +215,8 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
   const pincode = form.watch('pincode');
 
   useEffect(() => {
-    // केवल तभी जियोकोड करें जब सभी पते के फ़ील्ड मौजूद हों
-    if (businessAddress && city && pincode) {
+    // केवल तभी जियोकोड करें जब सभी पते के फ़ील्ड मौजूद हों और वे पर्याप्त लंबे हों
+    if (businessAddress && city && pincode && businessAddress.length > 5 && city.length > 2 && pincode.length === 6) {
       const fullAddress = `${businessAddress}, ${city}, ${pincode}`;
       // Debounce the geocoding to avoid excessive API calls
       const handler = setTimeout(() => {
@@ -252,36 +226,37 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
       return () => {
         clearTimeout(handler);
       };
+    } else {
+      // यदि पता अधूरा है, तो निर्देशांक को रीसेट करें
+      form.setValue('latitude', undefined);
+      form.setValue('longitude', undefined);
     }
-  }, [businessAddress, city, pincode, form.setValue]); // `form.setValue` को निर्भरता में शामिल करें
+  }, [businessAddress, city, pincode, form.setValue, toast]); // `toast` को भी निर्भरता में जोड़ा गया
 
-
-  // ======================================================================
-
-  if (!isOpen) return null; // `isOpen` को camelCase किया गया
+  if (!isOpen) return null;
 
   // ✅ Handle Auth States
-  if (isLoadingAuth) { // `isLoadingAuth` को camelCase किया गया
+  if (isLoadingAuth) {
     return (
-      <Dialog open={isOpen} onOpenChange={handleClose}> // `Dialog`, `isOpen`, `onOpenChange`, `handleClose` को uppercase/camelCase किया गया
-        <DialogContent className="max-w-md"> // `DialogContent`, `className` को uppercase/camelCase किया गया
-          <div className="flex flex-col items-center justify-center p-6 text-center"> // `className` को camelCase किया गया
-            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" /> // `Loader2`, `className` को uppercase/camelCase किया गया
-            <h2 className="text-xl font-semibold">Verifying Login...</h2> // `className` को camelCase किया गया
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md">
+          <div className="flex flex-col items-center justify-center p-6 text-center">
+            <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+            <h2 className="text-xl font-semibold">Verifying Login...</h2>
           </div>
         </DialogContent>
       </Dialog>
     );
   }
 
-  if (!isAuthenticated) { // `isAuthenticated` को camelCase किया गया
+  if (!isAuthenticated) {
     return (
-      <Dialog open={isOpen} onOpenChange={handleClose}> // `Dialog`, `isOpen`, `onOpenChange`, `handleClose` को uppercase/camelCase किया गया
-        <DialogContent className="max-w-md text-center p-6"> // `DialogContent`, `className` को uppercase/camelCase किया गया
-          <h2 className="text-xl font-semibold">Login Required</h2> // `className` को camelCase किया गया
-          <p className="text-gray-600 mb-4">Please log in to continue.</p> // `className` को camelCase किया गया
-          <Button onClick={() => { handleClose(); navigate("/auth"); }}> // `Button`, `onClick`, `handleClose` को uppercase/camelCase किया गया
-            Go to Login // `Go to Login` को camelCase किया गया
+      <Dialog open={isOpen} onOpenChange={handleClose}>
+        <DialogContent className="max-w-md text-center p-6">
+          <h2 className="text-xl font-semibold">Login Required</h2>
+          <p className="text-gray-600 mb-4">Please log in to continue.</p>
+          <Button onClick={() => { handleClose(); navigate("/auth"); }}>
+            Go to Login
           </Button>
         </DialogContent>
       </Dialog>
@@ -290,75 +265,97 @@ export default function SellerOnboardingDialog({ // `SellerOnboardingDialog` क
 
   // ✅ Main Form UI
   return (
-    <Dialog open={isOpen} onOpenChange={handleClose}> // `Dialog`, `isOpen`, `onOpenChange`, `handleClose` को uppercase/camelCase किया गया
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto"> // `DialogContent`, `className` को uppercase/camelCase किया गया
-        <DialogHeader> // `DialogHeader` को uppercase किया गया
-          <DialogTitle>Become a Seller</DialogTitle> // `DialogTitle` को uppercase किया गया
-          <DialogDescription> // `DialogDescription` को uppercase किया गया
+    <Dialog open={isOpen} onOpenChange={handleClose}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Become a Seller</DialogTitle>
+          <DialogDescription>
             Register your store for local delivery.
           </DialogDescription>
         </DialogHeader>
 
-        <Form {...form}> {/* `Form` को uppercase किया गया */}
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4"> {/* `onSubmit`, `handleSubmit`, `className` को camelCase किया गया */}
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
             {[
-              { name: "businessName", label: "Business Name" }, // `businessName` को camelCase किया गया
-              { name: "businessAddress", label: "Business Address", type: "textarea" }, // `businessAddress` को camelCase किया गया
-              { name: "businessType", label: "Business Type" }, // `businessType` को camelCase किया गया
-              { name: "description", label: "Description", type: "textarea" }, // `description` को camelCase किया गया
-              { name: "city", label: "City" }, // `city` को camelCase किया गया
-              { name: "pincode", label: "Pincode", type: "number" }, // `pincode` को camelCase किया गया
-              { name: "businessPhone", label: "Business Phone" }, // `businessPhone` को camelCase किया गया
-              { name: "gstNumber", label: "GST Number (Optional)" }, // `gstNumber` को camelCase किया गया
-              { name: "bankAccountNumber", label: "Bank Account Number" }, // `bankAccountNumber` को camelCase किया गया
-              { name: "ifscCode", label: "IFSC Code" }, // `ifscCode` को camelCase किया गया
-              { name: "deliveryRadius", label: "Delivery Radius (KM)", type: "number" }, // `deliveryRadius` को camelCase किया गया
+              { name: "businessName", label: "Business Name" },
+              { name: "businessAddress", label: "Business Address", type: "textarea" },
+              { name: "city", label: "City" },
+              { name: "pincode", label: "Pincode", type: "number" },
+              { name: "businessType", label: "Business Type" },
+              { name: "description", label: "Description", type: "textarea" },
+              { name: "businessPhone", label: "Business Phone" },
+              { name: "gstNumber", label: "GST Number (Optional)" },
+              { name: "bankAccountNumber", label: "Bank Account Number" },
+              { name: "ifscCode", label: "IFSC Code" },
+              { name: "deliveryRadius", label: "Delivery Radius (KM)", type: "number" },
             ].map(({ name, label, type }) => (
               <FormField
                 key={name}
                 control={form.control}
-                name={name as keyof FormData} // `FormData` को uppercase किया गया
+                name={name as keyof FormData}
                 render={({ field }) => (
-                  <FormItem> // `FormItem` को uppercase किया गया
-                    <FormLabel>{label}</FormLabel> // `FormLabel` को uppercase किया गया
-                    <FormControl> // `FormControl` को uppercase किया गया
+                  <FormItem>
+                    <FormLabel>{label}</FormLabel>
+                    <FormControl>
                       {type === "textarea" ? (
-                        <Textarea {...field} /> // `Textarea` को uppercase किया गया
+                        <Textarea {...field} />
                       ) : (
-                        <Input // `Input` को uppercase किया गया
+                        <Input
                           {...field}
                           type={type === "number" ? "number" : "text"}
                         />
                       )}
                     </FormControl>
-                    <FormMessage /> // `FormMessage` को uppercase किया गया
+                    <FormMessage />
                   </FormItem>
                 )}
               />
             ))}
 
-            {/* 📍 "Choose Current Location" बटन यहाँ जोड़ें */}
-            <Button type="button" onClick={chooseCurrentLocation} className="w-full"> {/* `Button` को uppercase किया गया, `className` जोड़ा गया */}
-              Choose Current Location
-            </Button>
-
-            {/* 📍 अक्षांश और देशांतर के लिए हिडन इनपुट्स (जो UI में नहीं दिखेंगे लेकिन फ़ॉर्म डेटा में होंगे) */}
+            {/* 📍 अक्षांश और देशांतर के लिए हिडन इनपुट्स (ये UI में नहीं दिखेंगे) */}
             <input type="hidden" {...form.register('latitude', { valueAsNumber: true })} />
             <input type="hidden" {...form.register('longitude', { valueAsNumber: true })} />
 
-            {/* 📍 यदि मान सेट हो जाते हैं तो प्रदर्शन करें */}
-            {form.watch('latitude') !== undefined && form.watch('longitude') !== undefined && (
-              <p className="text-sm text-gray-600">
-                Current Coordinates: {form.watch('latitude')?.toFixed(7)}, {form.watch('longitude')?.toFixed(7)}
-              </p>
+            {/* 📍 जियोकोड किए गए निर्देशांक का रीड-ओनली डिस्प्ले */}
+            {form.watch('latitude') !== undefined && form.watch('longitude') !== undefined ? (
+              <FormItem>
+                <FormLabel>Shop Location Coordinates</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    value={`Lat: ${form.watch('latitude')?.toFixed(7)}, Lng: ${form.watch('longitude')?.toFixed(7)}`}
+                    readOnly
+                    className="bg-gray-100 cursor-not-allowed"
+                  />
+                </FormControl>
+                <FormDescription>
+                  These coordinates are automatically derived from your business address.
+                </FormDescription>
+              </FormItem>
+            ) : (
+              <FormItem>
+                <FormLabel>Shop Location Coordinates</FormLabel>
+                <FormControl>
+                  <Input
+                    type="text"
+                    value="Enter a valid Business Address, City, and Pincode to get coordinates."
+                    readOnly
+                    className="bg-red-50 text-red-700 cursor-not-allowed"
+                  />
+                </FormControl>
+                <FormDescription className="text-red-600">
+                  Business address, city, and pincode are required to automatically determine your shop's location.
+                </FormDescription>
+                <FormMessage /> {/* यदि आप स्कीमा में इसे आवश्यक बनाते हैं तो त्रुटि दिखाएगा */}
+              </FormItem>
             )}
 
-            <DialogFooter> {/* `DialogFooter` को uppercase किया गया */}
-              <Button type="button" variant="outline" onClick={handleClose}> {/* `Button`, `onClick`, `handleClose` को uppercase/camelCase किया गया */}
+            <DialogFooter>
+              <Button type="button" variant="outline" onClick={handleClose}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={registerSellerMutation.isPending}> {/* `Button`, `registerSellerMutation.isPending` को camelCase किया गया */}
-                {registerSellerMutation.isPending ? ( // `registerSellerMutation.isPending` को camelCase किया गया
+              <Button type="submit" disabled={registerSellerMutation.isPending}>
+                {registerSellerMutation.isPending ? (
                   <>
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Submitting...
                   </>
