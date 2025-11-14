@@ -17,7 +17,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useToast } from "@/hooks/use-toast";
+import { useToast } from "@/hooks/use-toast"; // assuming use-toast is in @/components/ui
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import {
@@ -27,7 +27,7 @@ import {
   FormLabel,
   FormControl,
   FormMessage,
-  FormDescription, // FormDescription भी जोड़ा गया
+  FormDescription,
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
 
@@ -44,14 +44,14 @@ const sellerFormSchema = z.object({
   businessPhone: z.string().regex(/^\d{10}$/),
   gstNumber: z.string().max(15).optional(),
   bankAccountNumber: z.string().regex(/^\d{9,18}$/),
-  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/),
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/), // Regex fixed to uppercase for IFSC standard
   deliveryRadius: z.preprocess(
     (val) => (val === "" ? undefined : Number(val)),
     z.number().min(1).max(100)
   ),
   businessType: z.string().min(2).max(50),
-  latitude: z.number().min(-90).max(90).optional(), // Optional रखा गया
-  longitude: z.number().min(-180).max(180).optional(), // Optional रखा गया
+  latitude: z.number().min(-90).max(90).optional(),
+  longitude: z.number().min(-180).max(180).optional(),
 });
 
 type FormData = z.infer<typeof sellerFormSchema>;
@@ -162,7 +162,6 @@ export default function SellerOnboardingDialog({
       return;
     }
 
-    // सुनिश्चित करें कि अक्षांश और देशांतर मौजूद हैं
     if (data.latitude === undefined || data.longitude === undefined) {
       toast({
         title: "Location Missing",
@@ -180,7 +179,7 @@ export default function SellerOnboardingDialog({
     onClose();
   };
 
-  // 📍 Geocode Address फ़ंक्शन को जोड़ें
+  // 📍 Geocode Address फ़ंक्शन
   const geocodeAddress = async (address: string) => {
     if (!GOOGLE_MAPS_API_KEY) {
       toast({ title: "API Key Missing", description: "Google Maps API Key is not configured in environment variables.", variant: "destructive" });
@@ -215,23 +214,20 @@ export default function SellerOnboardingDialog({
   const pincode = form.watch('pincode');
 
   useEffect(() => {
-    // केवल तभी जियोकोड करें जब सभी पते के फ़ील्ड मौजूद हों और वे पर्याप्त लंबे हों
     if (businessAddress && city && pincode && businessAddress.length > 5 && city.length > 2 && pincode.length === 6) {
       const fullAddress = `${businessAddress}, ${city}, ${pincode}`;
-      // Debounce the geocoding to avoid excessive API calls
       const handler = setTimeout(() => {
         geocodeAddress(fullAddress);
-      }, 1000); // 1 सेकंड के बाद जियोकोड
+      }, 1000);
 
       return () => {
         clearTimeout(handler);
       };
     } else {
-      // यदि पता अधूरा है, तो निर्देशांक को रीसेट करें
       form.setValue('latitude', undefined);
       form.setValue('longitude', undefined);
     }
-  }, [businessAddress, city, pincode, form.setValue, toast]); // `toast` को भी निर्भरता में जोड़ा गया
+  }, [businessAddress, city, pincode, form.setValue, toast]);
 
   if (!isOpen) return null;
 
@@ -346,7 +342,7 @@ export default function SellerOnboardingDialog({
                 <FormDescription className="text-red-600">
                   Business address, city, and pincode are required to automatically determine your shop's location.
                 </FormDescription>
-                <FormMessage /> {/* यदि आप स्कीमा में इसे आवश्यक बनाते हैं तो त्रुटि दिखाएगा */}
+                <FormMessage />
               </FormItem>
             )}
 
