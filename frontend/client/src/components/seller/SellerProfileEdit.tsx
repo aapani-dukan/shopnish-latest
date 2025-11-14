@@ -3,10 +3,10 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import {
-  Button,
-  Input,
-  Textarea,
   Form,
   FormField,
   FormItem,
@@ -14,8 +14,8 @@ import {
   FormControl,
   FormMessage,
   FormDescription,
-  useToast,
-} from "@/components/ui/"; // Assuming all shadcn UI components are exported from an index.ts in components/ui
+} from "@/components/ui/form";
+import { useToast} from "@/hooks/use-toast"; // Assuming all shadcn UI components are exported from an index.ts in components/ui
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
