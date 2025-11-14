@@ -8,7 +8,7 @@ import { Skeleton } from "../components/ui/skeleton"; // Corrected casing
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"; // Corrected casing
 import { Button } from "../components/ui/button"; // Corrected casing
 import { useQuery, useQueryClient } from "@tanstack/react-query"; // Corrected casing
-import type { Seller, OrderWithItems } from "../../shared/backend/schema"; // Corrected casing
+import type { Seller, OrderWithItems } from "../../../shared/backend/schema"; // Corrected casing
 import { apiRequest } from "../lib/queryclient";
 import { useToast } from "../hooks/use-toast"; // Corrected casing
 import { Link, useNavigate } from "react-router-dom"; // Link and useNavigate corrected casing
