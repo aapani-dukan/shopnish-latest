@@ -24,7 +24,7 @@ import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient"; // Make sure this path is correct
 
 // Google Maps API Key को .env फ़ाइल से लोड करें
-const GOOGLE_MAPS_API_KEY = process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY;
+const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 // 📦 Form Validation Schema (SellerOnboardingDialog से समान)
 const sellerProfileSchema = z.object({
@@ -148,7 +148,7 @@ export default function SellerProfileEdit() {
   // 📍 Geocode Address फ़ंक्शन
   const geocodeAddress = async (address: string) => {
     if (!GOOGLE_MAPS_API_KEY) {
-      toast({ title: "API Key Missing", description: "Google Maps API Key is not configured in environment variables.", variant: "destructive" });
+      toast({ title: "API Key Missing", description: "Google Maps API Key is not configured in environment variables (`VITE_GOOGLE_MAPS_API_KEY`).", variant: "destructive" });
       return null;
     }
     try {
