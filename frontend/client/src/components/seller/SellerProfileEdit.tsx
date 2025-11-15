@@ -68,7 +68,7 @@ export default function SellerProfileEdit() {
     // 💡 यहाँ बदलाव है: `response.data` को लौटाएँ
     // apiRequest को कॉल करें
     const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
-   'return response';
+   return response;
     // return response.data;
     },
     enabled: isAuthenticated && !isLoadingAuth, // केवल तभी क्वेरी चलाएं जब यूजर प्रमाणित हो
