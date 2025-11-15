@@ -9,7 +9,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Button } from "../components/ui/button"; // Corrected casing
 import { useQuery, useQueryClient } from "@tanstack/react-query"; // Corrected casing
 import type { Seller, OrderWithItems } from "../../../shared/backend/schema"; // Corrected casing
-import { apiRequest } from "../lib/queryclient";
+import { apiRequest } from "../lib/queryClient";
 import { useToast } from "../hooks/use-toast"; // Corrected casing
 import { Link, useNavigate } from "react-router-dom"; // Link and useNavigate corrected casing
 import {
