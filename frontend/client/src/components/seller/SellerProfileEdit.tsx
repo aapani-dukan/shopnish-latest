@@ -56,16 +56,18 @@ export default function SellerProfileEdit() {
 
   // 1. मौजूदा सेलर प्रोफ़ाइल डेटा फ़ेच करें
   const {
-    data: sellerData,
-    isLoading: isLoadingSeller,
-    isError: isErrorSeller,
-    error: sellerError,
-  } = useQuery<FormData>({
-    queryKey: ["sellerProfile", user?.uid],
-    queryFn: async () => {
-      if (!user?.idToken) throw new Error("User not authenticated.");
-      // आपको यह एंडपॉइंट प्रदान करना होगा जो वर्तमान सेलर का डेटा लौटाता है
-      const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
+  data: sellerData,
+  isLoading: isLoadingSeller,
+  isError: isErrorSeller,
+  error: sellerError,
+} = useQuery<FormData>({
+  queryKey: ["sellerProfile", user?.uid],
+  queryFn: async () => {
+    if (!user?.idToken) throw new Error("User not authenticated.");
+    
+    // 💡 यहाँ बदलाव है: `response.data` को लौटाएँ
+    // apiRequest को कॉल करें
+    const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
       return response.data;
     },
     enabled: isAuthenticated && !isLoadingAuth, // केवल तभी क्वेरी चलाएं जब यूजर प्रमाणित हो
