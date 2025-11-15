@@ -68,7 +68,8 @@ export default function SellerProfileEdit() {
     // 💡 यहाँ बदलाव है: `response.data` को लौटाएँ
     // apiRequest को कॉल करें
     const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
-      return response.data;
+   'return response';
+    // return response.data;
     },
     enabled: isAuthenticated && !isLoadingAuth, // केवल तभी क्वेरी चलाएं जब यूजर प्रमाणित हो
   });
@@ -97,12 +98,12 @@ export default function SellerProfileEdit() {
   // 3. सेलर प्रोफ़ाइल अपडेट करने के लिए mutation हुक
   const updateSellerMutation = useMutation<any, Error, FormData>({
     mutationFn: async (formData) => {
-      if (!user?.idToken || !user?.uid || !sellerData?._id) { // MongoDB के लिए `_id` का उपयोग करें, या आपके डेटाबेस के आधार पर `id`
+      if (!user?.idToken || !user?.uid || !sellerData?.id) { // MongoDB के लिए `_id` का उपयोग करें, या आपके डेटाबेस के आधार पर `id`
         throw new Error("User not authenticated or seller ID missing.");
       }
       const response = await apiRequest(
         "PATCH", // PATCH method
-        `/api/sellers/${sellerData._id}`, // आपका अपडेट एंडपॉइंट (ID के साथ)
+        `/api/sellers/${sellerData.id}`, // आपका अपडेट एंडपॉइंट (ID के साथ)
         formData,
         user.idToken
       );
