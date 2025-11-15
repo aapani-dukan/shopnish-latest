@@ -25,7 +25,7 @@ import {
 import { useEffect, useState } from "react"; // Corrected casing
 import { useSocket } from "../hooks/useSocket"; // Corrected casing
 import { useAuth } from "../hooks/useAuth"; // Corrected casing
-import ProductManager from "../components/productManager"; // Corrected casing
+import ProductManager from "../components/ProductManager"; // Corrected casing
 import OrderManager from "../components/orderManager"; // Corrected casing
 // import ProfileManager from "../components/profileManager"; // 👈 यह हटा दिया गया है
 import SellerProfileEdit from "../components/seller/SellerProfileEdit"; // 👈 इसके बजाय नया कंपोनेंट इंपोर्ट किया गया है
