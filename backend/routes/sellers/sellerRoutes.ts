@@ -29,7 +29,7 @@ import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
 import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, इसे .ts के साथ इम्पोर्ट करें
 import { getMySellerProfile, updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
-import { authorize } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
+import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
 
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 const sellerRouter = Router();
