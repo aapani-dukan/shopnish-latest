@@ -575,6 +575,27 @@ sellerRouter.post(
       }
     );
 
+// backend/src/routes/sellerRoutes.ts
+import express from 'express';
+import { protect, authorize } from '../middleware/authMiddleware'; // आपके ऑथेंटिकेशन मिडलवेयर
+import { getMySellerProfile, updateMySellerProfile } from '../controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
+
+const router = express.Router();
+
+
+
+// 📍 PATCH /api/sellers/:id - प्रमाणित सेलर के लिए अपनी प्रोफ़ाइल अपडेट करें
+router.patch(
+  '/:id',
+  protect, // यूजर को प्रमाणित करें
+  authorize(['seller']), // केवल 'seller' भूमिका वाले यूजर को अनुमति दें
+  // कंट्रोलर में सुरक्षा जांच: सुनिश्चित करें कि सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
+  updateMySellerProfile
+);
+
+
+
+
     // ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें)
     sellerRouter.patch(
       '/products/:id',
