@@ -10,20 +10,7 @@ import { users, UserRoleEnum } from "../../shared/backend/schema.ts"; // अप�
 import { AuthenticatedUser } from "../../shared/types/user.ts"; // AuthenticatedUser को इम्पोर्ट करें
 import { eq } from "drizzle-orm";
 
-// AuthenticatedRequest इंटरफ़ेस को फिर से परिभाषित करें ताकि यह req.user को सही ढंग से टाइप कर सके
-export interface AuthenticatedRequest extends Request {
-  user?: AuthenticatedUser & {
-    // AuthenticatedUser में sellerId और deliveryBoyId हैं या नहीं, इसके आधार पर यहां जोड़ें
-    sellerId?: number;
-    deliveryBoyId?: number;
-  };
-}
 
-// ----------------------------------------------------
-// protect मिडलवेयर
-// @desc    Verify Firebase ID token and attach user from DB to request
-// @access  Public (लेकिन टोकन की आवश्यकता है)
-// ----------------------------------------------------
 export const protect = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   let token;
 
@@ -52,10 +39,6 @@ export const protect = async (req: AuthenticatedRequest, res: Response, next: Ne
         deliveryBoyId: undefined, // default
       };
 
-      // यदि आवश्यक हो तो SellerId और DeliveryBoyId को यहां पॉपुलेट करें
-      // ध्यान दें: यदि आपके पास authMiddleware.ts में requireSellerAuth/requireDeliveryBoyAuth जैसे विशिष्ट मिडलवेयर हैं,
-      // तो वे req.user में sellerId/deliveryBoyId को असाइन करने के लिए बेहतर जगह हो सकते हैं।
-      // यदि आप इसे यहां करना चाहते हैं, तो आपको यहां seller/deliveryBoy टेबल को क्वेरी करना होगा।
 
       next();
     } catch (error: any) {
@@ -71,37 +54,8 @@ export const protect = async (req: AuthenticatedRequest, res: Response, next: Ne
 
 // ----------------------------------------------------
 // authorize मिडलवेयर
-// ----------------------------------------------------
-/**
- * डायनामिक ऑथराइजेशन मिडलवेयर।
- * यह निर्दिष्ट भूमिकाओं (roles) में से किसी एक की अनुमति देता है।
- * `protect` मिडलवेयर के बाद उपयोग किया जाना चाहिए।
- *
- * @param allowedRoles भूमिकाओं का एक एरे (जैसे [UserRoleEnum.ENUM_VALUES.SELLER, UserRoleEnum.ENUM_VALUES.ADMIN])
- */
-export const authorize = (allowedRoles: string[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !req.user.role) {
-      return res.status(403).json({ message: "Forbidden: User role not defined or user not authenticated." });
-    }
+// -----------------------------------------------
 
-    if (!allowedRoles.includes(req.user.role)) {
-      return res.status(403).json({
-        message: `Forbidden: User role '${req.user.role}' is not allowed to access this resource.`,
-      });
-    }
-
-    next();
-  };
-};
-
-/**
- * डायनामिक ऑथराइजेशन मिडलवेयर।
- * यह निर्दिष्ट भूमिकाओं (roles) में से किसी एक की अनुमति देता है।
- * `verifyToken` मिडलवेयर के बाद उपयोग किया जाना चाहिए (या `requireAuth` का एक हिस्सा)।
- *
- * @param allowedRoles भूमिकाओं का एक एरे (जैसे [userRoleEnum.enumValues[0], userRoleEnum.enumValues[2]])
- */
 export const authorize = (allowedRoles: string[]) => {
   return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user || !req.user.role) {
