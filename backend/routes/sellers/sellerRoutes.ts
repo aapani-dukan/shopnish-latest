@@ -580,7 +580,7 @@ sellerRouter.post(
 
 
 // 📍 PATCH /api/sellers/:id - प्रमाणित सेलर के लिए अपनी प्रोफ़ाइल अपडेट करें
-router.patch(
+sellerRouter.patch(
   '/:id',
   protect, // यूजर को प्रमाणित करें
   authorize(['seller']), // केवल 'seller' भूमिका वाले यूजर को अनुमति दें
