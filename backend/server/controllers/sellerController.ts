@@ -1,7 +1,7 @@
 // backend/src/controllers/sellercontroller.ts
 import { Request, Response, NextFunction } from 'express'; // 'request', 'response', 'nextfunction' को सही केस में बदला
 import { db } from '../db'; // आपका drizzle db इंस्टेंस
-import { sellerspgtable, users, approvalstatusenum, userroleenum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
+import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
 import { eq } from 'drizzle-orm';
 import { z } from 'zod'; // आपके validation schemas के लिए
 
