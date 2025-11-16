@@ -25,8 +25,17 @@ const sellerUpdateSchema = z.object({
   bankAccountNumber: z.string().regex(/^\d{9,18}$/).optional(),
   ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/).optional(),
   deliveryRadius: z.union([z.number().int().min(1).max(100), z.string().transform(val => parseInt(val))])
-                      .optional()
-                      .nullable(), // null और undefined दोनों स्वीकार करें
+     return isNaN(num) ? null : num;
+    })
+  ])
+  .optional()
+  .nullable()
+  .refine(val => val === null || (typeof val === 'number' && !isNaN(val)), { // एक अतिरिक्त सुरक्षा जांच
+      message: "Delivery radius must be a valid number or null"
+  }),              
+    
+  
+                      .nullable(), 
   businessType: z.string().min(2).max(50).optional(),
   latitude: z.number().min(-90).max(90).optional().nullable(),
   longitude: z.number().min(-180).max(180).optional().nullable(),
