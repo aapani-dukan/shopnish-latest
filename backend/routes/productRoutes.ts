@@ -1,19 +1,20 @@
 // backend/routes/productRoutes.ts
 import { Router, Request, Response, NextFunction } from 'express';
-import { db } from '../db';
+import { db } from '../server/db';
 import {
   products,
-  productCategories,
+  categories, // ✅ 'categories' की जगह 'productCategories' का उपयोग करें जैसा कि स्कीमा में होगा
   sellersPgTable,
-  approvalStatusEnum,
-  users,
-} from '../shared/backend/schema';
-import { eq, like, inArray, and, desc, asc, sql } from 'drizzle-orm';
+  productCategories,
+  approvalStatusEnum, // ✅ approvalStatusEnum इम्पोर्ट करें
+  users, // यदि आवश्यक हो
+} from '../shared/backend/schema.ts'; // ✅ पाथ सही करें
+import { eq, like, inArray, and, desc, asc, sql } from 'drizzle-orm'; // ✅ desc, asc, sql इम्पोर्ट करें
+import { calculateDistanceKm } from '../services/locationService.ts'; // ✅ पाथ सही करें
+import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
+import { requireAuth, requireSellerAuth, requireAdminAuth } from '../server/middleware/authMiddleware';
 import { calculateDistanceKm } from '../services/locationService';
 
-import { AuthenticatedRequest, verifyToken } from '../middleware/verifyToken';
-import { requireAuth, requireSellerAuth, requireAdminAuth } from '../middleware/authMiddleware';
-import { upload } from '../middleware/multerConfig'; // यदि आप Multer का उपयोग कर रहे हैं
 import { deleteImage, uploadImage } from '../services/imageService'; // यदि आप इमेज अपलोड/डिलीट कर रहे हैं
 
 const router = Router();
