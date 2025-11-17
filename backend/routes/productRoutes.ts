@@ -545,15 +545,17 @@ for (const seller of allApprovedSellers) {
       );
     }
   } else {
-    try {
-      const parsedPincodes = JSON.parse(seller.deliveryPincodes as string);
-      if (Array.isArray(parsedPincodes) && parsedPincodes.includes(effectivePincode)) {
+    
+      const sellerPincodes = seller.deliveryPincodes; 
+      if (Array.isArray(sellerPincodes) && sellerPincodes.includes(effectivePincode)) {
         deliverableSellerIds.push(seller.userId);
-      }
-    } catch (err) {
-      console.warn(`[ProductRoutes] Seller ${seller.id} has invalid deliveryPincodes JSON.`, err);
+           } else if (sellerPincodes === null || sellerPincodes === undefined) {
+      
+    
+      console.warn(`[ProductRoutes] Seller ${seller.id} has null/undefined deliveryPincodes.`);
+    } else {console.warn(`[ProductRoutes] Seller ${seller.id} deliveryPincodes is not an array:`, sellerPincodes);
     }
-  }
+  
 }
 
 // ✅ सभी distance-check async tasks को पूरा होने दो
