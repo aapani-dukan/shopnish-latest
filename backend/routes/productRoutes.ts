@@ -14,10 +14,11 @@ import { calculateDistanceKm } from '../services/locationService.ts'; // ✅ प
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireAuth, requireSellerAuth, requireAdminAuth } from '../server/middleware/authMiddleware';
 import { calculateDistanceKm } from '../services/locationService';
-import { upload } from '../server/types/multer.d.ts
+
 import { deleteImage, uploadImage } from '../server/cloudStorage'; // यदि आप इमेज अपलोड/डिलीट कर रहे हैं
 
 const router = Router();
+const upload = multer({ dest: 'uploads/' });
 
 // =========================================================================
 // Helper Functions (Validation)
