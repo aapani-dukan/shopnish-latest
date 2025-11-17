@@ -5,7 +5,7 @@ import {
   products,
   categories, // ✅ 'categories' की जगह 'productCategories' का उपयोग करें जैसा कि स्कीमा में होगा
   sellersPgTable,
-  productCategories,
+
   approvalStatusEnum, // ✅ approvalStatusEnum इम्पोर्ट करें
   users, // यदि आवश्यक हो
 } from '../shared/backend/schema.ts'; // ✅ पाथ सही करें
