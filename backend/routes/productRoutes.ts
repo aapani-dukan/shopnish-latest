@@ -18,7 +18,7 @@ import { upload } from '../server/middleware/multerConfig';
 import { deleteImage, uploadImage } from '../server/cloudStorage'; // यदि आप इमेज अपलोड/डिलीट कर रहे हैं
 
 const router = Router();
-const upload = multer({ dest: 'uploads/' });
+
 
 // =========================================================================
 // Helper Functions (Validation)
