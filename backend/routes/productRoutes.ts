@@ -552,6 +552,9 @@ router.put('/admin/:productId/reject', verifyToken, requireAdminAuth, async (req
 // =========================================================================
 // Public Product Listing Routes (no authentication required for viewing)
 // =========================================================================
+      // =========================================================================
+// Public Product Listing Routes (no authentication required for viewing)
+// =========================================================================
 
 // GET /api/products (यह सभी प्रोडक्ट्स को लिस्ट करता है, अब स्थान, फ़िल्टर, सर्च, सॉर्ट, पेजिंग के आधार पर फ़िल्टर किया गया)
 router.get('/', async (req: Request, res: Response, next: NextFunction) => {
@@ -604,6 +607,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       .from(sellersPgTable)
       .where(eq(sellersPgTable.approvalStatus, "approved"));
 
+    // ✅ deliverableSellerIds में seller.id को पुश करें, न कि seller.userId को
     const deliverableSellerIds: number[] = [];
     const distanceCheckPromises: Promise<void>[] = [];
 
@@ -629,7 +633,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
                 effectiveLng
               );
               if (distance !== null && distance <= seller.deliveryRadius) {
-                deliverableSellerIds.push(seller.userId);
+                deliverableSellerIds.push(seller.id); // ✅ seller.id को पुश
               }
             })()
           );
@@ -644,7 +648,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
         if (Array.isArray(sellerPincodes)) {
           if (sellerPincodes.includes(effectivePincode)) {
-            deliverableSellerIds.push(seller.userId);
+            deliverableSellerIds.push(seller.id); // ✅ seller.id को पुश
           }
         } else if (sellerPincodes === null || sellerPincodes === undefined) {
           console.warn(`[ProductRoutes] Seller ${seller.id} has null/undefined deliveryPincodes. Skipping pincode check.`);
@@ -706,13 +710,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         seller: {
           columns: {
             id: true,
-            userId: true,
+            userId: true, // सेलर के userId को भी शामिल करें ताकि user डिटेल्स को बाद में fetch किया जा सके
             businessName: true,
-            latitude: true, // ✅ संभावित TypeError फिक्स के लिए
-            longitude: true, // ✅ संभावित TypeError फिक्स के लिए
-            deliveryRadius: true, // ✅ संभावित TypeError फिक्स के लिए
-            // contactPerson: true, // स्कीमा में नहीं है
-            // phoneNumber: true, // स्कीमा में नहीं है
+            latitude: true,
+            longitude: true,
+            deliveryRadius: true,
+          },
+          with: { // ✅ विक्रेता के उपयोगकर्ता विवरण लाने के लिए 'user' को शामिल करें
+            user: {
+              columns: {
+                fullName: true, // या जो भी नाम का फील्ड है (उदा. firstName, lastName)
+                email: true,
+                phoneNumber: true, // ✅ users स्कीमा से
+              }
+            }
           }
         }
       },
@@ -756,10 +767,17 @@ router.get('/:id', async (req: Request, res: Response, next: NextFunction) => {
         seller: {
           columns: {
             id: true,
-            userId: true,
+            userId: true, // ✅ सेलर के userId को भी शामिल करें
             businessName: true,
-            contactPerson: true,
-        phoneNumber: true,
+          },
+          with: { // ✅ विक्रेता के उपयोगकर्ता विवरण लाने के लिए 'user' को शामिल करें
+            user: {
+              columns: {
+                fullName: true, // या जो भी नाम का फील्ड है
+                email: true,
+                phoneNumber: true, // ✅ users स्कीमा से
+              }
+            }
           }
         },
         // TODO: यदि तुम रिव्यूज़ को जोड़ना चाहते हो तो यहाँ 'reviews' भी जोड़ें
