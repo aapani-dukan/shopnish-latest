@@ -22,7 +22,7 @@ import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient"; // Make sure this path is correct
-
+import { formatNumberWithPrecision } from '../../utils/formatters'; 
 // Google Maps API Key को .env फ़ाइल से लोड करें
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -286,7 +286,7 @@ export default function SellerProfileEdit() {
               <FormControl>
                 <Input
                   type="text"
-                  value={`Lat: ${form.watch('latitude')?.toFixed(7)}, Lng: ${form.watch('longitude')?.toFixed(7)}`}
+                  Value={`Lat: ${formatNumberWithPrecision(form.watch('latitude'), 7)}, Lng: ${formatNumberWithPrecision(form.watch('longitude'), 7)}`}
                   readOnly
                   className="bg-gray-100 cursor-not-allowed"
                 />
