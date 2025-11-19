@@ -87,7 +87,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
   // तो आपको पहले sellerId से संबंधित userId को fetch करना होगा।
   // यदि req.user.id सीधे seller के ID को दर्शाता है, तो यह तुलना सीधी हो सकती है।
   // मैं मान रहा हूँ कि req.user.id यूजर का ID है, और sellerId सेलर का ID है।
-  const [sellerBeingUpdated] = await db.query.sellerspgtable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'findmany' को 'findMany' और 'sellerbeingupdated' को 'sellerBeingUpdated' में बदला
+  const [sellerBeingUpdated] = await db.query.sellersPgTable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'findmany' को 'findMany' और 'sellerbeingupdated' को 'sellerBeingUpdated' में बदला
   
   if (!sellerBeingUpdated || sellerBeingUpdated.userId !== req.user.id) { // 'userid' को 'userId' में बदला
       res.status(403);
@@ -101,7 +101,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
     return res.status(400).json({ error: 'Invalid seller ID.' }); // संदेश में सुधार
   }
 
-  const [existingSeller] = await db.query.sellerspgtable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'existingseller' को 'existingSeller' में बदला
+  const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'existingseller' को 'existingSeller' में बदला
   if (!existingSeller) {
     return res.status(404).json({ message: 'Seller not found.' });
   }
@@ -118,7 +118,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
     }
   });
 
-  const [updatedSeller] = await db.update(sellerspgtable) // 'updatedseller' को 'updatedSeller' में बदला
+  const [updatedSeller] = await db.update(sellersPgTable) // 'updatedseller' को 'updatedSeller' में बदला
     .set(finalUpdateData)
     .where(eq(sellerspgtable.id, sellerId))
     .returning();
