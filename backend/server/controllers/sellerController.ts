@@ -4,7 +4,9 @@ import { db } from '../db'; // आपका drizzle db इंस्टेंस
 import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
 import { eq } from 'drizzle-orm';
 import { z } from 'zod'; // आपके validation schemas के लिए
-import { sellerUpdateSchema } from '../shared/validation/sellerValidation'; 
+// ✅ अपनी zod-schema फाइल के सही पाथ को एडजस्ट करें
+
+
 // यदि आपके पास एक async handler utility है, तो उसका उपयोग करें।
 // यदि नहीं, तो आपको async/await के लिए try-catch ब्लॉक का उपयोग करना होगा।
 const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => // 'asynchandler' को 'asyncHandler' और 'promise' को 'Promise' में बदला
@@ -57,8 +59,8 @@ export const getMySellerProfile = asyncHandler(async (req: Request, res: Respons
         throw new Error('Not authorized, user ID not found.'); // 'error' को 'Error' में बदला और संदेश में सुधार
     }
 
-    const [seller] = await db.query.sellerspgtable.findMany({ // 'findmany' को 'findMany' में बदला
-        where: eq(sellerspgtable.userId, req.user.id), // 'userid' को 'userId' में बदला
+    const [seller] = await db.query.sellersPgTable.findMany({ // 'findmany' को 'findMany' में बदला
+        where: eq(sellersPgTable.userId, req.user.id), // 'userid' को 'userId' में बदला
     });
 
     if (seller) {
@@ -101,12 +103,12 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
     return res.status(400).json({ error: 'Invalid seller ID.' }); // संदेश में सुधार
   }
 
-  const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'existingseller' को 'existingSeller' में बदला
+  const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) }); // 'existingseller' को 'existingSeller' में बदला
   if (!existingSeller) {
     return res.status(404).json({ message: 'Seller not found.' });
   }
 
-  const finalUpdateData: Partial<typeof sellerspgtable.$inferInsert> = { // 'partial' को 'Partial' में और '$inferinsert' को '$inferInsert' में बदला
+  const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = { // 'partial' को 'Partial' में और '$inferinsert' को '$inferInsert' में बदला
     ...updateData,
     updatedAt: new Date(), // 'updatedat' को 'updatedAt' और 'new date()' को 'new Date()' में बदला
   };
@@ -120,7 +122,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
 
   const [updatedSeller] = await db.update(sellersPgTable) // 'updatedseller' को 'updatedSeller' में बदला
     .set(finalUpdateData)
-    .where(eq(sellerspgtable.id, sellerId))
+    .where(eq(sellersPgTable.id, sellerId))
     .returning();
 
   if (!updatedSeller) {
