@@ -4,7 +4,7 @@ import { db } from '../db'; // आपका drizzle db इंस्टेंस
 import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
 import { eq } from 'drizzle-orm';
 import { z } from 'zod'; // आपके validation schemas के लिए
-
+import { sellerUpdateSchema } from '../shared/validation/sellerValidation'; 
 // यदि आपके पास एक async handler utility है, तो उसका उपयोग करें।
 // यदि नहीं, तो आपको async/await के लिए try-catch ब्लॉक का उपयोग करना होगा।
 const asyncHandler = (fn: (req: Request, res: Response, next: NextFunction) => Promise<any>) => // 'asynchandler' को 'asyncHandler' और 'promise' को 'Promise' में बदला
