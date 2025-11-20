@@ -558,7 +558,7 @@ router.put('/admin/:productId/reject', verifyToken, requireAdminAuth, async (req
 
 
 // 📍 GET /api/products - सभी प्रोडक्ट लाएं (ग्राहक के लिए)
-productRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
+router.get('/', async (req: Request, res: Response, next: NextFunction) => {
   console.log("📄 [API] Received request to get all products for customer view.");
 
   try {
