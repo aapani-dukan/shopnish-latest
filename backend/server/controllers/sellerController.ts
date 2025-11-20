@@ -89,7 +89,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
   // तो आपको पहले sellerId से संबंधित userId को fetch करना होगा।
   // यदि req.user.id सीधे seller के ID को दर्शाता है, तो यह तुलना सीधी हो सकती है।
   // मैं मान रहा हूँ कि req.user.id यूजर का ID है, और sellerId सेलर का ID है।
-  const [sellerBeingUpdated] = await db.query.sellersPgTable.findMany({ where: eq(sellerspgtable.id, sellerId) }); // 'findmany' को 'findMany' और 'sellerbeingupdated' को 'sellerBeingUpdated' में बदला
+  const [sellerBeingUpdated] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) }); // 'findmany' को 'findMany' और 'sellerbeingupdated' को 'sellerBeingUpdated' में बदला
   
   if (!sellerBeingUpdated || sellerBeingUpdated.userId !== req.user.id) { // 'userid' को 'userId' में बदला
       res.status(403);
