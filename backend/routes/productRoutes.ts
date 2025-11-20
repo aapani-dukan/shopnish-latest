@@ -556,8 +556,9 @@ router.put('/admin/:productId/reject', verifyToken, requireAdminAuth, async (req
 // Public Product Listing Routes (no authentication required for viewing)
 // =========================================================================
 
-// GET /api/products (यह सभी प्रोडक्ट्स को लिस्ट करता है, अब स्थान, फ़िल्टर, सर्च, सॉर्ट, पेजिंग के आधार पर फ़िल्टर किया गया)
-router.get('/', async (req: Request, res: Response, next: NextFunction) => {
+
+// 📍 GET /api/products - सभी प्रोडक्ट लाएं (ग्राहक के लिए)
+productRouter.get('/', async (req: Request, res: Response, next: NextFunction) => {
   console.log("📄 [API] Received request to get all products for customer view.");
 
   try {
@@ -567,9 +568,9 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       customerPincode,
       customerLat,
       customerLng,
-      lat,
-      lng,
-      pincode,
+      lat, // यह भी req.query से आ सकता है
+      lng, // यह भी req.query से आ सकता है
+      pincode, // यह भी req.query से आ सकता है
       minPrice,
       maxPrice,
       sortBy = 'createdAt',
@@ -582,85 +583,140 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
 
-    const effectivePincode =
-      (pincode?.toString() || customerPincode?.toString() || "").trim();
-
+    // प्रभावी स्थान मापदंडों का निर्धारण
+    const effectivePincode = (pincode?.toString() || customerPincode?.toString() || "").trim();
     const effectiveLatStr = lat?.toString() || customerLat?.toString() || "";
     const effectiveLngStr = lng?.toString() || customerLng?.toString() || "";
-
     const effectiveLat = effectiveLatStr ? parseFloat(effectiveLatStr) : NaN;
     const effectiveLng = effectiveLngStr ? parseFloat(effectiveLngStr) : NaN;
 
+    // ✅ LOG 1: ग्राहक स्थान डेटा जो प्रोसेसिंग के लिए उपयोग किया जाएगा
+    console.log("📍 Customer Location Data (Effective):", {
+      effectivePincode,
+      effectiveLat,
+      effectiveLng,
+      rawLat: lat, rawLng: lng, rawPincode: pincode,
+      rawCustomerLat: customerLat, rawCustomerLng: customerLng, rawCustomerPincode: customerPincode
+    });
+
     if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
-      console.log("❌ Invalid or missing location parameters:", {
-        effectivePincode,
-        effectiveLat,
-        effectiveLng,
-      });
+      console.log("❌ Invalid or missing critical customer location parameters. Returning 400.");
       return res.status(400).json({
         message: "Customer location (pincode, lat, lng) is required for filtering.",
       });
     }
 
+    // सभी स्वीकृत सेलर्स को फ़ेच करें
     const allApprovedSellers = await db
       .select()
       .from(sellersPgTable)
       .where(eq(sellersPgTable.approvalStatus, "approved"));
 
-    // ✅ deliverableSellerIds में seller.id को पुश करें, न कि seller.userId को
+    // ✅ LOG 2: स्वीकृत सेलर्स की संख्या
+    console.log(`✅ Fetched ${allApprovedSellers.length} approved sellers.`);
+    if (allApprovedSellers.length === 0) {
+        console.log("No approved sellers found. Returning empty product list.");
+         return res.status(200).json({
+            page: pageNum,
+            limit: limitNum,
+            total: 0,
+            totalPages: 0,
+            products: [],
+        });
+    }
+
     const deliverableSellerIds: number[] = [];
-    const distanceCheckPromises: Promise<void>[] = [];
+    const distanceCheckPromises: Promise<void>[] = []; // distance calculation async है
+
+    // ✅ LOG 3: जियोलोकेशन फ़िल्टरिंग शुरू
+    console.log("Starting geo-location filtering for sellers...");
 
     for (const seller of allApprovedSellers) {
-      if (!seller?.id || !seller?.userId) continue;
+      // ✅ LOG 3.1: प्रत्येक सेलर की जांच
+      console.log(`  🔍 Processing Seller ID: ${seller.id}, Business: ${seller.businessName}`);
+
+      if (!seller?.id) {
+          console.warn(`    Seller ID missing for seller. Skipping.`);
+          continue;
+      }
+
+      // सेलर का जियोलोकेशन डेटा पार्स करें
+      const sellerLat = typeof seller.latitude === 'number' ? seller.latitude : parseFloat(seller.latitude?.toString() || '');
+      const sellerLon = typeof seller.longitude === 'number' ? seller.longitude : parseFloat(seller.longitude?.toString() || '');
+      const sellerDeliveryRadius = typeof seller.deliveryRadius === 'number' ? seller.deliveryRadius : parseFloat(seller.deliveryRadius?.toString() || '');
+
+
+      // ✅ LOG 3.2: सेलर का जियोलोकेशन डेटा
+      console.log(`    Seller Geo-data (raw): lat=${seller.latitude}, lng=${seller.longitude}, radius=${seller.deliveryRadius}`);
+      console.log(`    Seller Geo-data (parsed): lat=${sellerLat}, lng=${sellerLon}, radius=${sellerDeliveryRadius}`);
+
 
       if (seller.isDistanceBasedDelivery) {
         if (
-          typeof seller.latitude === "number" &&
-          typeof seller.longitude === "number" &&
+          !isNaN(sellerLat) &&
+          !isNaN(sellerLon) &&
           !isNaN(effectiveLat) &&
           !isNaN(effectiveLng) &&
-          seller.deliveryRadius !== null &&
-          seller.deliveryRadius !== undefined &&
-          seller.deliveryRadius > 0
+          seller.deliveryRadius !== null && // null और undefined दोनों को कवर करता है
+          !isNaN(sellerDeliveryRadius) &&
+          sellerDeliveryRadius > 0
         ) {
           distanceCheckPromises.push(
             (async () => {
               const distance = calculateDistanceKm(
-                seller.latitude,
-                seller.longitude,
+                sellerLat,
+                sellerLon,
                 effectiveLat,
                 effectiveLng
               );
-              if (distance !== null && distance <= seller.deliveryRadius) {
-                deliverableSellerIds.push(seller.id); // ✅ seller.id को पुश
+              // ✅ LOG 3.3: दूरी की गणना
+              console.log(`      📏 Distance calculation for Seller ${seller.id}: ${distance} km (Radius: ${sellerDeliveryRadius} km)`);
+
+              if (distance !== null && distance <= sellerDeliveryRadius) {
+                deliverableSellerIds.push(seller.id);
+                console.log(`      ✅ Seller ${seller.id} IS deliverable by distance. Adding to list.`);
+              } else {
+                console.log(`      ❌ Seller ${seller.id} NOT deliverable by distance. Distance: ${distance}, Radius: ${sellerDeliveryRadius}`);
               }
             })()
           );
         } else {
+          // ✅ LOG 3.4: दूरी-आधारित डिलीवरी के लिए अमान्य सेलर डेटा
           console.warn(
-            `[ProductRoutes] Seller ${seller.id} chose distance-based delivery but missing or invalid location/radius. Skipping.`,
+            `    [ProductRoutes] Seller ${seller.id} chose distance-based delivery but has missing/invalid location/radius. Skipping.`,
             { latitude: seller.latitude, longitude: seller.longitude, deliveryRadius: seller.deliveryRadius }
           );
         }
-      } else {
+      } else { // पिनकोड-आधारित डिलीवरी
         const sellerPincodes = seller.deliveryPincodes;
+
+        // ✅ LOG 3.5: पिनकोड-आधारित डिलीवरी की जांच
+        console.log(`    Checking pincode-based delivery for Seller ${seller.id}. Seller pincodes:`, sellerPincodes);
 
         if (Array.isArray(sellerPincodes)) {
           if (sellerPincodes.includes(effectivePincode)) {
-            deliverableSellerIds.push(seller.id); // ✅ seller.id को पुश
+            deliverableSellerIds.push(seller.id);
+            console.log(`      ✅ Seller ${seller.id} IS deliverable by pincode: ${effectivePincode}. Adding to list.`);
+          } else {
+            console.log(`      ❌ Seller ${seller.id} NOT deliverable by pincode: ${effectivePincode}.`);
           }
         } else if (sellerPincodes === null || sellerPincodes === undefined) {
-          console.warn(`[ProductRoutes] Seller ${seller.id} has null/undefined deliveryPincodes. Skipping pincode check.`);
+          console.warn(`    [ProductRoutes] Seller ${seller.id} has null/undefined deliveryPincodes. Skipping pincode check.`);
         } else {
-          console.warn(`[ProductRoutes] Seller ${seller.id} deliveryPincodes is not a valid array or null:`, sellerPincodes);
+          console.warn(`    [ProductRoutes] Seller ${seller.id} deliveryPincodes is not a valid array or null:`, sellerPincodes);
         }
       }
     }
 
-    await Promise.all(distanceCheckPromises);
+    await Promise.all(distanceCheckPromises); // सभी दूरी गणना पूरी होने तक प्रतीक्षा करें
+
+    // ✅ LOG 4: डिलीवरेबल सेलर्स की अंतिम संख्या
+    console.log(`✅ Finished geo-filtering. Total deliverable Seller IDs found: ${deliverableSellerIds.length}`);
+    console.log(`Deliverable Seller IDs: ${JSON.stringify(deliverableSellerIds)}`);
+
 
     if (deliverableSellerIds.length === 0) {
+      console.log("No deliverable sellers found after geo-filtering. Returning empty product list.");
       return res.status(200).json({
         page: pageNum,
         limit: limitNum,
@@ -678,15 +734,19 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
 
     if (search) {
       whereClauses.push(like(products.name, `%${search}%`));
+      console.log(`  🔍 Applying search filter: "${search}"`);
     }
     if (categoryId) {
       whereClauses.push(eq(products.categoryId, Number(categoryId)));
+      console.log(`  🔍 Applying category filter: ${categoryId}`);
     }
     if (minPrice) {
       whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
+      console.log(`  🔍 Applying minPrice filter: ${minPrice}`);
     }
     if (maxPrice) {
       whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
+      console.log(`  🔍 Applying maxPrice filter: ${maxPrice}`);
     }
 
     const orderBy = [];
@@ -698,10 +758,14 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       orderBy.push(sortOrder === 'asc' ? asc(products.createdAt) : desc(products.createdAt));
     }
 
+    // कुल प्रोडक्ट की संख्या प्राप्त करें
     const [totalProductsResult] = await db.select({ count: sql<number>`count(*)` })
       .from(products)
       .where(and(...whereClauses));
     const totalProducts = totalProductsResult?.count || 0;
+
+    // ✅ LOG 5: अंतिम फिल्टरिंग के बाद कुल प्रोडक्ट
+    console.log(`Total products matching all criteria (before pagination): ${totalProducts}`);
 
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
@@ -710,18 +774,20 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
         seller: {
           columns: {
             id: true,
-            userId: true, // सेलर के userId को भी शामिल करें ताकि user डिटेल्स को बाद में fetch किया जा सके
+            userId: true,
             businessName: true,
             latitude: true,
             longitude: true,
             deliveryRadius: true,
+            isDistanceBasedDelivery: true, // यह भी जोड़ें
+            deliveryPincodes: true, // यह भी जोड़ें
           },
-          with: { // ✅ विक्रेता के उपयोगकर्ता विवरण लाने के लिए 'user' को शामिल करें
+          with: {
             user: {
               columns: {
-                fullName: true, // या जो भी नाम का फील्ड है (उदा. firstName, lastName)
+                fullName: true,
                 email: true,
-                phoneNumber: true, // ✅ users स्कीमा से
+                phone: true, // ✅ 'phoneNumber' के बजाय 'phone' हो सकता है users स्कीमा में
               }
             }
           }
@@ -731,6 +797,10 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
       limit: limitNum,
       offset: offset,
     });
+
+    // ✅ LOG 6: पेजिंग के बाद भेजे गए प्रोडक्ट
+    console.log(`Returning ${productList.length} products for page ${pageNum}.`);
+
 
     res.status(200).json({
       page: pageNum,
@@ -744,6 +814,7 @@ router.get('/', async (req: Request, res: Response, next: NextFunction) => {
     next(error);
   }
 });
+
 
 
 // GET /api/products/:id - Get a single product by ID (Public)
