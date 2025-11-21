@@ -128,6 +128,9 @@ function App() { // Capitalized App
               </AuthRedirectGuard>
             }
           />
+
+          <Route path="/seller" element={<SellerDashboardLayout />}>
+          <Route path="delivery-settings" element={<DeliverySettingsPage />} />
           <Route
             path="/order-confirmation/:orderId" // orderId, not orderid
             element={
