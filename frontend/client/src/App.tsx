@@ -1,7 +1,7 @@
 
 // client/src/App.tsx..
 import React, { useState } from "react";
-import { Routes, Route } from "react-router-dom";
+import { Routes, Route, Outlet } from "react-router-dom";
 
 // Layouts and components
 import Header from "./components/header";
