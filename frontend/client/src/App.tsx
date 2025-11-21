@@ -68,7 +68,7 @@ function App() {
           <Route path="/checkout2/:id" element={<Checkout2 />} />
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/login" element={<LoginPage />} />
-          <Route path="/admin-login" element={<AdminLoginPage />} />
+          <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/delivery-login" element={<DeliveryLoginPage />} />
           
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
