@@ -663,7 +663,7 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
     };
 
     if (deliveryScope === 'PRODUCT_PINCODE') {
-      if (!Array.isArray(productDeliveryPincodes) || productDeliveryPincodes.some(p => typeof p !== 'string'))) {
+      if (!Array.isArray(productDeliveryPincodes) || productDeliveryPincodes.some(p => typeof p !== 'string')) {
         return res.status(400).json({ message: 'productDeliveryPincodes must be an array of strings for PRODUCT_PINCODE scope.' });
       }
       updateData.productDeliveryPincodes = productDeliveryPincodes;
