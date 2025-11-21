@@ -87,7 +87,7 @@ function App() {
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
 
             {/* Seller Routes (using a shared layout for the dashboard) */}
-            <Route path="/seller" element={<SellerDashboardLayout />}>
+            <Route path="/seller" element={<SellerDashboard />}>
               <Route index element={<SellerDashboard />} />
               <Route path="apply" element={<SellerApplyPage />} />
               <Route path="status" element={<SellerStatusPage />} />
