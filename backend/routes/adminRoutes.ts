@@ -297,6 +297,93 @@ adminRouter.get('/orders', authorize(['admin']), async (req: AuthenticatedReques
   }
 });
 
+// ✅ New: GET /api/admin/sellers/:sellerId/delivery-settings
+// एडमिन द्वारा किसी विशिष्ट सेलर की ग्लोबल डिलीवरी सेटिंग्स को फेच करें।
+adminRouter.get('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = Number(req.params.sellerId);
+
+    if (isNaN(sellerId)) {
+      return res.status(400).json({ message: 'Invalid seller ID.' });
+    }
+
+    const seller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.id, sellerId),
+      columns: {
+        isDistanceBasedDelivery: true,
+        deliveryPincodes: true,
+        deliveryRadius: true,
+        latitude: true,
+        longitude: true,
+      }
+    });
+
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller not found.' });
+    }
+
+    res.status(200).json(seller);
+  } catch (error) {
+    console.error(`Error fetching delivery settings for seller ${req.params.sellerId}:`, error);
+    next(error);
+  }
+});
+// ✅ New: PUT /api/admin/sellers/:sellerId/delivery-settings
+// एडमिन द्वारा किसी विशिष्ट सेलर की ग्लोबल डिलीवरी सेटिंग्स को अपडेट करें।
+adminRouter.put('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = Number(req.params.sellerId);
+    const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
+
+    if (isNaN(sellerId)) {
+      return res.status(400).json({ message: 'Invalid seller ID.' });
+    }
+
+    // वैलिडेशन (जैसा कि sellerRoutes में है)
+    if (typeof isDistanceBasedDelivery !== 'boolean') {
+      return res.status(400).json({ message: 'isDistanceBasedDelivery must be a boolean.' });
+    }
+    if (isDistanceBasedDelivery && (typeof deliveryRadius !== 'number' || deliveryRadius <= 0)) {
+        return res.status(400).json({ message: 'deliveryRadius must be a positive number for distance-based delivery.' });
+    }
+    if (!isDistanceBasedDelivery && (!Array.isArray(deliveryPincodes) || deliveryPincodes.some(p => typeof p !== 'string'))) {
+        return res.status(400).json({ message: 'deliveryPincodes must be an array of strings for pincode-based delivery.' });
+    }
+
+    const updateData: Partial<typeof sellersPgTable.$inferInsert> = {
+      isDistanceBasedDelivery,
+      updatedAt: new Date(),
+    };
+
+    if (isDistanceBasedDelivery) {
+        updateData.deliveryRadius = deliveryRadius;
+        updateData.deliveryPincodes = [];
+    } else {
+        updateData.deliveryPincodes = deliveryPincodes;
+        updateData.deliveryRadius = null;
+    }
+
+    if (typeof latitude === 'number' && typeof longitude === 'number') {
+        updateData.latitude = latitude;
+        updateData.longitude = longitude;
+    }
+
+    const [updatedSeller] = await db
+      .update(sellersPgTable)
+      .set(updateData)
+      .where(eq(sellersPgTable.id, sellerId))
+      .returning();
+
+    if (!updatedSeller) {
+      return res.status(404).json({ message: 'Seller not found or no changes made.' });
+    }
+
+    res.status(200).json({ message: 'Seller delivery settings updated successfully!', seller: updatedSeller });
+  } catch (error) {
+    console.error(`Error updating delivery settings for seller ${req.params.sellerId}:`, error);
+    next(error);
+  }
+});
 /**
  * ✅ PATCH /api/admin/orders/:masterOrderId/status
  * मास्टर ऑर्डर का स्टेटस अपडेट करें (एडमिन द्वारा)
