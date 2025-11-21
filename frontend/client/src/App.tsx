@@ -46,7 +46,7 @@ import SellerProfileEdit from '@/components/seller/SellerProfileEdit';
 import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
 //import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 
-import DeliverySettingsPage from "./pages/seller/DeliverySettingsPage"; // Capitalized
+import DeliverySettingsPage from "@/compinents/seller/DeliverySettingsPage"; // Capitalized
 
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
