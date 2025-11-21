@@ -13,7 +13,7 @@ import { Toaster } from "./components/ui/toaster"; // Assuming this path
 import { TooltipProvider } from "./components/ui/tooltip"; // Assuming this path
 import { AuthProvider } from "./hooks/useAuth"; // Assuming this path
 import { SocketProvider } from "./hooks/useSocket"; // Assuming this path
-
+import LocationDisplay from "./components/LocationDisplay";
 
 import { LocationProvider } from "./context/LocationContext";
 
