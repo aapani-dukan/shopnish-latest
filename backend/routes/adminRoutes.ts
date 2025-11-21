@@ -27,6 +27,7 @@ import { authorize } from '../server/middleware/authorize'; // ✅ Assuming auth
 import { validateRequest } from '../server/middleware/validation';
 import { z } from 'zod'; // ✅ For category validation
 import { orderTracking } from "../shared/backend/schema";
+import { requireAdminAuth } from '../middleware/authMiddleware';
 const adminRouter = Router();
 const upload = multer({ dest: 'uploads/' });
 
@@ -299,7 +300,7 @@ adminRouter.get('/orders', authorize(['admin']), async (req: AuthenticatedReques
 
 // ✅ New: GET /api/admin/sellers/:sellerId/delivery-settings
 // एडमिन द्वारा किसी विशिष्ट सेलर की ग्लोबल डिलीवरी सेटिंग्स को फेच करें।
-adminRouter.get('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, async (req: Request, res: Response, next: NextFunction) => {
+adminRouter.get('/sellers/:sellerId/delivery-settings', verifyToken,requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
   try {
     const sellerId = Number(req.params.sellerId);
 
@@ -328,9 +329,41 @@ adminRouter.get('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, as
     next(error);
   }
 });
+// ✅ Updated: GET /api/admin/sellers/:sellerId/products/:productId/delivery-override
+adminRouter.get('/sellers/:sellerId/products/:productId/delivery-override', requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = Number(req.params.sellerId);
+    const productId = Number(req.params.productId);
+
+    if (isNaN(sellerId) || isNaN(productId)) {
+      return res.status(400).json({ message: 'Invalid seller ID or product ID.' });
+    }
+
+    const product = await db.query.products.findFirst({
+      where: and(eq(products.id, productId), eq(products.sellerId, sellerId)),
+      columns: {
+        id: true,
+        name: true,
+        deliveryScope: true,
+        productDeliveryPincodes: true,
+        productDeliveryRadiusKM: true,
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found or does not belong to the specified seller.' });
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    console.error(`Error fetching delivery override for product ${productId} by admin:`, error);
+    next(error);
+  }
+});
+
 // ✅ New: PUT /api/admin/sellers/:sellerId/delivery-settings
 // एडमिन द्वारा किसी विशिष्ट सेलर की ग्लोबल डिलीवरी सेटिंग्स को अपडेट करें।
-adminRouter.put('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, async (req: Request, res: Response, next: NextFunction) => {
+adminRouter.put('/sellers/:sellerId/delivery-settings', verifyToken,requireAdminAuth , async (req: Request, res: Response, next: NextFunction) => {
   try {
     const sellerId = Number(req.params.sellerId);
     const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
@@ -384,6 +417,61 @@ adminRouter.put('/sellers/:sellerId/delivery-settings', verifyToken, isAdmin, as
     next(error);
   }
 });
+// ✅ Updated: PUT /api/admin/sellers/:sellerId/products/:productId/delivery-override
+adminRouter.put('/sellers/:sellerId/products/:productId/delivery-override', requireAdminAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const sellerId = Number(req.params.sellerId);
+    const productId = Number(req.params.productId);
+    const { deliveryScope, productDeliveryPincodes, productDeliveryRadiusKM } = req.body;
+
+    if (isNaN(sellerId) || isNaN(productId)) {
+      return res.status(400).json({ message: 'Invalid seller ID or product ID.' });
+    }
+
+    const validScopes = ['GLOBAL', 'PRODUCT_PINCODE', 'PRODUCT_RADIUS'];
+    if (!validScopes.includes(deliveryScope)) {
+      return res.status(400).json({ message: 'Invalid deliveryScope provided.' });
+    }
+
+    const updateData: Partial<typeof products.$inferInsert> = {
+      deliveryScope,
+      updatedAt: new Date(),
+    };
+
+    if (deliveryScope === 'PRODUCT_PINCODE') {
+      if (!Array.isArray(productDeliveryPincodes) || productDeliveryPincodes.some(p => typeof p !== 'string'))) {
+        return res.status(400).json({ message: 'productDeliveryPincodes must be an array of strings for PRODUCT_PINCODE scope.' });
+      }
+      updateData.productDeliveryPincodes = productDeliveryPincodes;
+      updateData.productDeliveryRadiusKM = null;
+    } else if (deliveryScope === 'PRODUCT_RADIUS') {
+      if (typeof productDeliveryRadiusKM !== 'number' || productDeliveryRadiusKM <= 0) {
+        return res.status(400).json({ message: 'productDeliveryRadiusKM must be a positive number for PRODUCT_RADIUS scope.' });
+      }
+      updateData.productDeliveryRadiusKM = productDeliveryRadiusKM;
+      updateData.productDeliveryPincodes = [];
+    } else { // deliveryScope === 'GLOBAL'
+      updateData.productDeliveryPincodes = [];
+      updateData.productDeliveryRadiusKM = null;
+    }
+
+    const [updatedProduct] = await db
+      .update(products)
+      .set(updateData)
+      .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)))
+      .returning();
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Product not found, does not belong to specified seller, or no changes made.' });
+    }
+
+    res.status(200).json({ message: 'Product delivery override settings updated successfully!', product: updatedProduct });
+  } catch (error) {
+    console.error(`Error updating delivery override for product ${productId} by admin:`, error);
+    next(error);
+  }
+});
+
 /**
  * ✅ PATCH /api/admin/orders/:masterOrderId/status
  * मास्टर ऑर्डर का स्टेटस अपडेट करें (एडमिन द्वारा)
