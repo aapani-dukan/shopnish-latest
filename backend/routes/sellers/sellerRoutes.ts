@@ -356,6 +356,39 @@ sellerRouter.post(
       }
     });
 
+// ✅ New: GET /api/seller/profile/delivery-settings
+// यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को फेच करेगा।
+sellerRouter.get('/profile/delivery-settings', verifyToken, isSeller, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: User ID not found.' });
+    }
+
+    const seller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.userId, userId),
+      columns: {
+        isDistanceBasedDelivery: true,
+        deliveryPincodes: true,
+        deliveryRadius: true,
+        latitude: true,  // अक्षांश और देशांतर भी महत्वपूर्ण हैं
+        longitude: true, // क्योंकि ये दूरी-आधारित डिलीवरी के लिए आवश्यक हैं
+      }
+    });
+
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller profile not found.' });
+    }
+
+    res.status(200).json(seller);
+  } catch (error) {
+    console.error("Error fetching seller delivery settings:", error);
+    next(error);
+  }
+});
+
+
     // ✅ GET /api/sellers/categories (तुम्हारी schema में categories.sellerId नहीं है, यह यहाँ एक संभावित एरर है)
     sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
       try {
@@ -450,6 +483,73 @@ sellerRouter.post(
         return res.status(500).json({ error: 'Failed to update category.' });
       }
     });
+
+// ✅ New: PUT /api/seller/profile/delivery-settings
+// यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को अपडेट करेगा।
+sellerRouter.put('/profile/delivery-settings', verifyToken, isSeller, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
+    const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized: User ID not found.' });
+    }
+
+    // सुनिश्चित करें कि डेटा वैलिड है (एक बेसिक वैलिडेशन)
+    if (typeof isDistanceBasedDelivery !== 'boolean') {
+      return res.status(400).json({ message: 'isDistanceBasedDelivery must be a boolean.' });
+    }
+    if (isDistanceBasedDelivery && (typeof deliveryRadius !== 'number' || deliveryRadius <= 0)) {
+        return res.status(400).json({ message: 'deliveryRadius must be a positive number for distance-based delivery.' });
+    }
+    if (!isDistanceBasedDelivery && (!Array.isArray(deliveryPincodes) || deliveryPincodes.some(p => typeof p !== 'string'))) {
+        return res.status(400).json({ message: 'deliveryPincodes must be an array of strings for pincode-based delivery.' });
+    }
+
+    // अपडेट ऑब्जेक्ट तैयार करें
+    const updateData: Partial<typeof sellersPgTable.$inferInsert> = {
+      isDistanceBasedDelivery,
+      updatedAt: new Date(),
+    };
+
+    if (isDistanceBasedDelivery) {
+        updateData.deliveryRadius = deliveryRadius;
+        // जब रेडियस बेस्ड हो, तो pincodes को null या खाली सेट करें
+        updateData.deliveryPincodes = [];
+    } else {
+        updateData.deliveryPincodes = deliveryPincodes;
+        // जब pincode बेस्ड हो, तो radius को null सेट करें
+        updateData.deliveryRadius = null;
+    }
+
+    // latitude और longitude को अपडेट करें यदि वे दिए गए हैं
+    // ध्यान दें: latitude/longitude आमतौर पर सेलर के पते से ऑटो-जेनरेट होते हैं,
+    // लेकिन अगर फ्रंटएंड से इन्हें अपडेट करने की अनुमति है तो यहां शामिल करें।
+    // सुरक्षा कारणों से, इन्हें केवल तभी अपडेट करना चाहिए जब यह एक स्पष्ट कार्रवाई हो।
+    // यहाँ मैं मान रहा हूँ कि आप इसे अपडेट करना चाहते हैं:
+    if (typeof latitude === 'number' && typeof longitude === 'number') {
+        updateData.latitude = latitude;
+        updateData.longitude = longitude;
+    }
+
+
+    const [updatedSeller] = await db
+      .update(sellersPgTable)
+      .set(updateData)
+      .where(eq(sellersPgTable.userId, userId))
+      .returning(); // अपडेट किया गया रिकॉर्ड वापस करें
+
+    if (!updatedSeller) {
+      return res.status(404).json({ message: 'Seller profile not found or no changes made.' });
+    }
+
+    res.status(200).json({ message: 'Seller delivery settings updated successfully!', seller: updatedSeller });
+  } catch (error) {
+    console.error("Error updating seller delivery settings:", error);
+    next(error);
+  }
+});
+
 
     // ✅ DELETE /api/sellers/categories/:id (कैटेगरी डिलीट करें)
     sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
