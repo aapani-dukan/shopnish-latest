@@ -1,52 +1,51 @@
-// client/src/App.tsx
 
+// client/src/App.tsx..
 import React, { useState } from "react";
-import { Routes, Route, Outlet } from "react-router-dom"; // Outlet इम्पोर्ट करें
+import { Routes, Route } from "react-router-dom";
 
-// layouts and components
-import Header from "./components/header"; // Capitalized
-import CartModal from "./components/cart-modal"; // Capitalized
-import AdminLayout from "./components/AdminLayout"; // Capitalized
-import SellerDashboardLayout from "./layouts/SellerDashboardLayout"; // Capitalized, Assuming this exists and has an <Outlet />
+// Layouts and components
+import Header from "./components/header";
+import CartModal from "./components/cart-modal";
+import AdminLayout from "@/components/AdminLayout";
+import { LocationProvider } from "./context/LocationContext";
+// Pages
 
-// pages
-import HomePage from "./pages/home"; // Capitalized
-import ProductDetail from "./pages/product-detail"; // Capitalized
-import Cart from "./pages/cart"; // Capitalized
-import Checkout from "./pages/checkout"; // Capitalized
-import AuthPage from "./pages/auth"; // Capitalized
-import SellerDashboard from "./pages/seller-dashboard"; // Capitalized
-import SellerApplyPage from "./pages/seller-apply"; // Capitalized
-import SellerStatusPage from "./pages/seller-status"; // Capitalized
-import NotFound from "./pages/not-found"; // Capitalized
-import AdminDashboard from "./pages/admin/admindashboard"; // Capitalized
-import DeliveryApplyPage from "./pages/delivery-apply"; // Capitalized
-import DeliveryLoginPage from "./pages/delivery-login"; // Capitalized
-import LoginPage from "./pages/login"; // Capitalized
-import CategoriesManagement from "./components/categoriesmanagement"; // Capitalized
-import AdminLoginPage from "./pages/admin-login"; // Capitalized
-import OrderConfirmation from "./pages/order-confirmation"; // Capitalized
-import CustomerOrdersPage from "./pages/customer/orders"; // Capitalized
-import TrackOrder from "./pages/track-order"; // Capitalized
-import Checkout2 from "./pages/checkout2"; // Capitalized
-import DeliveryDashboard from "./pages/deliverydashboard"; // Capitalized
-import AdminOrderDashboard from "./pages/admin/adminorderdashboard"; // Capitalized
-import PrivacyPolicy from "./pages/privacypolicy"; // Capitalized
-import TermsOfService from "./pages/termsofservice"; // Capitalized
-import CookiesPolicy from "./pages/cookiespolicy"; // Capitalized
-import FAQ from "./pages/faq"; // Capitalized
-import AboutUs from "./pages/aboutus"; // Capitalized
-import ContactUs from "./pages/contactus"; // Capitalized
+import HomePage from "@/pages/home";
+import ProductDetail from "@/pages/product-detail";
+import Cart from "@/pages/cart";
+import Checkout from "@/pages/checkout";
+import AuthPage from "@/pages/auth";
+import SellerDashboard from "@/pages/seller-dashboard";
+import SellerApplyPage from "@/pages/seller-apply";
+import SellerStatusPage from "@/pages/seller-status";
+import NotFound from "@/pages/not-found";
+import AdminDashboard from "@/pages/admin/AdminDashboard";
+import DeliveryApplyPage from "@/pages/delivery-apply";
+import DeliveryLogin from "@/pages/delivery-login";
+import LoginPage from "@/pages/login";
+import CategoriesManagement from "@/components/CategoriesManagement";
+import AdminLogin from "@/pages/admin-login";
+import OrderConfirmation from "@/pages/order-confirmation";
+import CustomerOrdersPage from "@/pages/customer/orders";
+import TrackOrder from "@/pages/track-order"; 
+import Checkout2 from "./pages/checkout2";
+import DeliveryDashboard from "@/pages/DeliveryDashboard";
+import AdminOrderDashboard from "./pages/admin/AdminOrderDashboard";
+import PrivacyPolicy from "@/pages/PrivacyPolicy";
+import TermsOfService from "@/pages/TermsOfService";
+import CookiesPolicy from "@/pages/CookiesPolicy";
+import FAQ from "@/pages/FAQ";
+import AboutUs from "@/pages/AboutUs";
+import ContactUs from "@/pages/ContactUs";
+// Protected / Auth-based
+import AuthRedirectGuard from "@/components/auth-redirect-guard";
+import AdminGuard from "@/components/admin-guard";
+import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage'; 
+import AdminSettingsPage from './pages/admin/AdminSettingsPage';
+import SellerProfileEdit from '@/components/seller/SellerProfileEdit';
+import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
+//import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 
-// protected / auth-based
-import AuthRedirectGuard from "./components/auth-redirect-guard"; // Capitalized
-import AdminGuard from "./components/admin-guard"; // Capitalized
-import AdminVendorDetailsPage from './pages/admin/adminvendordetailspage'; // Capitalized
-import AdminSettingsPage from './pages/admin/adminsettingspage'; // Capitalized
-import SellerProfileEdit from './components/seller/sellerprofileedit'; // Capitalized
-import AdminProductDetailsPage from './pages/admin/adminproductdetailspage'; // Capitalized
-// LocationDisplay को App.tsx में इम्पोर्ट करने की आवश्यकता नहीं है, क्योंकि यह main.tsx के div के अंदर है।
-// import LocationDisplay from "./components/locationdisplay"; 
 import DeliverySettingsPage from "./pages/seller/DeliverySettingsPage"; // Capitalized
 
 function App() {
