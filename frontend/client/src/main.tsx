@@ -28,6 +28,7 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
               <SocketProvider>
                  <div>
                 <Toaster />
+                   <LocationDisplay /> 
                 <App />
                  </div>
                 </SocketProvider>        
