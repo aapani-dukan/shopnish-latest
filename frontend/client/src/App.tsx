@@ -8,6 +8,9 @@ import Header from "./components/header";
 import CartModal from "./components/cart-modal";
 import AdminLayout from "@/components/AdminLayout";
 import { LocationProvider } from "./context/LocationContext";
+import SellerDashboardLayout from "./components/layout/SellerDashboardLayout"; 
+
+
 // Pages
 
 import HomePage from "@/pages/home";
@@ -87,7 +90,8 @@ function App() {
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
 
             {/* Seller Routes (using a shared layout for the dashboard) */}
-            <Route path="/seller" element={<SellerDashboard />}>
+              <Route path="/seller" element={<SellerDashboardLayout />}>
+              <Route index element={<SellerDashboard />} />
               <Route index element={<SellerDashboard />} />
               <Route path="apply" element={<SellerApplyPage />} />
               <Route path="status" element={<SellerStatusPage />} />
