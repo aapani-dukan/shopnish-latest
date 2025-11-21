@@ -431,6 +431,43 @@ sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, as
     next(error);
   }
 });
+// backend/routes/sellerRoutes.ts में जोड़ें
+
+// ✅ New: GET /api/seller/products/delivery-overview
+sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+
+    if (!userId) {
+      return res.status(401).json({ message: 'Unauthorized.' });
+    }
+
+    const seller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.userId, userId),
+      columns: { id: true },
+    });
+
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller profile not found.' });
+    }
+
+    const productsOverview = await db.query.products.findMany({
+      where: eq(products.sellerId, seller.id),
+      columns: {
+        id: true,
+        name: true,
+        deliveryScope: true,
+        productDeliveryPincodes: true,
+        productDeliveryRadiusKM: true,
+      },
+    });
+
+    res.status(200).json(productsOverview);
+  } catch (error) {
+    console.error("Error fetching seller products for delivery overview:", error);
+    next(error);
+  }
+});
 
     // ✅ GET /api/sellers/categories (तुम्हारी schema में categories.sellerId नहीं है, यह यहाँ एक संभावित एरर है)
     sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
