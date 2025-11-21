@@ -69,7 +69,7 @@ function App() {
           <Route path="/auth" element={<AuthPage />} />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/admin-login" element={<AdminLogin />} />
-          <Route path="/delivery-login" element={<DeliveryLoginPage />} />
+          <Route path="/delivery-login" element={<DeliveryLogin />} />
           
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
