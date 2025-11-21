@@ -6,7 +6,7 @@ import { Routes, Route, Outlet } from "react-router-dom"; // Outlet इम्प
 // layouts and components
 import Header from "./components/header"; // Capitalized
 import CartModal from "./components/cart-modal"; // Capitalized
-import AdminLayout from "./components/adminlayout"; // Capitalized
+import AdminLayout from "./components/AdminLayout"; // Capitalized
 import SellerDashboardLayout from "./layouts/SellerDashboardLayout"; // Capitalized, Assuming this exists and has an <Outlet />
 
 // pages
