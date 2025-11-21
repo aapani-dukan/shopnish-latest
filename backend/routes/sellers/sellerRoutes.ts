@@ -358,7 +358,7 @@ sellerRouter.post(
 
 // ✅ New: GET /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को फेच करेगा।
-sellerRouter.get('/profile/delivery-settings', verifyToken, isSeller, async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
 
@@ -388,6 +388,49 @@ sellerRouter.get('/profile/delivery-settings', verifyToken, isSeller, async (req
   }
 });
 
+// ✅ Updated: GET /api/seller/products/:productId/delivery-override
+sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
+    const productId = Number(req.params.productId);
+
+    if (!userId) { // requireSellerAuth इसे पहले ही संभाल लेगा, लेकिन यह एक अतिरिक्त जाँच है
+      return res.status(401).json({ message: 'Unauthorized: User ID not found after authentication.' });
+    }
+    if (isNaN(productId)) {
+      return res.status(400).json({ message: 'Invalid product ID.' });
+    }
+
+    const seller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.userId, userId),
+      columns: { id: true },
+    });
+
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller profile not found for authenticated user.' });
+    }
+
+    const product = await db.query.products.findFirst({
+      where: and(eq(products.id, productId), eq(products.sellerId, seller.id)),
+      columns: {
+        id: true,
+        name: true,
+        deliveryScope: true,
+        productDeliveryPincodes: true,
+        productDeliveryRadiusKM: true,
+      },
+    });
+
+    if (!product) {
+      return res.status(404).json({ message: 'Product not found or does not belong to this seller.' });
+    }
+
+    res.status(200).json(product);
+  } catch (error) {
+    console.error(`Error fetching delivery override for product ${req.params.productId}:`, error);
+    next(error);
+  }
+});
 
     // ✅ GET /api/sellers/categories (तुम्हारी schema में categories.sellerId नहीं है, यह यहाँ एक संभावित एरर है)
     sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
@@ -486,7 +529,7 @@ sellerRouter.get('/profile/delivery-settings', verifyToken, isSeller, async (req
 
 // ✅ New: PUT /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को अपडेट करेगा।
-sellerRouter.put('/profile/delivery-settings', verifyToken, isSeller, async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: Request, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
     const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
@@ -549,7 +592,72 @@ sellerRouter.put('/profile/delivery-settings', verifyToken, isSeller, async (req
     next(error);
   }
 });
+// ✅ Updated: PUT /api/seller/products/:productId/delivery-override
+sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const userId = req.user?.id;
+    const productId = Number(req.params.productId);
+    const { deliveryScope, productDeliveryPincodes, productDeliveryRadiusKM } = req.body;
 
+    if (!userId) { // requireSellerAuth इसे पहले ही संभाल लेगा, लेकिन यह एक अतिरिक्त जाँच है
+      return res.status(401).json({ message: 'Unauthorized: User ID not found after authentication.' });
+    }
+    if (isNaN(productId)) {
+      return res.status(400).json({ message: 'Invalid product ID.' });
+    }
+
+    const seller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.userId, userId),
+      columns: { id: true },
+    });
+
+    if (!seller) {
+      return res.status(404).json({ message: 'Seller profile not found for authenticated user.' });
+    }
+
+    const validScopes = ['GLOBAL', 'PRODUCT_PINCODE', 'PRODUCT_RADIUS'];
+    if (!validScopes.includes(deliveryScope)) {
+      return res.status(400).json({ message: 'Invalid deliveryScope provided.' });
+    }
+
+    const updateData: Partial<typeof products.$inferInsert> = {
+      deliveryScope,
+      updatedAt: new Date(),
+    };
+
+    if (deliveryScope === 'PRODUCT_PINCODE') {
+      if (!Array.isArray(productDeliveryPincodes) || productDeliveryPincodes.some(p => typeof p !== 'string'))) {
+        return res.status(400).json({ message: 'productDeliveryPincodes must be an array of strings for PRODUCT_PINCODE scope.' });
+      }
+      updateData.productDeliveryPincodes = productDeliveryPincodes;
+      updateData.productDeliveryRadiusKM = null;
+    } else if (deliveryScope === 'PRODUCT_RADIUS') {
+      if (typeof productDeliveryRadiusKM !== 'number' || productDeliveryRadiusKM <= 0) {
+        return res.status(400).json({ message: 'productDeliveryRadiusKM must be a positive number for PRODUCT_RADIUS scope.' });
+      }
+      updateData.productDeliveryRadiusKM = productDeliveryRadiusKM;
+      updateData.productDeliveryPincodes = [];
+    } else { // deliveryScope === 'GLOBAL'
+      updateData.productDeliveryPincodes = [];
+      updateData.productDeliveryRadiusKM = null;
+    }
+
+    const [updatedProduct] = await db
+      .update(products)
+      .set(updateData)
+      .where(and(eq(products.id, productId), eq(products.sellerId, seller.id)))
+      .returning();
+
+    if (!updatedProduct) {
+      return res.status(404).json({ message: 'Product not found, does not belong to seller, or no changes made.' });
+    }
+
+    res.status(200).json({ message: 'Product delivery override settings updated successfully!', product: updatedProduct });
+  } catch (error) {
+    console.error(`Error updating delivery override for product ${req.params.productId}:`, error);
+    next(error);
+  }
+});
 
     // ✅ DELETE /api/sellers/categories/:id (कैटेगरी डिलीट करें)
     sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
