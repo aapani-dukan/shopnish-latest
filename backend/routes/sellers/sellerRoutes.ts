@@ -156,21 +156,21 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
 
     // कुल ऑर्डर की गणना
     const [{ totalOrders }] = await db
-      .select({ totalOrders: count(ordersPgTable.id) })
-      .from(ordersPgTable)
-      .where(eq(ordersPgTable.sellerId, sellerId));
+      .select({ totalOrders: count(orders.id) })
+      .from(orders)
+      .where(eq(orders.sellerId, sellerId));
 
     // कुल उत्पादों की गणना
     const [{ totalProducts }] = await db
-      .select({ totalProducts: count(productsPgTable.id) })
-      .from(productsPgTable)
-      .where(eq(productsPgTable.sellerId, sellerId));
+      .select({ totalProducts: count(products.id) })
+      .from(products)
+      .where(eq(products.sellerId, sellerId));
 
     // कुल राजस्व की गणना (मानकर कि ordersPgTable में 'totalAmount' और 'status' कॉलम हैं)
     // आपको यह तय करना होगा कि कौन से ऑर्डर (जैसे 'completed', 'shipped') राजस्व में गिने जाते हैं।
     const [{ totalRevenue }] = await db
-      .select({ totalRevenue: sum(ordersPgTable.totalAmount) }) // 'sum' फ़ंक्शन का उपयोग करें
-      .from(ordersPgTable)
+      .select({ totalRevenue: sum(orders.totalAmount) }) // 'sum' फ़ंक्शन का उपयोग करें
+      .from(orders)
       .where(
         // ऑर्डर्स को फिल्टर करें जिनके लिए आप राजस्व गिनना चाहते हैं
         // मान लीजिए आपके पास ordersPgTable में 'status' कॉलम है
@@ -178,7 +178,7 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
         //   eq(ordersPgTable.sellerId, sellerId),
         //   inArray(ordersPgTable.status, ['completed', 'shipped']) // उदाहरण के लिए
         // )
-        eq(ordersPgTable.sellerId, sellerId) // यदि आप सभी ऑर्डर के totalAmount को जोड़ना चाहते हैं
+        eq(orders.sellerId, sellerId) // यदि आप सभी ऑर्डर के totalAmount को जोड़ना चाहते हैं
       );
 
     // औसत रेटिंग की गणना (मानकर कि productsPgTable में 'rating' कॉलम है)
