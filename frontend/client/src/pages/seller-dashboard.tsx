@@ -27,7 +27,10 @@ import ProductManager from "../components/ProductManager";
 import OrderManager from "../components/OrderManager";
 import SellerProfileEdit from "../components/seller/SellerProfileEdit";
 
-export default function SellerDashboard() { 
+// Types
+import { Seller, OrderWithItems } from "../lib/types"; // सुनिश्चित करें कि OrderWithItems यहाँ से आ रहा है
+
+export default function SellerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("products");
@@ -85,41 +88,30 @@ export default function SellerDashboard() {
 
   // ----------------- fetch seller orders -----------------
   const {
-    data: orders,
+    data: orders, // orders डेटा का उपयोग यहाँ किया जा रहा है, लेकिन अब totalOrders बैकएंड से आ रहा है
     isLoading: ordersLoading,
     error: ordersError,
   } = useQuery<OrderWithItems[]>({
     queryKey: ["/api/sellers/orders"],
     queryFn: () => apiRequest("GET", "/api/sellers/orders", null, user?.idToken),
-    enabled: !!seller?._id,
+    // enabled: !!seller?._id, // seller?._id की जगह seller?.id का उपयोग करें
+    enabled: !!seller?.id, // ✅ क्योंकि आपके बैकएंड में id है, _id नहीं
     staleTime: 0,
     refetchInterval: 60 * 1000,
   });
 
   // ----------------- metrics -----------------
-  const totalRevenue =
-    orders?.reduce(
-      (sum, order) =>
-        sum +
-        order.items.reduce(
-          (itemSum, item) =>
-            itemSum +
-            (typeof item.total === "string"
-              ? parseFloat(item.total)
-              : item.total),
-          0
-        ) || 0,
-      0
-    );
-  const totalRevenue = seller?.metrics?.totalRevenue || 0;
-  const totalOrders = orders?.length || 0;
-  const totalProducts = 0; 
-  const averageRating = parseFloat(seller?.rating?.toString() || "0");
+  // ✅ यहाँ मेट्रिक्स को अपडेट किया गया है ताकि वे सीधे बैकएंड से प्राप्त seller ऑब्जेक्ट से आएं
+  // पुराने 'totalRevenue' गणना और 'totalProducts = 0' को हटा दिया गया है।
+  const totalRevenue = seller?.totalRevenue || 0;
+  const totalOrders = seller?.totalOrders || 0;
+  const totalProducts = seller?.totalProducts || 0;
+  const averageRating = parseFloat(seller?.averageRating?.toString() || "0"); // ✅ Back end name
 
   // ----------------- loading / error UI -----------------
   if (sellerLoading) {
     return (
-      <div className="py-8"> {/* ✅ min-h-screen और Header हटाया */}
+      <div className="py-8">
         <div className="animate-pulse space-y-6">
           <Skeleton className="h-8 w-64 mb-6" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -135,8 +127,15 @@ export default function SellerDashboard() {
   }
 
   if (sellerError || !seller) {
+    // अगर sellerProfile.approvalStatus 'pending' या 'rejected' है
+    if (seller?.approvalStatus === 'pending' || seller?.approvalStatus === 'rejected') {
+        // user?.idToken आवश्यक हो सकता है
+        navigate(`/seller-status?status=${seller.approvalStatus}`, { replace: true });
+        return null; // या एक लोडिंग स्पिनर
+    }
+
     return (
-      <div className="py-16 text-center"> {/* ✅ min-h-screen और Header हटाया */}
+      <div className="py-16 text-center">
         <div className="text-6xl mb-4">
           {sellerError ? (
             <XCircle className="w-20 h-20 text-red-500 mx-auto" />
