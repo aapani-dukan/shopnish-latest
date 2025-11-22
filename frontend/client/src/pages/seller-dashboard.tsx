@@ -111,7 +111,7 @@ export default function SellerDashboard() {
         ) || 0,
       0
     );
-
+  const totalRevenue = seller?.metrics?.totalRevenue || 0;
   const totalOrders = orders?.length || 0;
   const totalProducts = 0; 
   const averageRating = parseFloat(seller?.rating?.toString() || "0");
