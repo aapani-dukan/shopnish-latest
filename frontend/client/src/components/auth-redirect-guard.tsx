@@ -2,9 +2,9 @@
 
 import React from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Navigate, useLocation } from "react-router-dom";
+import { Navigate, useLocation, Outlet } from "react-router-dom";
 
-const AuthRedirectGuard = ({ children }: { children: React.ReactNode }) => {
+const AuthRedirectGuard = () => {
   const { isAuthenticated, isLoadingAuth } = useAuth();
   const location = useLocation();
 
@@ -22,7 +22,7 @@ const AuthRedirectGuard = ({ children }: { children: React.ReactNode }) => {
   }
 
   // अगर उपयोगकर्ता लॉग इन है, तो बच्चों को रेंडर करें।
-  return <>{children}</>;
+    return <Outlet />; 
 };
 
 export default AuthRedirectGuard;
