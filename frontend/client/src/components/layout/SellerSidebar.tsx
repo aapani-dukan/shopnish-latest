@@ -26,37 +26,37 @@ const SellerSidebar: React.FC = () => {
       <nav className="flex-1 overflow-y-auto">
         <ul className="space-y-2">
           <li>
-            <Link to="/seller" className={linkClasses('/seller')}>
+            <Link to="/seller-dashboard" className={linkClasses('/seller-dashboard')}>
               <TrendingUp className="h-5 w-5 mr-3" />
               Dashboard
             </Link>
           </li>
           <li>
-            <Link to="/seller/products" className={linkClasses('/seller/products')}>
+            <Link to="/seller-dashboard/products" className={linkClasses('/seller-dashboard/products')}>
               <Package className="h-5 w-5 mr-3" />
               Products
             </Link>
           </li>
           <li>
-            <Link to="/seller/orders" className={linkClasses('/seller/orders')}>
+            <Link to="/seller-dashboard/orders" className={linkClasses('/seller-dashboard/orders')}>
               <ShoppingCart className="h-5 w-5 mr-3" />
               Orders
             </Link>
           </li>
           <li>
-            <Link to="/seller/profile/edit" className={linkClasses('/seller/profile/edit')}>
+            <Link to="/seller-dashboard/profile/edit" className={linkClasses('/seller-dashboard/profile/edit')}>
               <User className="h-5 w-5 mr-3" />
               Profile
             </Link>
           </li>
           <li>
-            <Link to="/seller/delivery-settings" className={linkClasses('/seller/delivery-settings')}>
+            <Link to="/seller-dashboard/delivery-settings" className={linkClasses('/seller-dashboard/delivery-settings')}>
               <Settings className="h-5 w-5 mr-3" />
               Delivery Settings
             </Link>
           </li>
            <li>
-            <Link to="/seller/apply" className={linkClasses('/seller/apply')}>
+            <Link to="/seller-dashboard/apply" className={linkClasses('/seller-dashboard/apply')}>
                <FileText className="h-5 w-5 mr-3" />
                Application Status
             </Link>
