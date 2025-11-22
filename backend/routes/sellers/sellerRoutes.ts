@@ -23,14 +23,13 @@ import {
 } from '../../shared/backend/schema';
 import { requireSellerAuth } from '../../server/middleware/authMiddleware';
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
-import { eq, desc, and, ne, exists, inArray, sql } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
+import { eq, desc, and, ne, exists, inArray, sql,count, sum, avg } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
 import multer from 'multer';
 import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
 import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, इसे .ts के साथ इम्पोर्ट करें
 import { getMySellerProfile, updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
 import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
-
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 const sellerRouter = Router();
 const upload = multer({
@@ -134,6 +133,7 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
 });
 
 // ✅ GET /api/sellers/me
+
 sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -141,6 +141,7 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
       return res.status(401).json({ error: 'Unauthorized: Missing user data.' });
     }
 
+    // 1. सेलर प्रोफाइल प्राप्त करें
     const [sellerProfile] = await db
       .select()
       .from(sellersPgTable)
@@ -150,12 +151,63 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
       return res.status(404).json({ error: 'Seller profile not found.' });
     }
 
-    return res.status(200).json(sellerProfile);
+    // 2. मेट्रिक्स की गणना करें
+    const sellerId = sellerProfile.id; // सेलर की ID प्राप्त करें
+
+    // कुल ऑर्डर की गणना
+    const [{ totalOrders }] = await db
+      .select({ totalOrders: count(ordersPgTable.id) })
+      .from(ordersPgTable)
+      .where(eq(ordersPgTable.sellerId, sellerId));
+
+    // कुल उत्पादों की गणना
+    const [{ totalProducts }] = await db
+      .select({ totalProducts: count(productsPgTable.id) })
+      .from(productsPgTable)
+      .where(eq(productsPgTable.sellerId, sellerId));
+
+    // कुल राजस्व की गणना (मानकर कि ordersPgTable में 'totalAmount' और 'status' कॉलम हैं)
+    // आपको यह तय करना होगा कि कौन से ऑर्डर (जैसे 'completed', 'shipped') राजस्व में गिने जाते हैं।
+    const [{ totalRevenue }] = await db
+      .select({ totalRevenue: sum(ordersPgTable.totalAmount) }) // 'sum' फ़ंक्शन का उपयोग करें
+      .from(ordersPgTable)
+      .where(
+        // ऑर्डर्स को फिल्टर करें जिनके लिए आप राजस्व गिनना चाहते हैं
+        // मान लीजिए आपके पास ordersPgTable में 'status' कॉलम है
+        // and(
+        //   eq(ordersPgTable.sellerId, sellerId),
+        //   inArray(ordersPgTable.status, ['completed', 'shipped']) // उदाहरण के लिए
+        // )
+        eq(ordersPgTable.sellerId, sellerId) // यदि आप सभी ऑर्डर के totalAmount को जोड़ना चाहते हैं
+      );
+
+    // औसत रेटिंग की गणना (मानकर कि productsPgTable में 'rating' कॉलम है)
+    // यदि रेटिंग sellerPgTable पर सीधे है, तो उसे यहाँ से प्राप्त करें:
+    const averageRating = sellerProfile.rating || 0; // यदि sellerProfile में ही rating है
+
+    // या, यदि आप सभी उत्पादों की औसत रेटिंग की गणना करना चाहते हैं:
+    // const [{ avgProductRating }] = await db
+    //   .select({ avgProductRating: avg(productsPgTable.rating) })
+    //   .from(productsPgTable)
+    //   .where(eq(productsPgTable.sellerId, sellerId));
+    // const averageRating = avgProductRating ? parseFloat(avgProductRating.toFixed(1)) : 0; // avg() एक स्ट्रिंग या null लौटा सकता है
+
+    // 3. सेलर प्रोफाइल में मेट्रिक्स जोड़ें
+    const responseProfile = {
+      ...sellerProfile,
+      totalOrders: totalOrders || 0, // यदि count null लौटाता है तो 0
+      totalProducts: totalProducts || 0, // यदि count null लौटाता है तो 0
+      totalRevenue: parseFloat(totalRevenue || '0'), // sum() स्ट्रिंग या null लौटा सकता है
+      averageRating: averageRating // इसे अपनी गणना से लें
+    };
+
+    return res.status(200).json(responseProfile);
   } catch (error: any) {
     console.error('❌ Error in GET /api/sellers/me:', error);
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+
 
 // ✅ GET /api/sellers/orders (अब यह सब-ऑर्डर्स को फेच करेगा)
 sellerRouter.get("/orders", requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
