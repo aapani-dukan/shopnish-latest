@@ -56,11 +56,10 @@ function App() {
 
   return (
     <>  
-      {/* Header को यहाँ रेंडर करें, यह सभी रूट्स के लिए कॉमन होगा।
-          LocationProvider main.tsx में होने के कारण, Header को LocationContext तक पहुंच होगी। */}
+      
       <Header onCartClick={() => setIsCartModalOpen(true)} />
       
-      {/* main content area */}
+      
       <main className="min-h-screen"> 
         <Routes>
           {/* PUBLIC ROUTES */}
@@ -90,7 +89,7 @@ function App() {
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
 
             {/* Seller Routes (using a shared layout for the dashboard) */}
-              <Route path="/seller" element={<SellerDashboardLayout />}>
+              <Route path="/seller-dashboard" element={<SellerDashboardLayout />}>
               <Route index element={<SellerDashboard />} />
               
               <Route path="apply" element={<SellerApplyPage />} />
