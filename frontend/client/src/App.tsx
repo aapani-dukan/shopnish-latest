@@ -92,7 +92,7 @@ function App() {
             {/* Seller Routes (using a shared layout for the dashboard) */}
               <Route path="/seller" element={<SellerDashboardLayout />}>
               <Route index element={<SellerDashboard />} />
-              <Route index element={<SellerDashboard />} />
+              
               <Route path="apply" element={<SellerApplyPage />} />
               <Route path="status" element={<SellerStatusPage />} />
               <Route path="profile/edit" element={<SellerProfileEdit />} />
