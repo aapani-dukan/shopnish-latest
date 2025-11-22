@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"; // Adjusted path
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Adjusted path
 import { useToast } from "@/hooks/use-toast"; // Adjusted path
 import { apiRequest } from "@/lib/queryClient"; // Adjusted path
-import Header from "@/components/header"; // Adjusted path
+//import Header from "@/components/header"; // Adjusted path
 import Footer from "@/components/footer"; // Adjusted path
 // Removed direct import of api and auth as they are not used directly here anymore.
 // import api from "../lib/api.ts";
@@ -184,7 +184,7 @@ export default function ProductDetail() {
   if (productLoading) { 
     return (
       <div className="min-h-screen bg-neutral-50"> 
-        <Header categories={categories} /> 
+        
         <div className="max-w-7xl mx-auto px-4 py-8">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> 
             <Skeleton className="h-96 w-full" /> 
@@ -202,14 +202,14 @@ export default function ProductDetail() {
 
   if (error || !product) {
     return (
-      <div className="min-h-screen bg-neutral-50"> {/* ✅ Corrected className */}
-        <Header categories={categories} /> {/* ✅ Pass categories to Header */}
-        <div className="max-w-7xl mx-auto px-4 py-8"> {/* ✅ Corrected className */}
-          <Card> {/* ✅ Corrected component name */}
-            <CardContent className="p-8 text-center"> {/* ✅ Corrected component name and className */}
-              <h2 className="text-2xl font-bold mb-4">Product Not Found</h2> {/* ✅ Consistent casing and className */}
-              <p className="text-gray-600 mb-4">The product you're looking for doesn't exist.</p> {/* ✅ Corrected className */}
-              <Button onClick={() => window.history.back()}>Go Back</Button> {/* ✅ Corrected component name and casing */}
+      <div className="min-h-screen bg-neutral-50"> 
+        
+        <div className="max-w-7xl mx-auto px-4 py-8"> 
+          <Card> 
+            <CardContent className="p-8 text-center"> 
+              <h2 className="text-2xl font-bold mb-4">Product Not Found</h2> 
+              <p className="text-gray-600 mb-4">The product you're looking for doesn't exist.</p> 
+              <Button onClick={() => window.history.back()}>Go Back</Button> 
             </CardContent>
           </Card>
         </div>
@@ -220,40 +220,40 @@ export default function ProductDetail() {
   const images = product.images || [product.image];
 
   return (
-    <div className="min-h-screen bg-neutral-50"> {/* ✅ Corrected className */}
-      <Header categories={categories} /> {/* ✅ Pass categories to Header */}
+    <div className="min-h-screen bg-neutral-50"> 
+      
 
-      <main className="max-w-7xl mx-auto px-4 py-8"> {/* ✅ Corrected className */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12"> {/* ✅ Corrected className */}
+      <main className="max-w-7xl mx-auto px-4 py-8"> 
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-12"> 
           {/* product images */}
-          <div className="space-y-4"> {/* ✅ Corrected className */}
-            <div className="relative"> {/* ✅ Corrected className */}
+          <div className="space-y-4"> 
+            <div className="relative"> 
               <img
-                src={images[selectedImage]} // ✅ Corrected casing
+                src={images[selectedImage]} 
                 alt={product.name}
-                className="w-full h-96 object-cover rounded-lg" // ✅ Corrected className
+                className="w-full h-96 object-cover rounded-lg" 
               />
-              {product.originalPrice && ( // ✅ Corrected casing
-                <Badge className="absolute top-4 left-4 bg-red-500 text-white"> {/* ✅ Corrected component name and className */}
+              {product.originalPrice && ( 
+                <Badge className="absolute top-4 left-4 bg-red-500 text-white"> 
                   Sale
                 </Badge>
               )}
             </div>
 
             {images.length > 1 && (
-              <div className="flex space-x-2 overflow-x-auto"> {/* ✅ Corrected className */}
+              <div className="flex space-x-2 overflow-x-auto"> 
                 {images.map((image, index) => (
                   <Button // Use Button for consistent styling and accessibility
                     key={index}
-                    onClick={() => setSelectedImage(index)} // ✅ Corrected casing
-                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 p-0 ${ // ✅ Corrected className
-                      selectedImage === index ? 'border-primary' : 'border-gray-200' // ✅ Corrected casing
+                    onClick={() => setSelectedImage(index)} 
+                    className={`flex-shrink-0 w-20 h-20 rounded-lg overflow-hidden border-2 p-0 ${ 
+                      selectedImage === index ? 'border-primary' : 'border-gray-200' 
                     }`}
                   >
                     <img
                       src={image}
                       alt={`${product.name} ${index + 1}`}
-                      className="w-full h-full object-cover" // ✅ Corrected className
+                      className="w-full h-full object-cover" 
                     />
                   </Button>
                 ))}
@@ -262,9 +262,9 @@ export default function ProductDetail() {
           </div>
 
           {/* product info */}
-          <div className="space-y-6"> {/* ✅ Corrected className */}
+          <div className="space-y-6"> 
             <div>
-              <h1 className="text-3xl font-bold text-gray-900 mb-2"> {/* ✅ Corrected className */}
+              <h1 className="text-3xl font-bold text-gray-900 mb-2"> 
                 {product.name}
               </h1>
               {product.categoryName && ( // ✅ Corrected casing
@@ -312,7 +312,7 @@ export default function ProductDetail() {
             </div>
 
             {/* quantity selector */}
-            <div className="flex items-center space-x-4"> {/* ✅ Corrected className */}
+            <div className="flex items-center space-x-4"> 
               <Label className="text-sm font-medium">Quantity:</Label> 
               <div className="flex items-center border border-gray-300 rounded-lg"> 
                 <Button // ✅ Corrected component name
