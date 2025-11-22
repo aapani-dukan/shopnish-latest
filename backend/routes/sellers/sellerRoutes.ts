@@ -144,8 +144,8 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
     // 1. सेलर प्रोफाइल प्राप्त करें
     const [sellerProfile] = await db
       .select()
-      .from(sellersPgTable)
-      .where(eq(sellersPgTable.userId, userId));
+      .from(sellers) // sellersPgTable के बजाय 'sellers'
+      .where(eq(sellers.userId, userId)); // sellersPgTable.userId के बजाय 'sellers.userId'
 
     if (!sellerProfile) {
       return res.status(404).json({ error: 'Seller profile not found.' });
@@ -154,51 +154,58 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
     // 2. मेट्रिक्स की गणना करें
     const sellerId = sellerProfile.id; // सेलर की ID प्राप्त करें
 
-    // कुल ऑर्डर की गणना
+    // कुल ऑर्डर की गणना (subOrders से, क्योंकि sellerId यहीं है)
     const [{ totalOrders }] = await db
-      .select({ totalOrders: count(orders.id) })
-      .from(orders)
-      .where(eq(orders.sellerId, sellerId));
+      .select({ totalOrders: count(subOrders.id) })
+      .from(subOrders)
+      .where(eq(subOrders.sellerId, sellerId));
 
-    // कुल उत्पादों की गणना
+    // कुल उत्पादों की गणना (products से, क्योंकि sellerId यहीं है)
     const [{ totalProducts }] = await db
       .select({ totalProducts: count(products.id) })
       .from(products)
       .where(eq(products.sellerId, sellerId));
 
-    // कुल राजस्व की गणना (मानकर कि ordersPgTable में 'totalAmount' और 'status' कॉलम हैं)
-    // आपको यह तय करना होगा कि कौन से ऑर्डर (जैसे 'completed', 'shipped') राजस्व में गिने जाते हैं।
-    const [{ totalRevenue }] = await db
-      .select({ totalRevenue: sum(orders.totalAmount) }) // 'sum' फ़ंक्शन का उपयोग करें
-      .from(orders)
+    // कुल राजस्व की गणना (subOrders से, क्योंकि sellerId यहीं है)
+    // subOrders.total कॉलम का उपयोग करें
+    const [{ totalRevenueResult }] = await db // 'totalRevenue' नाम दें ताकि स्पष्ट हो
+      .select({ totalRevenueResult: sql<number>`sum(${subOrders.total}::numeric)` }) // ✅ subOrders.total का उपयोग करें
+      .from(subOrders)
       .where(
-        // ऑर्डर्स को फिल्टर करें जिनके लिए आप राजस्व गिनना चाहते हैं
-        // मान लीजिए आपके पास ordersPgTable में 'status' कॉलम है
+        // ऑर्डर्स को फिल्टर करें जिनके लिए आप राजस्व गिनना चाहते हैं (उदाहरण के लिए, केवल 'completed' सब-ऑर्डर)
+        // यदि आप सभी ऑर्डर के total को जोड़ना चाहते हैं, तो 'and' को हटा दें
         // and(
-        //   eq(ordersPgTable.sellerId, sellerId),
-        //   inArray(ordersPgTable.status, ['completed', 'shipped']) // उदाहरण के लिए
+        eq(subOrders.sellerId, sellerId)
+        //   inArray(subOrders.status, ['completed', 'shipped']) // उदाहरण के लिए, यदि आवश्यक हो तो इसे अनकमेंट करें
         // )
-        eq(orders.sellerId, sellerId) // यदि आप सभी ऑर्डर के totalAmount को जोड़ना चाहते हैं
       );
 
-    // औसत रेटिंग की गणना (मानकर कि productsPgTable में 'rating' कॉलम है)
-    // यदि रेटिंग sellerPgTable पर सीधे है, तो उसे यहाँ से प्राप्त करें:
-    const averageRating = sellerProfile.rating || 0; // यदि sellerProfile में ही rating है
+    const totalRevenue = totalRevenueResult || 0; // यदि sum null लौटाता है तो 0
 
-    // या, यदि आप सभी उत्पादों की औसत रेटिंग की गणना करना चाहते हैं:
-    // const [{ avgProductRating }] = await db
-    //   .select({ avgProductRating: avg(productsPgTable.rating) })
-    //   .from(productsPgTable)
-    //   .where(eq(productsPgTable.sellerId, sellerId));
-    // const averageRating = avgProductRating ? parseFloat(avgProductRating.toFixed(1)) : 0; // avg() एक स्ट्रिंग या null लौटा सकता है
+    // औसत रेटिंग की गणना
+    // विकल्प 1: यदि sellerProfile में सीधे रेटिंग है (आपका वर्तमान कार्यान्वयन)
+    const averageRatingFromProfile = sellerProfile.rating || 0;
+
+    // विकल्प 2: यदि आप सभी उत्पादों की औसत रेटिंग की गणना करना चाहते हैं
+    // (यह कोड अनकमेंट करें यदि आप इसे उपयोग करना चाहते हैं और products.rating कॉलम मौजूद है)
+    let calculatedAverageRating = averageRatingFromProfile; // Default to profile rating
+
+    // const [{ avgProductRatingResult }] = await db
+    //   .select({ avgProductRatingResult: sql<number>`avg(${products.rating}::numeric)` })
+    //   .from(products)
+    //   .where(eq(products.sellerId, sellerId));
+
+    // if (avgProductRatingResult !== null && avgProductRatingResult !== undefined) {
+    //   calculatedAverageRating = parseFloat(avgProductRatingResult.toFixed(1));
+    // }
 
     // 3. सेलर प्रोफाइल में मेट्रिक्स जोड़ें
     const responseProfile = {
       ...sellerProfile,
-      totalOrders: totalOrders || 0, // यदि count null लौटाता है तो 0
-      totalProducts: totalProducts || 0, // यदि count null लौटाता है तो 0
-      totalRevenue: parseFloat(totalRevenue || '0'), // sum() स्ट्रिंग या null लौटा सकता है
-      averageRating: averageRating // इसे अपनी गणना से लें
+      totalOrders: totalOrders || 0,
+      totalProducts: totalProducts || 0,
+      totalRevenue: parseFloat(totalRevenue.toFixed(2)), // `toFixed` अब संख्या पर सुरक्षित रूप से कॉल किया जा सकता है
+      averageRating: calculatedAverageRating // या averageRatingFromProfile, जो भी आप उपयोग करना चाहते हैं
     };
 
     return res.status(200).json(responseProfile);
@@ -207,7 +214,6 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
-
 
 // ✅ GET /api/sellers/orders (अब यह सब-ऑर्डर्स को फेच करेगा)
 sellerRouter.get("/orders", requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
