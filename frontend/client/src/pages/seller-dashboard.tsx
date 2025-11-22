@@ -28,7 +28,7 @@ import OrderManager from "../components/OrderManager";
 import SellerProfileEdit from "../components/seller/SellerProfileEdit";
 
 // Types
-import { Seller, OrderWithItems } from "../lib/types"; // सुनिश्चित करें कि OrderWithItems यहाँ से आ रहा है
+import { Seller, OrderWithItems } from "../lib/types";
 
 export default function SellerDashboard() {
   const { toast } = useToast();
@@ -79,6 +79,8 @@ export default function SellerDashboard() {
     data: seller,
     isLoading: sellerLoading,
     error: sellerError,
+    // ✅ सुधार 1: डेटा को दोबारा लोड करने के लिए 'refetch' फ़ंक्शन प्राप्त करें
+    refetch: refetchSeller,
   } = useQuery<Seller>({
     queryKey: ["/api/sellers/me"],
     queryFn: () => apiRequest("GET", "/api/sellers/me", null, user?.idToken),
@@ -88,25 +90,25 @@ export default function SellerDashboard() {
 
   // ----------------- fetch seller orders -----------------
   const {
-    data: orders, // orders डेटा का उपयोग यहाँ किया जा रहा है, लेकिन अब totalOrders बैकएंड से आ रहा है
+    data: orders,
     isLoading: ordersLoading,
     error: ordersError,
   } = useQuery<OrderWithItems[]>({
     queryKey: ["/api/sellers/orders"],
     queryFn: () => apiRequest("GET", "/api/sellers/orders", null, user?.idToken),
-    // enabled: !!seller?._id, // seller?._id की जगह seller?.id का उपयोग करें
-    enabled: !!seller?.id, // ✅ क्योंकि आपके बैकएंड में id है, _id नहीं
+    enabled: !!seller?.id, // सुनिश्चित करें कि seller.id उपलब्ध है
     staleTime: 0,
     refetchInterval: 60 * 1000,
   });
 
   // ----------------- metrics -----------------
-  // ✅ यहाँ मेट्रिक्स को अपडेट किया गया है ताकि वे सीधे बैकएंड से प्राप्त seller ऑब्जेक्ट से आएं
-  // पुराने 'totalRevenue' गणना और 'totalProducts = 0' को हटा दिया गया है।
+  // ✅ सुधार 2: डुप्लिकेट 'totalRevenue' गणना हटा दी गई है।
+  // अब सभी मेट्रिक्स सुरक्षित रूप से बैकएंड डेटा से या डिफ़ॉल्ट 0 से इनिशियलाइज़ होते हैं।
+  // इससे 'toLocaleString' वाली TypeError ठीक हो जाएगी।
   const totalRevenue = seller?.totalRevenue || 0;
   const totalOrders = seller?.totalOrders || 0;
   const totalProducts = seller?.totalProducts || 0;
-  const averageRating = parseFloat(seller?.averageRating?.toString() || "0"); // ✅ Back end name
+  const averageRating = parseFloat(seller?.averageRating?.toString() || "0");
 
   // ----------------- loading / error UI -----------------
   if (sellerLoading) {
@@ -127,11 +129,10 @@ export default function SellerDashboard() {
   }
 
   if (sellerError || !seller) {
-    // अगर sellerProfile.approvalStatus 'pending' या 'rejected' है
+    // अगर sellerProfile.approvalStatus 'pending' या 'rejected' है तो रीडायरेक्ट करें
     if (seller?.approvalStatus === 'pending' || seller?.approvalStatus === 'rejected') {
-        // user?.idToken आवश्यक हो सकता है
         navigate(`/seller-status?status=${seller.approvalStatus}`, { replace: true });
-        return null; // या एक लोडिंग स्पिनर
+        return null;
     }
 
     return (
@@ -151,11 +152,22 @@ export default function SellerDashboard() {
             ? "There was an issue fetching your seller profile. Please try again."
             : "It looks like you haven't set up your seller profile yet or it's not approved."}
         </p>
-        <Link to="/seller-apply">
-          <Button>
-            {sellerError ? "Retry" : "Apply to be a Seller"}
+
+        {/* ✅ सुधार 3: Retry और Apply बटन के लिए अलग लॉजिक */}
+        {sellerError ? (
+          // यदि कोई एरर है, तो 'Retry' बटन दिखाएं जो डेटा को फिर से फेच करता है
+          <Button onClick={() => refetchSeller()} variant="default">
+            Retry
           </Button>
-        </Link>
+        ) : (
+          // यदि कोई एरर नहीं है लेकिन प्रोफाइल नहीं मिली, तो 'Apply' लिंक दिखाएं
+          <Link to="/seller-apply">
+            <Button>
+              Apply to be a Seller
+            </Button>
+          </Link>
+        )}
+
         <Link to="/">
           <Button variant="ghost" className="ml-4">
             Go Back Home
@@ -167,7 +179,7 @@ export default function SellerDashboard() {
 
   // ----------------- Dashboard Content -----------------
   return (
-    <div className="space-y-8"> {/* ✅ min-h-screen और Header हटाया */}
+    <div className="space-y-8">
       {/* Header / Metrics सेक्शन */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
         <div>
@@ -198,6 +210,7 @@ export default function SellerDashboard() {
             <TrendingUp className="h-8 w-8 text-primary" />
             <div className="ml-4">
               <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
+              {/* अब यह सुरक्षित है क्योंकि totalRevenue को 0 पर इनिशियलाइज़ किया गया है */}
               <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</p>
             </div>
           </CardContent>
@@ -269,4 +282,4 @@ export default function SellerDashboard() {
       </Tabs>
     </div>
   );
-              }
+}
