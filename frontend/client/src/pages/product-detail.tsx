@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton"; // Adjusted path
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"; // Adjusted path
 import { useToast } from "@/hooks/use-toast"; // Adjusted path
 import { apiRequest } from "@/lib/queryClient"; // Adjusted path
-import Header from "@/components/header"; // Adjusted path
+//import Header from "@/components/header"; // Adjusted path
 import Footer from "@/components/footer"; // Adjusted path
 // Removed direct import of api and auth as they are not used directly here anymore.
 // import api from "../lib/api.ts";
@@ -181,18 +181,18 @@ export default function ProductDetail() {
     ? reviews.reduce((sum, review) => sum + review.rating, 0) / reviews.length
     : 0;
 
-  if (productLoading) { // ✅ Corrected casing
+  if (productLoading) { 
     return (
-      <div className="min-h-screen bg-neutral-50"> {/* ✅ Corrected className */}
-        <Header categories={categories} /> {/* ✅ Pass categories to Header */}
-        <div className="max-w-7xl mx-auto px-4 py-8"> {/* ✅ Corrected className */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> {/* ✅ Corrected className */}
-            <Skeleton className="h-96 w-full" /> {/* ✅ Corrected component name and className */}
-            <div className="space-y-4"> {/* ✅ Corrected className */}
-              <Skeleton className="h-8 w-3/4" /> {/* ✅ Corrected component name and className */}
-              <Skeleton className="h-4 w-1/2" /> {/* ✅ Corrected component name and className */}
-              <Skeleton className="h-6 w-1/4" /> {/* ✅ Corrected component name and className */}
-              <Skeleton className="h-32 w-full" /> {/* ✅ Corrected component name and className */}
+      <div className="min-h-screen bg-neutral-50"> 
+        <Header categories={categories} /> 
+        <div className="max-w-7xl mx-auto px-4 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8"> 
+            <Skeleton className="h-96 w-full" /> 
+            <div className="space-y-4"> 
+              <Skeleton className="h-8 w-3/4" /> 
+              <Skeleton className="h-4 w-1/2" /> 
+              <Skeleton className="h-6 w-1/4" /> 
+              <Skeleton className="h-32 w-full" /> 
             </div>
           </div>
         </div>
