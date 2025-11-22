@@ -23,9 +23,9 @@ import { Button } from "../components/ui/button";
 // ✅ Header इम्पोर्ट हटा दिया गया है
 
 // --- Import Managers ---
-import ProductManager from "../components/productmanager";
-import OrderManager from "../components/ordermanager";
-import SellerProfileEdit from "../components/seller/sellerprofileedit";
+import ProductManager from "../components/ProductManager";
+import OrderManager from "../components/OrderManager";
+import SellerProfileEdit from "../components/seller/SellerProfileEdit";
 
 export default function SellerDashboard() { 
   const { toast } = useToast();
