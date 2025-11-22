@@ -3,7 +3,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { auth } from "../lib/firebase.ts";
 import { apiRequest } from "@/lib/queryClient";
-import Header from "@/components/header";
+//import Header from "@/components/header";
 import Footer from "@/components/footer";
 
 interface CartItem {
@@ -49,7 +49,7 @@ refetchOnMount: false, // ⬅️ इसे जोड़ें
   if (isLoading) {
     return (
       <div className="min-h-screen">
-        <Header />
+        
         <p className="p-4 text-center">Loading cart...</p>
         <Footer />
       </div>
@@ -60,7 +60,7 @@ refetchOnMount: false, // ⬅️ इसे जोड़ें
     console.error("❌ Cart fetch error:", error);
     return (
       <div className="min-h-screen">
-        <Header />
+        
         <p className="p-4 text-center text-red-500">
           Error: Failed to load cart.
         </p>
@@ -71,7 +71,7 @@ refetchOnMount: false, // ⬅️ इसे जोड़ें
 
   return (
     <div className="min-h-screen">
-      <Header />
+      
       <main className="max-w-4xl mx-auto p-4">
         <h2 className="text-2xl font-bold mb-6 text-center">Your Cart</h2>
 
