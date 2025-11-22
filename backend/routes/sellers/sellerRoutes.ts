@@ -144,8 +144,8 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
     // 1. सेलर प्रोफाइल प्राप्त करें
     const [sellerProfile] = await db
       .select()
-      .from(sellers) // sellersPgTable के बजाय 'sellers'
-      .where(eq(sellers.userId, userId)); // sellersPgTable.userId के बजाय 'sellers.userId'
+      .from(sellersPgTable) // sellersPgTable के बजाय 'sellers'
+      .where(eq(sellersPgTable.userId, userId)); // sellersPgTable.userId के बजाय 'sellers.userId'
 
     if (!sellerProfile) {
       return res.status(404).json({ error: 'Seller profile not found.' });
