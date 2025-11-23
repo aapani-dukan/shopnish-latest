@@ -16,18 +16,11 @@ import { Button } from '../ui/button'; // Shadcn UI बटन
 import { PanelLeft } from 'lucide-react'; // हैमबर्गर आइकन
 
 const SellerDashboardLayout: React.FC = () => {
-  // useSidebar हुक का उपयोग करके साइडबार की वर्तमान स्थिति प्राप्त करें
-  // यह हमें मोबाइल पर रहते हुए ही एक विशिष्ट टॉगल बटन दिखाने की अनुमति देता है
-  const { toggleSidebar, isMobile } = useSidebar(); // useSidebar को SidebarProvider के अंदर से एक्सेस किया जाना चाहिए
-
   return (
     // SidebarProvider पूरे लेआउट को रैप करेगा ताकि सभी बच्चे साइडबार की स्थिति तक पहुंच सकें
     <SidebarProvider>
-      {/*
-        SidebarProvider के अंदर, हम useSidebar को फिर से कॉल करते हैं
-        ताकि हम वर्तमान संदर्भ से isMobile और toggleSidebar को प्राप्त कर सकें।
-        यह एक छोटा सा री-रेंडरिंग है लेकिन यह सुनिश्चित करता है कि हुक सही संदर्भ में है।
-      */}
+      {/* LayoutContent अब SidebarProvider का सीधा बच्चा है,
+          इसलिए इसके अंदर useSidebar का उपयोग करना सुरक्षित है। */}
       <LayoutContent />
     </SidebarProvider>
   );
@@ -35,10 +28,11 @@ const SellerDashboardLayout: React.FC = () => {
 
 // एक सहायक कंपोनेंट जो SidebarProvider के संदर्भ का उपयोग करता है
 const LayoutContent: React.FC = () => {
+  // अब useSidebar को यहाँ कॉल करना सुरक्षित है, क्योंकि LayoutContent SidebarProvider के अंदर है।
   const { toggleSidebar, isMobile } = useSidebar();
 
   return (
-    <div className="min-h-screen bg-gray-100 flex"> {/* 'flex-col' हटाया, अब साइडबार खुद ही फिक्स्ड होगा */}
+    <div className="min-h-screen bg-gray-100 flex">
       {/* मोबाइल पर ऊपर-बाएं कोने में हैमबर्गर मेनू */}
       {isMobile && (
         <header className="fixed top-0 left-0 w-full bg-white shadow-sm p-3 z-20 flex items-center">
@@ -55,11 +49,10 @@ const LayoutContent: React.FC = () => {
         </header>
       )}
 
-      {/* SellerSidebar कंपोनेंट, जिसे हमने अपडेट किया है */}
+      {/* SellerSidebar कंपोनेंट */}
       <SellerSidebar />
       
       {/* मुख्य कंटेंट एरिया अब SidebarInset द्वारा हैंडल किया जाएगा */}
-      {/* md:mt-[56px] (यदि मोबाइल हेडर है) या कोई अन्य मार्जिन जोड़ें ताकि कंटेंट हेडर के नीचे से शुरू हो */}
       <SidebarInset className={isMobile ? "mt-[56px]" : ""}> {/* मोबाइल पर हेडर के लिए मार्जिन */}
         <div className="p-8 overflow-y-auto w-full"> {/* Inner div for padding and scroll */}
           <Outlet /> 
