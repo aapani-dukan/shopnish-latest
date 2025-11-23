@@ -1,12 +1,13 @@
-// client/src/pages/SellerProductsPage.tsx
+// client/src/pages/s
+SellerProductsPage.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Loader2, Package } from 'lucide-react';
 import axios from 'axios';
-import { toast } from 'react-hot-toast'; // Shadcn UI Toast के साथ काम करने के लिए
+import { toast } from 'react-hot-toast';
 
-// Shadcn UI Components
+// Shadcn UI Components (आपके रेपो से इम्पोर्ट पाथ)
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import {
@@ -17,7 +18,7 @@ import {
   TableBody,
   TableCell
 } from '../components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '../../components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,54 +31,76 @@ import {
   AlertDialogTrigger,
 } from '../components/ui/alert-dialog';
 
-// product स्कीमा के आधार पर इंटरफ़ेस (आपके src/db/schema.ts से अनुमानित)
+// आपके db/schema/product.ts से वास्तविक Product इंटरफ़ेस
 interface Product {
-  id: string;
+  id: string; // Drizzle/PostgreSQL serial ID (string के रूप में हैंडल किया जा सकता है)
+  sellerid: number;
+  storeid: number;
+  categoryid: number; // यह एक ID है, नाम नहीं
   name: string;
+  namehindi?: string;
   description: string;
+  descriptionhindi?: string;
   price: number;
+  originalprice?: number;
+  image: string; // सिंगल इमेज URL
+  images?: string[]; // इमेज URL का array
+  unit: string;
+  brand?: string;
   stock: number;
-  imageUrl: string;
-  category: string; // यदि आपके उत्पाद स्कीमा में एक 'category' फ़ील्ड है
-  isApproved: boolean; // यदि आपके उत्पाद स्कीमा में यह है
-  createdAt: string;
+  minorderqty?: number;
+  maxorderqty?: number;
+  isactive: boolean;
+  deliveryscope: string;
+  productdeliverypincodes?: string[];
+  productdeliveryradiuskm?: number;
+  estimateddeliverytime?: string;
+  approvalstatus: 'pending' | 'approved' | 'rejected'; // enum के अनुसार
+  approvedat?: string;
+  rejectionreason?: string;
+  createdat: string;
+  updatedat: string;
+  // यदि API category name को join करके देता है तो आप इसे यहां जोड़ सकते हैं
+  categoryName?: string;
 }
 
 const SellerProductsPage: React.FC = () => {
+  const navigate = useNavigate();
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
-  // API से उत्पादों को फेच करने के लिए फंक्शन
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // ✅ आपके backened/src/routes/product.ts या seller.ts से वास्तविक एंडपॉइंट
-      const response = await axios.get('/api/seller/products', { withCredentials: true });
-      setProducts(response.data);
+      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट (getAllProducts या getSellerProducts)
+      // `getSellerProducts` के लिए, यह `/api/products/seller` होगा।
+      // मान लें कि `productRoutes` `app.use("/api/products", productRoutes)` के तहत माउंटेड है।
+      const response = await axios.get('/api/products/seller', { withCredentials: true });
+      // API response structure को समायोजित करें: `response.data` सीधे array नहीं हो सकता
+      setProducts(response.data.products || []); // मान लें कि उत्पादों को `products` key में भेजा जाता है
     } catch (err: any) {
       console.error('Failed to fetch products:', err);
-      setError(err.response?.data?.error || 'उत्पादों को लोड करने में विफल।');
-      toast.error(err.response?.data?.error || 'उत्पादों को लोड करने में विफल।');
+      setError(err.response?.data?.message || 'उत्पादों को लोड करने में विफल।');
+      toast.error(err.response?.data?.message || 'उत्पादों को लोड करने में विफल।');
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // उत्पाद को डिलीट करने के लिए फंक्शन
   const handleDeleteProduct = async (productId: string) => {
     setDeletingProductId(productId);
     try {
-      // ✅ अपने API एंडपॉइंट से बदलें
-      await axios.delete(`/api/seller/products/${productId}`, { withCredentials: true });
+      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
+      await axios.delete(`/api/products/${productId}`, { withCredentials: true });
       setProducts(prevProducts => prevProducts.filter(product => product.id !== productId));
       toast.success('उत्पाद सफलतापूर्वक हटाया गया।');
     } catch (err: any) {
       console.error('Failed to delete product:', err);
-      toast.error(err.response?.data?.error || 'उत्पाद हटाने में विफल।');
+      toast.error(err.response?.data?.message || 'उत्पाद हटाने में विफल।');
     } finally {
       setDeletingProductId(null);
     }
@@ -89,7 +112,7 @@ const SellerProductsPage: React.FC = () => {
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.category?.toLowerCase().includes(searchTerm.toLowerCase()) // category optional हो सकता है
+    product.categoryName?.toLowerCase().includes(searchTerm.toLowerCase()) // यदि categoryName उपलब्ध है
   );
 
   if (loading) {
@@ -152,10 +175,10 @@ const SellerProductsPage: React.FC = () => {
                 <TableRow>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">छवि</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">नाम</TableHead>
-                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">श्रेणी</TableHead>
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">श्रेणी ID</TableHead> {/* categoryid दिखाएँ */}
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">मूल्य</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">स्टॉक</TableHead>
-                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">स्टेटस</TableHead>
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">अनुमोदन</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">क्रियाएं</TableHead>
                 </TableRow>
               </TableHeader>
@@ -164,20 +187,24 @@ const SellerProductsPage: React.FC = () => {
                   <TableRow key={product.id}>
                     <TableCell className="px-4 py-3 whitespace-nowrap">
                       <img
-                        src={product.imageUrl || 'https://via.placeholder.com/50'}
+                        src={product.image || 'https://via.placeholder.com/50'} // सिंगल image फ़ील्ड का उपयोग करें
                         alt={product.name}
                         className="h-12 w-12 rounded-md object-cover"
                       />
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</TableCell>
-                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.category || 'N/A'}</TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.categoryid || 'N/A'}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{product.price.toFixed(2)}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.stock}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
-                          product.isApproved ? 'bg-green-100 text-green-800' : 'bg-yellow-100 text-yellow-800'
+                          product.approvalstatus === 'approved' ? 'bg-green-100 text-green-800' :
+                          product.approvalstatus === 'pending' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-red-100 text-red-800'
                       }`}>
-                          {product.isApproved ? 'अनुमोदित' : 'समीक्षा में'}
+                          {product.approvalstatus === 'approved' ? 'अनुमोदित' :
+                           product.approvalstatus === 'pending' ? 'समीक्षा में' :
+                           'अस्वीकृत'}
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
