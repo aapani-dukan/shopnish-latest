@@ -1,4 +1,4 @@
-// client/src/pages/seller/SellerOrdersPage.tsx
+// client/src/pages/SellerOrdersPage.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link } from 'react-router-dom';
@@ -26,41 +26,50 @@ import {
 } from '../components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 
-// subOrders स्कीमा के आधार पर इंटरफ़ेस (आपके src/db/schema.ts से अनुमानित)
+// आपके db/schema/subOrder.ts से वास्तविक SubOrder इंटरफ़ेस
 interface SubOrder {
-  id: string;
-  orderId: string; // मूल ऑर्डर आईडी
-  sellerId: string;
-  productId: string; // यदि आप इसे दिखाना चाहते हैं
-  quantity: number;
-  price: number; // प्रति यूनिट कीमत
-  total: number; // इस सबऑर्डर का कुल
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
-  createdAt: string; // ISO string
-  // customerName या orderNumber को प्राप्त करने के लिए आपको मूल 'orders' टेबल से join करना पड़ सकता है
-  // या आपके API को इसे सीधे SubOrder ऑब्जेक्ट में शामिल करना चाहिए।
-  orderNumber?: string; // यदि API इसे शामिल करता है
-  customerName?: string; // यदि API इसे शामिल करता है
-  productName?: string; // यदि API इसे शामिल करता है
+  id: string; // Drizzle/PostgreSQL serial ID (string के रूप में हैंडल किया जा सकता है)
+  masterorderid: number; // मूल ऑर्डर आईडी (integer)
+  subordernumber: string; // यूनिक सबऑर्डर नंबर
+  sellerid: number;
+  storeid?: number; // Store ID nullable हो सकता है
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'; // enum के अनुसार
+  subtotal: number;
+  deliverycharge: number;
+  total: number;
+  deliverybatchid?: number;
+  estimatedpreparationtime?: string;
+  isselfdeliverybyseller: boolean;
+  createdat: string; // ISO string
+  updatedat: string;
+  // यदि API product/customer विवरण को join करके देता है, तो आप इन्हें यहां जोड़ सकते हैं
+  productName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
+  customerName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
+  customerPhone?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
+  // मूल ऑर्डर से कुछ विवरण (यदि API इसे प्रदान करता है)
+  orderNumber?: string; // masterOrder से (यदि API इसे प्रदान करता है)
 }
 
 const SellerOrdersPage: React.FC = () => {
-  const [orders, setOrders] = useState<SubOrder[]>([]); // SubOrder के बजाय 'Order' का उपयोग करें यदि API पूरी ऑर्डर वस्तु देता है
+  const [orders, setOrders] = useState<SubOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<string>('all'); // 'all' या विशिष्ट स्टेटस
+  const [filterStatus, setFilterStatus] = useState<SubOrder['status'] | 'all'>('all'); // 'all' या विशिष्ट स्टेटस
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // ✅ आपके backened/src/routes/seller.ts से वास्तविक एंडपॉइंट (जो subOrders लौटाता है)
-      const response = await axios.get('/api/seller/suborders', { withCredentials: true }); // मैंने /api/seller/suborders अनुमान लगाया है
-      setOrders(response.data);
+      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
+      // subOrderRoutes `app.use("/api/suborders", subOrderRoutes)` के तहत माउंटेड है,
+      // और आपके रूट में `/seller` है।
+      const response = await axios.get('/api/suborders/seller', { withCredentials: true });
+      // API प्रतिक्रिया संरचना को समायोजित करें: `response.data.subOrders` एरे होना चाहिए
+      setOrders(response.data.subOrders || []);
     } catch (err: any) {
       console.error('Failed to fetch orders:', err);
-      setError(err.response?.data?.error || 'ऑर्डर्स को लोड करने में विफल।');
-      toast.error(err.response?.data?.error || 'ऑर्डर्स को लोड करने में विफल।');
+      setError(err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।');
+      toast.error(err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।');
     } finally {
       setLoading(false);
     }
@@ -131,7 +140,7 @@ const SellerOrdersPage: React.FC = () => {
     <Card className="p-4 sm:p-6 lg:p-8">
       <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-0 mb-6">
         <CardTitle className="text-3xl font-bold text-gray-800 mb-4 sm:mb-0">आपके ऑर्डर</CardTitle>
-        <Select value={filterStatus} onValueChange={setFilterStatus}>
+        <Select value={filterStatus} onValueChange={(value) => setFilterStatus(value as SubOrder['status'] | 'all')}>
           <SelectTrigger className="w-[180px]">
             <SelectValue placeholder="स्टेटस द्वारा फ़िल्टर करें" />
           </SelectTrigger>
@@ -158,8 +167,8 @@ const SellerOrdersPage: React.FC = () => {
             <Table className="min-w-full divide-y divide-gray-200">
               <TableHeader className="bg-gray-50">
                 <TableRow>
-                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">ऑर्डर ID</TableHead>
-                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">उत्पाद/ग्राहक</TableHead> {/* Adjust based on your API */}
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">सब-ऑर्डर #</TableHead>
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">उत्पाद विवरण</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">मात्रा</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">कुल</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">स्टेटस</TableHead>
@@ -170,10 +179,11 @@ const SellerOrdersPage: React.FC = () => {
               <TableBody className="bg-white divide-y divide-gray-200">
                 {filteredOrders.map((order) => (
                   <TableRow key={order.id}>
-                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{order.orderNumber || order.orderId.substring(0, 8)}</TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{order.subordernumber}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {order.productName || 'N/A'} (Qty: {order.quantity}) <br/>
-                      {order.customerName && <span className="text-xs text-gray-400">({order.customerName})</span>}
+                      {order.productName || `उत्पाद ID: ${order.productId || 'N/A'}`} <br/>
+                      {order.customerName && <span className="text-xs text-gray-400">({order.customerName} - {order.customerPhone || 'N/A'})</span>}
+                      {!order.customerName && order.masterorderid && <span className="text-xs text-gray-400">मास्टर ऑर्डर ID: {order.masterorderid}</span>}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{order.quantity}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{order.total.toFixed(2)}</TableCell>
@@ -184,9 +194,10 @@ const SellerOrdersPage: React.FC = () => {
                       </span>
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {format(new Date(order.createdAt), 'dd MMM yyyy')}
+                      {format(new Date(order.createdat), 'dd MMM yyyy')}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
+                      {/* ऑर्डर विवरण पेज पर लिंक, यदि आपके पास ऐसा कोई रूट है */}
                       <Link to={`/seller-dashboard/orders/${order.id}`} className="text-indigo-600 hover:text-indigo-900">
                         <Button variant="ghost" size="sm">विवरण देखें</Button>
                       </Link>
