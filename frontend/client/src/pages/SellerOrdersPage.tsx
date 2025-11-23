@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom'; // useNavigate इम्पोर्ट करें
 import { Loader2, Package, CheckCircle, Clock, XCircle, ShoppingBag } from 'lucide-react';
 // import axios from 'axios'; // 🔴 axios हटा दें
-import api from '../api/api'; // ✅ आपका कॉन्फ़िगर किया गया API इंस्टेंस इम्पोर्ट करें
+import api from '../lib/api'; // ✅ आपका कॉन्फ़िगर किया गया API इंस्टेंस इम्पोर्ट करें
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -209,8 +209,9 @@ const SellerOrdersPage: React.FC = () => {
                       {format(new Date(order.createdat), 'dd MMM yyyy')}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                      {/* ऑर्डर विवरण पेज पर लिंक, यदि आपके पास ऐसा कोई रूट है */}
-                      <Link to={`/seller-dashboard/orders/${order.id}`} className="text-indigo-600 hover:text-indigo-900">
+                      
+                      <Link to={`/seller-dashboard/orders/${order.id}`} 
+                      className="text-indigo-600 hover:text-indigo-900">
                         <Button variant="ghost" size="sm">विवरण देखें</Button>
                       </Link>
                     </TableCell>
