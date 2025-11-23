@@ -1,5 +1,4 @@
-// client/src/pages/s
-SellerProductsPage.tsx
+// client/src/pages/SellerProductsPage.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
