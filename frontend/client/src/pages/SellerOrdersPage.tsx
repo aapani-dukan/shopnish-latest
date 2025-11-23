@@ -210,7 +210,8 @@ const SellerOrdersPage: React.FC = () => {
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       
-                      <Link to={`/seller-dashboard/orders/${order.id}`} 
+                      <Link
+                    to={`/seller-dashboard/orders/${order.id}`}
                       className="text-indigo-600 hover:text-indigo-900">
                         <Button variant="ghost" size="sm">विवरण देखें</Button>
                       </Link>
