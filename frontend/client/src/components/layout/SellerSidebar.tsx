@@ -1,10 +1,9 @@
-// client/src/components/layout/sellersidebar.tsx
+// client/src/components/layout/SellerSidebar.tsx
 
-import React from 'react'; // 'react' को 'React' के रूप में इम्पोर्ट करें
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, ShoppingCart, Settings, User, TrendingUp, FileText, PanelLeft } from 'lucide-react'; // PanelLeft आइकन जोड़ा गया
+import { Package, ShoppingCart, Settings, User, TrendingUp, FileText, PanelLeft } from 'lucide-react';
 
-// sidebar.tsx से आवश्यक कंपोनेंट्स इम्पोर्ट करें
 import {
   Sidebar,
   SidebarHeader,
@@ -14,61 +13,64 @@ import {
   SidebarMenuItem,
   SidebarMenuButton,
   SidebarSeparator,
-  SidebarTrigger, // यदि आप इसे साइडबार के अंदर टॉगल बटन के रूप में चाहते हैं
-  useSidebar // यदि हमें साइडबार की स्थिति जानने की आवश्यकता है
-} from '../ui/sidebar'; // आपके sidebar.tsx फाइल का सही पाथ
+  SidebarTrigger,
+  useSidebar
+} from '../ui/sidebar';
 
-// आपके ui/button से Button कंपोनेंट
-import { Button } from '../ui/button'; 
+import { Button } from '../ui/button';
+// TooltipProvider को SellerSidebarLayout में इम्पोर्ट करना बेहतर है,
+// क्योंकि यह Tooltip कंपोनेंट्स के लिए context प्रदान करता है।
+// या तो इसे यहां से हटा दें, या सुनिश्चित करें कि आपके पास एक TooltipProvider है।
+// (SidebarProvider पहले से ही TooltipProvider को रैप कर रहा है, इसलिए इसकी यहां आवश्यकता नहीं है)
+// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
-// shadcn/ui से tooltip कंपोनेंट्स को भी इम्पोर्ट करें ताकि sidebarMenuButton टूलटिप दिखा सके
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
-
-const SellerSidebar: React.FC = () => { // फंक्शन का नाम PascalCase में होना चाहिए
+const SellerSidebar: React.FC = () => {
   const location = useLocation();
-  const { state: sidebarState, isMobile } = useSidebar(); // sidebar state प्राप्त करें
+  const { state: sidebarState, isMobile } = useSidebar();
 
   const isactive = (path: string) => location.pathname === path;
 
-  // SidebarMenuButton को एक फंक्शन के रूप में परिभाषित करें ताकि हम टूलटिप और सक्रिय स्थिति को हैंडल कर सकें
   const MenuItem = ({ to, icon: Icon, label }: { to: string; icon: React.ElementType; label: string }) => {
     const active = isactive(to);
     return (
       <SidebarMenuItem>
-        <Link to={to} className="w-full"> {/* Link को पूरे बटन पर स्ट्रेच करें */}
-          <SidebarMenuButton
-            isactive={active}
-            tooltip={label} // टूलटिप के रूप में लेबल दिखाएं
-            className="w-full justify-start" // लिंक को बाईं ओर संरेखित करें
-          >
+        {/*
+          यहां बदलाव किया गया है:
+          Link को SidebarMenuButton के asChild के रूप में उपयोग करें।
+          इससे SidebarMenuButton Link के सभी props प्राप्त करेगा और खुद एक <a/> टैग के रूप में रेंडर होगा।
+          यह सुनिश्चित करता है कि TooltipTrigger को एक ही child मिले।
+        */}
+        <SidebarMenuButton
+          asChild // <Link> को child के रूप में प्राप्त करने के लिए
+          isactive={active}
+          tooltip={label}
+          className="w-full justify-start"
+        >
+          <Link to={to} className="w-full flex items-center"> {/* Link को asChild के रूप में पास करें */}
             <Icon className="h-5 w-5 mr-3" />
             <span className={sidebarState === "collapsed" && !isMobile ? "sr-only" : ""}>
               {label}
             </span>
-          </SidebarMenuButton>
-        </Link>
+          </Link>
+        </SidebarMenuButton>
       </SidebarMenuItem>
     );
   };
 
   return (
-    // 'sidebar.tsx' से Sidebar कंपोनेंट का उपयोग करें
-    // 'collapsible' प्रॉप इसे मोबाइल पर ऑफकैंपस (शीट) और डेस्कटॉप पर आइकन-ओनली (संकुचित) बनाता है
     <Sidebar
       side="left"
-      variant="sidebar" // या 'floating', 'inset' - आपकी पसंद के अनुसार
-      collapsible="icon" // 'icon' या 'offcanvas' (यदि आप डेस्कटॉप पर भी इसे संकुचित करना चाहते हैं)
+      variant="sidebar"
+      collapsible="icon"
     >
       <SidebarHeader className="flex items-center justify-between p-4">
-        {/* लोगो/शीर्षक केवल विस्तारित होने पर या मोबाइल पर दिखाएं */}
         {(sidebarState === "expanded" || isMobile) && (
           <div className="flex items-center">
             <TrendingUp className="h-6 w-6 text-indigo-600 mr-2" />
             <h2 className="text-xl font-bold text-gray-800">Seller Hub</h2>
           </div>
         )}
-        {/* डेस्कटॉप पर साइडबार को टॉगल करने के लिए बटन (यदि collapsible="icon" है) */}
         {!isMobile && (
           <SidebarTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7">
@@ -100,3 +102,4 @@ const SellerSidebar: React.FC = () => { // फंक्शन का नाम P
 };
 
 export default SellerSidebar;
+
