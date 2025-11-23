@@ -12,7 +12,7 @@ import {
   useSidebar        // साइडबार की स्थिति तक पहुँचने के लिए (वैकल्पिक, लेकिन उपयोगी)
 } from '../ui/sidebar'; // आपके sidebar.tsx फाइल का सही पाथ
 
-import { Button } from '../components/ui/button'; // Shadcn UI बटन
+import { Button } from '../ui/button'; // Shadcn UI बटन
 import { PanelLeft } from 'lucide-react'; // हैमबर्गर आइकन
 
 const SellerDashboardLayout: React.FC = () => {
