@@ -1,9 +1,10 @@
 // client/src/pages/SellerOrdersPage.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom'; // useNavigate इम्पोर्ट करें
 import { Loader2, Package, CheckCircle, Clock, XCircle, ShoppingBag } from 'lucide-react';
-import axios from 'axios';
+// import axios from 'axios'; // 🔴 axios हटा दें
+import api from '../api/api'; // ✅ आपका कॉन्फ़िगर किया गया API इंस्टेंस इम्पोर्ट करें
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -28,8 +29,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card'
 
 // आपके db/schema/subOrder.ts से वास्तविक SubOrder इंटरफ़ेस
 interface SubOrder {
-  id: string; // Drizzle/PostgreSQL serial ID (string के रूप में हैंडल किया जा सकता है)
-  masterorderid: number; // मूल ऑर्डर आईडी (integer)
+  id: string; // Drizzle/PostgreSQL serial ID
+  masterorderid: number; // मूल ऑर्डर आईडी
   subordernumber: string; // यूनिक सबऑर्डर नंबर
   sellerid: number;
   storeid?: number; // Store ID nullable हो सकता है
@@ -42,15 +43,15 @@ interface SubOrder {
   isselfdeliverybyseller: boolean;
   createdat: string; // ISO string
   updatedat: string;
-  // यदि API product/customer विवरण को join करके देता है, तो आप इन्हें यहां जोड़ सकते हैं
+  // यदि API product/customer विवरण को join करके देता है
   productName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
   customerName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
   customerPhone?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
-  // मूल ऑर्डर से कुछ विवरण (यदि API इसे प्रदान करता है)
   orderNumber?: string; // masterOrder से (यदि API इसे प्रदान करता है)
 }
 
 const SellerOrdersPage: React.FC = () => {
+  const navigate = useNavigate(); // useNavigate हुक
   const [orders, setOrders] = useState<SubOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
@@ -60,20 +61,31 @@ const SellerOrdersPage: React.FC = () => {
     setLoading(true);
     setError(null);
     try {
-      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
-      // subOrderRoutes `app.use("/api/suborders", subOrderRoutes)` के तहत माउंटेड है,
-      // और आपके रूट में `/seller` है।
-      const response = await axios.get('/api/suborders/seller', { withCredentials: true });
+      // ✅ 'axios' के बजाय कॉन्फ़िगर किए गए 'api' इंस्टेंस का उपयोग करें
+      // Firebase टोकन स्वचालित रूप से इंटरसेप्टर द्वारा हेडर में जोड़ा जाएगा
+      const response = await api.get('/suborders/seller'); // Vercel प्रॉक्सी के माध्यम से रिलेटिव पाथ
+      
       // API प्रतिक्रिया संरचना को समायोजित करें: `response.data.subOrders` एरे होना चाहिए
       setOrders(response.data.subOrders || []);
     } catch (err: any) {
       console.error('Failed to fetch orders:', err);
-      setError(err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।');
-      toast.error(err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।');
+      
+      // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
+      // यदि इंटरसेप्टर में कोई यूजर नहीं मिलता है तो वह warning देता है,
+      // और यहां 401 एरर आ सकती है।
+      if (err.response?.status === 401) {
+         setError("कृपया ऑर्डर्स देखने के लिए लॉग इन करें।");
+         toast.error("कृपया ऑर्डर्स देखने के लिए लॉग इन करें।");
+         navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
+      } else {
+        const errorMessage = err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।';
+        setError(errorMessage);
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [navigate]); // navigate को निर्भरता के रूप में जोड़ें
 
   useEffect(() => {
     fetchOrders();
@@ -188,7 +200,7 @@ const SellerOrdersPage: React.FC = () => {
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{order.quantity}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{order.total.toFixed(2)}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         {getStatusIcon(order.status)}
                         <span className="ml-1">{getStatusText(order.status)}</span>
                       </span>
