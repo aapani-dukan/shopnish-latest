@@ -51,7 +51,8 @@ import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage';
 import SellerProductsPage from "./pages/SellerProductsPage";
 import SellerOrdersPage from "./pages/SellerOrdersPage";
 import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; // Capitalized
-
+import SellerAddProductPage from "./pages/SellerAddProductPage"; // आपके द्वारा प्रदान किए गए पाथ के अनुसार
+import SellerEditProductPage from "./pages/SellerEditProductPage"; 
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
@@ -81,10 +82,9 @@ function App() {
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
 
-          {/* PROTECTED ROUTES (Requires Auth) */}
-          {/* AuthRedirectGuard एक लेआउट कंपोनेंट की तरह काम करेगा जो चिल्ड्रेन को प्रोटेक्ट करेगा */}
+          
           <Route element={<AuthRedirectGuard />}> 
-            {/* Customer Routes */}
+            
             <Route path="/customer/orders" element={<CustomerOrdersPage />} />
             <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
@@ -97,9 +97,13 @@ function App() {
               <Route path="status" element={<SellerStatusPage />} />
               <Route path="profile/edit" element={<SellerProfileEdit />} />
               <Route path="delivery-settings" element={<DeliverySettingsPage />} />
-              {/* अन्य सेलर रूट्स यहां जोड़ें */}
+                <Route path="products" element={<SellerProductsPage />} /> 
+              <Route path="products/add" element={<SellerAddProductPage />} />
+              <Route path="products/edit/:productId" element={<SellerEditProductPage />} />
+              <Route path="orders" element={<SellerOrdersPage />} /> 
             </Route>
 
+            
             {/* Delivery Person Routes */}
             <Route path="/delivery" element={<DeliveryDashboard />} />
             <Route path="/delivery-apply" element={<DeliveryApplyPage />} />
