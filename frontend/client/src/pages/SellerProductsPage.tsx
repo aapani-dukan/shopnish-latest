@@ -5,7 +5,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Loader2, Package } from 'lucide-react';
 
 import { toast } from 'react-hot-toast';
-import api from '../api/api';
+import api from '../lib/api';
 import { getAuth } from 'firebase/auth'; // Firebase Auth से
 
 // Shadcn UI Components (आपके रेपो से इम्पोर्ट पाथ)
