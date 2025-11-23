@@ -5,6 +5,8 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Loader2, Package } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
+import axiosInstance from '../../api/axiosInstance'; // आपका axios इंस्टेंस
+import { getAuth } from 'firebase/auth'; // Firebase Auth से
 
 // Shadcn UI Components (आपके रेपो से इम्पोर्ट पाथ)
 import { Button } from '../components/ui/button';
