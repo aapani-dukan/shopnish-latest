@@ -73,35 +73,73 @@ const SellerProductsPage: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
+  // ✅ Firebase ID टोकन प्राप्त करने और उसे रिक्वेस्ट हेडर में जोड़ने के लिए सहायक फ़ंक्शन
+  const getAuthHeaders = useCallback(async () => {
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      // यदि कोई यूजर लॉग इन नहीं है, तो एक त्रुटि थ्रो करें या null वापस करें
+      // और कॉलिंग फंक्शन इसे हैंडल करेगा।
+      throw new Error("No authenticated Firebase user found.");
+    }
+
+    const idToken = await user.getIdToken();
+    return {
+      headers: {
+        Authorization: `Bearer ${idToken}`,
+      },
+      // withCredentials: true; // यह अब आवश्यक नहीं है क्योंकि प्रमाणीकरण हेडर-आधारित है।
+                                  // यदि आपके बैकएंड में अन्य कुकी-आधारित लॉजिक है तो इसे रखें।
+    };
+  }, []); // इस हुक की निर्भरताएँ नहीं हैं क्योंकि getAuth() और currentUser हमेशा नवीनतम होते हैं।
+
+
   const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट (getAllProducts या getSellerProducts)
-      // `getSellerProducts` के लिए, यह `/api/products/seller` होगा।
-      // मान लें कि `productRoutes` `app.use("/api/products", productRoutes)` के तहत माउंटेड है।
-      const response = await axios.get('/api/products/seller', { withCredentials: true });
-      // API response structure को समायोजित करें: `response.data` सीधे array नहीं हो सकता
-      setProducts(response.data.products || []); // मान लें कि उत्पादों को `products` key में भेजा जाता है
+      const authHeaders = await getAuthHeaders(); // Firebase Auth हेडर प्राप्त करें
+      
+      const response = await axios.get('/api/products/seller', authHeaders); // हेडर पास करें
+      
+      setProducts(response.data.products || []);
+
     } catch (err: any) {
       console.error('Failed to fetch products:', err);
-      setError(err.response?.data?.message || 'उत्पादों को लोड करने में विफल।');
-      toast.error(err.response?.data?.message || 'उत्पादों को लोड करने में विफल।');
+      // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
+      if (err.message === "No authenticated Firebase user found.") {
+        setError("कृपया उत्पादों को देखने के लिए लॉग इन करें।");
+        toast.error("कृपया उत्पादों को देखने के लिए लॉग इन करें।");
+        navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
+      } else {
+        const errorMessage = err.response?.data?.message || 'उत्पादों को लोड करने में विफल।';
+        setError(errorMessage);
+        toast.error(errorMessage);
+      }
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [getAuthHeaders, navigate]); // getAuthHeaders और navigate को निर्भरता के रूप में जोड़ें
 
   const handleDeleteProduct = async (productId: string) => {
     setDeletingProductId(productId);
     try {
-      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
-      await axios.delete(`/api/products/${productId}`, { withCredentials: true });
+      const authHeaders = await getAuthHeaders(); // Firebase Auth हेडर प्राप्त करें
+
+      await axios.delete(`/api/products/${productId}`, authHeaders); // हेडर पास करें
+      
       setProducts(prevProducts => prevProducts.filter(product => product.id !== productId));
       toast.success('उत्पाद सफलतापूर्वक हटाया गया।');
     } catch (err: any) {
       console.error('Failed to delete product:', err);
-      toast.error(err.response?.data?.message || 'उत्पाद हटाने में विफल।');
+      // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
+      if (err.message === "No authenticated Firebase user found.") {
+        toast.error("उत्पाद हटाने के लिए आपको लॉग इन होना चाहिए।");
+        navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
+      } else {
+        toast.error(err.response?.data?.message || 'उत्पाद हटाने में विफल।');
+      }
     } finally {
       setDeletingProductId(null);
     }
@@ -113,6 +151,7 @@ const SellerProductsPage: React.FC = () => {
 
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.namehindi?.toLowerCase().includes(searchTerm.toLowerCase()) || // हिंदी नाम के लिए भी सर्च करें
     product.categoryName?.toLowerCase().includes(searchTerm.toLowerCase()) // यदि categoryName उपलब्ध है
   );
 
@@ -236,7 +275,7 @@ const SellerProductsPage: React.FC = () => {
                           </AlertDialogHeader>
                           <AlertDialogFooter>
                             <AlertDialogCancel>रद्द करें</AlertDialogCancel>
-                            <AlertDialogAction onClick={() => handleDeleteProduct(product.id)} variant="destructive">
+                            <AlertDialogAction onClick={() => handleDeleteProduct(product.id)} className="bg-red-600 hover:bg-red-700">
                               जारी रखें
                             </AlertDialogAction>
                           </AlertDialogFooter>
