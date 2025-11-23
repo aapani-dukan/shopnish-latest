@@ -3,9 +3,9 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Plus, Edit, Trash2, Loader2, Package } from 'lucide-react';
-import axios from 'axios';
-import { toast } from 'react-hot-toast';
 
+import { toast } from 'react-hot-toast';
+import api from '../api/api';
 import { getAuth } from 'firebase/auth'; // Firebase Auth से
 
 // Shadcn UI Components (आपके रेपो से इम्पोर्ट पाथ)
@@ -95,20 +95,21 @@ const SellerProductsPage: React.FC = () => {
   }, []); // इस हुक की निर्भरताएँ नहीं हैं क्योंकि getAuth() और currentUser हमेशा नवीनतम होते हैं।
 
 
-  const fetchProducts = useCallback(async () => {
+    const fetchProducts = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      const authHeaders = await getAuthHeaders(); // Firebase Auth हेडर प्राप्त करें
-      
-      const response = await axios.get('/api/products/seller', authHeaders); // हेडर पास करें
+      // Firebase Auth इंटरसेप्टर 'api' इंस्टेंस में टोकन को स्वचालित रूप से जोड़ता है।
+      // हमें यहां मैन्युअल रूप से हेडर पास करने की आवश्यकता नहीं है।
+      const response = await api.get('/products/seller'); // 'axios' के बजाय 'api' का उपयोग करें
       
       setProducts(response.data.products || []);
 
     } catch (err: any) {
       console.error('Failed to fetch products:', err);
       // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
-      if (err.message === "No authenticated Firebase user found.") {
+      const auth = getAuth(); // Firebase auth इंस्टेंस फिर से प्राप्त करें
+      if (!auth.currentUser) { // यदि कोई Firebase यूजर लॉग इन नहीं है
         setError("कृपया उत्पादों को देखने के लिए लॉग इन करें।");
         toast.error("कृपया उत्पादों को देखने के लिए लॉग इन करें।");
         navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
@@ -120,21 +121,22 @@ const SellerProductsPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [getAuthHeaders, navigate]); // getAuthHeaders और navigate को निर्भरता के रूप में जोड़ें
+  }, [navigate]); // navigate को निर्भरता के रूप में जोड़ें
 
   const handleDeleteProduct = async (productId: string) => {
     setDeletingProductId(productId);
     try {
-      const authHeaders = await getAuthHeaders(); // Firebase Auth हेडर प्राप्त करें
-
-      await axios.delete(`/api/products/${productId}`, authHeaders); // हेडर पास करें
+      // Firebase Auth इंटरसेप्टर 'api' इंस्टेंस में टोकन को स्वचालित रूप से जोड़ता है।
+      // हमें यहां मैन्युअल रूप से हेडर पास करने की आवश्यकता नहीं है।
+      await api.delete(`/products/${productId}`); // 'axios' के बजाय 'api' का उपयोग करें
       
       setProducts(prevProducts => prevProducts.filter(product => product.id !== productId));
       toast.success('उत्पाद सफलतापूर्वक हटाया गया।');
     } catch (err: any) {
       console.error('Failed to delete product:', err);
       // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
-      if (err.message === "No authenticated Firebase user found.") {
+      const auth = getAuth(); // Firebase auth इंस्टेंस फिर से प्राप्त करें
+      if (!auth.currentUser) { // यदि कोई Firebase यूजर लॉग इन नहीं है
         toast.error("उत्पाद हटाने के लिए आपको लॉग इन होना चाहिए।");
         navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
       } else {
@@ -179,7 +181,7 @@ const SellerProductsPage: React.FC = () => {
       </Card>
     );
   }
-
+  
   return (
     <Card className="p-4 sm:p-6 lg:p-8">
       <CardHeader className="flex flex-col sm:flex-row justify-between items-start sm:items-center p-0 mb-6">
