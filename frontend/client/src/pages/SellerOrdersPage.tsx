@@ -1,10 +1,9 @@
 // client/src/pages/SellerOrdersPage.tsx
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { Link, useNavigate } from 'react-router-dom'; // useNavigate इम्पोर्ट करें
+import { Link, useNavigate } from 'react-router-dom';
 import { Loader2, Package, CheckCircle, Clock, XCircle, ShoppingBag } from 'lucide-react';
-// import axios from 'axios'; // 🔴 axios हटा दें
-import api from '../lib/api'; // ✅ आपका कॉन्फ़िगर किया गया API इंस्टेंस इम्पोर्ट करें
+import api from '../lib/api'; // आपका कॉन्फ़िगर किया गया API इंस्टेंस
 import { format } from 'date-fns';
 import { toast } from 'react-hot-toast';
 
@@ -27,56 +26,49 @@ import {
 } from '../components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 
-// आपके db/schema/subOrder.ts से वास्तविक SubOrder इंटरफ़ेस
+// SubOrder इंटरफ़ेस
 interface SubOrder {
-  id: string; // Drizzle/PostgreSQL serial ID
-  masterorderid: number; // मूल ऑर्डर आईडी
-  subordernumber: string; // यूनिक सबऑर्डर नंबर
+  id: string;
+  masterorderid: number;
+  subordernumber: string;
   sellerid: number;
-  storeid?: number; // Store ID nullable हो सकता है
-  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled'; // enum के अनुसार
+  storeid?: number;
+  status: 'pending' | 'processing' | 'shipped' | 'delivered' | 'cancelled';
   subtotal: number;
   deliverycharge: number;
   total: number;
   deliverybatchid?: number;
   estimatedpreparationtime?: string;
   isselfdeliverybyseller: boolean;
-  createdat: string; // ISO string
+  createdat: string;
   updatedat: string;
-  // यदि API product/customer विवरण को join करके देता है
-  productName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
-  customerName?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
-  customerPhone?: string; // API द्वारा प्रदान किया गया (यदि उपलब्ध हो)
-  orderNumber?: string; // masterOrder से (यदि API इसे प्रदान करता है)
+  productName?: string;
+  customerName?: string;
+  customerPhone?: string;
+  orderNumber?: string;
 }
 
 const SellerOrdersPage: React.FC = () => {
-  const navigate = useNavigate(); // useNavigate हुक
+  const navigate = useNavigate();
   const [orders, setOrders] = useState<SubOrder[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-  const [filterStatus, setFilterStatus] = useState<SubOrder['status'] | 'all'>('all'); // 'all' या विशिष्ट स्टेटस
+  const [filterStatus, setFilterStatus] = useState<SubOrder['status'] | 'all'>('all');
 
   const fetchOrders = useCallback(async () => {
     setLoading(true);
     setError(null);
     try {
-      // ✅ 'axios' के बजाय कॉन्फ़िगर किए गए 'api' इंस्टेंस का उपयोग करें
-      // Firebase टोकन स्वचालित रूप से इंटरसेप्टर द्वारा हेडर में जोड़ा जाएगा
-      const response = await api.get('/suborders/seller'); // Vercel प्रॉक्सी के माध्यम से रिलेटिव पाथ
-      
-      // API प्रतिक्रिया संरचना को समायोजित करें: `response.data.subOrders` एरे होना चाहिए
+      // Vercel प्रॉक्सी के माध्यम से रिलेटिव पाथ
+      const response = await api.get('/suborders/seller');
       setOrders(response.data.subOrders || []);
     } catch (err: any) {
       console.error('Failed to fetch orders:', err);
       
-      // Firebase Auth संबंधित त्रुटियों को अधिक विशिष्ट रूप से हैंडल करें
-      // यदि इंटरसेप्टर में कोई यूजर नहीं मिलता है तो वह warning देता है,
-      // और यहां 401 एरर आ सकती है।
       if (err.response?.status === 401) {
          setError("कृपया ऑर्डर्स देखने के लिए लॉग इन करें।");
          toast.error("कृपया ऑर्डर्स देखने के लिए लॉग इन करें।");
-         navigate('/login'); // यदि लॉग इन नहीं है तो लॉगिन पेज पर रीडायरेक्ट करें
+         navigate('/login');
       } else {
         const errorMessage = err.response?.data?.message || 'ऑर्डर्स को लोड करने में विफल।';
         setError(errorMessage);
@@ -85,7 +77,7 @@ const SellerOrdersPage: React.FC = () => {
     } finally {
       setLoading(false);
     }
-  }, [navigate]); // navigate को निर्भरता के रूप में जोड़ें
+  }, [navigate]);
 
   useEffect(() => {
     fetchOrders();
@@ -193,14 +185,15 @@ const SellerOrdersPage: React.FC = () => {
                   <TableRow key={order.id}>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{order.subordernumber}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
-                      {order.productName || `उत्पाद ID: ${order.productId || 'N/A'}`} <br/>
+                      {order.productName || `उत्पाद ID: ${order.id}`} <br/>
                       {order.customerName && <span className="text-xs text-gray-400">({order.customerName} - {order.customerPhone || 'N/A'})</span>}
                       {!order.customerName && order.masterorderid && <span className="text-xs text-gray-400">मास्टर ऑर्डर ID: {order.masterorderid}</span>}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{order.quantity}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{order.total.toFixed(2)}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+                      {/* यहाँ पर बदलाव किया गया है: अनावश्यक {} और `` हटा दिए गए हैं */}
+                      <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
                         {getStatusIcon(order.status)}
                         <span className="ml-1">{getStatusText(order.status)}</span>
                       </span>
@@ -209,10 +202,8 @@ const SellerOrdersPage: React.FC = () => {
                       {format(new Date(order.createdat), 'dd MMM yyyy')}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
-                      
-                      <Link
-                    to={`/seller-dashboard/orders/${order.id}`}
-                      className="text-indigo-600 hover:text-indigo-900">
+                      {/* यह वह लाइन है जहाँ त्रुटि आ रही थी, अब यह ठीक होनी चाहिए */}
+                      <Link to={`/seller-dashboard/orders/${order.id}`} className="text-indigo-600 hover:text-indigo-900">
                         <Button variant="ghost" size="sm">विवरण देखें</Button>
                       </Link>
                     </TableCell>
