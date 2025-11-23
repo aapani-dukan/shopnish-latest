@@ -48,7 +48,8 @@ import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import SellerProfileEdit from '@/components/seller/SellerProfileEdit';
 import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
 //import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
-
+import SellerProductsPage from "./pages/SellerProductsPage";
+import SellerOrdersPage from "./pages/SellerOrdersPage";
 import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; // Capitalized
 
 function App() {
