@@ -12,18 +12,13 @@ import {
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuButton,
-  SidebarSeparator,
-  SidebarTrigger,
+  SidebarTrigger, // इसे यहां रहने दें
   useSidebar
 } from '../ui/sidebar';
 
 import { Button } from '../ui/button';
-// TooltipProvider को SellerSidebarLayout में इम्पोर्ट करना बेहतर है,
-// क्योंकि यह Tooltip कंपोनेंट्स के लिए context प्रदान करता है।
-// या तो इसे यहां से हटा दें, या सुनिश्चित करें कि आपके पास एक TooltipProvider है।
-// (SidebarProvider पहले से ही TooltipProvider को रैप कर रहा है, इसलिए इसकी यहां आवश्यकता नहीं है)
-// import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '../ui/tooltip';
 
+// TooltipProvider को SellerDashboardLayout में ही रहने दें, यहां इसकी आवश्यकता नहीं है।
 
 const SellerSidebar: React.FC = () => {
   const location = useLocation();
@@ -35,19 +30,37 @@ const SellerSidebar: React.FC = () => {
     const active = isactive(to);
     return (
       <SidebarMenuItem>
-        {/*
-          यहां बदलाव किया गया है:
-          Link को SidebarMenuButton के asChild के रूप में उपयोग करें।
-          इससे SidebarMenuButton Link के सभी props प्राप्त करेगा और खुद एक <a/> टैग के रूप में रेंडर होगा।
-          यह सुनिश्चित करता है कि TooltipTrigger को एक ही child मिले।
+        {/* यहां बदलाव किया गया है:
+          SidebarMenuButton के अंदर Link को सीधे child के रूप में रखें।
+          Link खुद एक HTML 'a' टैग के रूप में रेंडर होगा।
+          SidebarMenuButton स्वयं एक <button> टैग या 'asChild' प्रॉप के आधार पर कुछ और रेंडर करेगा।
+          TooltipTrigger को SidebarMenuButton के अंदर के <button> (या जो भी SidebarMenuButton रेंडर करता है)
+          को सीधे प्राप्त करना चाहिए।
+
+          महत्वपूर्ण: sidebar.tsx में SidebarMenuButton के 'asChild' प्रॉप को समझें।
+          यदि sidebar.tsx में sidebarmenubutton के पास 'asChild' है, तो उसे child के रूप में
+          एक React एलिमेंट की उम्मीद होगी, जिसे वह अपने प्रॉप्स के साथ क्लोन करेगा।
+          यदि sidebar.tsx में SidebarMenuButton के अंदर Link को asChild के रूप में पास किया जाता है,
+          तो SidebarMenuButton खुद Link बन जाएगा।
+
+          लेकिन, चूंकि TooltipTrigger को 'asChild' के साथ SidebarMenuButton मिलता है,
+          इसका मतलब है कि TooltipTrigger को SidebarMenuButton को क्लोन करना चाहिए।
+          SidebarMenuButton के अंदर फिर Link है। यह नेस्टिंग समस्या पैदा कर सकता है।
+
+          सबसे सरल तरीका है: SidebarMenuButton को एक बटन के रूप में रेंडर होने दें,
+          और उसके children के रूप में Link को रेंडर करें (या Link के content को)।
+          लेकिन Link को पूरे बटन पर clickable बनाने के लिए, हमें Link को ही Button बनाना होगा।
+
+          आइए इसे ऐसे करें: SidebarMenuButton के 'asChild' के रूप में Link को पास करें,
+          और 'Link' के अंदर आइकन और टेक्स्ट रखें। यह सबसे स्टैंडर्ड Shadcn 'asChild' पैटर्न है।
         */}
         <SidebarMenuButton
-          asChild // <Link> को child के रूप में प्राप्त करने के लिए
+          asChild // SidebarMenuButton को Link के रूप में रेंडर करें
           isactive={active}
-          tooltip={label}
+          tooltip={label} // Tooltip को Link पर ही दिखाया जाएगा
           className="w-full justify-start"
         >
-          <Link to={to} className="w-full flex items-center"> {/* Link को asChild के रूप में पास करें */}
+          <Link to={to} className="flex items-center"> {/* Link ही अब बटन के रूप में काम करेगा */}
             <Icon className="h-5 w-5 mr-3" />
             <span className={sidebarState === "collapsed" && !isMobile ? "sr-only" : ""}>
               {label}
@@ -72,6 +85,7 @@ const SellerSidebar: React.FC = () => {
           </div>
         )}
         {!isMobile && (
+          // सुनिश्चित करें कि SidebarTrigger को भी एक ही child मिले
           <SidebarTrigger asChild>
             <Button variant="ghost" size="icon" className="h-7 w-7">
               <PanelLeft className="h-4 w-4" />
@@ -102,4 +116,3 @@ const SellerSidebar: React.FC = () => {
 };
 
 export default SellerSidebar;
-
