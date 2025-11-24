@@ -284,12 +284,12 @@ const sidebartrigger = react.forwardref<
       // अन्यथा, उन्हें बटन पर लागू करें।
       // चूंकि आपके SellerSidebar.tsx में <Button> को asChild के रूप में पास किया जा रहा है,
       // <Button> को खुद variant और size हैंडल करना चाहिए।
-      {!aschild && (
-        <>
-          variant="ghost"
-          size="icon"
-        </>
-      )}
+      {...(!aschild && (
+        
+          variant: "ghost"
+          size: "icon"
+        
+      ))}
       classname={cn("h-7 w-7", classname)} // className को हमेशा लागू करें
       onclick={(event) => {
         onclick?.(event)
