@@ -266,32 +266,50 @@ const Sidebar = React.forwardRef<
   }
 )
 Sidebar.displayName = "Sidebar"
+const sidebartrigger = react.forwardref<
+  react.elementref<typeof button>,
+  react.componentprops<typeof button> & {
+    aschild?: boolean // asChild प्रॉप जोड़ा गया
+  }
+>(({ classname, onclick, aschild = false, ...props }, ref) => { // aschild को props से बाहर निकालें
+  const { togglesidebar } = usesidebar()
 
-const SidebarTrigger = React.forwardRef<
-  React.ElementRef<typeof Button>,
-  React.ComponentProps<typeof Button>
->(({ className, onClick, ...props }, ref) => {
-  const { toggleSidebar } = useSidebar()
+  const Comp = aschild ? slot : 'button'; // aschild के आधार पर कंपोनेंट चुनें
 
   return (
-    <Button
+    <Comp // <Comp> का उपयोग करें जो 'slot' या 'button' हो सकता है
       ref={ref}
       data-sidebar="trigger"
-      variant="ghost"
-      size="icon"
-      className={cn("h-7 w-7", className)}
-      onClick={(event) => {
-        onClick?.(event)
-        toggleSidebar()
+      // यदि asChild है, तो variant और size प्रॉप्स को सीधे child कंपोनेंट द्वारा हैंडल किया जाना चाहिए
+      // अन्यथा, उन्हें बटन पर लागू करें।
+      // चूंकि आपके SellerSidebar.tsx में <Button> को asChild के रूप में पास किया जा रहा है,
+      // <Button> को खुद variant और size हैंडल करना चाहिए।
+      {!aschild && (
+        <>
+          variant="ghost"
+          size="icon"
+        </>
+      )}
+      classname={cn("h-7 w-7", classname)} // className को हमेशा लागू करें
+      onclick={(event) => {
+        onclick?.(event)
+        togglesidebar()
       }}
       {...props}
     >
-      <PanelLeft />
-      <span className="sr-only">Toggle Sidebar</span>
-    </Button>
+      {aschild ? ( // यदि asChild है, तो children को सीधे पास करें
+        props.children
+      ) : ( // अन्यथा, डिफ़ॉल्ट आइकन और स्पैन रेंडर करें
+        <>
+          <panelleft />
+          <span classname="sr-only">toggle sidebar</span>
+        </>
+      )}
+    </Comp>
   )
 })
-SidebarTrigger.displayName = "SidebarTrigger"
+sidebartrigger.displayname = "sidebartrigger"
+
 
 const SidebarRail = React.forwardRef<
   HTMLButtonElement,
