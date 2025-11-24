@@ -286,8 +286,8 @@ const sidebartrigger = react.forwardref<
       // <Button> को खुद variant और size हैंडल करना चाहिए।
       {...(!aschild && (
         
-          variant: "ghost"
-          size: "icon"
+          variant: "ghost",
+          size: "icon",
         
       ))}
       classname={cn("h-7 w-7", classname)} // className को हमेशा लागू करें
