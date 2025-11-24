@@ -266,9 +266,9 @@ const Sidebar = React.forwardRef<
   }
 )
 Sidebar.displayName = "Sidebar"
-const SidebarTrigger = react.forwardref<
-  react.elementref<typeof button>,
-  react.componentprops<typeof button> & {
+const SidebarTrigger = React.forwardref<
+  React.elementref<typeof button>,
+  React.componentprops<typeof button> & {
     aschild?: boolean // asChild प्रॉप जोड़ा गया
   }
 >(({ classname, onclick, aschild = false, ...props }, ref) => { // aschild को props से बाहर निकालें
