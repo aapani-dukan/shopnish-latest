@@ -266,29 +266,29 @@ const Sidebar = React.forwardRef<
   }
 )
 Sidebar.displayName = "Sidebar"
-const SidebarTrigger = React.forwardref<
-  React.elementref<typeof button>,
-  React.componentprops<typeof button> & {
-    aschild?: boolean // asChild प्रॉप जोड़ा गया
+const SidebarTrigger = React.forwardRef< // ✅ forwardRef (बड़ा R)
+  React.ElementRef<typeof Button>,       // ✅ ElementRef (बड़ा E, R)
+  React.ComponentProps<typeof Button> & { // ✅ ComponentProps (बड़ा C, P)
+    asChild?: boolean
   }
->(({ classname, onclick, aschild = false, ...props }, ref) => { // aschild को props से बाहर निकालें
-  const { togglesidebar } = usesidebar()
+>(({ className, onClick, asChild = false, ...props }, ref) => { // ✅ className, onClick (camelCase)
+  const { toggleSidebar } = useSidebar() // ✅ useSidebar (बड़ा S)
 
-  const Comp = aschild ? slot : 'button'; // aschild के आधार पर कंपोनेंट चुनें
+  // ✅ Slot और Button बड़े अक्षर से शुरू होने चाहिए
+  const Comp = asChild ? Slot : Button
 
   return (
     <Comp
       ref={ref}
       data-sidebar="trigger"
-      // ✅ सही सिंटैक्स: ऑब्जेक्ट स्प्रेड
       {...(!asChild && {
         variant: "ghost",
         size: "icon",
       })}
-      className={cn("h-7 w-7", className)}
-      onClick={(event) => {
+      className={cn("h-7 w-7", className)} // ✅ className
+      onClick={(event) => { // ✅ onClick
         onClick?.(event)
-        toggleSidebar()
+        toggleSidebar() // ✅ toggleSidebar
       }}
       {...props}
     >
@@ -304,6 +304,7 @@ const SidebarTrigger = React.forwardref<
   )
 })
 SidebarTrigger.displayName = "SidebarTrigger"
+
 
 
 const SidebarRail = React.forwardRef<
