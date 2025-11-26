@@ -1,7 +1,7 @@
 // client/src/components/layout/SellerDashboardLayout.tsx
 
 import React from 'react';
-import { Outlet } from 'react-router-dom'; 
+import { Outlet, Link } from 'react-router-dom'; 
 import SellerSidebar from './SellerSidebar'; 
 
 // sidebar.tsx से आवश्यक कंपोनेंट्स इम्पोर्ट करें
@@ -13,13 +13,15 @@ import {
 } from '../ui/sidebar';
 
 import { Button } from '../ui/button';
-import { PanelLeft } from 'lucide-react';
+//import { PanelLeft } from 'lucide-react';
+
+import { ShoppingCart, Menu } from 'lucide-react'; // Menu आइकन का उपयोग कर रहा हूँ
+
 
 const SellerDashboardLayout: React.FC = () => {
   return (
     // SidebarProvider पूरे लेआउट को रैप करेगा
     <SidebarProvider>
-      {/* LayoutContent अब SidebarProvider का सीधा बच्चा है */}
       <LayoutContent />
     </SidebarProvider>
   );
@@ -29,64 +31,64 @@ const SellerDashboardLayout: React.FC = () => {
 const LayoutContent: React.FC = () => {
   const { toggleSidebar, isMobile } = useSidebar();
 
+  // हेडर की ऊंचाई को Tailwind classes से अनुमानित करें, उदा. h-14 (56px)
+  // या आप इसे CSS वेरिएबल में भी सेट कर सकते हैं।
+  const HEADER_HEIGHT_CLASS = "h-14"; // लगभग 56px
+
   return (
-    // यह outer div SidebarProvider के 'group/sidebar-wrapper' div के child के रूप में रेंडर होगा।
-    // हमें यह सुनिश्चित करना होगा कि इसमें एक ही child हो, यदि 'group/sidebar-wrapper' div ऐसा ही चाहता है।
-    // लेकिन आम तौर पर, SidebarProvider का 'children' प्रॉप कई बच्चों को स्वीकार करता है।
-    //
-    // समस्या 'SidebarProvider' के children में नहीं, बल्कि 'Sidebar' कंपोनेंट के
-    // अंदर के 'Sheet' या 'Tooltip' में हो सकती है।
-    //
-    // इस त्रुटि का सबसे आम कारण यह होता है कि `SheetTrigger` या `TooltipTrigger` को
-    // एक से अधिक child दिए जाते हैं, या कोई child नहीं दिया जाता है।
-    //
-    // चूंकि हमने SellerSidebar में `asChild` को ठीक कर दिया है,
-    // अब हमें `LayoutContent` के स्ट्रक्चर को देखना होगा।
-    //
-    // SidebarProvider का child सीधे `Sidebar` और `SidebarInset` होना चाहिए।
-    // यदि `isMobile` है, तो हमें `header` को भी शामिल करना होगा।
-    //
-    // आइए `isMobile` हेडर को `SidebarProvider` के बाहर ही रखें,
-    // ताकि वह लेआउट का हिस्सा न बने बल्कि एक ओवरले के रूप में काम करे।
-    //
-    // **अंतिम प्रयास का तरीका:**
-    // हम एक टॉप-लेवल `div` रखेंगे, और `isMobile` हेडर को सशर्त रूप से उस `div` के बाहर रेंडर करेंगे,
-    // या हम इसे `SidebarProvider` के भीतर लेकिन `Sidebar` और `SidebarInset` के बाहर रखेंगे।
+    <div className="flex min-h-screen w-full bg-background"> {/* मुख्य फ्लेक्स कंटेनर */}
+      {/* 🚨 टॉप हेडर (Shopnish, कार्ट, मोबाइल साइडबार ट्रिगर) */}
+      {/* यह हेडर Sidebar के ऊपर होगा */}
+      <header
+        className={`fixed top-0 left-0 right-0 z-50 flex items-center justify-between border-b bg-card px-4 ${HEADER_HEIGHT_CLASS}`}
+      >
+        <div className="flex items-center">
+          {/* मोबाइल पर साइडबार ट्रिगर */}
+          {isMobile && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleSidebar}
+              className="mr-2"
+            >
+              <Menu className="h-5 w-5" /> {/* मोबाइल के लिए बर्गर मेनू आइकन */}
+              <span className="sr-only">Toggle Sidebar</span>
+            </Button>
+          )}
+          <Link to="/" className="flex items-center space-x-2">
+            <h1 className="text-xl font-bold">Shopnish</h1> {/* आपका ऐप नाम */}
+          </Link>
+        </div>
 
-    <> {/* React Fragment का उपयोग करें ताकि हम एक से अधिक टॉप-लेवल एलिमेंट रेंडर कर सकें */}
-      {isMobile && (
-        // मोबाइल हेडर को `SidebarProvider` के बाहर रखें ताकि यह `children` काउंट को प्रभावित न करे।
-        // या, इसे SidebarProvider के अंदर, लेकिन SellerSidebar/SidebarInset के "बाहर" रखें।
-        // इसे यहां रखना सुरक्षित है क्योंकि यह एक फिक्स्ड ओवरले है।
-        <header className="fixed top-0 left-0 w-full bg-white shadow-sm p-3 z-20 flex items-center">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={toggleSidebar}
-            className="h-8 w-8"
-          >
-            <PanelLeft className="h-5 w-5" />
-            <span className="sr-only">Toggle Sidebar</span>
-          </Button>
-          <h1 className="ml-4 text-xl font-bold text-gray-800">Seller Hub</h1>
-        </header>
-      )}
+        <nav className="flex items-center space-x-4">
+          <Link to="/cart">
+            <Button variant="ghost" size="icon">
+              <ShoppingCart className="h-5 w-5" />
+              <span className="sr-only">Cart</span>
+            </Button>
+          </Link>
+          {/* अन्य हेडर आइटम यहाँ आ सकते हैं */}
+        </nav>
+      </header>
 
-      {/* यह वह div है जो SidebarProvider के children के रूप में रेंडर होगा।
-          इसके बच्चों को Sidebar और SidebarInset होना चाहिए, जो flexbox में होंगे। */}
-      <div className="min-h-screen bg-gray-100 flex"> {/* यह div SidebarProvider के child के रूप में काम करता है */}
+      {/* मुख्य लेआउट कंटेंट, हेडर के नीचे से शुरू होगा */}
+      {/* `pt-[calc(theme(spacing.14))]` हेडर की ऊंचाई के बराबर पैडिंग-टॉप देता है */}
+      <div className={`flex flex-1 ${isMobile ? 'flex-col' : ''} pt-[calc(theme(spacing.14))]`}>
         {/* SellerSidebar कंपोनेंट */}
-        <SellerSidebar />
-        
+        {/* यह सुनिश्चित करेगा कि साइडबार हेडर के नीचे से शुरू हो */}
+        <div className={`relative ${isMobile ? 'w-full' : ''}`}>
+           <SellerSidebar />
+        </div>
+
         {/* मुख्य कंटेंट एरिया अब SidebarInset द्वारा हैंडल किया जाएगा */}
-        {/* ध्यान दें: SidebarInset खुद अपने पैडिंग और बैकग्राउंड को हैंडल कर सकता है। */}
-        <SidebarInset className={isMobile ? "mt-[56px]" : ""}>
-          <div className="p-8 overflow-y-auto w-full">
-            <Outlet /> 
+        {/* `SidebarInset` को अब मुख्य `div` का एक बच्चा होना चाहिए */}
+        <SidebarInset className="flex-1"> {/* SidebarInset को Flex-1 दें ताकि यह शेष जगह ले */}
+          <div className="p-8 overflow-y-auto w-full"> {/* यहां आपका Outlet कंटेंट होगा */}
+            <Outlet />
           </div>
         </SidebarInset>
       </div>
-    </>
+    </div>
   );
 };
 
