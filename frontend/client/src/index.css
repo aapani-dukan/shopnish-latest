@@ -23,6 +23,16 @@
   --destructive-foreground: 60 9.1% 97.8%;
   --ring: 20 14.3% 4.1%;
   --radius: 0.5rem;
+
+  /* 🚨 यहां नए साइडबार वेरिएबल्स जोड़े गए हैं */
+  --sidebar-background: 0 0% 100%; /* सफेद पृष्ठभूमि (लाइट थीम के लिए) */
+  --sidebar-foreground: 20 14.3% 4.1%; /* टेक्स्ट रंग */
+  --sidebar-primary: 13 100% 60%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-accent: 60 4.8% 95.9%; /* हल्का ग्रे */
+  --sidebar-accent-foreground: 24 9.8% 10%;
+  --sidebar-border: 20 5.9% 90%;
+  --sidebar-ring: 20 14.3% 4.1%;
 }
 
 .dark {
@@ -46,6 +56,16 @@
   --destructive-foreground: 0 0% 98%;
   --ring: 240 4.9% 83.9%;
   --radius: 0.5rem;
+
+  /* 🚨 यहां डार्क थीम के लिए नए साइडबार वेरिएबल्स जोड़े गए हैं */
+  --sidebar-background: 240 10% 3.9%; /* डार्क पृष्ठभूमि */
+  --sidebar-foreground: 0 0% 98%; /* टेक्स्ट रंग */
+  --sidebar-primary: 13 100% 60%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-accent: 240 3.7% 15.9%; /* हल्का डार्क ग्रे */
+  --sidebar-accent-foreground: 0 0% 98%;
+  --sidebar-border: 240 3.7% 15.9%;
+  --sidebar-ring: 240 4.9% 83.9%;
 }
 
 @layer base {
