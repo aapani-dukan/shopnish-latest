@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, ShoppingCart, Settings, User, TrendingUp, FileText, MoreVertical } from 'lucide-react'; // PanelLeft के बजाय MoreVertical आयात करें
+import { Package, ShoppingCart, Settings, User, TrendingUp, FileText, MoreVertical } from 'lucide-react';
 
 import {
   Sidebar,
@@ -29,8 +29,8 @@ const SellerSidebar: React.FC = () => {
     return (
       <SidebarMenuItem>
         <SidebarMenuButton
-          asChild // SidebarMenuButton को Link के रूप में रेंडर करें
-          isActive={active} // isActive प्रॉप को सही केसिंग में बदलें
+          asChild
+          isActive={active}
           tooltip={label}
           className="w-full justify-start"
         >
@@ -51,19 +51,32 @@ const SellerSidebar: React.FC = () => {
       variant="sidebar"
       collapsible="icon"
     >
-      <SidebarHeader className="flex items-center justify-between p-2 pb-0"> {/* 🚨 पैडिंग कम की गई */}
-        {(sidebarState === "expanded" || isMobile) && (
+      {/* 🚨 SidebarHeader के className को एडजस्ट किया गया है */}
+      {/* अब यह 'p-4' (चारों ओर 1rem पैडिंग) का उपयोग करेगा,
+          और 'justify-between' सुनिश्चित करेगा कि आइकन और टेक्स्ट के बीच जगह रहे। */}
+      <SidebarHeader className="flex items-center justify-between p-4">
+        {(sidebarState === "expanded" || isMobile) ? ( // 🚨 यहां एक शर्त जोड़ी गई है
           <div className="flex items-center">
             <TrendingUp className="h-6 w-6 text-indigo-600 mr-2" />
-            <h2 className="text-lg font-bold text-gray-800"> {/* 🚨 text-xl से text-lg किया गया */}
+            <h2 className="text-lg font-bold text-gray-800">
               Seller Hub
             </h2>
           </div>
+        ) : (
+          // जब साइडबार कोलैप्स हो, तो केवल आइकन ही दिखना चाहिए, 'Seller Hub' नहीं।
+          // यह तभी रेंडर होगा जब isMobile न हो और sidebarState 'collapsed' हो।
+          // SidebarTrigger अपने आप में यह आइकन दिखाता है।
+          // इसलिए, यदि साइडबार कोलैप्स है, तो हम Seller Hub टेक्स्ट को नहीं दिखाएँगे।
+          // यदि आप कोलैप्स किए गए राज्य में भी कुछ आइकन दिखाना चाहते हैं,
+          // तो आप यहां एक छोटा आइकन जोड़ सकते हैं।
+          null // 🚨 यहां बदलाव: कोलैप्स होने पर Seller Hub टेक्स्ट/आइकन नहीं दिखेगा
         )}
+
         {!isMobile && (
-          // SidebarTrigger को बिना 'asChild' के उपयोग करें ताकि यह अपने डिफ़ॉल्ट आइकन को रेंडर करे
-          // और 'h-7 w-7' क्लास पहले से ही sidebar.tsx में सेट है।
-          <SidebarTrigger /> // 🚨 SidebarTrigger को सरल किया गया
+          // SidebarTrigger को बिना 'asChild' के उपयोग करें।
+          // इसकी पैडिंग और पोजीशनिंग sidebar.tsx से नियंत्रित होगी।
+          // यदि अभी भी समस्या है, तो हमें sidebar.tsx में SidebarTrigger के className को देखना होगा।
+          <SidebarTrigger />
         )}
       </SidebarHeader>
 
@@ -78,7 +91,7 @@ const SellerSidebar: React.FC = () => {
         </SidebarMenu>
       </SidebarContent>
 
-      <SidebarFooter className="mt-auto pt-4 border-t border-gray-200 p-2"> {/* 🚨 पैडिंग जोड़ी गई */}
+      <SidebarFooter className="mt-auto pt-4 border-t border-gray-200 p-2">
         {(sidebarState === "expanded" || isMobile) && (
           <p className="text-xs text-gray-500">© 2024 Aapani Dukan</p>
         )}
@@ -88,3 +101,4 @@ const SellerSidebar: React.FC = () => {
 };
 
 export default SellerSidebar;
+
