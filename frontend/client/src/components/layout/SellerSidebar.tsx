@@ -54,11 +54,11 @@ const SellerSidebar: React.FC = () => {
       {/* 🚨 SidebarHeader के className को एडजस्ट किया गया है */}
       {/* अब यह 'p-4' (चारों ओर 1rem पैडिंग) का उपयोग करेगा,
           और 'justify-between' सुनिश्चित करेगा कि आइकन और टेक्स्ट के बीच जगह रहे। */}
-      <SidebarHeader className="flex items-center justify-between p-4">
+      <SidebarHeader className="flex items-center justify-between p-3">
         {(sidebarState === "expanded" || isMobile) ? ( // 🚨 यहां एक शर्त जोड़ी गई है
           <div className="flex items-center">
-            <TrendingUp className="h-6 w-6 text-indigo-600 mr-2" />
-            <h2 className="text-lg font-bold text-gray-800">
+            <TrendingUp className="h-5 w-5 text-indigo-600 mr-2" />
+            <h2 className="text-base font-bold text-gray-800">
               Seller Hub
             </h2>
           </div>
