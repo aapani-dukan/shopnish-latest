@@ -27,7 +27,7 @@ import { SellerDeliverySettings, ProductDeliverySettings, DeliveryScope } from '
 // सेलर की ग्लोबल डिलीवरी सेटिंग्स फेच करें
 const useSellerDeliverySettings = () => useQuery<SellerDeliverySettings, Error>({
   queryKey: ['sellerDeliverySettings'],
-  queryFn: () => apiRequest('GET', '/api/seller/profile/delivery-settings'),
+  queryFn: () => apiRequest('GET', '/api/sellers/profile/delivery-settings'),
 });
 
 // सेलर के सभी प्रोडक्ट्स फेच करें (डिलीवरी ओवरराइड डेटा सहित)
@@ -37,7 +37,7 @@ const useSellerProductsForDelivery = () => useQuery<ProductDeliverySettings[], E
   // आपको एक ऐसा API एंडपॉइंट चाहिए जो सिर्फ आवश्यक प्रोडक्ट डेटा लौटाता हो
   // उदाहरण के लिए: GET /api/seller/products/delivery-settings-overview
   // या अगर आपका मौजूदा /api/seller/products सभी डेटा लौटाता है, तो आप उसे फिल्टर कर सकते हैं।
-  queryFn: () => apiRequest('GET', '/api/seller/products/delivery-overview'), // नया API एंडपॉइंट मान रहे हैं
+  queryFn: () => apiRequest('GET', '/api/sellers/products/delivery-overview'), // नया API एंडपॉइंट मान रहे हैं
 });
 
 
