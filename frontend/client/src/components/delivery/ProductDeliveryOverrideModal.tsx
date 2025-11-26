@@ -46,7 +46,7 @@ const ProductDeliveryOverrideModal: React.FC<Props> = ({
       };
 
        // API एंडपॉइंट तय करें
-       let apiUrl = `/api/seller/products/${product.id}/delivery-override`;
+       let apiUrl = `/api/sellers/products/${product.id}/delivery-override`;
        if (isAdmin && sellerId) {
          // एडमिन रूट का उदाहरण (अपने बैकएंड रूट के अनुसार बदलें)
          apiUrl = `/api/admin/sellers/${sellerId}/products/${product.id}/delivery-override`;
