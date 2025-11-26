@@ -52,7 +52,7 @@ const GlobalDeliverySettingsForm: React.FC<Props> = ({
       };
 
       // API एंडपॉइंट तय करें (एडमिन vs सेलर)
-      let apiUrl = '/api/seller/profile/delivery-settings'; // सेलर के लिए
+      let apiUrl = '/api/sellers/profile/delivery-settings'; // सेलर के लिए
       if (isAdmin && sellerId) {
         apiUrl = `/api/admin/sellers/${sellerId}/delivery-settings`; // एडमिन के लिए
       }
