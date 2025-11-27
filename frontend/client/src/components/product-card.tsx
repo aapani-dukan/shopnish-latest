@@ -93,11 +93,15 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
     }
 
     console.log("➡️ Buy Now clicked for product ID:", product.id);
+    
     // For "Buy Now", we are redirecting to a checkout page directly for a single product.
     // The checkout page will need to handle how to create an order for this single item.
     // Make sure your checkout page (checkout2 in this case) is ready to receive product ID and quantity directly.
     navigate(`/checkout2/${product.id}?quantity=1`);
   };
+  // product-card.tsx के return स्टेटमेंट से ठीक पहले यह जोड़ें
+console.log(`Product ID: ${product.id}, Name: ${product.name}, Image URL: ${product.image}`);
+  
 
   return (
     <div className="p-4 border rounded-lg"> {/* ✅ Corrected className */}
