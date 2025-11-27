@@ -110,7 +110,8 @@ const isLocationReady =
   !!currentLocation?.lng &&
   !loadingLocation;
 
-const { data: products = [], isLoading: productsLoading, error: productsError } = useQuery<Product[]>({
+// ✅ Products fetching
+const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery<{ products: Product[] }>({ // 🚨 रिटर्न टाइप अपडेट किया
   queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
   queryFn: async () => {
     if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
@@ -128,7 +129,7 @@ const { data: products = [], isLoading: productsLoading, error: productsError } 
     if (sortBy) params.append('sortBy', sortBy);
 
     const response = await axios.get(`/api/products?${params.toString()}`);
-    return response.data;
+    return response.data; // 🚨 अब यह पूरा ऑब्जेक्ट वापस करेगा जिसमें `products` Array होगा
   },
   enabled: isLocationReady,
   retry: (failureCount, error: any) => {
@@ -139,10 +140,13 @@ const { data: products = [], isLoading: productsLoading, error: productsError } 
   retryDelay: 1000,
 });
 
+// `products` Array को निकालने के लिए
+const products = productsData?.products || [];
+
+
 // ✅ Featured products fetching (similar handling)
-// ✅ Featured products fetching (similar handling)
-const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: featuredProductsError } =
-  useQuery<Product[]>({
+const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } =
+  useQuery<{ products: Product[] }>({ // 🚨 रिटर्न टाइप अपडेट किया
     queryKey: ['featuredProducts', currentLocation],
     queryFn: async () => {
       // ✨ fallback default location अगर user location नहीं मिली
@@ -160,7 +164,7 @@ const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: 
       });
 
       const response = await axios.get(`/api/products?${params.toString()}`);
-      return response.data;
+      return response.data; // 🚨 अब यह पूरा ऑब्जेक्ट वापस करेगा जिसमें `products` Array होगा
     },
     enabled: isLocationReady,
     retry: (failureCount, error: any) => {
@@ -169,6 +173,10 @@ const { data: featuredProducts = [], isLoading: featuredProductsLoading, error: 
     },
     retryDelay: 1000,
   });
+
+// `featuredProducts` Array को निकालने के लिए
+const featuredProducts = featuredProductsData?.products || [];
+
 
 // ✅ Loading State
 if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
