@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { SellerDeliverySettings } from '../../types/delivery';
 import axios from 'axios';
+import { getAuth } from "firebase/authMiddlware"; // 🚨 Firebase Auth इम्पोर्ट करें
 
 interface Props {
   sellerId?: number; // अगर एडमिन है तो sellerId पास करें, अगर सेलर है तो undefined
@@ -22,6 +23,14 @@ const GlobalDeliverySettingsForm: React.FC<Props> = ({
     initialData.deliveryPincodes?.join(', ') || ''
   );
   const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null); // 🚨 एरर स्टेट जोड़ा
+
+  // initialData बदलने पर formData को अपडेट करें
+  useEffect(() => {
+    setFormData(initialData);
+    setPincodesString(initialData.deliveryPincodes?.join(', ') || '');
+  }, [initialData]);
+
 
   // पिनकोड स्ट्रिंग बदलने पर हैंडलर
   const handlePincodeChange = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -36,6 +45,29 @@ const GlobalDeliverySettingsForm: React.FC<Props> = ({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
+    setError(null); // हर सबमिशन पर एरर रीसेट करें
+
+    // 🚨 Firebase ID टोकन प्राप्त करें
+    const auth = getAuth();
+    const user = auth.currentUser;
+
+    if (!user) {
+      setError("User not logged in. Please log in to save settings.");
+      setLoading(false);
+      alert("Error: User not logged in. Please log in to save settings.");
+      return;
+    }
+
+    let firebaseIdToken: string;
+    try {
+      firebaseIdToken = await user.getIdToken();
+    } catch (tokenError) {
+      console.error("Error getting Firebase ID token:", tokenError);
+      setError("Failed to get authentication token. Please try again.");
+      setLoading(false);
+      alert("Error: Failed to get authentication token. Please try again.");
+      return;
+    }
 
     try {
       // कॉमा-सेपरेटेड स्ट्रिंग को वापस ऐरे में बदलें
@@ -57,13 +89,20 @@ const GlobalDeliverySettingsForm: React.FC<Props> = ({
         apiUrl = `/api/admin/sellers/${sellerId}/delivery-settings`; // एडमिन के लिए
       }
 
-      // यहाँ आपको अपना auth token हेडर में भेजना होगा
-      await axios.put(apiUrl, payload);
+      // 🚨 यहाँ आपको अपना auth token हेडर में भेजना होगा
+      await axios.put(apiUrl, payload, {
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${firebaseIdToken}` // 🚨 Firebase ID टोकन यहां
+        }
+      });
       alert('Global settings saved successfully!');
       onSaveSuccess();
-    } catch (error) {
+    } catch (error: any) { // 🚨 error टाइपिंग को और सटीक बनाया
       console.error('Error saving settings:', error);
-      alert('Failed to save settings.');
+      const errorMessage = error.response?.data?.message || 'Failed to save settings.';
+      setError(errorMessage);
+      alert(`Error saving settings: ${errorMessage}`);
     } finally {
       setLoading(false);
     }
@@ -131,6 +170,8 @@ const GlobalDeliverySettingsForm: React.FC<Props> = ({
           />
         </div>
       )}
+
+      {error && <p className="text-red-500 text-sm mb-4">{error}</p>} {/* 🚨 एरर डिस्प्ले */}
 
       <button
         type="submit"
