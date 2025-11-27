@@ -3,7 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { SellerDeliverySettings } from '../../types/delivery';
 import axios from 'axios';
-import { getAuth } from "firebase/authMiddlware"; // 🚨 Firebase Auth इम्पोर्ट करें
+import { getAuth } from "firebase/auth"; // 🚨 Firebase Auth इम्पोर्ट करें
 
 interface Props {
   sellerId?: number; // अगर एडमिन है तो sellerId पास करें, अगर सेलर है तो undefined
