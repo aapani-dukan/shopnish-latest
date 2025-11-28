@@ -73,7 +73,9 @@ const SellerAddProductPage: React.FC = () => {
       toast.error('कृपया अपलोड करने के लिए एक इमेज चुनें।');
       return;
     }
-
+  console.log("➡️ Attempting to upload image:", selectedImage.name);
+  console.log("➡️ Image type:", selectedImage.type);
+  console.log("➡️ Image size (bytes):", selectedImage.size); 
     setImageUploading(true);
     const storageRef = ref(storage, `products/${Date.now()}_${selectedImage.name}`); // Firebase Storage में पाथ
     const uploadTask = uploadBytesResumable(storageRef, selectedImage);
