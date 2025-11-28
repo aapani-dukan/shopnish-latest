@@ -1,18 +1,18 @@
-// frontend/components/ProductCard.tsx
-import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { toast } from "/hooks/use-toast";
-import { Button } from "/components/ui/button";
-import { ApiRequest } from "/lib/queryclient";
-import React, { useState } from "react";
-import { useAuth } from "/hooks/useAuth";
+// frontend/components/product-card.tsx
+import { useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ Corrected casing
+import { toast } from "@/hooks/use-toast"; // Assuming correct path based on common Next.js/React setup
+import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
+import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
+import React, { useState } from "react"; // ✅ Corrected casing
+import { useAuth } from "@/hooks/useAuth"; // Assuming correct path and casing
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "/components/ui/dialog";
-import { useNavigate } from "react-router-dom";
+} from "@/components/ui/dialog"; // ✅ Corrected casing
+import { useNavigate } from "react-router-dom"; // ✅ Corrected casing
 
 interface Product {
   id: number;
