@@ -1,150 +1,154 @@
 // frontend/components/product-card.tsx
-import { useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ Corrected casing
-import { toast } from "@/hooks/use-toast"; // Assuming correct path based on common Next.js/React setup
-import { Button } from "@/components/ui/button"; // ✅ Corrected casing and path
-import { apiRequest } from "@/lib/queryClient"; // ✅ Corrected casing and path
-import React, { useState } from "react"; // ✅ Corrected casing
-import { useAuth } from "@/hooks/useAuth"; // Assuming correct path and casing
+import { usemutation, usequeryclient } from "tanstack/react-query";
+import { toast } from "/hooks/use-toast";
+import { button } from "/components/ui/button";
+import { apirequest } from "/lib/queryclient";
+import react, { usestate } from "react";
+import { useauth } from "/hooks/useauth";
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog"; // ✅ Corrected casing
-import { useNavigate } from "react-router-dom"; // ✅ Corrected casing
+  dialog,
+  dialogcontent,
+  dialogdescription,
+  dialogheader,
+  dialogtitle,
+} from "/components/ui/dialog";
+import { usenavigate } from "react-router-dom";
 
-// ✅ Updated Product Interface to include seller information
-interface Product {
+interface product {
   id: number;
   name: string;
   price: string;
   image: string;
   stock: number;
-  sellerId: number; // For buy-now logic or other seller-specific actions
-  // ✅ Added seller object as expected from backend
+  sellerid: number;
   seller: {
     id: number;
-    businessName: string;
+    businessname: string;
   };
 }
 
-interface ProductCardProps {
-  product: Product;
+interface productcardprops {
+  product: product;
 }
 
-const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
-  const queryClient = useQueryClient(); // ✅ Corrected casing
-  const { user } = useAuth(); // ✅ Corrected casing
-  const navigate = useNavigate(); // ✅ Corrected casing
-  const [isLoginPopupOpen, setIsLoginPopupOpen] = useState(false); // ✅ Corrected casing
+const productcard: react.fc<productcardprops> = ({ product }) => {
+  const queryclient = usequeryclient();
+  const { user } = useauth();
+  const navigate = usenavigate();
+  const [isloginpopupopen, setisloginpopupopen] = usestate(false);
 
-  const addToCartMutation = useMutation({ // ✅ Corrected casing
-    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      return await apiRequest("post", "/api/cart/add", { productId, quantity });
+  const addtocartmutation = usemutation({
+    mutationfn: async ({ productid, quantity }: { productid: number; quantity: number }) => {
+      return await apirequest("post", "/api/cart/add", { productid, quantity });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
+    onsuccess: () => {
+      queryclient.invalidatequeries({ querykey: ["/api/cart"] });
       toast({
-        title: "Added to Cart", // ✅ Consistent casing for toast title
+        title: "added to cart",
         description: `${product.name} has been added to your cart.`,
       });
     },
-    onError: (error: any) => {
+    onerror: (error: any) => {
       toast({
-        title: "Failed to Add to Cart", // ✅ Consistent casing for toast title
-        description: error.message || "An error occurred while adding the item to your cart.",
+        title: "failed to add to cart",
+        description: error.message || "an error occurred while adding the item to your cart.",
         variant: "destructive",
       });
     },
   });
 
-  const handleAddToCart = () => { // ✅ Corrected casing
+  const handleaddtocart = () => {
     if (!user) {
-      setIsLoginPopupOpen(true);
+      setisloginpopupopen(true);
       return;
     }
 
     if (product.stock === 0) {
       toast({
-        title: "Out of Stock", // ✅ Consistent casing
-        description: "This product is currently unavailable.",
+        title: "out of stock",
+        description: "this product is currently unavailable.",
         variant: "destructive",
       });
       return;
     }
 
-    addToCartMutation.mutate({ productId: product.id, quantity: 1 });
+    addtocartmutation.mutate({ productid: product.id, quantity: 1 });
   };
 
-  const handleBuyNow = () => { // ✅ Corrected casing
+  const handlebuynow = () => {
     if (!user) {
-      setIsLoginPopupOpen(true);
+      setisloginpopupopen(true);
       return;
     }
 
     if (product.stock === 0) {
       toast({
-        title: "Out of Stock", // ✅ Consistent casing
-        description: "This product is currently unavailable.",
+        title: "out of stock",
+        description: "this product is currently unavailable.",
         variant: "destructive",
       });
       return;
     }
 
-    console.log("➡️ Buy Now clicked for product ID:", product.id);
-    
-    // For "Buy Now", we are redirecting to a checkout page directly for a single product.
-    // The checkout page will need to handle how to create an order for this single item.
-    // Make sure your checkout page (checkout2 in this case) is ready to receive product ID and quantity directly.
+    console.log("➡️ buy now clicked for product id:", product.id);
     navigate(`/checkout2/${product.id}?quantity=1`);
   };
-  // product-card.tsx के return स्टेटमेंट से ठीक पहले यह जोड़ें
-console.log(`Product ID: ${product.id}, Name: ${product.name}, Image URL: ${product.image}`);
-  
 
+  // Debugging: Log the image URL to console
+  console.log(`product id: ${product.id}, name: ${product.name}, image url: ${product.image}`);
+  
   return (
-    <div className="p-4 border rounded-lg"> {/* ✅ Corrected className */}
-      <img src={product.image} alt={product.name} className="h-40 w-full object-cover rounded-lg mb-4" /> {/* ✅ Corrected className */}
-      <h3 className="text-lg font-semibold truncate">{product.name}</h3> {/* ✅ Corrected className */}
-      <p className="text-gray-600 mb-2">By: {product.seller ? product.seller.businessName : 'N/A'}</p> {/* ✅ New: Display Seller Name */}
-      <p className="text-gray-600 mb-2">₹{product.price}</p> {/* ✅ Corrected className */}
-      <div className="flex flex-col gap-2"> {/* ✅ Corrected className */}
-        <Button // ✅ Corrected component name
-          onClick={handleAddToCart} // ✅ Corrected casing
-          disabled={addToCartMutation.isPending || product.stock === 0} // ✅ Corrected casing
-          className="w-full" // ✅ Corrected className
+    <div classname="p-4 border rounded-lg">
+      <img
+        src={product.image}
+        alt={product.name}
+        classname="h-40 w-full object-cover rounded-lg mb-4"
+        onError={(e) => { // Added onError handler for debugging purposes
+          e.currentTarget.onerror = null; // Prevents infinite loop
+          e.currentTarget.src = 'https://via.placeholder.com/150?text=Image+Not+Found'; // Fallback image
+          console.error(`ERROR: Failed to load image for product ID: ${product.id}, URL: ${product.image}`);
+          console.error("Image element HTML:", e.currentTarget.outerHTML);
+        }}
+      />
+      <h3 classname="text-lg font-semibold truncate">{product.name}</h3>
+      <p classname="text-gray-600 mb-2">by: {product.seller ? product.seller.businessname : 'n/a'}</p>
+      <p classname="text-gray-600 mb-2">₹{product.price}</p>
+      <div classname="flex flex-col gap-2">
+        <button
+          onclick={handleaddtocart}
+          disabled={addtocartmutation.ispending || product.stock === 0}
+          classname="w-full"
         >
-          {addToCartMutation.isPending ? "Adding..." : "Add to Cart"}
-        </Button>
-        <Button // ✅ Corrected component name
-          onClick={handleBuyNow} // ✅ Corrected casing
+          {addtocartmutation.ispending ? "adding..." : "add to cart"}
+        </button>
+        <button
+          onclick={handlebuynow}
           disabled={product.stock === 0}
-          className="w-full" // ✅ Corrected className
+          classname="w-full"
         >
-          Buy Now
-        </Button>
+          buy now
+        </button>
       </div>
 
-      <Dialog open={isLoginPopupOpen} onOpenChange={setIsLoginPopupOpen}> {/* ✅ Corrected casing */}
-        <DialogContent> {/* ✅ Corrected casing */}
-          <DialogHeader> {/* ✅ Corrected casing */}
-            <DialogTitle>Login Required</DialogTitle> {/* ✅ Corrected casing */}
-            <DialogDescription> {/* ✅ Corrected casing */}
-              Please log in to add items to your cart or buy now.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="flex justify-end gap-2"> {/* ✅ Corrected className */}
-            <Button variant="outline" onClick={() => setIsLoginPopupOpen(false)}>Cancel</Button> {/* ✅ Corrected casing */}
-            <Button onClick={() => { // ✅ Corrected casing
-              setIsLoginPopupOpen(false);
+      <dialog open={isloginpopupopen} onopenchange={setisloginpopupopen}>
+        <dialogcontent>
+          <dialogheader>
+            <dialogtitle>login required</dialogtitle>
+            <dialogdescription>
+              please log in to add items to your cart or buy now.
+            </dialogdescription>
+          </dialogheader>
+          <div classname="flex justify-end gap-2">
+            <button variant="outline" onclick={() => setisloginpopupopen(false)}>cancel</button>
+            <button onclick={() => {
+              setisloginpopupopen(false);
               navigate("/login");
-            }}>Login</Button> {/* ✅ Corrected casing */}
+            }}>login</button>
           </div>
-        </DialogContent>
-      </Dialog>
+        </dialogcontent>
+      </dialog>
     </div>
   );
 };
 
-export default ProductCard; // ✅ Corrected casing
+export default productcard;
