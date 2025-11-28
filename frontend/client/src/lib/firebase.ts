@@ -15,7 +15,7 @@ import {
   signInWithCredential,
   sendPasswordResetEmail as firebaseSendPasswordResetEmail,
 } from "firebase/auth";
-import { getStorage } from "firebase-admin/storage";
+import { getStorage } from "firebase/storage";
 // ... (existing firebaseConfig and setup) ...
 
 const firebaseConfig = {
