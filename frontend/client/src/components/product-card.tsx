@@ -1,20 +1,20 @@
-// frontend/components/product-card.tsx
-import { usemutation, usequeryclient } from "tanstack/react-query";
+// frontend/components/ProductCard.tsx
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "/hooks/use-toast";
-import { button } from "/components/ui/button";
-import { apirequest } from "/lib/queryclient";
-import react, { usestate } from "react";
-import { useauth } from "/hooks/useauth";
+import { Button } from "/components/ui/button";
+import { ApiRequest } from "/lib/queryclient";
+import React, { useState } from "react";
+import { useAuth } from "/hooks/useAuth";
 import {
-  dialog,
-  dialogcontent,
-  dialogdescription,
-  dialogheader,
-  dialogtitle,
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
 } from "/components/ui/dialog";
-import { usenavigate } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-interface product {
+interface Product {
   id: number;
   name: string;
   price: string;
@@ -27,128 +27,127 @@ interface product {
   };
 }
 
-interface productcardprops {
-  product: product;
+interface ProductCardProps {
+  product: Product;
 }
 
-const productcard: react.fc<productcardprops> = ({ product }) => {
-  const queryclient = usequeryclient();
-  const { user } = useauth();
-  const navigate = usenavigate();
-  const [isloginpopupopen, setisloginpopupopen] = usestate(false);
+const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
+  const queryClient = useQueryClient();
+  const { user } = useAuth();
+  const navigate = useNavigate();
+  const [isLoginPopupOpen, setIsLoginPopupOpen] = useState(false);
 
-  const addtocartmutation = usemutation({
-    mutationfn: async ({ productid, quantity }: { productid: number; quantity: number }) => {
-      return await apirequest("post", "/api/cart/add", { productid, quantity });
+  const addToCartMutation = useMutation({
+    mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
+      return await ApiRequest("post", "/api/cart/add", { productId, quantity });
     },
-    onsuccess: () => {
-      queryclient.invalidatequeries({ querykey: ["/api/cart"] });
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
       toast({
-        title: "added to cart",
+        title: "Added to Cart",
         description: `${product.name} has been added to your cart.`,
       });
     },
-    onerror: (error: any) => {
+    onError: (error: any) => {
       toast({
-        title: "failed to add to cart",
-        description: error.message || "an error occurred while adding the item to your cart.",
+        title: "Failed to Add to Cart",
+        description: error.message || "An error occurred while adding the item to your cart.",
         variant: "destructive",
       });
     },
   });
 
-  const handleaddtocart = () => {
+  const handleAddToCart = () => {
     if (!user) {
-      setisloginpopupopen(true);
+      setIsLoginPopupOpen(true);
       return;
     }
 
     if (product.stock === 0) {
       toast({
-        title: "out of stock",
-        description: "this product is currently unavailable.",
+        title: "Out of Stock",
+        description: "This product is currently unavailable.",
         variant: "destructive",
       });
       return;
     }
 
-    addtocartmutation.mutate({ productid: product.id, quantity: 1 });
+    addToCartMutation.mutate({ productId: product.id, quantity: 1 });
   };
 
-  const handlebuynow = () => {
+  const handleBuyNow = () => {
     if (!user) {
-      setisloginpopupopen(true);
+      setIsLoginPopupOpen(true);
       return;
     }
 
     if (product.stock === 0) {
       toast({
-        title: "out of stock",
-        description: "this product is currently unavailable.",
+        title: "Out of Stock",
+        description: "This product is currently unavailable.",
         variant: "destructive",
       });
       return;
     }
 
-    console.log("➡️ buy now clicked for product id:", product.id);
+    console.log("➡️ Buy now clicked for product ID:", product.id);
     navigate(`/checkout2/${product.id}?quantity=1`);
   };
 
-  // Debugging: Log the image URL to console
-  console.log(`product id: ${product.id}, name: ${product.name}, image url: ${product.image}`);
+  console.log(`Product ID: ${product.id}, Name: ${product.name}, Image URL: ${product.image}`);
   
   return (
-    <div classname="p-4 border rounded-lg">
+    <div className="p-4 border rounded-lg">
       <img
         src={product.image}
         alt={product.name}
-        classname="h-40 w-full object-cover rounded-lg mb-4"
-        onError={(e) => { // Added onError handler for debugging purposes
-          e.currentTarget.onerror = null; // Prevents infinite loop
-          e.currentTarget.src = 'https://via.placeholder.com/150?text=Image+Not+Found'; // Fallback image
+        className="h-40 w-full object-cover rounded-lg mb-4"
+        onError={(e) => {
+          e.currentTarget.onerror = null;
+          e.currentTarget.src = 'https://via.placeholder.com/150?text=Image+Not+Found';
           console.error(`ERROR: Failed to load image for product ID: ${product.id}, URL: ${product.image}`);
           console.error("Image element HTML:", e.currentTarget.outerHTML);
         }}
       />
-      <h3 classname="text-lg font-semibold truncate">{product.name}</h3>
-      <p classname="text-gray-600 mb-2">by: {product.seller ? product.seller.businessname : 'n/a'}</p>
-      <p classname="text-gray-600 mb-2">₹{product.price}</p>
-      <div classname="flex flex-col gap-2">
-        <button
-          onclick={handleaddtocart}
-          disabled={addtocartmutation.ispending || product.stock === 0}
-          classname="w-full"
+      <h3 className="text-lg font-semibold truncate">{product.name}</h3>
+      <p className="text-gray-600 mb-2">by: {product.seller ? product.seller.businessname : 'n/a'}</p>
+      <p className="text-gray-600 mb-2">₹{product.price}</p>
+      <div className="flex flex-col gap-2">
+        <Button
+          onClick={handleAddToCart}
+          disabled={addToCartMutation.isPending || product.stock === 0}
+          className="w-full"
         >
-          {addtocartmutation.ispending ? "adding..." : "add to cart"}
-        </button>
-        <button
-          onclick={handlebuynow}
+          {addToCartMutation.isPending ? "Adding..." : "Add to Cart"}
+        </Button>
+        <Button
+          onClick={handleBuyNow}
           disabled={product.stock === 0}
-          classname="w-full"
+          className="w-full"
         >
-          buy now
-        </button>
+          Buy Now
+        </Button>
       </div>
 
-      <dialog open={isloginpopupopen} onopenchange={setisloginpopupopen}>
-        <dialogcontent>
-          <dialogheader>
-            <dialogtitle>login required</dialogtitle>
-            <dialogdescription>
-              please log in to add items to your cart or buy now.
-            </dialogdescription>
-          </dialogheader>
-          <div classname="flex justify-end gap-2">
-            <button variant="outline" onclick={() => setisloginpopupopen(false)}>cancel</button>
-            <button onclick={() => {
-              setisloginpopupopen(false);
+      <Dialog open={isLoginPopupOpen} onOpenChange={setIsLoginPopupOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Login Required</DialogTitle>
+            <DialogDescription>
+              Please log in to add items to your cart or buy now.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2">
+            <Button variant="outline" onClick={() => setIsLoginPopupOpen(false)}>Cancel</Button>
+            <Button onClick={() => {
+              setIsLoginPopupOpen(false);
               navigate("/login");
-            }}>login</button>
+            }}>Login</Button>
           </div>
-        </dialogcontent>
-      </dialog>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };
 
-export default productcard;
+export default ProductCard;
