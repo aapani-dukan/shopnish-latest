@@ -22,7 +22,7 @@ import {
 
 // Firebase Storage क्लाइंट SDK
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../firebase'; // ✅ अपनी firebase.ts फ़ाइल से इम्पोर्ट करें
+import { storage } from '../lib/firebase'; // ✅ अपनी firebase.ts फ़ाइल से इम्पोर्ट करें
 
 
 interface ProductInput {
