@@ -29,6 +29,7 @@ const firebaseConfig = {
 
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
+export const storage = getStorage(app);
 const provider = new GoogleAuthProvider();
 // 🚀 New function to export
 export const sendPasswordResetEmail = async (email: string): Promise<void> => {
