@@ -20,18 +20,20 @@ import {
   SelectValue,
 } from '../components/ui/select';
 
-// आपके db/schema/product.ts से अनुकूलित ProductInput प्रकार
+// Firebase Storage क्लाइंट SDK
+import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
+import { storage } from '../firebase'; // ✅ अपनी firebase.ts फ़ाइल से इम्पोर्ट करें
+
+
 interface ProductInput {
   name: string;
   description: string;
   price: number;
   stock: number;
-  image: string; // सिंगल इमेज URL
-  categoryid: string; // अब categoryid एक string के रूप में भेज रहे हैं (select value string होती है)
-  // अन्य फ़ील्ड्स जैसे storeId, sellerId बैकएंड द्वारा हैंडल किए जाने चाहिए
+  image: string; // अब यह अपलोड होने के बाद URL रखेगा
+  categoryid: string;
 }
 
-// Categories स्कीमा से अनुमानित
 interface Category {
     id: number;
     name: string;
@@ -44,41 +46,57 @@ const SellerAddProductPage: React.FC = () => {
     description: '',
     price: 0,
     stock: 0,
-    image: '',
+    image: '', // इमेज URL के लिए खाली
     categoryid: '',
   });
-  const [loading, setLoading] = useState<boolean>(false);
-  const [categories, setCategories] = useState<Category[]>([]); // API से फेच की गई श्रेणियां
+  const [selectedImage, setSelectedImage] = useState<File | null>(null); // ✅ चुनी हुई इमेज फ़ाइल
+  const [imageUploadProgress, setImageUploadProgress] = useState<number>(0); // ✅ अपलोड प्रोग्रेस
+  const [imageUploading, setImageUploading] = useState<boolean>(false); // ✅ इमेज अपलोड स्थिति
+  const [loading, setLoading] = useState<boolean>(false); // मुख्य फॉर्म सबमिट लोडिंग
+  const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState<boolean>(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
-  // API से श्रेणियां फेच करें
-  useEffect(() => {
-    const fetchCategories = async () => {
-      try {
-        // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
-        const response = await axios.get('/api/categories/all', { withCredentials: true }); // मान लें कि यह एंडपॉइंट सभी श्रेणियां देता है
-        setCategories(response.data.categories || []);
-      } catch (err: any) {
-        console.error('Failed to fetch categories:', err);
-        toast.error(err.response?.data?.message || 'श्रेणियां लोड करने में विफल।');
-      } finally {
-        setCategoriesLoading(false);
-      }
-    };
-    fetchCategories();
-  }, []);
+  // (आपके useEffect और handleChange फंक्शंस वही रहेंगे)
 
-
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
-    const { id, value } = e.target;
-    setFormData(prev => ({ ...prev, [id]: value }));
-    setErrors(prev => ({ ...prev, [id]: '' }));
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedImage(e.target.files[0]);
+      setErrors(prev => ({ ...prev, image: '' })); // इमेज एरर साफ़ करें
+    } else {
+      setSelectedImage(null);
+    }
   };
 
-  const handleSelectChange = (value: string, id: string) => {
-    setFormData(prev => ({ ...prev, [id]: value }));
-    setErrors(prev => ({ ...prev, [id]: '' }));
+  const handleImageUpload = async () => {
+    if (!selectedImage) {
+      toast.error('कृपया अपलोड करने के लिए एक इमेज चुनें।');
+      return;
+    }
+
+    setImageUploading(true);
+    const storageRef = ref(storage, `products/${Date.now()}_${selectedImage.name}`); // Firebase Storage में पाथ
+    const uploadTask = uploadBytesResumable(storageRef, selectedImage);
+
+    uploadTask.on(
+      'state_changed',
+      (snapshot) => {
+        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+        setImageUploadProgress(progress);
+      },
+      (error) => {
+        console.error('Firebase Image Upload Error:', error);
+        setImageUploading(false);
+        toast.error('इमेज अपलोड करने में विफल।');
+      },
+      async () => {
+        // अपलोड पूरा होने पर डाउनलोड URL प्राप्त करें
+        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+        setFormData(prev => ({ ...prev, image: downloadURL })); // formData में URL अपडेट करें
+        setImageUploading(false);
+        toast.success('इमेज सफलतापूर्वक अपलोड की गई।');
+      }
+    );
   };
 
   const validateForm = () => {
@@ -87,7 +105,7 @@ const SellerAddProductPage: React.FC = () => {
     if (!formData.description) newErrors.description = 'विवरण आवश्यक है।';
     if (formData.price <= 0) newErrors.price = 'मूल्य 0 से अधिक होना चाहिए।';
     if (formData.stock < 0) newErrors.stock = 'स्टॉक ऋणात्मक नहीं हो सकता।';
-    if (!formData.image) newErrors.image = 'छवि URL आवश्यक है।'; // सिंगल image फ़ील्ड
+    if (!formData.image) newErrors.image = 'उत्पाद की छवि आवश्यक है।'; // अब यह अपलोड किए गए URL की जाँच करेगा
     if (!formData.categoryid) newErrors.categoryid = 'श्रेणी आवश्यक है।';
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -95,6 +113,11 @@ const SellerAddProductPage: React.FC = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // सुनिश्चित करें कि इमेज अपलोड हो चुकी है और formData.image में उसका URL है
+    if (imageUploading) {
+        toast.error('कृपया इमेज अपलोड पूरा होने का इंतजार करें।');
+        return;
+    }
     if (!validateForm()) {
       toast.error('कृपया फॉर्म में सभी आवश्यक फ़ील्ड भरें।');
       return;
@@ -102,15 +125,13 @@ const SellerAddProductPage: React.FC = () => {
 
     setLoading(true);
     try {
-      // API को भेजने से पहले categoryid को संख्या में बदलें
       const dataToSend = {
           ...formData,
-          categoryid: parseInt(formData.categoryid), // string से number में बदलें
+          categoryid: parseInt(formData.categoryid),
       };
-      // ✅ आपके बैकएंड के अनुसार सही एंडपॉइंट
       await axios.post('/api/products/create', dataToSend, { withCredentials: true });
       toast.success('उत्पाद सफलतापूर्वक जोड़ा गया।');
-      navigate('/seller-dashboard/products'); // उत्पाद सूची पेज पर रीडायरेक्ट करें
+      navigate('/seller-dashboard/products');
     } catch (err: any) {
       console.error('Failed to add product:', err);
       toast.error(err.response?.data?.message || 'उत्पाद जोड़ने में विफल।');
@@ -126,96 +147,59 @@ const SellerAddProductPage: React.FC = () => {
       </CardHeader>
       <CardContent className="p-0">
         <form onSubmit={handleSubmit} className="space-y-6">
+          {/* अन्य फ़ील्ड्स (name, description, price, stock) */}
+
           <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="name">उत्पाद का नाम</Label>
+            <Label htmlFor="image-upload">उत्पाद छवि</Label>
             <Input
-              type="text"
-              id="name"
-              placeholder="फैंसी टी-शर्ट"
-              value={formData.name}
-              onChange={handleChange}
-              disabled={loading}
+              id="image-upload"
+              type="file" // ✅ अब यह एक फ़ाइल इनपुट है
+              accept="image/jpeg, image/png, image/webp, image/heic" // ✅ स्वीकृत फॉर्मेट
+              onChange={handleFileChange}
+              disabled={loading || imageUploading}
             />
-            {errors.name && <p className="text-red-500 text-sm mt-1">{errors.name}</p>}
-          </div>
-
-          <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="description">विवरण</Label>
-            <Textarea
-              id="description"
-              placeholder="उत्पाद का विस्तृत विवरण..."
-              value={formData.description}
-              onChange={handleChange}
-              disabled={loading}
-              rows={4}
-            />
-            {errors.description && <p className="text-red-500 text-sm mt-1">{errors.description}</p>}
-          </div>
-
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="price">मूल्य (₹)</Label>
-              <Input
-                type="number"
-                id="price"
-                placeholder="199.99"
-                value={formData.price}
-                onChange={handleChange}
-                disabled={loading}
-                min="0"
-                step="0.01"
-              />
-              {errors.price && <p className="text-red-500 text-sm mt-1">{errors.price}</p>}
-            </div>
-
-            <div className="grid w-full items-center gap-1.5">
-              <Label htmlFor="stock">स्टॉक</Label>
-              <Input
-                type="number"
-                id="stock"
-                placeholder="100"
-                value={formData.stock}
-                onChange={handleChange}
-                disabled={loading}
-                min="0"
-              />
-              {errors.stock && <p className="text-red-500 text-sm mt-1">{errors.stock}</p>}
-            </div>
-          </div>
-
-          <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="image">छवि URL</Label> {/* सिंगल image फ़ील्ड */}
-            <Input
-              type="url"
-              id="image"
-              placeholder="https://example.com/product-image.jpg"
-              value={formData.image}
-              onChange={handleChange}
-              disabled={loading}
-            />
-            {errors.image && <p className="text-red-500 text-sm mt-1">{errors.image}</p>}
-          </div>
-
-          <div className="grid w-full items-center gap-1.5">
-            <Label htmlFor="categoryid">श्रेणी</Label>
-            <Select onValueChange={(value) => handleSelectChange(value, 'categoryid')} value={formData.categoryid} disabled={loading || categoriesLoading}>
-              <SelectTrigger className="w-full">
-                <SelectValue placeholder={categoriesLoading ? "श्रेणियां लोड हो रही हैं..." : "एक श्रेणी चुनें"} />
-              </SelectTrigger>
-              <SelectContent>
-                {categories.length > 0 ? (
-                    categories.map(category => (
-                        <SelectItem key={category.id} value={String(category.id)}>{category.name}</SelectItem>
-                    ))
-                ) : (
-                    <SelectItem value="" disabled>कोई श्रेणी उपलब्ध नहीं</SelectItem>
+            {selectedImage && (
+              <div className="flex items-center gap-2 mt-2">
+                <Button
+                  type="button"
+                  onClick={handleImageUpload}
+                  disabled={imageUploading || !selectedImage}
+                  className="bg-green-600 hover:bg-green-700"
+                >
+                  {imageUploading ? (
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                  ) : (
+                    <UploadCloud className="h-4 w-4 mr-2" />
+                  )}
+                  {imageUploading ? `अपलोड हो रहा है (${Math.round(imageUploadProgress)}%)` : 'छवि अपलोड करें'}
+                </Button>
+                {formData.image && (
+                  <a href={formData.image} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline">
+                    अपलोड की गई छवि देखें
+                  </a>
                 )}
-              </SelectContent>
-            </Select>
-            {errors.categoryid && <p className="text-red-500 text-sm mt-1">{errors.categoryid}</p>}
+              </div>
+            )}
+            {errors.image && <p className="text-red-500 text-sm mt-1">{errors.image}</p>}
+
+            {/* वैकल्पिक: इमेज का पूर्वावलोकन */}
+            {selectedImage && !formData.image && (
+                <div className="mt-4">
+                    <p className="text-sm text-gray-600">पूर्वावलोकन:</p>
+                    <img src={URL.createObjectURL(selectedImage)} alt="Image Preview" className="mt-2 h-32 w-32 object-cover rounded-lg" />
+                </div>
+            )}
+            {formData.image && ( // एक बार इमेज अपलोड होने के बाद उसका पूर्वावलोकन दिखाएं
+                <div className="mt-4">
+                    <p className="text-sm text-gray-600">अपलोड की गई छवि:</p>
+                    <img src={formData.image} alt="Uploaded Image" className="mt-2 h-32 w-32 object-cover rounded-lg" />
+                </div>
+            )}
           </div>
 
-          <Button type="submit" disabled={loading} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700">
+          {/* बाकी फ़ील्ड्स (categoryid) */}
+
+          <Button type="submit" disabled={loading || imageUploading || !formData.image} className="w-full sm:w-auto bg-indigo-600 hover:bg-indigo-700">
             {loading ? (
               <Loader2 className="h-4 w-4 animate-spin mr-2" />
             ) : (
@@ -230,3 +214,4 @@ const SellerAddProductPage: React.FC = () => {
 };
 
 export default SellerAddProductPage;
+            
