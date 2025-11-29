@@ -69,7 +69,7 @@ const SellerAddProductPage: React.FC = () => {
   };
 
   const handleImageUpload = async () => {
-    console.log("🔥 handleImageUpload function called!"); /
+    console.log("🔥 handleImageUpload function called!"); 
   if (!selectedImage) {
     toast.error('कृपया अपलोड करने के लिए एक इमेज चुनें।');
     return;
