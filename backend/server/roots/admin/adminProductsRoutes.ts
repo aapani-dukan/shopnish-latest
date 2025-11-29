@@ -15,7 +15,7 @@ import { z } from 'zod'; // ✅ For validation
 import multer from 'multer'; // ✅ For image upload
 import { uploadImage } from '../../cloudStorage'; // ✅ For image upload
 import { v4 as uuidv4 } from "uuid"; // ✅ For unique filenames
-
+import fs from "fs/promises";
 const adminProductsRouter = Router();
 const upload = multer({ dest: 'uploads/' });
 
@@ -256,7 +256,14 @@ adminProductsRouter.patch(
 
       let imageUrl = existingProduct.image;
       if (file) {
-        imageUrl = await uploadImage(file.path, `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`); // ✅ Seller-specific image path
+
+const buffer = await fs.readFile(file.path);
+
+imageUrl = await uploadImage(
+  buffer,
+  `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`,
+  file.mimetype
+);
         if (!imageUrl) {
           return res.status(500).json({ error: 'Failed to upload new product image.' });
         }
