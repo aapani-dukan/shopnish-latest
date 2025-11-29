@@ -849,7 +849,13 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
             return res.status(400).json({ error: 'Invalid data provided for categoryId, price, or stock.' });
           }
 
-          const imageUrl = await uploadImage(file.path, file.originalname);
+          const buffer = await fs.readFile(file.path);
+
+const imageUrl = await uploadImage(
+  buffer,
+  `products/${sellerId}/${uuidv4()}-${file.originalname}`,
+  file.mimetype
+);
 
           const newProduct = await db
             .insert(products)
@@ -940,7 +946,14 @@ sellerRouter.patch(
               console.log(`[INFO] Attempting to delete old image: ${existingProduct.image}`);
               await deleteImage(existingProduct.image);
             }
-            imageUrl = await uploadImage(file.path, file.originalname);
+const buffer = await fs.readFile(file.path);
+
+const imageUrl = await uploadImage(
+  buffer,
+  `products/${sellerId}/${uuidv4()}-${file.originalname}`,
+  file.mimetype
+);
+            
           }
 
           const updatePayload: any = {
