@@ -23,15 +23,7 @@ import {
 // Firebase
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
-import { uploadProductImage } from "../../utils/uploadImage";
-
-async function handleSubmit() {
-  const file = selectedImageFile;
-
-  const imageUrl = await uploadProductImage(file);
-
-  // Save imageUrl to database
-}
+import { uploadProductImage } from "../utils/uploadImage";
 
 interface ProductInput {
   name: string;
@@ -109,36 +101,27 @@ const SellerAddProductPage: React.FC = () => {
 
   // 🔽 Upload Image to Firebase (Fixed)
   const handleImageUpload = async () => {
-    if (!selectedImage) {
-      toast.error("कृपया एक इमेज चुनें।");
-      return;
-    }
+  if (!selectedImage) {
+    toast.error("कृपया एक इमेज चुनें।");
+    return;
+  }
 
-    setImageUploading(true);
+  setImageUploading(true);
 
-    const storageRef = ref(storage, `products/${Date.now()}_${selectedImage.name}`);
-    const uploadTask = uploadBytesResumable(storageRef, selectedImage);
+  try {
+    // ⭐ नई utility function का सही उपयोग
+    const url = await uploadProductImage(selectedImage);
 
-    uploadTask.on(
-      "state_changed",
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setImageUploadProgress(progress);
-      },
-      (error) => {
-        console.error("Upload error:", error);
-        toast.error("इमेज अपलोड विफल!");
-        setImageUploading(false);
-      },
-      async () => {
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        setFormData((prev) => ({ ...prev, image: downloadURL }));
-        toast.success("इमेज अपलोड सफल!");
-        setImageUploading(false);
-      }
-    );
-  };
+    setFormData((prev) => ({ ...prev, image: url }));
 
+    toast.success("Image Uploaded Successfully!");
+  } catch (error) {
+    console.error(error);
+    toast.error("Image Upload Failed!");
+  } finally {
+    setImageUploading(false);
+  }
+};
 
   // 🔽 Form Validation
   const validateForm = () => {
