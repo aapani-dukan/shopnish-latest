@@ -69,37 +69,52 @@ const SellerAddProductPage: React.FC = () => {
   };
 
   const handleImageUpload = async () => {
-    if (!selectedImage) {
-      toast.error('कृपया अपलोड करने के लिए एक इमेज चुनें।');
-      return;
-    }
-  console.log("➡️ Attempting to upload image:", selectedImage.name);
-  console.log("➡️ Image type:", selectedImage.type);
-  console.log("➡️ Image size (bytes):", selectedImage.size); 
-    setImageUploading(true);
-    const storageRef = ref(storage, `products/${Date.now()}_${selectedImage.name}`); // Firebase Storage में पाथ
-    const uploadTask = uploadBytesResumable(storageRef, selectedImage);
+  if (!selectedImage) {
+    toast.error('कृपया अपलोड करने के लिए एक इमेज चुनें।');
+    return;
+  }
 
-    uploadTask.on(
-      'state_changed',
-      (snapshot) => {
-        const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
-        setImageUploadProgress(progress);
-      },
-      (error) => {
-        console.error('Firebase Image Upload Error:', error);
-        setImageUploading(false);
-        toast.error('इमेज अपलोड करने में विफल।');
-      },
-      async () => {
-        // अपलोड पूरा होने पर डाउनलोड URL प्राप्त करें
-        const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
-        setFormData(prev => ({ ...prev, image: downloadURL })); // formData में URL अपडेट करें
-        setImageUploading(false);
-        toast.success('इमेज सफलतापूर्वक अपलोड की गई।');
-      }
-    );
-  };
+  // **** यहाँ नए लॉग और चेक जोड़ें ****
+  console.log("➡️ Before uploadBytesResumable:");
+  console.log("➡️ selectedImage.name:", selectedImage.name);
+  console.log("➡️ selectedImage.type:", selectedImage.type);
+  console.log("➡️ selectedImage.size:", selectedImage.size); // <--- यह बहुत महत्वपूर्ण है
+  console.log("➡️ selectedImage:", selectedImage); // <--- पूरे File ऑब्जेक्ट को भी लॉग करें
+
+  // यदि फ़ाइल का आकार 0 है तो तुरंत रोकें
+  if (selectedImage.size === 0) {
+      toast.error('चुनी गई इमेज फ़ाइल खाली है या उसका आकार 0 बाइट्स है। कृपया एक वैध इमेज चुनें।');
+      setImageUploading(false); // ✅ अपलोड रोकने के लिए
+      return; // ✅ आगे अपलोड न करें
+  }
+
+  setImageUploading(true);
+  const storageRef = ref(storage, `products/${Date.now()}_${selectedImage.name}`); // Firebase Storage में पाथ
+  const uploadTask = uploadBytesResumable(storageRef, selectedImage);
+
+  uploadTask.on(
+    'state_changed',
+    (snapshot) => {
+      const progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+      setImageUploadProgress(progress);
+      console.log(`➡️ Upload Progress: ${Math.round(progress)}%`); // प्रोग्रेस भी लॉग करें
+    },
+    (error) => {
+      console.error('❌ Firebase Image Upload Error:', error); // Firebase से सीधे त्रुटि
+      setImageUploading(false);
+      toast.error('इमेज अपलोड करने में विफल।');
+    },
+    async () => {
+      // अपलोड पूरा होने पर डाउनलोड URL प्राप्त करें
+      const downloadURL = await getDownloadURL(uploadTask.snapshot.ref);
+      setFormData(prev => ({ ...prev, image: downloadURL })); // formData में URL अपडेट करें
+      setImageUploading(false);
+      toast.success('इमेज सफलतापूर्वक अपलोड की गई।');
+      console.log('✅ Image uploaded successfully. Download URL:', downloadURL); // सफलता पर लॉग
+    }
+  );
+};
+  
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
