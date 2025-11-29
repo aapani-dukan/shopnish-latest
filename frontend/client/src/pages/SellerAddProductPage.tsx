@@ -23,7 +23,15 @@ import {
 // Firebase
 import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
 import { storage } from '../lib/firebase';
+import { uploadProductImage } from "../../utils/uploadImage";
 
+async function handleSubmit() {
+  const file = selectedImageFile;
+
+  const imageUrl = await uploadProductImage(file);
+
+  // Save imageUrl to database
+}
 
 interface ProductInput {
   name: string;
