@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, PlusCircle } from 'lucide-react';
+import { Loader2, PlusCircle, UploadCloud } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
