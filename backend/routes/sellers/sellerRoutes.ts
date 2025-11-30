@@ -911,97 +911,126 @@ sellerRouter.patch(
 
 
     // ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें)
-    sellerRouter.patch(
-      '/products/:id',
-      requireSellerAuth,
-      upload.single('image'),
-      async (req: AuthenticatedRequest, res: Response) => {
-        try {
-          const userId = req.user?.id;
-          const productId = parseInt(req.params.id);
+sellerRouter.patch(
+  '/products/:id',
+  requireSellerAuth,
+  upload.single('image'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const productId = parseInt(req.params.id);
 
-          if (!userId) {
-            return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
-          }
-          if (isNaN(productId)) {
-            return res.status(400).json({ error: 'Invalid product ID.' });
-          }
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
+      }
+      if (isNaN(productId)) {
+        return res.status(400).json({ error: 'Invalid product ID.' });
+      }
 
-          const [sellerProfile] = await db
-            .select()
-            .from(sellersPgTable)
-            .where(eq(sellersPgTable.userId, userId));
+      // ✅ Seller Profile Check
+      const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
 
-          if (!sellerProfile) {
-            return res.status(404).json({ error: 'Seller profile not found.' });
-          }
-          const sellerId = sellerProfile.id;
+      if (!sellerProfile) {
+        return res.status(404).json({ error: 'Seller profile not found.' });
+      }
 
-          // सुनिश्चित करें कि प्रोडक्ट सेलर का है
-          const [existingProduct] = await db.select()
-            .from(products)
-            .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
+      const sellerId = sellerProfile.id;
 
-          if (!existingProduct) {
-            return res.status(403).json({ error: 'Not authorized to update this product.' });
-          }
+      // ✅ Product Ownership Check
+      const [existingProduct] = await db
+        .select()
+        .from(products)
+        .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
 
-          const { name, description, price, categoryId, stock, unit, brand, minOrderQty, maxOrderQty, estimatedDeliveryTime } = req.body;
-          const file = req.file;
+      if (!existingProduct) {
+        return res.status(403).json({ error: 'Not authorized to update this product.' });
+      }
 
-          let imageUrl = existingProduct.image;
-          if (file) {
-            // ✅ पुरानी इमेज को क्लाउड स्टोरेज से हटाने पर विचार करें
-            if (existingProduct.image) {
-              console.log(`[INFO] Attempting to delete old image: ${existingProduct.image}`);
-              await deleteImage(existingProduct.image);
-            }
-const buffer = await fs.readFile(file.path);
+      const {
+        name,
+        description,
+        price,
+        categoryId,
+        stock,
+        unit,
+        brand,
+        minOrderQty,
+        maxOrderQty,
+        estimatedDeliveryTime
+      } = req.body;
 
-const imageUrl = await uploadImage(
-  buffer,
-  `products/${sellerId}/${uuidv4()}-${file.originalname}`,
-  file.mimetype
-);
-            
-          }
+      const file = req.file;
 
-          const updatePayload: any = {
-            updatedAt: new Date(),
-          };
+      // 🌟 START: Image Update Logic
+      let imageUrl = existingProduct.image;
 
-          if (name !== undefined) updatePayload.name = name;
-          if (description !== undefined) updatePayload.description = description;
-          if (price !== undefined) updatePayload.price = parseFloat(price as string);
-          if (categoryId !== undefined) updatePayload.categoryId = parseInt(categoryId as string);
-          if (stock !== undefined) updatePayload.stock = parseInt(stock as string);
-          if (unit !== undefined) updatePayload.unit = unit;
-          if (brand !== undefined) updatePayload.brand = brand;
-          if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(minOrderQty as string);
-          if (maxOrderQty !== undefined) updatePayload.maxOrderQty = parseInt(maxOrderQty as string);
-          if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
-          if (imageUrl !== undefined) updatePayload.image = imageUrl;
+      if (file) {
+        // Read local file using fs because multer disk storage is used
+        const buffer = await fs.readFile(file.path);
 
+        // Upload new image to cloud
+        imageUrl = await uploadImage(
+          buffer,
+          `products/${sellerId}/${uuidv4()}-${file.originalname}`,
+          file.mimetype
+        );
 
-          const [updatedProduct] = await db
-            .update(products)
-            .set(updatePayload)
-            .where(eq(products.id, productId))
-            .returning();
-
-          if (!updatedProduct) {
-            return res.status(404).json({ error: 'Product not found or no changes made.' });
-          }
-
-          getIO().emit("product:updated", updatedProduct);
-
-          return res.status(200).json(updatedProduct);
-
-        } catch (error: any) {
-          console.error("❌ PUT /api/sellers/delivery-preferences error:", error);
-          res.status(500).json({ message: "Failed to update delivery preferences.", error: error.message });
+        if (!imageUrl) {
+          return res.status(500).json({ error: "Failed to upload new product image." });
         }
-      });
+
+        // Delete temp file
+        await fs.unlink(file.path).catch(() => {});
+
+        // Delete old cloud image
+        if (existingProduct.image) {
+          await deleteImage(existingProduct.image).catch(() => {});
+        }
+      }
+      // 🌟 END: Image Update Logic
+
+      // ✏️ Build update payload
+      const updatePayload: any = {
+        updatedAt: new Date(),
+      };
+
+      if (name !== undefined) updatePayload.name = name;
+      if (description !== undefined) updatePayload.description = description;
+      if (price !== undefined) updatePayload.price = parseFloat(price);
+      if (categoryId !== undefined) updatePayload.categoryId = parseInt(categoryId);
+      if (stock !== undefined) updatePayload.stock = parseInt(stock);
+      if (unit !== undefined) updatePayload.unit = unit;
+      if (brand !== undefined) updatePayload.brand = brand;
+      if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(minOrderQty);
+      if (maxOrderQty !== undefined) updatePayload.maxOrderQty = parseInt(maxOrderQty);
+      if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
+      if (imageUrl !== undefined) updatePayload.image = imageUrl;
+
+      // ✅ Update DB
+      const [updatedProduct] = await db
+        .update(products)
+        .set(updatePayload)
+        .where(eq(products.id, productId))
+        .returning();
+
+      if (!updatedProduct) {
+        return res.status(404).json({ error: 'Product not found or no changes made.' });
+      }
+
+      // 🔊 Emit update event
+      getIO().emit("product:updated", updatedProduct);
+
+      return res.status(200).json(updatedProduct);
+
+    } catch (error: any) {
+      console.error("❌ PATCH /api/sellers/products/:id error:", error);
+      return res.status(500).json({ message: "Failed to update product.", error: error.message });
+    }
+  }
+);
 
     // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
     sellerRouter.patch(
