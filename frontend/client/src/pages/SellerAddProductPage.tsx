@@ -21,8 +21,6 @@ import {
 } from '../components/ui/select';
 
 // Firebase
-import { ref, uploadBytesResumable, getDownloadURL } from 'firebase/storage';
-import { storage } from '../lib/firebase';
 import { uploadProductImage } from "../utils/uploadImage";
 
 interface ProductInput {
@@ -31,7 +29,7 @@ interface ProductInput {
   price: number;
   stock: number;
   image: string;
-  categoryid: string;
+  categoryId: string;   // ⭐ FIXED (पहले categoryid था)
 }
 
 interface Category {
@@ -48,11 +46,10 @@ const SellerAddProductPage: React.FC = () => {
     price: 0,
     stock: 0,
     image: '',
-    categoryid: '',
+    categoryId: '',
   });
 
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
-  const [imageUploadProgress, setImageUploadProgress] = useState(0);
   const [imageUploading, setImageUploading] = useState(false);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
@@ -60,7 +57,7 @@ const SellerAddProductPage: React.FC = () => {
   const [errors, setErrors] = useState<Record<string, string>>({});
 
 
-  // 🔽 Fetch Categories
+  // Fetch Categories
   useEffect(() => {
     const fetchCategories = async () => {
       try {
@@ -76,70 +73,60 @@ const SellerAddProductPage: React.FC = () => {
   }, []);
 
 
-  // 🔽 Handle Input Change
+  // Handle Change
   const handleChange = (e: any) => {
     setFormData({ ...formData, [e.target.name]: e.target.value });
     setErrors((prev) => ({ ...prev, [e.target.name]: '' }));
   };
 
 
-  // 🔽 Select Image
+  // Select Image
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files && e.target.files[0]) {
-      const file = e.target.files[0];
-
-      if (file.size === 0) {
-        toast.error("यह इमेज फाइल खराब है (0 bytes)। कृपया दूसरी इमेज चुनें।");
-        return;
-      }
-
-      setSelectedImage(file);
+      setSelectedImage(e.target.files[0]);
       setErrors((prev) => ({ ...prev, image: '' }));
     }
   };
 
 
-  // 🔽 Upload Image to Firebase (Fixed)
+  // Upload image to Firebase
   const handleImageUpload = async () => {
-  if (!selectedImage) {
-    toast.error("कृपया एक इमेज चुनें।");
-    return;
-  }
+    if (!selectedImage) {
+      toast.error("कृपया एक इमेज चुनें।");
+      return;
+    }
 
-  setImageUploading(true);
+    setImageUploading(true);
 
-  try {
-    // ⭐ नई utility function का सही उपयोग
-    const url = await uploadProductImage(selectedImage);
+    try {
+      const url = await uploadProductImage(selectedImage);
+      setFormData((prev) => ({ ...prev, image: url }));
+      toast.success("Image Uploaded Successfully!");
+    } catch {
+      toast.error("Image Upload Failed!");
+    } finally {
+      setImageUploading(false);
+    }
+  };
 
-    setFormData((prev) => ({ ...prev, image: url }));
 
-    toast.success("Image Uploaded Successfully!");
-  } catch (error) {
-    console.error(error);
-    toast.error("Image Upload Failed!");
-  } finally {
-    setImageUploading(false);
-  }
-};
-
-  // 🔽 Form Validation
+  // Form Validation
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name) newErrors.name = "उत्पाद का नाम आवश्यक है।";
     if (!formData.description) newErrors.description = "विवरण आवश्यक है।";
-    if (formData.price <= 0) newErrors.price = "मूल्य 0 से अधिक होना चाहिए।";
-    if (formData.stock < 0) newErrors.stock = "स्टॉक नकारात्मक नहीं हो सकता।";
+    if (formData.price <= 0) newErrors.price = "मूल्य सही नहीं है।";
+    if (formData.stock < 0) newErrors.stock = "स्टॉक गलत है।";
     if (!formData.image) newErrors.image = "कृपया इमेज अपलोड करें।";
-    if (!formData.categoryid) newErrors.categoryid = "श्रेणी आवश्यक है।";
+    if (!formData.categoryId) newErrors.categoryId = "श्रेणी आवश्यक है।";
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
 
-  // 🔽 Submit Form
+  // Submit
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -158,7 +145,7 @@ const SellerAddProductPage: React.FC = () => {
     try {
       const data = {
         ...formData,
-        categoryid: parseInt(formData.categoryid),
+        categoryId: parseInt(formData.categoryId), // ⭐ FIXED
       };
 
       await axios.post("/api/products/create", data, { withCredentials: true });
@@ -186,35 +173,36 @@ const SellerAddProductPage: React.FC = () => {
           <div>
             <Label>उत्पाद का नाम</Label>
             <Input name="name" value={formData.name} onChange={handleChange} />
-            {errors.name && <p className="text-red-500 text-sm">{errors.name}</p>}
           </div>
 
           {/* DESCRIPTION */}
           <div>
             <Label>उत्पाद विवरण</Label>
             <Textarea name="description" value={formData.description} onChange={handleChange} />
-            {errors.description && <p className="text-red-500 text-sm">{errors.description}</p>}
           </div>
 
           {/* PRICE */}
           <div>
             <Label>मूल्य</Label>
             <Input type="number" name="price" value={formData.price} onChange={handleChange} />
-            {errors.price && <p className="text-red-500 text-sm">{errors.price}</p>}
           </div>
 
           {/* STOCK */}
           <div>
             <Label>स्टॉक</Label>
             <Input type="number" name="stock" value={formData.stock} onChange={handleChange} />
-            {errors.stock && <p className="text-red-500 text-sm">{errors.stock}</p>}
           </div>
 
           {/* IMAGE UPLOAD */}
           <div className="space-y-2">
             <Label>उत्पाद छवि</Label>
 
-            <Input type="file" accept="image/*" onChange={handleFileChange} disabled={imageUploading} />
+            <Input
+              type="file"
+              accept="image/*"
+              name="image"        // ⭐ SUPER IMPORTANT FIX
+              onChange={handleFileChange}
+            />
 
             {selectedImage && !formData.image && (
               <img
@@ -233,24 +221,17 @@ const SellerAddProductPage: React.FC = () => {
               onClick={handleImageUpload}
               className="bg-green-600"
             >
-              {imageUploading ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <UploadCloud className="h-4 w-4 mr-2" />
-              )}
-              {imageUploading ? `अपलोड हो रहा है (${Math.round(imageUploadProgress)}%)` : "छवि अपलोड करें"}
+              {imageUploading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <UploadCloud className="h-4 w-4 mr-2" />}
+              {imageUploading ? "अपलोड हो रहा है..." : "छवि अपलोड करें"}
             </Button>
-
-            {errors.image && <p className="text-red-500 text-sm">{errors.image}</p>}
           </div>
 
           {/* CATEGORY */}
           <div>
             <Label>श्रेणी</Label>
-
             <Select
               onValueChange={(value) =>
-                setFormData((prev) => ({ ...prev, categoryid: value }))
+                setFormData((prev) => ({ ...prev, categoryId: value }))
               }
             >
               <SelectTrigger>
@@ -264,16 +245,10 @@ const SellerAddProductPage: React.FC = () => {
                 ))}
               </SelectContent>
             </Select>
-
-            {errors.categoryid && <p className="text-red-500 text-sm">{errors.categoryid}</p>}
           </div>
 
-          {/* SUBMIT BUTTON */}
-          <Button
-            type="submit"
-            disabled={loading || imageUploading}
-            className="bg-indigo-600 w-full"
-          >
+          {/* SUBMIT */}
+          <Button type="submit" disabled={loading} className="bg-indigo-600 w-full">
             {loading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <PlusCircle className="h-4 w-4 mr-2" />}
             उत्पाद जोड़ें
           </Button>
