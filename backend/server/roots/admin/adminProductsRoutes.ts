@@ -239,35 +239,70 @@ adminProductsRouter.patch(
       maxOrderQuantity: z.union([z.number().int(), z.string().transform(val => parseInt(val))]).optional(),
     }).partial(),
   })),
+
   async (req: AuthenticatedRequest, res: Response) => {
-    try {
-      const productId = parseInt(req.params.id);
-      const updateData = req.body;
-      const file = req.file;
+  try {
+    const productId = parseInt(req.params.id);
+    const updateData = req.body;
+    const file = req.file; // multer memoryStorage → file.buffer मिलेगा
 
-      if (isNaN(productId)) {
-        return res.status(400).json({ error: 'Invalid product ID.' });
+    if (isNaN(productId)) {
+      return res.status(400).json({ error: "Invalid product ID." });
+    }
+
+    // Fetch existing product
+    const [existingProduct] = await db.query.products.findMany({
+      where: eq(products.id, productId),
+    });
+
+    if (!existingProduct) {
+      return res.status(404).json({ message: "Product not found." });
+    }
+
+    // DEFAULT:
+    let imageUrl = existingProduct.image;
+
+    // ⭐ If new image uploaded
+    if (file) {
+      // 🔥 NO fs, NO file.path — ONLY buffer
+      const uploadedUrl = await uploadImage(
+        file.buffer,
+        `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`,
+        file.mimetype
+      );
+
+      if (!uploadedUrl) {
+        return res.status(500).json({
+          error: "Failed to upload new product image.",
+        });
       }
 
-      const [existingProduct] = await db.query.products.findMany({ where: eq(products.id, productId) });
-      if (!existingProduct) {
-        return res.status(404).json({ message: 'Product not found.' });
-      }
+      imageUrl = uploadedUrl;
+    }
 
-      let imageUrl = existingProduct.image;
-      if (file) {
+    // FINAL UPDATE DB
+    const updatedProduct = await db
+      .update(products)
+      .set({
+        ...updateData,
+        image: imageUrl,
+        updatedAt: new Date(),
+      })
+      .where(eq(products.id, productId))
+      .returning();
 
-const buffer = await fs.readFile(file.path);
-
-imageUrl = await uploadImage(
-  buffer,
-  `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`,
-  file.mimetype
-);
-        if (!imageUrl) {
-          return res.status(500).json({ error: 'Failed to upload new product image.' });
-        }
-      }
+    return res.json({
+      message: "Product updated successfully",
+      product: updatedProduct[0],
+    });
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({
+      message: "Failed to update product",
+      error: err.message,
+    });
+  }
+};
 
       // Convert category ID string to number if present
       if (updateData.category) {
