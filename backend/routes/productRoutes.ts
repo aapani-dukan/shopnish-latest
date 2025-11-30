@@ -78,21 +78,35 @@ function validateProductInput(data: any, isUpdate: boolean = false) {
     errors.push("Category ID is required.");
   }
 
-  // Image (main) - URL validation
-  if (data.image !== undefined) {
-    if (typeof data.image !== 'string' || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(data.image)) {
-      errors.push("Image must be a valid URL.");
-    }
-  } else if (!isUpdate) {
-    errors.push("Main product image is required.");
+  // ------------------------------------------------------------
+// MAIN IMAGE VALIDATION
+// ------------------------------------------------------------
+if (data.image !== undefined) {
+  if (
+    typeof data.image !== "string" ||
+    !/^https?:\/\/.+/i.test(data.image) // सिर्फ valid URL check
+  ) {
+    errors.push("Image must be a valid URL.");
   }
+} else if (!isUpdate) {
+  errors.push("Main product image is required.");
+}
 
-  // Images (array) - URL validation
-  if (data.images !== undefined) {
-    if (!Array.isArray(data.images) || data.images.some((img: any) => typeof img !== 'string' || !/^https?:\/\/.+\.(jpg|jpeg|png|gif|webp|svg)$/i.test(img))) {
-      errors.push("Additional images must be an array of valid URLs.");
-    }
+
+// ------------------------------------------------------------
+// MULTIPLE IMAGES VALIDATION (Array)
+// ------------------------------------------------------------
+if (data.images !== undefined) {
+  if (
+    !Array.isArray(data.images) ||
+    data.images.some(
+      (img: any) =>
+        typeof img !== "string" || !/^https?:\/\/.+/i.test(img) // प्रत्येक को URL check
+    )
+  ) {
+    errors.push("Additional images must be an array of valid URLs.");
   }
+}
 
   // Unit
   if (data.unit !== undefined) {
