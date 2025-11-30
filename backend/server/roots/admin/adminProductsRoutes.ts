@@ -240,7 +240,7 @@ adminProductsRouter.patch(
     }).partial(),
   })),
 
-  async (req: AuthenticatedRequest, res: Response) => {
+async (req: AuthenticatedRequest, res: Response) => {
   try {
     const productId = parseInt(req.params.id);
     const updateData = req.body;
@@ -259,14 +259,13 @@ adminProductsRouter.patch(
       return res.status(404).json({ message: "Product not found." });
     }
 
-    // DEFAULT:
+    // Default image stays same if no new upload
     let imageUrl = existingProduct.image;
 
-    // ⭐ If new image uploaded
+    // If new image uploaded
     if (file) {
-      // 🔥 NO fs, NO file.path — ONLY buffer
       const uploadedUrl = await uploadImage(
-        file.buffer,
+        file.buffer, // NO fs, NO file.path
         `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`,
         file.mimetype
       );
@@ -280,69 +279,49 @@ adminProductsRouter.patch(
       imageUrl = uploadedUrl;
     }
 
-    // FINAL UPDATE DB
-    const updatedProduct = await db
+    // Convert category ID if received as string
+    if (updateData.category) {
+      updateData.categoryId = parseInt(updateData.category);
+      delete updateData.category; // remove string version
+    }
+
+    // Build final update object
+    const finalUpdateData: Partial<typeof products.$inferInsert> = {
+      ...updateData,
+      image: imageUrl,
+      updatedAt: new Date(),
+    };
+
+    // Remove undefined fields to avoid overwriting DB values with undefined
+    Object.keys(finalUpdateData).forEach((key) => {
+      if (finalUpdateData[key as keyof typeof finalUpdateData] === undefined) {
+        delete finalUpdateData[key as keyof typeof finalUpdateData];
+      }
+    });
+
+    // Update DB
+    const [updatedProduct] = await db
       .update(products)
-      .set({
-        ...updateData,
-        image: imageUrl,
-        updatedAt: new Date(),
-      })
+      .set(finalUpdateData)
       .where(eq(products.id, productId))
       .returning();
 
-    return res.json({
-      message: "Product updated successfully",
-      product: updatedProduct[0],
+    if (!updatedProduct) {
+      return res.status(500).json({ message: "Failed to update product." });
+    }
+
+    return res.status(200).json({
+      message: "Product updated successfully.",
+      product: updatedProduct,
     });
-  } catch (err) {
-    console.error(err);
+
+  } catch (error: any) {
+    console.error(`❌ Error updating product with ID ${req.params.id}:`, error);
     return res.status(500).json({
-      message: "Failed to update product",
-      error: err.message,
+      error: error.message || "Failed to update product.",
     });
   }
 };
-
-      // Convert category ID string to number if present
-      if (updateData.category) {
-        updateData.categoryId = parseInt(updateData.category);
-        delete updateData.category; // Remove the original string category field
-      }
-
-      const finalUpdateData: Partial<typeof products.$inferInsert> = {
-        ...updateData,
-        image: imageUrl,
-        updatedAt: new Date(),
-      };
-
-      // Remove undefined values to avoid setting fields to undefined in DB
-      Object.keys(finalUpdateData).forEach(key => finalUpdateData[key as keyof typeof finalUpdateData] === undefined && delete finalUpdateData[key as keyof typeof finalUpdateData]);
-
-
-      const [updatedProduct] = await db.update(products)
-        .set(finalUpdateData)
-        .where(eq(products.id, productId))
-        .returning();
-
-      if (!updatedProduct) {
-        return res.status(500).json({ message: 'Failed to update product.' });
-      }
-
-      // Socket.io event for seller
-      // getIO().emit(`seller:${updatedProduct.sellerId}:product-update`, {
-      //   productId: updatedProduct.id,
-      //   message: `Your product '${updatedProduct.name}' has been updated by admin.`,
-      //   product: updatedProduct
-      // });
-
-      return res.status(200).json({ message: "Product updated successfully.", product: updatedProduct });
-    } catch (error: any) {
-      console.error(`❌ Error updating product with ID ${req.params.id}:`, error);
-      return res.status(500).json({ error: error.message || 'Failed to update product.' });
-    }
-  }
-);
 
 
 /**
