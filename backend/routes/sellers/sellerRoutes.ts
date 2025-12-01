@@ -34,7 +34,7 @@ import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 import * as fs from 'fs/promises'; 
 import * as fsSync from 'fs'; 
 const sellerRouter = Router();
-Const upload = multer({
+const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB फ़ाइल साइज़ लिमिट
