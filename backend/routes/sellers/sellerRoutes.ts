@@ -31,6 +31,7 @@ import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, �
 import { getMySellerProfile, updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
 import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
+import * as fs from 'fs/promises'; 
 const sellerRouter = Router();
 const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
