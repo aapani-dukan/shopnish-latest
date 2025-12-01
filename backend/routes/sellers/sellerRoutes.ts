@@ -32,8 +32,9 @@ import { getMySellerProfile, updateMySellerProfile } from '../../server/controll
 import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 import * as fs from 'fs/promises'; 
+import * as fsSync from 'fs'; 
 const sellerRouter = Router();
-const upload = multer({
+Const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
   limits: {
     fileSize: 5 * 1024 * 1024, // 5MB फ़ाइल साइज़ लिमिट
@@ -47,6 +48,7 @@ const upload = multer({
   }
 });
 
+abhi ah hai
 // ✅ POST /api/sellers/apply
 sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
@@ -915,7 +917,7 @@ sellerRouter.patch(
 sellerRouter.patch(
   '/products/:id',
   requireSellerAuth,
-  upload.single('image'),
+  // ⭐ ⭐ ⭐ यहाँ से 'upload.single('image')' को हटा दें ⭐ ⭐ ⭐
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
@@ -960,38 +962,43 @@ sellerRouter.patch(
         brand,
         minOrderQty,
         maxOrderQty,
-        estimatedDeliveryTime
+        estimatedDeliveryTime,
+        imageUrl: newImageUrlFromClient // ⭐ क्लाइंट से इमेज का URL प्राप्त करें
       } = req.body;
 
-      const file = req.file;
+      // ⭐ Multer के बिना, `req.file` मौजूद नहीं होगा।
+      // const file = req.file; // <--- इसकी अब आवश्यकता नहीं है
 
       // 🌟 START: Image Update Logic
-      let imageUrl = existingProduct.image;
+      let finalImageUrl = existingProduct.image; // डिफ़ॉल्ट रूप से मौजूदा इमेज URL
 
-      if (file) {
-        // Read local file using fs because multer disk storage is used
-        const buffer = await fs.readFile(file.path);
-
-        // Upload new image to cloud
-        imageUrl = await uploadImage(
-          buffer,
-          `products/${sellerId}/${uuidv4()}-${file.originalname}`,
-          file.mimetype
-        );
-
-        if (!imageUrl) {
-          return res.status(500).json({ error: "Failed to upload new product image." });
+      // यदि क्लाइंट ने एक नया इमेज URL भेजा है
+      if (newImageUrlFromClient !== undefined && newImageUrlFromClient !== existingProduct.image) {
+        try {
+          // पुरानी इमेज को क्लाउड स्टोरेज से हटाने का प्रयास करें (यदि मौजूद हो)
+          if (existingProduct.image) {
+            console.log(`[INFO] Attempting to delete old cloud image: ${existingProduct.image}`);
+            await deleteImage(existingProduct.image).catch(err => {
+              console.warn(`⚠️ Could not delete old cloud image ${existingProduct.image}:`, err.message);
+            });
+          }
+          finalImageUrl = newImageUrlFromClient; // नए URL को अपडेट के लिए उपयोग करें
+        } catch (imageDeleteError: any) {
+          console.error("❌ Error during old image deletion process:", imageDeleteError);
+          // यदि पुरानी इमेज हटाने में विफल रहता है, तो भी हम नई इमेज URL के साथ आगे बढ़ सकते हैं
+          finalImageUrl = newImageUrlFromClient;
         }
-
-        // Delete temp file
-        await fs.unlink(file.path).catch(() => {});
-
-        // Delete old cloud image
-        if (existingProduct.image) {
-          await deleteImage(existingProduct.image).catch(() => {});
-        }
+      } else if (newImageUrlFromClient === null || newImageUrlFromClient === '') { // मान लें कि क्लाइंट इमेज हटाना चाहता है
+          if (existingProduct.image) {
+               console.log(`[INFO] Client requested to clear image. Attempting to delete old cloud image: ${existingProduct.image}`);
+               await deleteImage(existingProduct.image).catch(err => {
+                   console.warn(`⚠️ Could not delete old cloud image ${existingProduct.image} during clear request:`, err.message);
+               });
+          }
+          finalImageUrl = null; // इमेज URL को null पर सेट करें
       }
       // 🌟 END: Image Update Logic
+
 
       // ✏️ Build update payload
       const updatePayload: any = {
@@ -1008,7 +1015,9 @@ sellerRouter.patch(
       if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(minOrderQty);
       if (maxOrderQty !== undefined) updatePayload.maxOrderQty = parseInt(maxOrderQty);
       if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
-      if (imageUrl !== undefined) updatePayload.image = imageUrl;
+      
+      // ⭐ अपडेटेड इमेज URL को पेलोड में जोड़ें
+      updatePayload.image = finalImageUrl;
 
       // ✅ Update DB
       const [updatedProduct] = await db
@@ -1022,7 +1031,7 @@ sellerRouter.patch(
       }
 
       // 🔊 Emit update event
-      getIO().emit("product:updated", updatedProduct);
+      // getIO().emit("product:updated", updatedProduct); // यदि आप Socket.IO का उपयोग कर रहे हैं
 
       return res.status(200).json(updatedProduct);
 
