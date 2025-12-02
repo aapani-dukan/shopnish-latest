@@ -48,7 +48,7 @@ const upload = multer({
   }
 });
 
-abhi ah hai
+
 // ✅ POST /api/sellers/apply
 sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
