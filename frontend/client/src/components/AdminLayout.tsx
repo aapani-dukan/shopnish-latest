@@ -1,3 +1,33 @@
+// src/components/AdminLayout.tsx
+import React from 'react';
+import { Outlet } from 'react-router-dom';
+
+// एक बहुत ही सरल लेआउट जो केवल कंटेंट को प्रदर्शित करता है
+const SimpleAdminLayout = () => {
+  return (
+    <div style={{ minHeight: '100vh', padding: '20px', border: '5px solid green' }}>
+      <h2>✅ Admin Layout - Wrapper is Working!</h2>
+      <p>साइडबार और हेडर हटा दिए गए हैं। अब हम डैशबोर्ड कंटेंट लोड कर रहे हैं:</p>
+      
+      {/* Outlet यह सुनिश्चित करता है कि इसका child (AdminDashboard) दिखाई दे */}
+      <Outlet /> 
+    </div>
+  );
+};
+
+export default SimpleAdminLayout;
+
+
+
+
+
+
+
+
+
+
+{/*
+
 import { Link, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -7,7 +37,7 @@ const AdminLayout = () => {
   return (
     <div className="bg-neutral-50 min-h-screen">
       <div className="flex">
-        {/* Sidebar */}
+        
         <aside className="w-64 bg-white shadow-lg p-6 min-h-screen">
           <div className="flex items-center space-x-2 mb-8">
             <svg
@@ -30,7 +60,7 @@ const AdminLayout = () => {
             </span>
           </div>
 
-          {/* Navigation */}
+          
           <nav className="space-y-2">
             <Link
               to="/admin/dashboard"
@@ -82,11 +112,11 @@ const AdminLayout = () => {
               <span>Categories</span>
             </Link>
 
-            {/* 🚀 Future links (Orders, Users, Reports, etc.) यहीं add करना */}
+            
           </nav>
         </aside>
 
-        {/* Main Content */}
+        
         <div className="flex-1 p-8">
           <header className="flex items-center justify-between mb-8">
             <h1 className="text-3xl font-bold text-neutral-800">
@@ -99,7 +129,7 @@ const AdminLayout = () => {
             </div>
           </header>
 
-          {/* ✅ Nested admin pages यहां render होंगे */}
+           
           <Outlet />
         </div>
       </div>
@@ -108,3 +138,4 @@ const AdminLayout = () => {
 };
 
 export default AdminLayout;
+*/}
