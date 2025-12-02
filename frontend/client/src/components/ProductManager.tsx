@@ -317,26 +317,29 @@ export default function ProductManager({ seller }: ProductManagerProps) {
   };
 
   const handleDeleteProduct = (productId: number) => {
-    const toastId = toast({
-      title: "Confirm Deletion",
-      description: "Are you sure you want to delete this product? This action cannot be undone.",
-      variant: "destructive",
-      action: (
-        <div className="flex gap-2">
-          <Button onClick={() => {
+  toast({
+    title: "Confirm Deletion",
+    description: "Are you sure you want to delete this product? This action cannot be undone.",
+    variant: "destructive",
+    action: (
+      <div className="flex gap-2">
+        <Button
+          onClick={() => {
             deleteProductMutation.mutate(productId);
-            toast.dismiss(toastId);
-          }} className="bg-red-500 hover:bg-red-600 text-white">
-            Delete
-          </Button>
-          <Button onClick={() => toast.dismiss(toastId)} variant="outline">
-            Cancel
-          </Button>
-        </div>
-      ),
-      duration: 10000,
-    }).id;
-  };
+          }}
+          className="bg-red-500 hover:bg-red-600 text-white"
+        >
+          Delete
+        </Button>
+
+        <Button variant="outline">
+          Cancel
+        </Button>
+      </div>
+    ),
+    duration: 10000, // Toast auto close
+  });
+};
 
   return (
     <Card>
