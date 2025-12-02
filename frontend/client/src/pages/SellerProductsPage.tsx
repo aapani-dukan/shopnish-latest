@@ -128,7 +128,7 @@ const SellerProductsPage: React.FC = () => {
     try {
       // Firebase Auth इंटरसेप्टर 'api' इंस्टेंस में टोकन को स्वचालित रूप से जोड़ता है।
       // हमें यहां मैन्युअल रूप से हेडर पास करने की आवश्यकता नहीं है।
-      await api.delete(`/products/${productId}`); // 'axios' के बजाय 'api' का उपयोग करें
+      await api.delete(`/api/products/${productId}`); // 'axios' के बजाय 'api' का उपयोग करें
       
       setProducts(prevProducts => prevProducts.filter(product => product.id !== productId));
       toast.success('उत्पाद सफलतापूर्वक हटाया गया।');
