@@ -811,6 +811,66 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
       }
     });
 
+// सुनिश्चित करें कि db, products, sellersPgTable, verifyToken, requireSellerAuth, eq, and, deleteImage
+// और AuthenticatedRequest, Response, NextFunction, console.log, parseInt आदि पहले ही इंपोर्टेड (imported) हैं।
+
+// ✅ DELETE /api/sellers/products/:productId (उत्पाद डिलीट करें)
+sellerRouter.delete('/products/:productId', verifyToken, requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+  console.log(`🗑️ [API] Received seller request to delete product ${req.params.productId}.`);
+  const userId = req.user?.id; // Authenticated user ID
+
+  if (!userId) {
+    return res.status(401).json({ message: "Unauthorized: Seller user not authenticated." });
+  }
+
+  // Input Validation
+  const productId = parseInt(req.params.productId);
+  if (isNaN(productId) || productId <= 0) {
+    return res.status(400).json({ message: "Invalid product ID." });
+  }
+
+  try {
+    // 1. Seller ID प्राप्त करें
+    // Note: यह प्रोफाइल सुनिश्चित करता है कि यूजर वास्तव में एक पंजीकृत Seller है
+    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+    if (!sellerProfile) {
+      return res.status(404).json({ message: "Seller profile not found for the authenticated user." });
+    }
+    const sellerId = sellerProfile.id;
+
+    // 2. सुनिश्चित करें कि सेलर इस प्रोडक्ट का मालिक है और इमेज URL प्राप्त करें
+    const [existingProduct] = await db.select({ image: products.image }).from(products).where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
+    if (!existingProduct) {
+      // 404 दिया जाता है ताकि हमलावर को यह न पता चले कि प्रोडक्ट मौजूद है लेकिन उनका नहीं है।
+      return res.status(404).json({ message: "Product not found or not owned by this seller." }); 
+    }
+
+    // 3. इमेज को क्लाउड स्टोरेज से हटा दें (यदि मौजूद हो)
+    if (existingProduct.image) {
+      console.log(`[INFO] Attempting to delete product image: ${existingProduct.image}`);
+      // सुनिश्चित करें कि deleteImage फंक्शन सही ढंग से इंपोर्ट किया गया है
+      await deleteImage(existingProduct.image); 
+    }
+
+    // 4. डेटाबेस से प्रोडक्ट हटाएँ
+    const [deletedProduct] = await db.delete(products)
+      .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)))
+      .returning();
+
+    if (!deletedProduct) {
+      return res.status(404).json({ message: "Product deletion failed or product was not found." });
+    }
+
+    res.status(200).json({
+      message: "Product deleted successfully.",
+      product: deletedProduct,
+    });
+  } catch (error) {
+    console.error("❌ Error deleting product from seller route:", error);
+    next(error); 
+  }
+});
+
 
     // ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं) (यह पहले से मौजूद है, यहाँ सिर्फ संदर्भ के लिए)
     sellerRouter.post(
