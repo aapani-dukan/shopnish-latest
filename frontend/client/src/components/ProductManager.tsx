@@ -213,10 +213,10 @@ export default function ProductManager({ seller }: ProductManagerProps) {
   const deleteProductMutation = useMutation({
     mutationFn: async (productId: number) => {
       // apiRequest के अंदर भी टोकन लॉजिक की जांच करें यदि यह firebase auth का उपयोग करता है
-      return await apiRequest("DELETE", `/api/sellers/products/${productId}`);
+      return await apiRequest("DELETE", `/api/products/${productId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/sellers/products"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/products"] });
       toast({
         title: "Product Deleted",
         description: "Product has been deleted successfully.",
