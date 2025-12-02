@@ -1,38 +1,4 @@
-// src/pages/admin/AdminDashboard.tsx
-import React from 'react';
 
-// यहाँ कोई फैंसी हुक या जटिल लॉजिक नहीं है
-const SimpleAdminDashboard = () => {
-  return (
-    <div style={{ padding: '20px', backgroundColor: '#f0f4f8', minHeight: '80vh' }}>
-      <h1>✅ Admin Dashboard - Test Page Loaded Successfully!</h1>
-      <p>यह पेज सफलतापूर्वक लोड हो रहा है, जिसका अर्थ है कि AdminLogin और रूटिंग सही काम कर रहे हैं।</p>
-      <p>अगर आपको अभी भी ब्लैंक पेज दिखता है, तो समस्या AdminLayout या AdminGuard में है।</p>
-      
-      <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#fff' }}>
-        <h2>Quick Checklist:</h2>
-        <ul>
-          <li><strong>रूटिंग:</strong> /admin/dashboard पर सही नेविगेट हुआ।</li>
-          <li><strong>गार्ड:</strong> AdminGuard सही ढंग से पास हुआ।</li>
-          <li><strong>लेआउट:</strong> AdminLayout रेंडर हो रहा होगा (या क्रैश हो रहा होगा)।</li>
-        </ul>
-      </div>
-    </div>
-  );
-};
-
-export default SimpleAdminDashboard;
-
-
-
-
-
-
-
-
-
-
-{/*
 // client/src/pages/admin/AdminDashboard.tsx // ✅ File name change for consistency
 
 "use client";
@@ -395,5 +361,5 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard; // ✅ AdminDashboard
-*/}
+
               
