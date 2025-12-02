@@ -1,3 +1,38 @@
+// src/pages/admin/AdminDashboard.tsx
+import React from 'react';
+
+// यहाँ कोई फैंसी हुक या जटिल लॉजिक नहीं है
+const SimpleAdminDashboard = () => {
+  return (
+    <div style={{ padding: '20px', backgroundColor: '#f0f4f8', minHeight: '80vh' }}>
+      <h1>✅ Admin Dashboard - Test Page Loaded Successfully!</h1>
+      <p>यह पेज सफलतापूर्वक लोड हो रहा है, जिसका अर्थ है कि AdminLogin और रूटिंग सही काम कर रहे हैं।</p>
+      <p>अगर आपको अभी भी ब्लैंक पेज दिखता है, तो समस्या AdminLayout या AdminGuard में है।</p>
+      
+      <div style={{ marginTop: '20px', padding: '15px', border: '1px solid #ccc', borderRadius: '5px', backgroundColor: '#fff' }}>
+        <h2>Quick Checklist:</h2>
+        <ul>
+          <li><strong>रूटिंग:</strong> /admin/dashboard पर सही नेविगेट हुआ।</li>
+          <li><strong>गार्ड:</strong> AdminGuard सही ढंग से पास हुआ।</li>
+          <li><strong>लेआउट:</strong> AdminLayout रेंडर हो रहा होगा (या क्रैश हो रहा होगा)।</li>
+        </ul>
+      </div>
+    </div>
+  );
+};
+
+export default SimpleAdminDashboard;
+
+
+
+
+
+
+
+
+
+
+{/*
 // client/src/pages/admin/AdminDashboard.tsx // ✅ File name change for consistency
 
 "use client";
@@ -216,19 +251,19 @@ const AdminDashboard: React.FC = () => {
       case "pending-vendors":
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Pending Vendors</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Pending Vendors</h2> 
             {pendingVendors?.map((vendor) => ( // ✅ pendingVendors
-              <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
-                <span>{vendor.businessName}</span> {/* ✅ businessName */}
-                <div className="flex items-center space-x-2"> {/* ✅ className */}
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> {/* ✅ Button */}
+              <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
+                <span>{vendor.businessName}</span> 
+                <div className="flex items-center space-x-2"> 
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> 
                     <Pencil className="h-4 w-4 mr-1" /> View/Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => approveVendorMutation.mutate(vendor.id)} disabled={approveVendorMutation.isPending}> {/* ✅ Button */}
-                    {approveVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} {/* ✅ Loader2, Check */}
+                  <Button variant="outline" size="sm" onClick={() => approveVendorMutation.mutate(vendor.id)} disabled={approveVendorMutation.isPending}> 
+                    {approveVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} 
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => rejectVendorMutation.mutate(vendor.id)} disabled={rejectVendorMutation.isPending}> {/* ✅ Button */}
-                    {rejectVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} {/* ✅ Loader2, X */}
+                  <Button variant="destructive" size="sm" onClick={() => rejectVendorMutation.mutate(vendor.id)} disabled={rejectVendorMutation.isPending}> 
+                    {rejectVendorMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} 
                   </Button>
                 </div>
               </div>
@@ -239,11 +274,11 @@ const AdminDashboard: React.FC = () => {
       case "approved-vendors":
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Approved Vendors</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Approved Vendors</h2> 
             {approvedVendors?.map((vendor) => ( // ✅ approvedVendors
-              <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
-                <span>{vendor.businessName}</span> {/* ✅ businessName */}
-                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> {/* ✅ Button */}
+              <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
+                <span>{vendor.businessName}</span> 
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> 
                   <Pencil className="h-4 w-4 mr-1" /> View/Edit
                 </Button>
               </div>
@@ -254,19 +289,19 @@ const AdminDashboard: React.FC = () => {
       case "pending-products":
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Pending Products</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Pending Products</h2> 
             {pendingProducts?.map((product) => ( // ✅ pendingProducts
-              <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
+              <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{product.name}</span>
-                <div className="flex items-center space-x-2"> {/* ✅ className */}
-                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> {/* ✅ Button */}
+                <div className="flex items-center space-x-2"> 
+                  <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> 
                     <Pencil className="h-4 w-4 mr-1" /> View/Edit
                   </Button>
-                  <Button variant="outline" size="sm" onClick={() => approveProductMutation.mutate(product.id)} disabled={approveProductMutation.isPending}> {/* ✅ Button */}
-                    {approveProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} {/* ✅ Loader2, Check */}
+                  <Button variant="outline" size="sm" onClick={() => approveProductMutation.mutate(product.id)} disabled={approveProductMutation.isPending}> 
+                    {approveProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} 
                   </Button>
-                  <Button variant="destructive" size="sm" onClick={() => rejectProductMutation.mutate(product.id)} disabled={rejectProductMutation.isPending}> {/* ✅ Button */}
-                    {rejectProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} {/* ✅ Loader2, X */}
+                  <Button variant="destructive" size="sm" onClick={() => rejectProductMutation.mutate(product.id)} disabled={rejectProductMutation.isPending}> 
+                    {rejectProductMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} 
                   </Button>
                 </div>
               </div>
@@ -277,11 +312,11 @@ const AdminDashboard: React.FC = () => {
       case "approved-products":
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Approved Products</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Approved Products</h2> 
             {approvedProducts?.map((product) => ( // ✅ approvedProducts
-              <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
+              <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{product.name}</span>
-                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> {/* ✅ Button */}
+                <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> 
                     <Pencil className="h-4 w-4 mr-1" /> View/Edit
                 </Button>
               </div>
@@ -292,17 +327,17 @@ const AdminDashboard: React.FC = () => {
       case "pending-deliveryboys": // ✅ activeTab
         return (
           <div>
-            <h2 className="text-lg font-semibold mb-2">Pending Delivery Boys</h2> {/* ✅ className */}
+            <h2 className="text-lg font-semibold mb-2">Pending Delivery Boys</h2> 
             {Array.isArray(pendingDeliveryBoys) && pendingDeliveryBoys.length > 0 ? ( // ✅ Array.isArray, pendingDeliveryBoys
               pendingDeliveryBoys.map((dboy) => ( // ✅ pendingDeliveryBoys
-                <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> {/* ✅ className */}
+                <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                   <span>{dboy.name}</span>
-                  <div className="flex items-center space-x-2"> {/* ✅ className */}
-                    <Button variant="outline" size="sm" onClick={() => approveDeliveryBoyMutation.mutate(dboy.id)} disabled={approveDeliveryBoyMutation.isPending}> {/* ✅ Button */}
-                      {approveDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} {/* ✅ Loader2, Check */}
+                  <div className="flex items-center space-x-2"> 
+                    <Button variant="outline" size="sm" onClick={() => approveDeliveryBoyMutation.mutate(dboy.id)} disabled={approveDeliveryBoyMutation.isPending}> 
+                      {approveDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <Check className="h-4 w-4" />} 
                     </Button>
-                    <Button variant="destructive" size="sm" onClick={() => rejectDeliveryBoyMutation.mutate(dboy.id)} disabled={rejectDeliveryBoyMutation.isPending}> {/* ✅ Button */}
-                      {rejectDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} {/* ✅ Loader2, X */}
+                    <Button variant="destructive" size="sm" onClick={() => rejectDeliveryBoyMutation.mutate(dboy.id)} disabled={rejectDeliveryBoyMutation.isPending}> 
+                      {rejectDeliveryBoyMutation.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <X className="h-4 w-4" />} 
                     </Button>
                   </div>
                 </div>
@@ -360,4 +395,5 @@ const AdminDashboard: React.FC = () => {
 };
 
 export default AdminDashboard; // ✅ AdminDashboard
+*/}
               
