@@ -289,11 +289,11 @@ export default function ProductDetail() {
             {/* price */}
             <div className="flex items-center space-x-4"> 
               <span className="text-3xl font-bold text-primary"> 
-                ₹{product.price.toFixed(2)} 
+                ₹{Number(product.price).toFixed(2)} 
               </span>
               {product.originalPrice && ( // ✅ Corrected casing
                 <span className="text-xl text-gray-400 line-through"> 
-                  ₹{product.originalPrice.toFixed(2)} 
+                  ₹{Number(product.originalPrice).toFixed(2)} 
                 </span>
               )}
             </div>
