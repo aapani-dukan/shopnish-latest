@@ -1,32 +1,4 @@
-// src/components/AdminLayout.tsx
-import React from 'react';
-import { Outlet } from 'react-router-dom';
 
-// एक बहुत ही सरल लेआउट जो केवल कंटेंट को प्रदर्शित करता है
-const SimpleAdminLayout = () => {
-  return (
-    <div style={{ minHeight: '100vh', padding: '20px', border: '5px solid green' }}>
-      <h2>✅ Admin Layout - Wrapper is Working!</h2>
-      <p>साइडबार और हेडर हटा दिए गए हैं। अब हम डैशबोर्ड कंटेंट लोड कर रहे हैं:</p>
-      
-      {/* Outlet यह सुनिश्चित करता है कि इसका child (AdminDashboard) दिखाई दे */}
-      <Outlet /> 
-    </div>
-  );
-};
-
-export default SimpleAdminLayout;
-
-
-
-
-
-
-
-
-
-
-{/*
 
 import { Link, Outlet } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth";
@@ -138,4 +110,4 @@ const AdminLayout = () => {
 };
 
 export default AdminLayout;
-*/}
+
