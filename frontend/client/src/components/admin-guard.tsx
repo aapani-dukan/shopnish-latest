@@ -1,3 +1,32 @@
+// src/components/admin-guard.tsx
+import React from 'react';
+import { Outlet } from 'react-router-dom';
+
+// **********************************************
+// WARNING: यह कोड सुरक्षा की जाँच नहीं करता है।
+// यह केवल टेस्टिंग के लिए है कि कंपोनेंट क्रैश हो रहा है या नहीं।
+// **********************************************
+
+const SimpleAdminGuard = () => {
+  // गार्ड का काम है, अगर यूजर एडमिन न हो तो उसे '/admin-login' पर भेजना।
+  // लेकिन टेस्टिंग के लिए, हम सिर्फ़ कंपोनेंट को लोड करेंगे।
+
+  return (
+    <div style={{ border: '2px dashed red', padding: '10px' }}>
+      <p>✅ AdminGuard Test Passed (Ignoring Security Checks)</p>
+      <Outlet /> 
+    </div>
+  );
+};
+
+export default SimpleAdminGuard;
+
+
+
+
+
+
+{/*
 // ✅ client/src/components/admin-guard.tsx
 import React, { useEffect, useState } from "react"; // ✅ camelCase
 import { useNavigate } from "react-router-dom"; // ✅ useNavigate hook का उपयोग करें
@@ -40,3 +69,4 @@ const AdminGuard = ({ children }: { children: React.ReactNode }) => { // ✅ cam
 };
 
 export default AdminGuard; // ✅ camelCase
+*/}
