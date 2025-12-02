@@ -17,7 +17,7 @@ import { useNavigate } from "react-router-dom"; // ✅ Corrected casing
 interface Product {
   id: number;
   name: string;
-  price: string;
+  price: number;
   image: string;
   stock: number;
   sellerid: number;
@@ -39,7 +39,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const addToCartMutation = useMutation({
     mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      return await ApiRequest("post", "/api/cart/add", { productId, quantity });
+      return await apiRequest("post", "/api/cart/add", { productId, quantity });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });
