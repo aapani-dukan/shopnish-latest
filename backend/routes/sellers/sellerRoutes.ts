@@ -871,94 +871,108 @@ sellerRouter.delete('/products/:productId', verifyToken, requireSellerAuth, asyn
   }
 });
 
+// ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं)
+sellerRouter.post(
+  '/products',
+  requireSellerAuth,
+  upload.single('image'),
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const firebaseUid = req.user?.firebaseUid;
+      const userId = req.user?.id;
 
-    // ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं) (यह पहले से मौजूद है, यहाँ सिर्फ संदर्भ के लिए)
-    sellerRouter.post(
-      '/products',
-      requireSellerAuth,
-      upload.single('image'),
-      async (req: AuthenticatedRequest, res: Response) => {
-        try {
-          const firebaseUid = req.user?.firebaseUid;
-          const userId = req.user?.id;
-          if (!firebaseUid || !userId) {
-            return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
-          }
+      if (!firebaseUid || !userId) {
+        return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
+      }
 
-          const [sellerProfile] = await db
-            .select()
-            .from(sellersPgTable)
-            .where(eq(sellersPgTable.userId, userId));
+      const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
 
-          if (!sellerProfile) {
-            return res.status(404).json({ error: 'Seller profile not found. Please complete your seller registration.' });
-          }
-          const sellerId = sellerProfile.id;
+      if (!sellerProfile) {
+        return res.status(404).json({ error: 'Seller profile not found. Please complete your seller registration.' });
+      }
 
-          const { name, description, price, categoryId, stock, unit, brand, minOrderQty, maxOrderQty, estimatedDeliveryTime } = req.body;
-          const file = req.file;
+      const sellerId = sellerProfile.id;
 
-          if (!name || !price || !categoryId || !stock || !file) {
-            return res.status(400).json({ error: 'Missing required fields or image.' });
-          }
+      const {
+        name,
+        description,
+        price,
+        categoryId,
+        stock,
+        unit,
+        brand,
+        minOrderQty,
+        maxOrderQty,
+        estimatedDeliveryTime
+      } = req.body;
 
-          const parsedCategoryId = parseInt(categoryId as string);
-          const parsedStock = parseInt(stock as string);
-          const parsedPrice = parseFloat(price as string);
-          const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : undefined;
-          const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : undefined;
+      const file = req.file;
 
-          if (isNaN(parsedCategoryId) || isNaN(parsedStock) || isNaN(parsedPrice)) {
-            return res.status(400).json({ error: 'Invalid data provided for categoryId, price, or stock.' });
-          }
+      if (!name || !price || !categoryId || !stock || !file) {
+        return res.status(400).json({ error: 'Missing required fields or image.' });
+      }
 
-          let imageUrl = existingProduct.image;
+      const parsedCategoryId = parseInt(categoryId as string);
+      const parsedStock = parseInt(stock as string);
+      const parsedPrice = parseFloat(price as string);
+      const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : undefined;
+      const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : undefined;
 
-if (file) {
-  const buffer = file.buffer;
+      if (isNaN(parsedCategoryId) || isNaN(parsedStock) || isNaN(parsedPrice)) {
+        return res.status(400).json({ error: 'Invalid data provided for categoryId, price, or stock.' });
+      }
 
-  imageUrl = await uploadImage(
-    buffer,
-    `products/${existingProduct.sellerId}/${uuidv4()}-${file.originalname}`,
-    file.mimetype
-  );
+      // ✅ FIXED: no existingProduct here
+      let imageUrl = "";
 
-  if (!imageUrl) {
-    return res
-      .status(500)
-      .json({ error: "Failed to upload new product image." });
-  }
-}
+      // Upload the new image
+      if (file) {
+        const buffer = file.buffer;
 
-          const newProduct = await db
-            .insert(products)
-            .values({
-              name,
-              description,
-              price: parsedPrice,
-              categoryId: parsedCategoryId,
-              stock: parsedStock,
-              image: imageUrl,
-              sellerId,
-              unit: unit || 'piece',
-              brand: brand || null,
-              minOrderQty: parsedMinOrderQty,
-              maxOrderQty: parsedMaxOrderQty,
-              estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours',
-              approvalStatus: approvalStatusEnum.enumValues[0],
-            })
-            .returning();
+        imageUrl = await uploadImage(
+          buffer,
+          `products/${sellerId}/${uuidv4()}-${file.originalname}`,
+          file.mimetype
+        );
 
-          getIO().emit("product:created", newProduct[0]);
-
-          return res.status(201).json(newProduct[0]);
-        } catch (error: any) {
-          console.error('❌ Error in POST /api/sellers/products:', error);
-          return res.status(500).json({ error: 'Failed to create product.' });
+        if (!imageUrl) {
+          return res.status(500).json({ error: "Failed to upload product image." });
         }
       }
-    );
 
+      const newProduct = await db
+        .insert(products)
+        .values({
+          name,
+          description,
+          price: parsedPrice,
+          categoryId: parsedCategoryId,
+          stock: parsedStock,
+          image: imageUrl,
+          sellerId,
+          unit: unit || 'piece',
+          brand: brand || null,
+          minOrderQty: parsedMinOrderQty,
+          maxOrderQty: parsedMaxOrderQty,
+          estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours',
+          approvalStatus: approvalStatusEnum.enumValues[0],
+        })
+        .returning();
+
+      getIO().emit("product:created", newProduct[0]);
+
+      return res.status(201).json(newProduct[0]);
+
+    } catch (error: any) {
+      console.error('❌ Error in POST /api/sellers/products:', error);
+      return res.status(500).json({ error: 'Failed to create product.' });
+    }
+  }
+);
+    
 
 
 // 📍 PATCH /api/sellers/:id - प्रमाणित सेलर के लिए अपनी प्रोफ़ाइल अपडेट करें
