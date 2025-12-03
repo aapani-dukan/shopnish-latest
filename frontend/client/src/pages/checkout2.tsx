@@ -148,106 +148,114 @@ useEffect(() => {
   // ----------------------------------------------------------------------------------
   // ✅ order mutation
   // ----------------------------------------------------------------------------------
-  const createOrderMutation = useMutation({ // ✅ Corrected casing
-    mutationFn: (orderData: any) => apiRequest("post", "/api/orders/buy-now", orderData), // ✅ Corrected casing
-    onSuccess: (data) => { // ✅ Corrected casing
-      toast({
-        title: "Order Placed Successfully!", // ✅ Consistent casing
-        description: `Order #${data.orderNumber || data.id} has been confirmed.`, // ✅ Use orderNumber or ID
-      });
-      // ✅ Use orderId or id for navigation
-      const orderId = data.orderId || data.id;
-      if (orderId) {
-        navigate(`/order-confirmation/${orderId}`);
-      } else {
-        console.error("No order ID received for navigation.");
-        navigate('/'); // Fallback to home if no order ID
-      }
-    },
-    onError: (error: any) => { // ✅ Explicitly type error
-      console.error("❌ Order placement failed:", error);
-      toast({
-        title: "Order Failed", // ✅ Consistent casing
-        description: error.message || "Failed to place order. Please try again.",
-        variant: "destructive",
-      });
-    },
-  });
+  const createOrderMutation = useMutation({
+  mutationFn: (orderData: any) =>
+    apiRequest("post", "/api/orders/buy-now", orderData),
 
-  const handlePlaceOrder = () => { // ✅ Corrected casing
-    if (!user || !user.id) {
-      toast({
-        title: "Authentication Error", // ✅ Consistent casing
-        description: "You must be logged in to place an order.",
-        variant: "destructive",
-      });
-      return;
+  onSuccess: (data) => {
+    toast({
+      title: "Order Placed Successfully!",
+      description: `Order #${data.orderNumber || data.id} has been confirmed.`,
+    });
+
+    const orderId = data.orderId || data.id;
+    if (orderId) {
+      navigate(`/order-confirmation/${orderId}`);
+    } else {
+      console.error("No order ID received for navigation.");
+      navigate("/");
     }
+  },
 
-    if (!deliveryAddress.fullName || !deliveryAddress.phone || !deliveryAddress.address || !deliveryAddress.pincode || !deliveryAddress.latitude || !deliveryAddress.longitude) { // ✅ Corrected casing
-      toast({
-        title: "Address Required", // ✅ Consistent casing
-        description: "Please fill in all delivery address fields and select a location on the map.",
-        variant: "destructive",
-      });
-      return;
-    }
+  onError: (error: any) => {
+    console.error("❌ Order placement failed:", error);
+    toast({
+      title: "Order Failed",
+      description: error.message || "Failed to place order. Please try again.",
+      variant: "destructive",
+    });
+  },
+});
 
-    if (!productData) { // ✅ Corrected casing
-      toast({
-        title: "Product Not Found", // ✅ Consistent casing
-        description: "Could not find the product to place an order.",
-        variant: "destructive",
-      });
-      return;
-    }
+const handlePlaceOrder = () => {
+  if (!user || !user.id) {
+    toast({
+      title: "Authentication Error",
+      description: "You must be logged in to place an order.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    // ✅ order data update: नए lat/lng को orderData में शामिल करें
-    const orderData = { // ✅ Corrected casing
-      customerId: user.id, // ✅ Corrected to camelCase
-      deliveryAddress: { // ✅ Corrected casing
-        ...deliveryAddress,
-        // lat/lng को number के रूप में भेजें
-        latitude: deliveryAddress.latitude,
-        longitude: deliveryAddress.longitude
-      },
-      paymentMethod, // ✅ Corrected casing
-      subtotal: subtotal.toFixed(2),
-      total: total.toFixed(2),
-      deliveryCharge: deliveryCharge.toFixed(2), // ✅ Corrected casing
-      deliveryInstructions, // ✅ Corrected casing
-      items: itemsToOrder, // ✅ Corrected casing
-      cartOrder: false, // क्योंकि यह 'buy-now' ऑर्डर है
-    };
+  if (
+    !deliveryAddress.fullName ||
+    !deliveryAddress.phone ||
+    !deliveryAddress.address ||
+    !deliveryAddress.pincode ||
+    !deliveryAddress.latitude ||
+    !deliveryAddress.longitude
+  ) {
+    toast({
+      title: "Address Required",
+      description:
+        "Please fill in all delivery address fields and select a location on the map.",
+      variant: "destructive",
+    });
+    return;
+  }
 
-    createOrderMutation.mutate(orderData); // ✅ Corrected casing
+  if (!productData) {
+    toast({
+      title: "Product Not Found",
+      description: "Could not find the product to place an order.",
+      variant: "destructive",
+    });
+    return;
+  }
+
+  // 👉 BUY-NOW के लिए सिर्फ एक ही item चाहिए
+  const singleItem = {
+    productId: productData.id,
+    sellerId: productData.sellerId,
+    quantity: quantity,
+    unitPrice: Number(productData.price),
   };
 
-  if (isLoading) { // ✅ Corrected casing
-    return (
-      <div className="min-h-screen flex items-center justify-center"> {/* ✅ Corrected className */}
-        <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div> {/* ✅ Corrected className */}
-      </div>
-    );
-  }
+  // 👉 Correct payload as required by backend
+  const orderData = {
+    customerId: user.id,
 
-  if (error || !productData) { // ✅ Corrected casing
-    return (
-      <div className="min-h-screen flex items-center justify-center"> {/* ✅ Corrected className */}
-        <Card className="w-full max-w-md"> {/* ✅ Corrected component name and className */}
-          <CardContent className="pt-6 text-center"> {/* ✅ Corrected component name and className */}
-            <h3 className="text-lg font-medium mb-2">Product Not Found</h3> {/* ✅ Consistent casing and className */}
-            <p className="text-gray-600 mb-4"> {/* ✅ Corrected className */}
-              The product you're looking for doesn't exist or is not available.
-            </p>
-            <Link to="/"> {/* ✅ Corrected component name */}
-              <Button>Go to Home Page</Button> {/* ✅ Corrected component name */}
-            </Link>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+    // backend required: newDeliveryAddress
+    newDeliveryAddress: {
+      fullName: deliveryAddress.fullName,
+      phone: deliveryAddress.phone,
+      address: deliveryAddress.address,
+      city: deliveryAddress.city,
+      pincode: deliveryAddress.pincode,
+      landmark: deliveryAddress.landmark || "",
+      latitude: Number(deliveryAddress.latitude),
+      longitude: Number(deliveryAddress.longitude),
+    },
+
+    paymentMethod,
+    deliveryInstructions,
+
+    // backend requires single `item`
+    item: singleItem,
+
+    // convert all numbers properly
+    subtotal: Number(subtotal),
+    deliveryCharge: Number(deliveryCharge),
+    total: Number(total),
+
+    // buy now → cartOrder = false
+    cartOrder: false,
+  };
+
+  console.log("FINAL BUY NOW PAYLOAD:", orderData);
+  createOrderMutation.mutate(orderData);
+};
+
 
   return (
     <div className="min-h-screen bg-gray-50 py-8"> {/* ✅ Corrected className */}
