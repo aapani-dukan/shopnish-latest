@@ -227,11 +227,11 @@ export default function OrderHistory() {
                           <h5 className="font-medium">{item.product.name}</h5>
                           <p className="text-sm text-gray-600">{item.product.nameHindi}</p> 
                           <p className="text-sm text-gray-500">
-                            ₹{item.unitPrice.toFixed(2)} × {item.quantity} {item.product.unit} 
+                            ₹{Number(item.unitPrice).toFixed(2)} × {item.quantity} {item.product.unit} 
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="font-medium">₹{item.totalPrice.toFixed(2)}</p> 
+                          <p className="font-medium">₹{Number(item.totalPrice).toFixed(2)}</p> 
                         </div>
                       </div>
                     ))}
