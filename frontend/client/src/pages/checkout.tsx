@@ -15,6 +15,7 @@ import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react"; // Adjus
 import { Link } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth"; // Adjusted path
 import AddressInputWithMap from "@/components/AddressInputWithMap"; // Adjusted path
+import { useLocation } from '@/context/LocationContext';
 
 // ✅ Updated CartItem Interface
 interface CartItem {
@@ -57,7 +58,7 @@ export default function Checkout() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const { user, isAuthenticated } = useAuth(); // ✅ Corrected casing
-
+const { address: contextAddress, city: contextCity, pincode: contextPincode } = useLocation();
   const [currentStep, setCurrentStep] = useState(1); // ✅ Corrected casing
 
   const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({ // ✅ Corrected casing
