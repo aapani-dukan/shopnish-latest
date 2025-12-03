@@ -111,6 +111,29 @@ const { address: contextAddress, city: contextCity, pincode: contextPincode } = 
     [setDeliveryAddress]
   );
 
+  // client/src/pages/checkout2.tsx में `handleLocationUpdate` फ़ंक्शन के नीचे,
+// या `createOrderMutation` से पहले कहीं भी यह जोड़ें।
+
+// ✅ LocationContext से प्राप्त डेटा को स्थानीय स्टेट में सेट करने के लिए
+useEffect(() => {
+    // 💡 सुनिश्चित करें कि Context से डेटा पूरी तरह से प्राप्त हो गया है
+    if (contextAddress && contextCity && contextPincode) {
+        setDeliveryAddress(prev => ({
+            ...prev,
+            address: contextAddress,
+            city: contextCity,
+            pincode: contextPincode,
+            // यदि आप Context से lat/lng प्राप्त कर रहे हैं, तो उन्हें यहाँ भी अपडेट करें
+            // उदा. latitude: contextLat, longitude: contextLng
+        }));
+
+        toast({
+            title: "Location Updated",
+            description: "Delivery address has been automatically filled.",
+        });
+    }
+}, [contextAddress, contextCity, contextPincode, setDeliveryAddress, toast]);
+  
   // ----------------------------------------------------------------------------------
   // ✅ order items को ठीक करें (buy now के लिए)
   // ----------------------------------------------------------------------------------
