@@ -220,38 +220,32 @@ const singleItem = {
   priceAtAdded: Number(productData.price),
   totalPrice: Number(productData.price) * directBuyQuantity,
 };
-  
 
-  // 👉 Correct payload as required by backend
-  const orderData = {
-    customerId: user.id,
+const orderData = {
+  customerId: user.id,
 
-    // backend required: newDeliveryAddress
-    newDeliveryAddress: {
-      fullName: deliveryAddress.fullName,
-      phone: deliveryAddress.phone,
-      address: deliveryAddress.address,
-      city: deliveryAddress.city,
-      pincode: deliveryAddress.pincode,
-      landmark: deliveryAddress.landmark || "",
-      latitude: Number(deliveryAddress.latitude),
-      longitude: Number(deliveryAddress.longitude),
-    },
+  newDeliveryAddress: {
+    fullName: deliveryAddress.fullName,
+    phone: deliveryAddress.phone,
+    address: deliveryAddress.address,
+    city: deliveryAddress.city,
+    pincode: deliveryAddress.pincode,
+    landmark: deliveryAddress.landmark || "",
+    latitude: Number(deliveryAddress.latitude),
+    longitude: Number(deliveryAddress.longitude),
+  },
 
-    paymentMethod,
-    deliveryInstructions,
+  paymentMethod,
+  deliveryInstructions,
 
-    // backend requires single `item`
-    item: singleItem,
+  item: singleItem, // IMPORTANT — backend expects "item", not "items"
 
-    // convert all numbers properly
-    subtotal: Number(subtotal),
-    deliveryCharge: Number(deliveryCharge),
-    total: Number(total),
+  subtotal: Number(subtotal),
+  deliveryCharge: Number(deliveryCharge),
+  total: Number(total),
 
-    // buy now → cartOrder = false
-    cartOrder: false,
-  };
+  cartOrder: false,
+};
 
   console.log("FINAL BUY NOW PAYLOAD:", orderData);
   createOrderMutation.mutate(orderData);
