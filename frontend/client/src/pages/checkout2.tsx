@@ -295,7 +295,7 @@ const orderData = {
                   <div className="space-y-4"> {/* ✅ Corrected className */}
                     <div className="flex items-center space-x-4 py-4 border-b"> {/* ✅ Corrected className */}
                       <img
-                        src={productData.image} // ✅ Corrected casing
+                        src={productData?.image || "" } // ✅ Corrected casing
                         alt={productData.name} // ✅ Corrected casing
                         className="w-16 h-16 object-cover rounded-lg" // ✅ Corrected className
                       />
