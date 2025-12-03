@@ -236,7 +236,7 @@ const SellerProductsPage: React.FC = () => {
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{product.name}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.categoryid || 'N/A'}</TableCell>
-                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{product.price.toFixed(2)}</TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{Number(product.price).toFixed(2)}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.stock}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${
