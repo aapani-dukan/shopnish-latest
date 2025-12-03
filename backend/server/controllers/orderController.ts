@@ -66,94 +66,127 @@ async function assignDeliveryBoy(tx: any, masterOrderId: number, customerLat: nu
  * returns { Promise<{ id: number, lat: number, lng: number, fullAddress: string, city: string, state: string, pincode: string }> }
  */
 async function handleDeliveryAddress(
-  tx: any, // Drizzle transaction
+  tx: any,
   userId: number,
   deliveryAddressId?: number,
   newDeliveryAddress?: any,
-  reqUser?: any // req.user से डेटा के लिए
-): Promise<{ id: number; lat: number; lng: number; fullAddress: string; city: string; state: string; pincode: string }> {
+  reqUser?: any
+): Promise<{ 
+  id: number; 
+  lat: number; 
+  lng: number; 
+  fullAddress: any;      // <-- json object not string
+  city: string; 
+  state: string; 
+  pincode: string 
+}> {
+  
   let finalDeliveryAddressId: number;
   let finalDeliveryLat: number;
   let finalDeliveryLng: number;
-  let finalFullAddress: string;
+  let finalFullAddress: any;   // <-- json object
   let finalCity: string;
   let finalState: string;
   let finalPincode: string;
 
+  // ------------------------ NEW DELIVERY ADDRESS ---------------------------
   if (newDeliveryAddress) {
-    const safeAddress = newDeliveryAddress || {};
-    const [insertedAddress] = await tx.insert(deliveryAddresses).values({
+    const safe = newDeliveryAddress || {};
+
+    const [inserted] = await tx.insert(deliveryAddresses).values({
       userId,
-      fullName: safeAddress.fullName || reqUser?.name || "Unknown Customer",
-      phoneNumber: safeAddress.phone || reqUser?.phone || "0000000000",
-      addressLine1: safeAddress.address || safeAddress.addressLine1 || "N/A",
-      addressLine2: safeAddress.landmark || safeAddress.addressLine2 || "",
-      city: safeAddress.city || "Unknown",
-      postalCode: safeAddress.pincode || safeAddress.postalCode || "000000",
-      state: safeAddress.state || "Rajasthan",
-      latitude: safeAddress.latitude || 0,
-      longitude: safeAddress.longitude || 0,
+      fullName: safe.fullName || reqUser?.name || "Unknown Customer",
+
+      // FIX 1: phoneNumber → phone
+      phone: safe.phoneNumber || safe.phone || reqUser?.phone || "0000000000",
+
+      // FIX 2: correct mapping
+      addressLine1: safe.addressLine1 || safe.address || "N/A",
+      addressLine2: safe.addressLine2 || safe.landmark || "",
+      city: safe.city || "Unknown",
+      state: safe.state || "Unknown",
+      postalCode: safe.pincode || safe.postalCode || "000000",
+
+      // FIX 3: convert to number always
+      latitude: Number(safe.latitude) || 0,
+      longitude: Number(safe.longitude) || 0,
+
       isDefault: false,
       createdAt: new Date(),
     }).returning();
 
-    if (!insertedAddress) throw new Error('Failed to create new delivery address.');
+    if (!inserted) throw new Error("Failed to create new delivery address.");
 
-    finalDeliveryAddressId = insertedAddress.id;
-    finalDeliveryLat = insertedAddress.latitude || 0;
-    finalDeliveryLng = insertedAddress.longitude || 0;
-    finalCity = insertedAddress.city || "Unknown";
-    finalState = insertedAddress.state || "Unknown";
-    finalPincode = insertedAddress.postalCode || "000000";
-    finalFullAddress = JSON.stringify({
-      addressLine1: insertedAddress.addressLine1,
-      addressLine2: insertedAddress.addressLine2,
-      city: insertedAddress.city,
-      pincode: insertedAddress.postalCode,
-      latitude: insertedAddress.latitude,
-      longitude: insertedAddress.longitude,
-      fullName: insertedAddress.fullName,
-      phoneNumber: insertedAddress.phoneNumber
-    });
-  } else if (deliveryAddressId) {
-    const [existingAddress] = await tx.select()
-      .from(deliveryAddresses)
-      .where(and(eq(deliveryAddresses.id, deliveryAddressId), eq(deliveryAddresses.userId, userId)));
+    finalDeliveryAddressId = inserted.id;
+    finalDeliveryLat = Number(inserted.latitude) || 0;
+    finalDeliveryLng = Number(inserted.longitude) || 0;
 
-    if (!existingAddress) {
-      throw new Error('Provided delivery address not found or does not belong to user.');
-    }
-    finalDeliveryAddressId = existingAddress.id;
-    finalDeliveryLat = existingAddress.latitude || 0;
-    finalDeliveryLng = existingAddress.longitude || 0;
-    finalCity = existingAddress.city || "Unknown";
-    finalState = existingAddress.state || "Unknown";
-    finalPincode = existingAddress.postalCode || "000000";
-    finalFullAddress = JSON.stringify({
-      addressLine1: existingAddress.addressLine1,
-      addressLine2: existingAddress.addressLine2,
-      city: existingAddress.city,
-      pincode: existingAddress.postalCode,
-      latitude: existingAddress.latitude,
-      longitude: existingAddress.longitude,
-      fullName: existingAddress.fullName,
-      phoneNumber: existingAddress.phoneNumber
-    });
-  } else {
-    throw new Error('No valid delivery address provided.');
+    finalCity = inserted.city;
+    finalState = inserted.state;
+    finalPincode = inserted.postalCode;
+
+    // FIX 4: JSON object (NOT string)
+    finalFullAddress = {
+      fullName: inserted.fullName,
+      phone: inserted.phone,
+      addressLine1: inserted.addressLine1,
+      addressLine2: inserted.addressLine2,
+      city: inserted.city,
+      state: inserted.state,
+      pincode: inserted.postalCode,
+      latitude: Number(inserted.latitude),
+      longitude: Number(inserted.longitude),
+    };
+
   }
 
-  return { 
-    id: finalDeliveryAddressId, 
-    lat: finalDeliveryLat, 
-    lng: finalDeliveryLng, 
+  // ------------------------ EXISTING SAVED ADDRESS ---------------------------
+  else if (deliveryAddressId) {
+    const [existing] = await tx.select()
+      .from(deliveryAddresses)
+      .where(and(
+        eq(deliveryAddresses.id, deliveryAddressId),
+        eq(deliveryAddresses.userId, userId)
+      ));
+
+    if (!existing) throw new Error("Delivery address not found.");
+
+    finalDeliveryAddressId = existing.id;
+
+    finalDeliveryLat = Number(existing.latitude);
+    finalDeliveryLng = Number(existing.longitude);
+
+    finalCity = existing.city;
+    finalState = existing.state;
+    finalPincode = existing.postalCode;
+
+    finalFullAddress = {
+      fullName: existing.fullName,
+      phone: existing.phone,
+      addressLine1: existing.addressLine1,
+      addressLine2: existing.addressLine2,
+      city: existing.city,
+      state: existing.state,
+      pincode: existing.postalCode,
+      latitude: Number(existing.latitude),
+      longitude: Number(existing.longitude),
+    };
+  }
+
+  else {
+    throw new Error("No delivery address provided.");
+  }
+
+  return {
+    id: finalDeliveryAddressId,
+    lat: finalDeliveryLat,
+    lng: finalDeliveryLng,
     fullAddress: finalFullAddress,
     city: finalCity,
     state: finalState,
     pincode: finalPincode,
   };
 }
-
 
 /**
  * handles placing a direct "buy now" order.
