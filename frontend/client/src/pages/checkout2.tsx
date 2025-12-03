@@ -203,23 +203,23 @@ const handlePlaceOrder = () => {
     });
     return;
   }
+if (!productData) {
+  toast({
+    title: "Product Not Found",
+    description: "Could not load product details.",
+    variant: "destructive",
+  });
+  return;
+}
 
-  if (!productData) {
-    toast({
-      title: "Product Not Found",
-      description: "Could not find the product to place an order.",
-      variant: "destructive",
-    });
-    return;
-  }
-
-  // 👉 BUY-NOW के लिए सिर्फ एक ही item चाहिए
-  const singleItem = {
-    productId: productData.id,
-    sellerId: productData.sellerId,
-    quantity: quantity,
-    unitPrice: Number(productData.price),
-  };
+const singleItem = {
+  productId: productData.id,
+  sellerId: productData.sellerId,
+  quantity: quantity,
+  unitPrice: Number(productData.price),
+  productImage: productData.image || "", // <--- added safe fallback
+};
+  
 
   // 👉 Correct payload as required by backend
   const orderData = {
