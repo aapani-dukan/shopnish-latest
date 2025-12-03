@@ -215,7 +215,7 @@ if (!productData) {
 const singleItem = {
   productId: productData.id,
   sellerId: productData.sellerId,
-  quantity: quantity,
+  quantity: directBuyQuantity,
   unitPrice: Number(productData.price),
   productImage: productData.image || "", // <--- added safe fallback
 };
