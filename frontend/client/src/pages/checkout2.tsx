@@ -296,7 +296,7 @@ const orderData = {
                     <div className="flex items-center space-x-4 py-4 border-b"> 
                       <img
                         src={productData?.image || "" } 
-                       alt={productData?.name || "product"}  
+                       alt={productData?.name || ""}  
                         className="w-16 h-16 object-cover rounded-lg" 
                       />
                       <div className="flex-1"> {/* ✅ Corrected className */}
