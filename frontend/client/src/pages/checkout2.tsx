@@ -230,26 +230,26 @@ const orderData = {
 
   newDeliveryAddress: {
     fullName: deliveryAddress.fullName,
-    phone: deliveryAddress.phone,
+    phoneNumber: deliveryAddress.phone,
     address: deliveryAddress.address,
     city: deliveryAddress.city,
+    state: deliveryAddress.state || "Rajasthan",
     pincode: deliveryAddress.pincode,
-    landmark: deliveryAddress.landmark || "",
     latitude: Number(deliveryAddress.latitude),
-    longitude: Number(deliveryAddress.longitude),
-
+    longitude: Number(deliveryAddress.longitude)
   },
 
   paymentMethod,
   deliveryInstructions,
 
-  item: singleItem, // IMPORTANT — backend expects "item", not "items"
+  item: singleItem,
 
   subtotal: Number(subtotal),
   deliveryCharge: Number(deliveryCharge),
   total: Number(total),
-    sellerId: sellerId,
-  cartOrder: false,
+
+  sellerId: productData.sellerId,
+  cartOrder: false
 };
 
   console.log("FINAL BUY NOW PAYLOAD:", orderData);
