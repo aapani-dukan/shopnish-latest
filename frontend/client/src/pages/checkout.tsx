@@ -216,49 +216,49 @@ export default function Checkout() {
     );
   }
 
-  if (!cartItems || cartItems.length === 0) { // ✅ Corrected casing
+  if (!cartItems || cartItems.length === 0) { 
     return (
-      <div className="min-h-screen bg-gray-50 py-8 text-center"> {/* ✅ Corrected className */}
-        <h2 className="text-2xl font-bold mb-4">Your Cart is Empty</h2> {/* ✅ Corrected className */}
-        <p className="text-gray-600 mb-6">Looks like you haven't added anything to your cart yet.</p> {/* ✅ Corrected className */}
-        <Link to="/"> {/* ✅ Corrected component name */}
-          <Button>Start Shopping</Button> {/* ✅ Corrected component name */}
+      <div className="min-h-screen bg-gray-50 py-8 text-center"> 
+        <h2 className="text-2xl font-bold mb-4">Your Cart is Empty</h2> 
+        <p className="text-gray-600 mb-6">Looks like you haven't added anything to your cart yet.</p> 
+        <Link to="/"> 
+          <Button>Start Shopping</Button> 
         </Link>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8"> {/* ✅ Corrected className */}
-      <div className="max-w-6xl mx-auto px-4"> {/* ✅ Corrected className */}
-        <div className="mb-8"> {/* ✅ Corrected className */}
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1> {/* ✅ Corrected className */}
-          <div className="flex space-x-4"> {/* ✅ Corrected className */}
+    <div className="min-h-screen bg-gray-50 py-8"> 
+      <div className="max-w-6xl mx-auto px-4"> 
+        <div className="mb-8"> 
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">Checkout</h1> 
+          <div className="flex space-x-4"> 
             {[1, 2, 3].map((step) => (
               <div
                 key={step}
                 className={`flex items-center space-x-2 ${currentStep >= step ? "text-green-600" : "text-gray-400"}`} // ✅ Corrected className
               >
-                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep > step ? "bg-green-600 text-white" : "bg-gray-200"}`}> {/* ✅ Corrected className */}
-                  {currentStep > step ? <Check className="w-4 h-4" /> : step} {/* ✅ Corrected component name and className */}
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${currentStep > step ? "bg-green-600 text-white" : "bg-gray-200"}`}> 
+                  {currentStep > step ? <Check className="w-4 h-4" /> : step} 
                 </div>
-                <span className="font-medium"> {/* ✅ Corrected className */}
-                  {step === 1 ? "Cart Review" : step === 2 ? "Delivery Address" : "Payment"} {/* ✅ Consistent casing */}
+                <span className="font-medium"> 
+                  {step === 1 ? "Cart Review" : step === 2 ? "Delivery Address" : "Payment"} 
                 </span>
               </div>
             ))}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8"> {/* ✅ Corrected className */}
-          <div className="lg:col-span-2 space-y-6"> {/* ✅ Corrected className */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8"> 
+          <div className="lg:col-span-2 space-y-6"> 
             {currentStep === 1 && ( // ✅ Corrected casing
               // ... (step 1 cart review jsx)
-              <Card> {/* ✅ Corrected component name */}
-                <CardHeader> {/* ✅ Corrected component name */}
-                  <CardTitle className="flex items-center space-x-2"> {/* ✅ Corrected component name and className */}
-                    <ShoppingCart className="w-5 h-5" /> {/* ✅ Corrected component name and className */}
-                    <span>Review Your Order</span> {/* ✅ Consistent casing */}
+              <Card>
+                <CardHeader> 
+                  <CardTitle className="flex items-center space-x-2"> 
+                    <ShoppingCart className="w-5 h-5" /> 
+                    <span>Review Your Order</span> 
                   </CardTitle>
                 </CardHeader>
                 <CardContent> {/* ✅ Corrected component name */}
@@ -271,9 +271,9 @@ export default function Checkout() {
                           <p className="text-sm text-gray-600">{item.product.nameHindi}</p> {/* ✅ Corrected casing and className */}
                           <p className="text-sm text-gray-500">{item.product.brand} • {item.product.unit}</p> {/* ✅ Corrected className */}
                         </div>
-                        <div className="text-right"> {/* ✅ Corrected className */}
-                          <p className="font-medium">₹{item.product.price.toFixed(2)} × {item.quantity}</p> {/* ✅ Corrected toFixed(2) */}
-                          <p className="text-sm text-gray-600">₹{(item.product.price * item.quantity).toFixed(2)}</p> {/* ✅ Corrected toFixed(2) */}
+                        <div className="text-right"> 
+                          <p className="font-medium">₹{Number(item.product.price).toFixed(2)} × {item.quantity}</p> 
+                          <p className="text-sm text-gray-600">₹{(Number(item.product.price) * item.quantity).toFixed(2)}</p> 
                         </div>
                       </div>
                     ))}
