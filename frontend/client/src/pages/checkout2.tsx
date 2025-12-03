@@ -224,7 +224,7 @@ const singleItem = {
   priceAtAdded: Number(productData.price),
   totalPrice: Number(productData.price) * directBuyQuantity,
 };
-
+const sellerId = productData?.sellerId;
 const orderData = {
   customerId: user.id,
 
@@ -237,6 +237,7 @@ const orderData = {
     landmark: deliveryAddress.landmark || "",
     latitude: Number(deliveryAddress.latitude),
     longitude: Number(deliveryAddress.longitude),
+
   },
 
   paymentMethod,
@@ -247,7 +248,7 @@ const orderData = {
   subtotal: Number(subtotal),
   deliveryCharge: Number(deliveryCharge),
   total: Number(total),
-
+    sellerId: sellerId,
   cartOrder: false,
 };
 
