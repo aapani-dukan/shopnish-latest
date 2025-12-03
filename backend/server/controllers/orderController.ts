@@ -166,37 +166,59 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
     return res.status(401).json({ message: "Unauthorized: User not logged in." });
   }
 
-  const {
-    deliveryAddressId,
-    newDeliveryAddress,
-    paymentMethod,
-    deliveryInstructions,
-    item, // { productId, quantity, priceAtAdded (या unitPrice), sellerId }
-    subtotal,
-    total,
-    deliveryCharge,
-    sellerId, // buy now के लिए एक ही sellerId अपेक्षित है
-  } = req.body;
+  try {
+    // Accept either `item` (single) OR `items` (array) from client.
+    // Many clients send `items: [...]` even for buy-now — handle both.
+    const {
+      deliveryAddressId,
+      newDeliveryAddress,
+      paymentMethod,
+      deliveryInstructions,
+      item,    // single item object (legacy)
+      items,   // array of items (possible)
+      subtotal: rawSubtotal,
+      total: rawTotal,
+      deliveryCharge: rawDeliveryCharge,
+      sellerId, // required for buy-now (single seller)
+    } = req.body;
 
-  if (!item) {
-    return res.status(400).json({ message: "Item details are empty, cannot place an order." });
-  }
-  if (!deliveryAddressId && !newDeliveryAddress) {
-    return res.status(400).json({ message: "Delivery address is required. Provide deliveryAddressId or newDeliveryAddress." });
-  }
-  if (!paymentMethod) {
-    return res.status(400).json({ message: "Invalid or missing payment method." });
-  }
-  if (typeof subtotal !== 'number' || typeof total !== 'number' || typeof deliveryCharge !== 'number') {
-    return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be numbers." });
-  }
-  if (!sellerId) {
+    // Normalize items: ensure we have an array with at least one item
+    let normalizedItems: any[] = [];
+    if (Array.isArray(items) && items.length > 0) {
+      normalizedItems = items;
+    } else if (item) {
+      // if single item provided as object
+      normalizedItems = [item];
+    }
+
+    if (!normalizedItems || normalizedItems.length === 0) {
+      return res.status(400).json({ message: "Item details are empty, cannot place an order." });
+    }
+
+    if (!deliveryAddressId && !newDeliveryAddress) {
+      return res.status(400).json({ message: "Delivery address is required. Provide deliveryAddressId or newDeliveryAddress." });
+    }
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Invalid or missing payment method." });
+    }
+    if (!sellerId) {
       return res.status(400).json({ message: "Seller ID is required for 'buy now' order." });
-  }
+    }
 
-  await db.transaction(async (tx) => {
-    try {
-      const { 
+    // Coerce numeric fields safely (frontend may send strings)
+    const subtotal = typeof rawSubtotal === "number" ? rawSubtotal : parseFloat(rawSubtotal);
+    const total = typeof rawTotal === "number" ? rawTotal : parseFloat(rawTotal);
+    const deliveryCharge = typeof rawDeliveryCharge === "number" ? rawDeliveryCharge : parseFloat(rawDeliveryCharge);
+
+    if (Number.isNaN(subtotal) || Number.isNaN(total) || Number.isNaN(deliveryCharge)) {
+      return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be valid numbers." });
+    }
+
+    // Server-side transaction
+    await db.transaction(async (tx) => {
+      try {
+        // Handle delivery address (same as before)
+        const { 
           id: finalDeliveryAddressId, 
           lat: finalDeliveryLat, 
           lng: finalDeliveryLng, 
@@ -204,31 +226,81 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           city: finalCity,
           state: finalState,
           pincode: finalPincode,
-      } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
+        } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
 
-      // प्रोडक्ट डिटेल्स फेच करें
-      const [product] = await tx.select().from(products).where(eq(products.id, item.productId));
+        // --- Fetch product(s) and validate each item ---
+        // Also compute server-side subtotal from product prices to verify integrity
+        let calculatedSubtotal = 0;
+        const validatedItems: Array<{
+          productId: number;
+          product: any;
+          unitPrice: number;
+          quantity: number;
+          itemTotal: number;
+        }> = [];
 
-      if (!product || product.approvalStatus !== approvalStatusEnum.enumvalues[1]) {
-        throw new Error(`Product ${item.productId} is not available or not approved.`);
-      }
-      if (product.minOrderQty && item.quantity < product.minOrderQty) {
-        throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
-      }
-      if (product.maxOrderQty && item.quantity > product.maxOrderQty) {
-        throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
-      }
+        for (const it of normalizedItems) {
+          // Expect item to have productId and quantity (and possibly unitPrice/priceAtAdded)
+          const productId = Number(it.productId);
+          const quantity = Number(it.quantity ?? 1);
 
-      const unitPrice = item.priceAtAdded ?? item.unitPrice ?? product.price;
-      const itemTotalPrice = unitPrice * item.quantity;
-      
-      // ✅ फ्रंटएंड से प्राप्त सबटोटल की सर्वर-साइड गणना से तुलना करें (अतिरिक्त सुरक्षा)
-      if (Math.abs(itemTotalPrice - subtotal) > 0.01) {
-        throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
-      }
+          if (!productId || Number.isNaN(productId)) {
+            throw new Error("Invalid productId in item.");
+          }
+          if (!quantity || Number.isNaN(quantity) || quantity <= 0) {
+            throw new Error("Invalid quantity in item.");
+          }
 
-      // 1. मास्टर ऑर्डर बनाएं
-      const [masterOrder] = await tx.insert(orders).values({
+          const [product] = await tx.select().from(products).where(eq(products.id, productId));
+
+          if (!product) {
+            throw new Error(`Product ${productId} not found.`);
+          }
+
+          // IMPORTANT: check approved status robustly (avoid enum naming mismatches)
+          if (product.approvalStatus !== "approved") {
+            throw new Error(`Product ${productId} is not available or not approved.`);
+          }
+
+          // min/max order checks
+          if (product.minOrderQty && quantity < product.minOrderQty) {
+            throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
+          }
+          if (product.maxOrderQty && quantity > product.maxOrderQty) {
+            throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
+          }
+
+          // Determine unit price: prefer priceAtAdded -> unitPrice -> product.price
+          const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
+          if (Number.isNaN(unitPrice)) {
+            throw new Error(`Invalid unit price for product ${productId}.`);
+          }
+
+          const itemTotalPrice = unitPrice * quantity;
+          calculatedSubtotal += itemTotalPrice;
+
+          validatedItems.push({
+            productId,
+            product,
+            unitPrice,
+            quantity,
+            itemTotal: itemTotalPrice,
+          });
+        } // end for each item
+
+        // Compare calculatedSubtotal with client-provided subtotal (tolerance for floating)
+        if (Math.abs(calculatedSubtotal - subtotal) > 0.01) {
+          throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
+        }
+
+        // You may also validate total = subtotal + deliveryCharge (or with discounts)
+        if (Math.abs((calculatedSubtotal + deliveryCharge) - total) > 0.01) {
+          // Not fatal necessarily — but better to reject to avoid tampered totals
+          throw new Error('Calculated total (subtotal + deliveryCharge) does not match provided total.');
+        }
+
+        // 1. Create master order
+        const [masterOrder] = await tx.insert(orders).values({
           orderNumber: `ORD-${Date.now()}-${userId}`,
           customerId: userId,
           deliveryAddressId: finalDeliveryAddressId,
@@ -238,103 +310,112 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           deliveryPincode: finalPincode,
           deliveryLat: finalDeliveryLat,
           deliveryLng: finalDeliveryLng,
-          subtotal: subtotal,
-          total: total, // यहाँ प्रोमो/डिस्काउंट लागू कर सकते हैं
+          subtotal: calculatedSubtotal,
+          total: total, // server trusts computed total (could recalc)
           paymentMethod: paymentMethod,
           paymentStatus: paymentMethod === 'COD' ? 'pending' : 'pending',
-          status: masterOrderStatusEnum.enumvalues[0], // 'pending'
+          status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
           deliveryInstructions: deliveryInstructions || null,
           createdAt: new Date(),
           updatedAt: new Date(),
-      }).returning({ id: orders.id, orderNumber: orders.orderNumber });
+        }).returning({ id: orders.id, orderNumber: orders.orderNumber, total: orders.total, status: orders.status, createdAt: orders.createdAt });
 
-      if (!masterOrder) throw new Error('Failed to create master order.');
+        if (!masterOrder) throw new Error('Failed to create master order.');
 
-      // 2. सब-ऑर्डर बनाएं (एकल विक्रेता के लिए)
-      const [sellerStore] = await tx.select().from(stores).where(eq(stores.sellerId, sellerId)).limit(1);
-      if (!sellerStore) throw new Error(`Store details not found for seller ${sellerId}.`);
-      
-      const [sellerInfo] = await tx.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId)).limit(1);
-      const isSelfDelivery = sellerInfo?.isSelfDeliveryBySeller || false;
+        // 2. Create sub-order for the seller (buy-now expects single seller)
+        const [sellerStore] = await tx.select().from(stores).where(eq(stores.sellerId, sellerId)).limit(1);
+        if (!sellerStore) throw new Error(`Store details not found for seller ${sellerId}.`);
 
-      const [subOrder] = await tx.insert(subOrders).values({
+        const [sellerInfo] = await tx.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId)).limit(1);
+        const isSelfDelivery = sellerInfo?.isSelfDeliveryBySeller || false;
+
+        const [subOrder] = await tx.insert(subOrders).values({
           masterOrderId: masterOrder.id,
           subOrderNumber: `${masterOrder.orderNumber}-${sellerId}`,
           sellerId: sellerId,
           storeId: sellerStore.id,
-          subtotal: itemTotalPrice,
+          subtotal: calculatedSubtotal,
           deliveryCharge: deliveryCharge,
           total: total,
-          status: subOrderStatusEnum.enumvalues[0], // 'pending'
+          status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
           isSelfDeliveryBySeller: isSelfDelivery,
           createdAt: new Date(),
           updatedAt: new Date(),
-      }).returning({ id: subOrders.id });
+        }).returning({ id: subOrders.id });
 
-      if (!subOrder) throw new Error('Failed to create sub-order.');
+        if (!subOrder) throw new Error('Failed to create sub-order.');
 
-      // 3. ऑर्डर आइटम बनाएं
-      await tx.insert(orderItems).values({
-          subOrderId: subOrder.id,
-          productId: product.id,
-          productName: product.name,
-          productImage: product.image,
-          productPrice: unitPrice,
-          productUnit: product.unit,
-          quantity: item.quantity,
-          itemTotal: itemTotalPrice,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-      });
+        // 3. Insert order items (all validatedItems)
+        for (const vItem of validatedItems) {
+          await tx.insert(orderItems).values({
+            subOrderId: subOrder.id,
+            productId: vItem.productId,
+            productName: vItem.product.name,
+            productImage: vItem.product.image,
+            productPrice: vItem.unitPrice,
+            productUnit: vItem.product.unit,
+            quantity: vItem.quantity,
+            itemTotal: vItem.itemTotal,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          });
+        }
 
-      // 4. डिलीवरी बैचिंग (यदि सेल्फ-डिलीवरी नहीं है)
-      if (!isSelfDelivery) {
+        // 4. Delivery batching if not self-delivery
+        if (!isSelfDelivery) {
           const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
 
           const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-              masterOrderId: masterOrder.id,
-              deliveryBoyId: assignedDeliveryBoyId,
-              customerDeliveryAddressId: finalDeliveryAddressId,
-              status: deliveryStatusEnum.enumvalues[0], // 'pending'
-              estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // डमी: 1 घंटा
-              deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
-              createdAt: new Date(),
-              updatedAt: new Date(),
+            masterOrderId: masterOrder.id,
+            deliveryBoyId: assignedDeliveryBoyId,
+            customerDeliveryAddressId: finalDeliveryAddressId,
+            status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+            estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // dummy: 1 hour
+            deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+            createdAt: new Date(),
+            updatedAt: new Date(),
           }).returning({ id: deliveryBatches.id });
 
           await tx.update(subOrders)
-              .set({
-                  deliveryBatchId: deliveryBatch.id,
-                  // deliveryBoyId: assignedDeliveryBoyId, // deliveryBoyId अब deliveryBatches में है
-              })
-              .where(eq(subOrders.id, subOrder.id));
+            .set({
+              deliveryBatchId: deliveryBatch.id,
+            })
+            .where(eq(subOrders.id, subOrder.id));
+        }
+
+        // Emit events
+        getIo().emit("new-order", {
+          orderId: masterOrder.id,
+          orderNumber: masterOrder.orderNumber,
+          customerId: masterOrder.customerId,
+          total: masterOrder.total,
+          status: masterOrder.status,
+          createdAt: masterOrder.createdAt,
+        });
+        getIo().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
+
+        return res.status(201).json({
+          message: "Order placed successfully!",
+          orderId: masterOrder.id,
+          orderNumber: masterOrder.orderNumber,
+          data: masterOrder,
+        });
+
+      } catch (error: any) {
+        console.error("❌ Error placing buy now order (transaction rolled back):", error);
+        // For known validation errors, send 400; otherwise 500
+        const errMsg = error?.message || "Failed to place order.";
+        if (errMsg && (errMsg.includes("Invalid") || errMsg.includes("required") || errMsg.includes("does not match"))) {
+          return res.status(400).json({ message: errMsg });
+        }
+        return res.status(500).json({ message: errMsg });
       }
+    }); // end transaction
 
-
-      getIo().emit("new-order", {
-        orderId: masterOrder.id,
-        orderNumber: masterOrder.orderNumber,
-        customerId: masterOrder.customerId,
-        total: masterOrder.total,
-        status: masterOrder.status,
-        createdAt: masterOrder.createdAt,
-        // items: [item], // यहाँ वास्तविक आइटम डेटा दें
-      });
-      getIo().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
-
-      return res.status(201).json({
-        message: "Order placed successfully!",
-        orderId: masterOrder.id,
-        orderNumber: masterOrder.orderNumber,
-        data: masterOrder,
-      });
-
-    } catch (error: any) {
-      console.error("❌ Error placing buy now order (transaction rolled back):", error);
-      // next(error);
-      return res.status(500).json({ message: error.message || "Failed to place order." });
-    }
-  });
+  } catch (err: any) {
+    console.error("❌ Unexpected error in placeOrderBuyNow:", err);
+    return res.status(500).json({ message: err?.message || "Internal server error." });
+  }
 };
 
 /**
