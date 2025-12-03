@@ -225,6 +225,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       savedAddresses,
       loadSavedAddresses,
       setSelectedAddress,
+       // 👇 ADD THESE 3 FIELDS
+    address: currentLocation?.address || "",
+    city: currentLocation?.city || "",
+    pincode: currentLocation?.pincode || "",
     ]
   );
 
