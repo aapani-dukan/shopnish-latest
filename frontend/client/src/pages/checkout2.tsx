@@ -278,15 +278,15 @@ export default function Checkout2() {
                         <p className="text-sm text-gray-600">{productData.nameHindi}</p> {/* ✅ Corrected casing and className */}
                         <p className="text-sm text-gray-500">{productData.brand} • {productData.unit}</p> {/* ✅ Corrected casing and className */}
                       </div>
-                      <div className="text-right"> {/* ✅ Corrected className */}
-                        <p className="font-medium">₹{productData.price.toFixed(2)} × {directBuyQuantity}</p> {/* ✅ Corrected casing and toFixed(2) */}
-                        <p className="text-sm text-gray-600"> {/* ✅ Corrected className */}
-                          ₹{(productData.price * directBuyQuantity).toFixed(2)} {/* ✅ Corrected calculation and toFixed(2) */}
+                      <div className="text-right"> 
+                        <p className="font-medium">₹{Number(productData.price).toFixed(2)} × {directBuyQuantity}</p> {/* ✅ Corrected casing and toFixed(2) */}
+                        <p className="text-sm text-gray-600"> 
+                          ₹{(Number(productData.price) * directBuyQuantity).toFixed(2)} 
                         </p>
                       </div>
                     </div>
-                    <div className="pt-4"> {/* ✅ Corrected className */}
-                      <Button onClick={() => setCurrentStep(2)} className="w-full"> {/* ✅ Corrected component name and casing */}
+                    <div className="pt-4"> 
+                      <Button onClick={() => setCurrentStep(2)} className="w-full"> 
                         Proceed to Delivery Address
                       </Button>
                     </div>
