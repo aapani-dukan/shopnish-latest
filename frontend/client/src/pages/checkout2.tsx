@@ -300,14 +300,14 @@ const orderData = {
                         className="w-16 h-16 object-cover rounded-lg" 
                       />
                       <div className="flex-1"> {/* ✅ Corrected className */}
-                        <h3 className="font-medium">{productData.name}</h3> {/* ✅ Corrected casing and className */}
-                        <p className="text-sm text-gray-600">{productData.nameHindi}</p> {/* ✅ Corrected casing and className */}
-                        <p className="text-sm text-gray-500">{productData.brand} • {productData.unit}</p> {/* ✅ Corrected casing and className */}
+                        <h3 className="font-medium">{productData?.name}</h3> {/* ✅ Corrected casing and className */}
+                        <p className="text-sm text-gray-600">{productData?.nameHindi}</p> {/* ✅ Corrected casing and className */}
+                        <p className="text-sm text-gray-500">{productData?.brand} • {productData.unit}</p> {/* ✅ Corrected casing and className */}
                       </div>
                       <div className="text-right"> 
-                        <p className="font-medium">₹{Number(productData.price).toFixed(2)} × {directBuyQuantity}</p> {/* ✅ Corrected casing and toFixed(2) */}
+                        <p className="font-medium">₹{Number(productData?.price).toFixed(2)} × {directBuyQuantity}</p> {/* ✅ Corrected casing and toFixed(2) */}
                         <p className="text-sm text-gray-600"> 
-                          ₹{(Number(productData.price) * directBuyQuantity).toFixed(2)} 
+                          ₹{(Number(productData?.price) * directBuyQuantity).toFixed(2)} 
                         </p>
                       </div>
                     </div>
