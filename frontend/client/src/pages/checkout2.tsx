@@ -178,6 +178,10 @@ useEffect(() => {
 });
 
 const handlePlaceOrder = () => {
+    if (!productData) {
+    console.warn("Product not loaded yet!");
+    return;
+    }
   if (!user || !user.id) {
     toast({
       title: "Authentication Error",
@@ -250,7 +254,9 @@ const orderData = {
   console.log("FINAL BUY NOW PAYLOAD:", orderData);
   createOrderMutation.mutate(orderData);
 };
-
+if (!productData) {
+  return <p style={{padding: 20}}>Loading product…</p>;
+}
 
   return (
     <div className="min-h-screen bg-gray-50 py-8"> {/* ✅ Corrected className */}
