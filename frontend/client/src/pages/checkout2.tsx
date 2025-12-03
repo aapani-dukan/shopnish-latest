@@ -13,7 +13,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { ShoppingCart, MapPin, CreditCard, Check } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import AddressInputWithMap from "@/components/AddressInputWithMap";
-
+import { useLocation } from '@/context/LocationContext';
 // ✅ Updated SellerInfo Interface
 interface SellerInfo {
   id: number;
@@ -51,7 +51,7 @@ export default function Checkout2() {
   const { toast } = useToast();
   // const queryClient = useQueryClient(); // Removed as not directly used for invalidation here
   const { isAuthenticated, user } = useAuth(); // ✅ Corrected casing
-
+const { address: contextAddress, city: contextCity, pincode: contextPincode } = useLocation();
   const { id: directBuyProductId } = useParams<{ id: string }>(); // ✅ Corrected casing
   const [searchParams] = useSearchParams(); // ✅ Corrected casing
   const directBuyQuantity = searchParams.get("quantity") ? parseInt(searchParams.get("quantity")!) : 1; // ✅ Corrected casing
