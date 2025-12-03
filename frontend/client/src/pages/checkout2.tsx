@@ -217,7 +217,8 @@ const singleItem = {
   sellerId: productData.sellerId,
   quantity: directBuyQuantity,
   unitPrice: Number(productData.price),
-  productImage: productData.image || "", // <--- added safe fallback
+  priceAtAdded: Number(productData.price),
+  totalPrice: Number(productData.price) * directBuyQuantity,
 };
   
 
