@@ -293,11 +293,11 @@ const orderData = {
                 </CardHeader>
                 <CardContent> {/* ✅ Corrected component name */}
                   <div className="space-y-4"> {/* ✅ Corrected className */}
-                    <div className="flex items-center space-x-4 py-4 border-b"> {/* ✅ Corrected className */}
+                    <div className="flex items-center space-x-4 py-4 border-b"> 
                       <img
-                        src={productData?.image || "" } // ✅ Corrected casing
-                        alt={productData.name} // ✅ Corrected casing
-                        className="w-16 h-16 object-cover rounded-lg" // ✅ Corrected className
+                        src={productData?.image || "" } 
+                       alt={productData?.name || "product"}  
+                        className="w-16 h-16 object-cover rounded-lg" 
                       />
                       <div className="flex-1"> {/* ✅ Corrected className */}
                         <h3 className="font-medium">{productData.name}</h3> {/* ✅ Corrected casing and className */}
