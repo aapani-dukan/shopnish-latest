@@ -450,6 +450,8 @@ for (const vItem of validatedItems) {
 /**
  * handles placing an order from the user's cart.
  */
+// सुनिश्चित करें कि handleDeliveryAddress, calculateDistance, और अन्य फ़ंक्शंस/इंपोर्ट उपलब्ध हैं।
+
 export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("🚀 [API] Received request to place order from cart.");
   const userId = req.user?.id;
@@ -457,358 +459,363 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
     return res.status(401).json({ message: "Unauthorized: User not logged in." });
   }
 
-  const {
-    deliveryAddressId,
-    newDeliveryAddress,
-    paymentMethod,
-    deliveryInstructions,
-    subtotal: frontendSubtotal, // फ्रंटएंड से प्राप्त
-    total: frontendTotal,      // फ्रंटएंड से प्राप्त
-    deliveryCharge: frontendDeliveryCharge, // फ्रंटएंड से प्राप्त (कुल डिलीवरी चार्ज)
-  } = req.body;
+  try {
+    const {
+      deliveryAddressId,
+      newDeliveryAddress,
+      paymentMethod,
+      deliveryInstructions,
+      subtotal: frontendSubtotal, // फ्रंटएंड से प्राप्त
+      total: frontendTotal,      // फ्रंटएंड से प्राप्त
+      deliveryCharge: frontendDeliveryCharge, // फ्रंटएंड से प्राप्त (कुल डिलीवरी चार्ज)
+    } = req.body;
 
-  if (!deliveryAddressId && !newDeliveryAddress) {
-    return res.status(400).json({ message: "Delivery address is required. Provide deliveryAddressId or newDeliveryAddress." });
-  }
-  if (!paymentMethod) {
-    return res.status(400).json({ message: "Invalid or missing payment method." });
-  }
-  if (typeof frontendSubtotal !== 'number' || typeof frontendTotal !== 'number' || typeof frontendDeliveryCharge !== 'number') {
-    return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be numbers." });
-  }
-
-  await db.transaction(async (tx) => {
-    try {
-      const { 
-          id: finalDeliveryAddressId, 
-          lat: finalDeliveryLat, 
-          lng: finalDeliveryLng, 
-          fullAddress: finalDeliveryAddressJson,
-          city: finalCity,
-          state: finalState,
-          pincode: finalPincode,
-      } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
-
-      // ग्राहक की कार्ट आइटम्स को fetch करें
-      const userCartItems = await tx.query.cartItems.findMany({ // ✅ findMany का उपयोग करें
-        where: eq(cartItems.userId, userId),
-        with: {
-          product: {
-            columns: {
-              id: true,
-              name: true,
-              price: true,
-              sellerId: true,
-              approvalStatus: true,
-              minOrderQty: true,
-              maxOrderQty: true,
-              image: true,
-              unit: true,
-            }
-          },
-          seller: { // ✅ सेलर विवरण भी fetch करें
-              columns: {
-                  id: true,
-                  businessName: true,
-                  isSelfDeliveryBySeller: true, // सेल्फ-डिलीवरी चेक के लिए
-              }
-          }
-        }
-      });
-
-      if (userCartItems.length === 0) {
-        throw new Error('Your cart is empty. Please add items before placing an order.');
-      }
-
-      let masterOrderCalculatedSubtotal = 0;
-      let masterOrderCalculatedDeliveryCharge = 0; // सभी सब-ऑर्डर के डिलीवरी चार्ज का योग
-
-      // कार्ट आइटम को सेलर-वाइज ग्रुप करें और सब-ऑर्डर डेटा तैयार करें
-      const tempSubOrders: { 
-          sellerId: number; 
-          storeId: number; 
-          isSelfDelivery: boolean; 
-          subtotal: number; 
-          deliveryCharge: number; // यह सब-ऑर्डर का अपना डिलीवरी चार्ज है
-          total: number; 
-          items: typeof cartItems.$inferSelect & { product: typeof products.$inferSelect }[]; 
-          storeLat: number; 
-          storeLng: number;
-          estimatedTime: number; // 30 मिनट का अंतर चेक करने के लिए (सरल उदाहरण)
-      }[] = [];
-
-      const groupedBySeller = new Map<number, (typeof cartItems.$inferSelect & { product: typeof products.$inferSelect })[]>();
-
-      for (const cartItem of userCartItems) {
-          const product = cartItem.product;
-          if (!product || product.approvalStatus !== approvalStatusEnum.enumvalues[1]) {
-            console.warn(`[order_from_cart] Product ${cartItem.productId} not found or not approved, skipping.`);
-            continue;
-          }
-          if (product.minOrderQty && cartItem.quantity < product.minOrderQty) {
-            throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
-          }
-          if (product.maxOrderQty && cartItem.quantity > product.maxOrderQty) {
-            throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
-          }
-
-          if (!groupedBySeller.has(cartItem.sellerId)) {
-              groupedBySeller.set(cartItem.sellerId, []);
-          }
-          groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product });
-          masterOrderCalculatedSubtotal += cartItem.totalPrice;
-      }
-      
-      // फ्रंटएंड से प्राप्त सबटोटल की सर्वर-साइड गणना से तुलना करें (अतिरिक्त सुरक्षा)
-      if (Math.abs(masterOrderCalculatedSubtotal - frontendSubtotal) > 0.01) {
-        throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
-      }
-
-      const sellerIds = Array.from(groupedBySeller.keys());
-      const sellerStores = await tx.query.stores.findMany({
-          where: inArray(stores.sellerId, sellerIds),
-      });
-      const sellerStoreMap = new Map(sellerStores.map(s => [s.sellerId, s]));
-
-      for (const [sellerId, items] of groupedBySeller.entries()) {
-          const store = sellerStoreMap.get(sellerId);
-          const seller = items[0].seller; // किसी भी आइटम से सेलर की जानकारी लें
-
-          if (!store || !store.latitude || !store.longitude || !seller) {
-              throw new Error(`Store or seller details missing for seller ${sellerId}`);
-          }
-
-          const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
-          // ✅ प्रत्येक सब-ऑर्डर का डिलीवरी चार्ज यहाँ पर कैलकुलेट होगा
-          // यह लॉजिक जटिल हो सकता है: दूरी, प्रोडक्ट का प्रकार, सेलर के नियम
-          const currentSubOrderDeliveryCharge = seller.isSelfDeliveryBySeller ? 0 : 50; // डमी चार्ज
-          masterOrderCalculatedDeliveryCharge += currentSubOrderDeliveryCharge;
-
-          tempSubOrders.push({
-              sellerId,
-              storeId: store.id,
-              isSelfDelivery: seller.isSelfDeliveryBySeller,
-              subtotal,
-              deliveryCharge: currentSubOrderDeliveryCharge,
-              total: subtotal + currentSubOrderDeliveryCharge,
-              items: items,
-              storeLat: store.latitude,
-              storeLng: store.longitude,
-              estimatedTime: 60, // डमी: 60 मिनट तैयारी/पिकअप के लिए
-          });
-      }
-
-      // ✅ फ्रंटएंड से प्राप्त कुल डिलीवरी चार्ज की सर्वर-साइड गणना से तुलना करें
-      if (Math.abs(masterOrderCalculatedDeliveryCharge - frontendDeliveryCharge) > 0.01) {
-        // throw new Error('Calculated total delivery charge does not match provided total delivery charge.');
-        console.warn('Calculated total delivery charge does not match provided total delivery charge. Using calculated value.');
-        // आप यहाँ एक त्रुटि फेंक सकते हैं या सर्वर-साइड गणना का उपयोग कर सकते हैं।
-      }
-      
-      const masterOrderCalculatedTotal = masterOrderCalculatedSubtotal + masterOrderCalculatedDeliveryCharge;
-      if (Math.abs(masterOrderCalculatedTotal - frontendTotal) > 0.01) {
-          // throw new Error('Calculated total does not match provided total.');
-          console.warn('Calculated total does not match provided total. Using calculated value.');
-      }
-
-      // 1. मास्टर ऑर्डर बनाएं
-      const [masterOrder] = await tx.insert(orders).values({
-          orderNumber: `ORD-${Date.now()}-${userId}`,
-          customerId: userId,
-          deliveryAddressId: finalDeliveryAddressId,
-          deliveryAddress: finalDeliveryAddressJson,
-          deliveryCity: finalCity,
-          deliveryState: finalState,
-          deliveryPincode: finalPincode,
-          deliveryLat: finalDeliveryLat,
-          deliveryLng: finalDeliveryLng,
-          subtotal: masterOrderCalculatedSubtotal,
-          total: masterOrderCalculatedTotal, // प्रोमो/डिस्काउंट यहाँ लागू कर सकते हैं
-          paymentMethod: paymentMethod,
-          paymentStatus: paymentMethod === 'COD' ? 'pending' : 'pending',
-          status: masterOrderStatusEnum.enumvalues[0], // 'pending'
-          deliveryInstructions: deliveryInstructions || null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-      }).returning({ id: orders.id, orderNumber: orders.orderNumber });
-
-      if (!masterOrder) throw new Error('Failed to create master order.');
-
-      // 2. डिलीवरी बैचिंग लॉजिक
-      const batchesToCreate: { 
-          subOrdersData: (typeof tempSubOrders[number] & { subOrderId: number })[], 
-          deliveryBoyId: number | null 
-      }[] = [];
-      
-      const nonSelfDeliverySubOrders = tempSubOrders.filter(s => !s.isSelfDelivery);
-      const selfDeliverySubOrders = tempSubOrders.filter(s => s.isSelfDelivery);
-      
-      const consoleTimeDiffThreshold = 30; // 30 मिनट (सरल उदाहरण, वास्तविक में अधिक जटिल होगा)
-      const consoleDistThreshold = 2.0; // 2 किमी
-
-      // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए बैच बनाएं
-      let currentBatchGroup: (typeof tempSubOrders[number] & { subOrderId: number })[] = [];
-      
-      // सभी non-self-delivery sub-orders को सॉर्ट करें (उदाहरण के लिए, डिलीवरी समय से, या ग्राहक के करीब से)
-      // इसे और अधिक परिष्कृत किया जा सकता है
-      nonSelfDeliverySubOrders.sort((a, b) => {
-          // ग्राहक के स्थान से निकटतम स्टोर को प्राथमिकता दें
-          const distA = calculateDistance(finalDeliveryLat, finalDeliveryLng, a.storeLat, a.storeLng);
-          const distB = calculateDistance(finalDeliveryLat, finalDeliveryLng, b.storeLat, b.storeLng);
-          return distA - distB;
-      });
-
-      for (const subOrderData of nonSelfDeliverySubOrders) {
-          // पहले सब-ऑर्डर बनाएं
-          const [subOrder] = await tx.insert(subOrders).values({
-              masterOrderId: masterOrder.id,
-              subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}`,
-              sellerId: subOrderData.sellerId,
-              storeId: subOrderData.storeId,
-              subtotal: subOrderData.subtotal,
-              deliveryCharge: subOrderData.deliveryCharge,
-              total: subOrderData.total,
-              status: subOrderStatusEnum.enumvalues[0], // 'pending'
-              isSelfDeliveryBySeller: false,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-          }).returning({ id: subOrders.id });
-          
-          if (!subOrder) throw new Error(`Failed to create sub-order for seller ${subOrderData.sellerId}`);
-
-          const subOrderWithId = { ...subOrderData, subOrderId: subOrder.id };
-
-          if (currentBatchGroup.length === 0) {
-              currentBatchGroup.push(subOrderWithId);
-          } else {
-              // मौजूदा बैच के पहले स्टोर से दूरी की जाँच करें
-              const firstStoreInBatch = currentBatchGroup[0];
-              const dist = calculateDistance(firstStoreInBatch.storeLat, firstStoreInBatch.storeLng, subOrderData.storeLat, subOrderData.storeLng);
-              
-              // समय का अंतर भी चेक कर सकते हैं (currentBatchGroup[0].estimatedTime - subOrderData.estimatedTime <= consoleTimeDiffThreshold)
-              
-              if (dist <= consoleDistThreshold) {
-                  currentBatchGroup.push(subOrderWithId);
-              } else {
-                  // दूरी की सीमा पार हो गई, वर्तमान बैच को बंद करें और एक नया शुरू करें
-                  batchesToCreate.push({ subOrdersData: currentBatchGroup, deliveryBoyId: null });
-                  currentBatchGroup = [subOrderWithId];
-              }
-          }
-      }
-      
-      // अंतिम बैच को पुश करें (यदि कोई बाकी है)
-      if (currentBatchGroup.length > 0) {
-          batchesToCreate.push({ subOrdersData: currentBatchGroup, deliveryBoyId: null });
-      }
-      
-      // B) सेल्फ-डिलीवरी वाले सब-ऑर्डर के लिए
-      for (const subOrderData of selfDeliverySubOrders) {
-          const [subOrder] = await tx.insert(subOrders).values({
-              masterOrderId: masterOrder.id,
-              subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}-SELF`,
-              sellerId: subOrderData.sellerId,
-              storeId: subOrderData.storeId,
-              subtotal: subOrderData.subtotal,
-              deliveryCharge: 0, // सेल्फ डिलीवरी में कोई अतिरिक्त डिलीवरी चार्ज नहीं
-              total: subOrderData.subtotal,
-              status: subOrderStatusEnum.enumvalues[0], // 'pending'
-              isSelfDeliveryBySeller: true,
-              createdAt: new Date(),
-              updatedAt: new Date(),
-          }).returning({ id: subOrders.id });
-
-          if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
-
-          // ऑर्डर आइटम्स बनाएं
-          for (const item of subOrderData.items) {
-              await tx.insert(orderItems).values({
-                  subOrderId: subOrder.id,
-                  productId: item.product.id,
-                  productName: item.product.name,
-                  productImage: item.product.image,
-                  productPrice: item.priceAtAdded,
-                  productUnit: item.product.unit,
-                  quantity: item.quantity,
-                  itemTotal: item.totalPrice,
-                  createdAt: new Date(),
-                  updatedAt: new Date(),
-              });
-          }
-      }
-
-      // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें
-      for (const batch of batchesToCreate) {
-          const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
-
-          // a) डिलीवरी बैच बनाएं
-          const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-              masterOrderId: masterOrder.id,
-              deliveryBoyId: assignedDeliveryBoyId,
-              customerDeliveryAddressId: finalDeliveryAddressId,
-              status: deliveryStatusEnum.enumvalues[0], // 'pending'
-              estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // डमी: 1 घंटा
-              deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
-              createdAt: new Date(),
-              updatedAt: new Date(),
-          }).returning({ id: deliveryBatches.id });
-
-          if (!deliveryBatch) throw new Error('Failed to create delivery batch.');
-
-          // b) संबंधित सब-ऑर्डर को बैच ID के साथ अपडेट करें
-          const subOrderIdsToUpdate = batch.subOrdersData.map(s => s.subOrderId);
-          if (subOrderIdsToUpdate.length > 0) {
-              await tx.update(subOrders)
-                  .set({
-                      deliveryBatchId: deliveryBatch.id,
-                      // deliveryBoyId: assignedDeliveryBoyId, // deliveryBoyId अब deliveryBatches में है
-                  })
-                  .where(inArray(subOrders.id, subOrderIdsToUpdate));
-          }
-
-          // c) Order Items बनाएं
-          for (const subOrderData of batch.subOrdersData) {
-              for (const item of subOrderData.items) {
-                  await tx.insert(orderItems).values({
-                      subOrderId: subOrderData.subOrderId,
-                      productId: item.product.id,
-                      productName: item.product.name,
-                      productImage: item.product.image,
-                      productPrice: item.priceAtAdded,
-                      productUnit: item.product.unit,
-                      quantity: item.quantity,
-                      itemTotal: item.totalPrice,
-                      createdAt: new Date(),
-                      updatedAt: new Date(),
-                  });
-              }
-          }
-      }
-      
-      // 4. कार्ट को खाली करें
-      await tx.delete(cartItems).where(eq(cartItems.userId, userId));
-      console.log("✅ Cart items deleted from cartItems table.");
-
-      // Socket.io इवेंट
-      getIO().emit("new-master-order", {
-        masterOrder: masterOrder,
-        subOrders: tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
-      });
-      getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
-
-      return res.status(201).json({
-        message: "Orders placed successfully!",
-        masterOrderId: masterOrder.id,
-        masterOrderNumber: masterOrder.orderNumber,
-        data: masterOrder,
-      });
-
-    } catch (error: any) {
-      console.error("❌ Error placing cart order (transaction rolled back):", error);
-      // next(error);
-      return res.status(500).json({ message: error.message || "Failed to place order." });
+    // --- इनपुट वैलिडेशन ---
+    if (!deliveryAddressId && !newDeliveryAddress) {
+      return res.status(400).json({ message: "Delivery address is required. Provide deliveryAddressId or newDeliveryAddress." });
     }
-  });
+    if (!paymentMethod) {
+      return res.status(400).json({ message: "Invalid or missing payment method." });
+    }
+    // Coerce numeric fields safely (ensure they are numbers)
+    const subtotal = typeof frontendSubtotal === "number" ? frontendSubtotal : parseFloat(frontendSubtotal);
+    const total = typeof frontendTotal === "number" ? frontendTotal : parseFloat(frontendTotal);
+    const deliveryCharge = typeof frontendDeliveryCharge === "number" ? frontendDeliveryCharge : parseFloat(frontendDeliveryCharge);
+
+    if (Number.isNaN(subtotal) || Number.isNaN(total) || Number.isNaN(deliveryCharge)) {
+      return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be valid numbers." });
+    }
+
+    // Server-side transaction
+    await db.transaction(async (tx) => {
+      try {
+        // Handle delivery address (same as BuyNow)
+        const {
+            id: finalDeliveryAddressId,
+            lat: finalDeliveryLat,
+            lng: finalDeliveryLng,
+            fullAddress: finalDeliveryAddressJson,
+            city: finalCity,
+            state: finalState,
+            pincode: finalPincode,
+        } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
+
+        // --- Fetch and Validate Cart Items ---
+        const userCartItems = await tx.query.cartItems.findMany({
+          where: eq(cartItems.userId, userId),
+          with: {
+            product: {
+              columns: {
+                id: true, name: true, price: true, sellerId: true, approvalStatus: true,
+                minOrderQty: true, maxOrderQty: true, image: true, unit: true,
+              }
+            },
+            seller: {
+                columns: {
+                    id: true, businessName: true, isSelfDeliveryBySeller: true,
+                }
+            }
+          }
+        });
+
+        if (userCartItems.length === 0) {
+          throw new Error('Your cart is empty. Please add items before placing an order.');
+        }
+
+        let masterOrderCalculatedSubtotal = 0;
+        let masterOrderCalculatedDeliveryCharge = 0;
+
+        // --- ग्रुपिंग और प्रारंभिक वैलिडेशन ---
+        const groupedBySeller = new Map<number, (typeof cartItems.$inferSelect & { product: typeof products.$inferSelect })[]>();
+
+        for (const cartItem of userCartItems) {
+            const product = cartItem.product;
+            // Note: Assuming `approvalStatusEnum.enumvalues[1]` is 'approved'
+            if (!product || product.approvalStatus !== 'approved') { // Using 'approved' string for safety
+              console.warn(`[order_from_cart] Product ${cartItem.productId} not found or not approved, skipping.`);
+              continue;
+            }
+            if (product.minOrderQty && cartItem.quantity < product.minOrderQty) {
+              throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
+            }
+            if (product.maxOrderQty && cartItem.quantity > product.maxOrderQty) {
+              throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
+            }
+
+            if (!groupedBySeller.has(cartItem.sellerId)) {
+                groupedBySeller.set(cartItem.sellerId, []);
+            }
+            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product });
+            masterOrderCalculatedSubtotal += cartItem.totalPrice;
+        }
+
+        // --- इंटीग्रिटी चेक ---
+        if (Math.abs(masterOrderCalculatedSubtotal - subtotal) > 0.01) {
+          throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
+        }
+
+        const sellerIds = Array.from(groupedBySeller.keys());
+        const sellerStores = await tx.query.stores.findMany({
+            where: inArray(stores.sellerId, sellerIds),
+        });
+        const sellerStoreMap = new Map(sellerStores.map(s => [s.sellerId, s]));
+
+        const tempSubOrders: { 
+            sellerId: number; 
+            storeId: number; 
+            isSelfDelivery: boolean; 
+            subtotal: number; 
+            deliveryCharge: number; 
+            total: number; 
+            items: typeof cartItems.$inferSelect & { product: typeof products.$inferSelect }[]; 
+            storeLat: number; 
+            storeLng: number;
+            estimatedTime: number; 
+        }[] = [];
+
+        for (const [sellerId, items] of groupedBySeller.entries()) {
+            const store = sellerStoreMap.get(sellerId);
+            const seller = items[0].seller;
+
+            if (!store || !store.latitude || !store.longitude || !seller) {
+                throw new Error(`Store or seller details missing for seller ${sellerId}`);
+            }
+
+            const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+            const currentSubOrderDeliveryCharge = seller.isSelfDeliveryBySeller ? 0 : 50; // DUMMY CHARGE
+            masterOrderCalculatedDeliveryCharge += currentSubOrderDeliveryCharge;
+
+            tempSubOrders.push({
+                sellerId,
+                storeId: store.id,
+                isSelfDelivery: seller.isSelfDeliveryBySeller,
+                subtotal,
+                deliveryCharge: currentSubOrderDeliveryCharge,
+                total: subtotal + currentSubOrderDeliveryCharge,
+                items: items,
+                storeLat: store.latitude,
+                storeLng: store.longitude,
+                estimatedTime: 60,
+            });
+        }
+
+        // --- फाइनल टोटल चेक ---
+        if (Math.abs(masterOrderCalculatedDeliveryCharge - deliveryCharge) > 0.01) {
+          console.warn('Calculated total delivery charge does not match provided total delivery charge. Using calculated value.');
+        }
+
+        const masterOrderCalculatedTotal = masterOrderCalculatedSubtotal + masterOrderCalculatedDeliveryCharge;
+        if (Math.abs(masterOrderCalculatedTotal - total) > 0.01) {
+            console.warn('Calculated total does not match provided total. Using calculated value.');
+        }
+
+        // 1. मास्टर ऑर्डर बनाएं
+        const [masterOrder] = await tx.insert(orders).values({
+            orderNumber: `ORD-${Date.now()}-${userId}`,
+            customerId: userId,
+            deliveryAddressId: finalDeliveryAddressId,
+            // 🛑 FIX 1: deliveryAddress को JSON के बजाय TEXT कॉलम के लिए addressLine1 का उपयोग करें
+            deliveryAddress: finalDeliveryAddressJson.addressLine1, 
+            deliveryCity: finalCity,
+            deliveryState: finalState,
+            deliveryPincode: finalPincode,
+            deliveryLat: finalDeliveryLat,
+            deliveryLng: finalDeliveryLng,
+            subtotal: masterOrderCalculatedSubtotal,
+            total: masterOrderCalculatedTotal,
+            // 🛑 FIX 2: paymentMethod को ENUM कंपैटिबिलिटी के लिए UPPERCASE में बदलें
+            paymentMethod: paymentMethod.toUpperCase(),
+            paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
+            status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
+            deliveryInstructions: deliveryInstructions || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        }).returning({ id: orders.id, orderNumber: orders.orderNumber });
+
+        if (!masterOrder) throw new Error('Failed to create master order.');
+
+        // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
+        const batchesToCreate: { 
+            subOrdersData: (typeof tempSubOrders[number] & { subOrderId: number })[], 
+            deliveryBoyId: number | null 
+        }[] = [];
+        
+        const nonSelfDeliverySubOrders = tempSubOrders.filter(s => !s.isSelfDelivery);
+        const selfDeliverySubOrders = tempSubOrders.filter(s => s.isSelfDelivery);
+        
+        const consoleTimeDiffThreshold = 30;
+        const consoleDistThreshold = 2.0;
+
+        // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए बैच बनाएं (Create Sub-Orders first)
+        let currentBatchGroup: (typeof tempSubOrders[number] & { subOrderId: number })[] = [];
+        
+        nonSelfDeliverySubOrders.sort((a, b) => {
+            const distA = calculateDistance(finalDeliveryLat, finalDeliveryLng, a.storeLat, a.storeLng);
+            const distB = calculateDistance(finalDeliveryLat, finalDeliveryLng, b.storeLat, b.storeLng);
+            return distA - distB;
+        });
+
+        for (const subOrderData of nonSelfDeliverySubOrders) {
+            // सब-ऑर्डर बनाएं
+            const [subOrder] = await tx.insert(subOrders).values({
+                masterOrderId: masterOrder.id,
+                subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}`,
+                sellerId: subOrderData.sellerId,
+                storeId: subOrderData.storeId,
+                subtotal: subOrderData.subtotal,
+                deliveryCharge: subOrderData.deliveryCharge,
+                total: subOrderData.total,
+                status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
+                isSelfDeliveryBySeller: false,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning({ id: subOrders.id });
+            
+            if (!subOrder) throw new Error(`Failed to create sub-order for seller ${subOrderData.sellerId}`);
+
+            const subOrderWithId = { ...subOrderData, subOrderId: subOrder.id };
+
+            if (currentBatchGroup.length === 0) {
+                currentBatchGroup.push(subOrderWithId);
+            } else {
+                const firstStoreInBatch = currentBatchGroup[0];
+                const dist = calculateDistance(firstStoreInBatch.storeLat, firstStoreInBatch.storeLng, subOrderData.storeLat, subOrderData.storeLng);
+                
+                if (dist <= consoleDistThreshold) {
+                    currentBatchGroup.push(subOrderWithId);
+                } else {
+                    batchesToCreate.push({ subOrdersData: currentBatchGroup, deliveryBoyId: null });
+                    currentBatchGroup = [subOrderWithId];
+                }
+            }
+        }
+        
+        if (currentBatchGroup.length > 0) {
+            batchesToCreate.push({ subOrdersData: currentBatchGroup, deliveryBoyId: null });
+        }
+        
+        // B) सेल्फ-डिलीवरी वाले सब-ऑर्डर के लिए (Create Sub-Orders and Items)
+        for (const subOrderData of selfDeliverySubOrders) {
+            const [subOrder] = await tx.insert(subOrders).values({
+                masterOrderId: masterOrder.id,
+                subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}-SELF`,
+                sellerId: subOrderData.sellerId,
+                storeId: subOrderData.storeId,
+                subtotal: subOrderData.subtotal,
+                deliveryCharge: 0,
+                total: subOrderData.subtotal,
+                status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
+                isSelfDeliveryBySeller: true,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning({ id: subOrders.id });
+
+            if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
+
+            // 3. Order Items बनाएं (Self-Delivery)
+            for (const item of subOrderData.items) {
+                await tx.insert(orderItems).values({
+                    subOrderId: subOrder.id,
+                    // 🛑 FIX 3: order_items स्कीमा के लिए orderId, sellerId, userId जोड़ें
+                    orderId: masterOrder.id, 
+                    sellerId: subOrderData.sellerId,
+                    userId: userId,
+                    
+                    productId: item.product.id,
+                    productName: item.product.name,
+                    productImage: item.product.image,
+                    productPrice: item.priceAtAdded,
+                    productUnit: item.product.unit,
+                    quantity: item.quantity,
+                    itemTotal: item.totalPrice,
+                    createdAt: new Date(),
+                    updatedAt: new Date(),
+                });
+            }
+        }
+
+        // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
+        for (const batch of batchesToCreate) {
+            // deliveryBoyId असाइन करें
+            const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
+
+            // a) डिलीवरी बैच बनाएं
+            const [deliveryBatch] = await tx.insert(deliveryBatches).values({
+                masterOrderId: masterOrder.id,
+                deliveryBoyId: assignedDeliveryBoyId,
+                customerDeliveryAddressId: finalDeliveryAddressId,
+                status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+                estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),
+                deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning({ id: deliveryBatches.id });
+
+            if (!deliveryBatch) throw new Error('Failed to create delivery batch.');
+
+            // b) संबंधित सब-ऑर्डर को बैच ID के साथ अपडेट करें
+            const subOrderIdsToUpdate = batch.subOrdersData.map(s => s.subOrderId);
+            if (subOrderIdsToUpdate.length > 0) {
+                await tx.update(subOrders)
+                    .set({
+                        deliveryBatchId: deliveryBatch.id,
+                    })
+                    .where(inArray(subOrders.id, subOrderIdsToUpdate));
+            }
+
+            // c) Order Items बनाएं (Non-Self-Delivery)
+            for (const subOrderData of batch.subOrdersData) {
+                for (const item of subOrderData.items) {
+                    await tx.insert(orderItems).values({
+                        subOrderId: subOrderData.subOrderId,
+                        // 🛑 FIX 3: order_items स्कीमा के लिए orderId, sellerId, userId जोड़ें
+                        orderId: masterOrder.id, 
+                        sellerId: subOrderData.sellerId,
+                        userId: userId,
+                        
+                        productId: item.product.id,
+                        productName: item.product.name,
+                        productImage: item.product.image,
+                        productPrice: item.priceAtAdded,
+                        productUnit: item.product.unit,
+                        quantity: item.quantity,
+                        itemTotal: item.totalPrice,
+                        createdAt: new Date(),
+                        updatedAt: new Date(),
+                    });
+                }
+            }
+        }
+        
+        // 4. कार्ट को खाली करें
+        await tx.delete(cartItems).where(eq(cartItems.userId, userId));
+        console.log("✅ Cart items deleted from cartItems table.");
+
+        // Socket.io इवेंट
+        // 🛑 FIX 4: getIO के बजाय getIo का उपयोग करें (केस-सेंसिटिविटी)
+        getIo().emit("new-master-order", {
+          masterOrder: masterOrder,
+          subOrders: tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
+        });
+        getIo().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
+
+        return res.status(201).json({
+          message: "Orders placed successfully!",
+          masterOrderId: masterOrder.id,
+          masterOrderNumber: masterOrder.orderNumber,
+          data: masterOrder,
+        });
+
+      } catch (error: any) {
+        console.error("❌ Error placing cart order (transaction rolled back):", error);
+        return res.status(500).json({ message: error.message || "Failed to place order." });
+      }
+    }); // end transaction
+
+  } catch (err: any) {
+    console.error("❌ Unexpected error in placeOrderFromCart:", err);
+    return res.status(500).json({ message: err?.message || "Internal server error." });
+  }
 };
 
 
