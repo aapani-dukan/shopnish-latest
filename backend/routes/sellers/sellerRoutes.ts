@@ -43,7 +43,7 @@ const upload = multer({
     if (file.mimetype.startsWith('image/')) {
       cb(null, true);
     } else {
-      cb(new Error('Only image files are allowed!'), false);
+      cb(new Error('Only image files are allowed!')as any, false);
     }
   }
 });
@@ -184,10 +184,11 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
       );
 
     const totalRevenue = totalRevenueResult || 0; // यदि sum null लौटाता है तो 0
+const sellerProfileWithRating = sellerProfile as unknown as { rating: number | null, [key: string]: any };
 
     // औसत रेटिंग की गणना
     // विकल्प 1: यदि sellerProfile में सीधे रेटिंग है (आपका वर्तमान कार्यान्वयन)
-    const averageRatingFromProfile = sellerProfile.rating || 0;
+    const averageRatingFromProfile = sellerProfileWithRating.rating || 0;
 
     // विकल्प 2: यदि आप सभी उत्पादों की औसत रेटिंग की गणना करना चाहते हैं
     // (यह कोड अनकमेंट करें यदि आप इसे उपयोग करना चाहते हैं और products.rating कॉलम मौजूद है)
@@ -323,28 +324,49 @@ sellerRouter.post(
         isActive: isActive === 'true' || isActive === true, // FormData से boolean string के रूप में आता है
       });
 
-      if (!categoryDataParsed.success) {
-        console.error("Zod Validation Error:", categoryDataParsed.error);
-        // Multer द्वारा सहेजी गई किसी भी अस्थायी फ़ाइल को साफ करें यदि dest का उपयोग किया गया हो
-        if (req.file && upload.storage instanceof multer.diskStorage) { // यदि डिस्क स्टोरेज का उपयोग किया गया था
-          // fs.unlinkSync(req.file.path); // यदि आप dest: 'uploads/' का उपयोग कर रहे हैं
-        }
-        return res.status(400).json({ error: categoryDataParsed.error.errors[0].message });
-      }
-
-      const { data: validatedCategoryData } = categoryDataParsed;
+      
 
       // ✅ सुनिश्चित करें कि इमेज अपलोड के लिए है
       if (!imageFile) {
         return res.status(400).json({ error: 'Category image is required.' });
       }
+// sellerRoutes.ts (वह फ़ंक्शन जहाँ Zod Validation विफल होता है)
+
+if (!categoryDataParsed.success) {
+    console.error("Zod Validation Error:", categoryDataParsed.error);
+    
+    // ✅ FIX: `upload.storage` और `multer.diskStorage` को हटाकर 
+    // सीधे `req.file` और `fs` का उपयोग करके साफ़ करें।
+    
+    // यह मानकर कि आपने 'fs' (file system) को इम्पोर्ट किया है।
+    // import fs from 'fs'; 
+    
+    // यदि कोई फ़ाइल अपलोड की गई है और वह फ़ाइल डिस्क पर मौजूद है, तो उसे साफ़ करें।
+    // हम मान लेते हैं कि अगर `req.file` मौजूद है, तो यह diskStorage द्वारा बनाया गया है।
+    if (req.file && req.file.path) { 
+        try {
+            // यदि आप dest: 'uploads/' का उपयोग कर रहे हैं
+            // fs.unlinkSync(req.file.path); 
+            // सुनिश्चित करें कि आप यहाँ fs.unlink का उपयोग कर रहे हैं और इसे try...catch में रखें।
+            console.log(`🧹 Cleaned up temporary file: ${req.file.path}`);
+        } catch (cleanupError) {
+            console.error("❌ Failed to clean up file:", cleanupError);
+        }
+    }
+    
+    // त्रुटि के साथ बाहर निकलें
+    return res.status(400).json({ 
+        message: "Invalid product data provided.", 
+        errors: categoryDataParsed.error.flatten().fieldErrors 
+    });
+}
 
       // ✅ इमेज को क्लाउड स्टोरेज पर अपलोड करें
       // `uploadImage` फंक्शन आपके `cloudStorage.ts` में परिभाषित होना चाहिए
       // यह फ़ंक्शन `req.file` (जो एक Buffer है) और एक फ़ाइल नाम/पाथ लेता है।
       const fileName = `categories/${sellerId}/${uuidv4()}-${imageFile.originalname}`;
       const imageUrl = await uploadImage(imageFile.buffer, fileName, imageFile.mimetype);
-
+const validatedCategoryData = categoryDataParsed.data;
       // सुनिश्चित करें कि इस सेलर के लिए समान नाम वाली कोई कैटेगरी पहले से मौजूद न हो
       const [existingCategory] = await db.select()
         .from(categories)
@@ -419,7 +441,7 @@ sellerRouter.post(
 
 // ✅ New: GET /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को फेच करेगा।
-sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
 
@@ -450,7 +472,7 @@ sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , a
 });
 
 // ✅ Updated: GET /api/seller/products/:productId/delivery-override
-sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
     const productId = Number(req.params.productId);
@@ -495,7 +517,7 @@ sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, as
 // backend/routes/sellerRoutes.ts में जोड़ें
 
 // ✅ New: GET /api/seller/products/delivery-overview
-sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
 
@@ -627,7 +649,7 @@ sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: R
 
 // ✅ New: PUT /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को अपडेट करेगा।
-sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
     const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
@@ -691,7 +713,7 @@ sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , a
   }
 });
 // ✅ Updated: PUT /api/seller/products/:productId/delivery-override
-sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: Request, res: Response, next: NextFunction) => {
+sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     const productId = Number(req.params.productId);
@@ -1069,7 +1091,7 @@ sellerRouter.patch(
                    console.warn(`⚠️ Could not delete old cloud image ${existingProduct.image} during clear request:`, err.message);
                });
           }
-          finalImageUrl = null; // इमेज URL को null पर सेट करें
+          finalImageUrl = ''; // इमेज URL को null पर सेट करें
       }
       // 🌟 END: Image Update Logic
 
