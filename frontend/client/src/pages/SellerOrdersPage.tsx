@@ -111,7 +111,7 @@ const SellerOrdersPage: React.FC = () => {
     }
   };
 
-  const filteredOrders = orders.filter(order =>
+  const filteredOrders = (orders || []).filter(order =>
     filterStatus === 'all' || order.status === filterStatus
   );
 
