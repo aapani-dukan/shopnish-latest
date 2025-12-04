@@ -232,7 +232,7 @@ useEffect(() => {
         
         state: (deliveryAddress as any).state || "Rajasthan", 
         pincode: deliveryAddress.pincode,
-        [span_3](start_span)// lat/lng को Number के रूप में भेजें[span_3](end_span)
+        
         latitude: Number(deliveryAddress.latitude),
         longitude: Number(deliveryAddress.longitude),
       },
