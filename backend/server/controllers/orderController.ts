@@ -558,7 +558,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
         const sellerStores = await tx.query.stores.findMany({
             where: inArray(stores.sellerId, sellerIds),
         });
-        const sellerStoreMap = new Map(sellerStores.map(s => [s.sellerId, s]));
+        const sellerStoreMap = new Map((sellerStores || []).map(s => [s.sellerId, s]));
 
         const tempSubOrders: { 
             sellerId: number; 
@@ -754,7 +754,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             if (!deliveryBatch) throw new Error('Failed to create delivery batch.');
 
             // b) संबंधित सब-ऑर्डर को बैच ID के साथ अपडेट करें
-            const subOrderIdsToUpdate = batch.subOrdersData.map(s => s.subOrderId);
+            const subOrderIdsToUpdate = (batch.subOrdersData || []).map(s => s.subOrderId);
             if (subOrderIdsToUpdate.length > 0) {
                 await tx.update(subOrders)
                     .set({
@@ -864,15 +864,27 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
     });
 
     const formattedOrders = masterOrders.map(masterOrder => {
-      let parsedDeliveryAddress = {};
-      try {
-        parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
-      } catch (e) {
-        console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
-      }
+      
+let parsedDeliveryAddress: any = {};
+const addressData = masterOrder.deliveryAddress;
+if (addressData) {
+    if (typeof addressData === 'string') {
+        try {
+            parsedDeliveryAddress = JSON.parse(addressData);
+        } catch (e) {
+            console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
+            // यदि parsing विफल हो जाए, तो मूल स्ट्रिंग को addressLine1 के रूप में उपयोग करें
+            parsedDeliveryAddress = { addressLine1: addressData }; 
+        }
+    } else if (typeof addressData === 'object') {
+        // यदि Drizzle ने इसे पहले ही ऑब्जेक्ट के रूप में पार्स कर दिया है
+        parsedDeliveryAddress = addressData;
+    }
+}
+
 
       // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें
-      const subOrdersWithDeliveryInfo = masterOrder.subOrders.map(subOrder => {
+      const subOrdersWithDeliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
         const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned'); // ✅ सेल्फ-डिलीवरी के लिए अलग स्टेटस
         const estimatedDeliveryTime = subOrder.deliveryBatch?.estimatedDeliveryTime || null;
@@ -961,7 +973,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     }
 
     // डिलीवरी बॉय की स्थिति और अपेक्षित मार्ग दिखाने के लिए सब-ऑर्डर से डेटा एकत्र करें
-    const deliveryInfo = masterOrder.subOrders.map(subOrder => {
+    const deliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy;
         const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned');
         const storeLocation = { lat: subOrder.store?.latitude, lng: subOrder.store?.longitude };
@@ -1071,7 +1083,7 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, n
     }
 
     // सब-ऑर्डर और उनके आइटम को एक साथ जोड़ें
-    const detailedSubOrders = masterOrderDetail.subOrders.map(subOrder => {
+    const detailedSubOrders = (masterOrderDetail.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
         const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned');
         
