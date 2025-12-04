@@ -323,8 +323,16 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           deliveryLng: finalDeliveryLng,
           subtotal: calculatedSubtotal,
           total: total,
-          paymentMethod: paymentMethod,
-          paymentStatus: paymentMethod === 'COD' ? 'pending' : 'pending',
+                
+      paymentMethod: paymentMethod.toUpperCase(), 
+      
+      paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
+      
+      status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
+      deliveryInstructions: deliveryInstructions || null,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning({ id: orders.id, orderNumber: orders.orderNumber, total: orders.total, status: orders.status, createdAt: orders.createdAt });
           status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
           deliveryInstructions: deliveryInstructions || null,
           createdAt: new Date(),
