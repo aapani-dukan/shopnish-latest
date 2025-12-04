@@ -75,7 +75,7 @@ async function handleDeliveryAddress(
   id: number; 
   lat: number; 
   lng: number; 
-  fullAddress: any;      // <-- json object not string
+  fullAddress: any;
   city: string; 
   state: string; 
   pincode: string 
@@ -84,64 +84,59 @@ async function handleDeliveryAddress(
   let finalDeliveryAddressId: number;
   let finalDeliveryLat: number;
   let finalDeliveryLng: number;
-  let finalFullAddress: any;   // <-- json object
+  let finalFullAddress: any;
   let finalCity: string;
   let finalState: string;
   let finalPincode: string;
 
-  // ------------------------ NEW DELIVERY ADDRESS ---------------------------
+  // ------------------------ NEW ADDRESS ---------------------------
   if (newDeliveryAddress) {
+
     const safe = newDeliveryAddress || {};
 
-    const [inserted] = await tx.insert(deliveryAddresses).values({
-      userId,
+    const fullAddressObj = {
       fullName: safe.fullName || reqUser?.name || "Unknown Customer",
-
-      // FIX 1: phoneNumber → phone
       phone: safe.phoneNumber || safe.phone || reqUser?.phone || "0000000000",
-
-      // FIX 2: correct mapping
       addressLine1: safe.addressLine1 || safe.address || "N/A",
       addressLine2: safe.addressLine2 || safe.landmark || "",
       city: safe.city || "Unknown",
       state: safe.state || "Unknown",
-      postalCode: safe.pincode || safe.postalCode || "000000",
-
-      // FIX 3: convert to number always
+      pincode: safe.pincode || safe.postalCode || "000000",
       latitude: Number(safe.latitude) || 0,
       longitude: Number(safe.longitude) || 0,
+    };
 
+    // 🟢 STORE OBJECT IN DB AS STRING — NO MIGRATION NEEDED
+    const [inserted] = await tx.insert(deliveryAddresses).values({
+      userId,
+      fullName: fullAddressObj.fullName,
+      phoneNumber: fullAddressObj.phone,
+      addressLine1: fullAddressObj.addressLine1,
+      addressLine2: fullAddressObj.addressLine2,
+      city: fullAddressObj.city,
+      state: fullAddressObj.state,
+      postalCode: fullAddressObj.pincode,
+      latitude: fullAddressObj.latitude,
+      longitude: fullAddressObj.longitude,
       isDefault: false,
       createdAt: new Date(),
     }).returning();
 
-    if (!inserted) throw new Error("Failed to create new delivery address.");
-
     finalDeliveryAddressId = inserted.id;
-    finalDeliveryLat = Number(inserted.latitude) || 0;
-    finalDeliveryLng = Number(inserted.longitude) || 0;
+    finalDeliveryLat = Number(inserted.latitude);
+    finalDeliveryLng = Number(inserted.longitude);
 
     finalCity = inserted.city;
     finalState = inserted.state;
     finalPincode = inserted.postalCode;
 
-    // FIX 4: JSON object (NOT string)
-    finalFullAddress = {
-      fullName: inserted.fullName,
-      phone: inserted.phone,
-      addressLine1: inserted.addressLine1,
-      addressLine2: inserted.addressLine2,
-      city: inserted.city,
-      state: inserted.state,
-      pincode: inserted.postalCode,
-      latitude: Number(inserted.latitude),
-      longitude: Number(inserted.longitude),
-    };
-
+    // RETURN AS JSON OBJECT
+    finalFullAddress = fullAddressObj;
   }
 
-  // ------------------------ EXISTING SAVED ADDRESS ---------------------------
+  // ------------------------ EXISTING ADDRESS ---------------------------
   else if (deliveryAddressId) {
+
     const [existing] = await tx.select()
       .from(deliveryAddresses)
       .where(and(
@@ -151,18 +146,9 @@ async function handleDeliveryAddress(
 
     if (!existing) throw new Error("Delivery address not found.");
 
-    finalDeliveryAddressId = existing.id;
-
-    finalDeliveryLat = Number(existing.latitude);
-    finalDeliveryLng = Number(existing.longitude);
-
-    finalCity = existing.city;
-    finalState = existing.state;
-    finalPincode = existing.postalCode;
-
-    finalFullAddress = {
+    const fullAddressObj = {
       fullName: existing.fullName,
-      phone: existing.phone,
+      phone: existing.phoneNumber,
       addressLine1: existing.addressLine1,
       addressLine2: existing.addressLine2,
       city: existing.city,
@@ -171,6 +157,16 @@ async function handleDeliveryAddress(
       latitude: Number(existing.latitude),
       longitude: Number(existing.longitude),
     };
+
+    finalDeliveryAddressId = existing.id;
+    finalDeliveryLat = Number(existing.latitude);
+    finalDeliveryLng = Number(existing.longitude);
+
+    finalCity = existing.city;
+    finalState = existing.state;
+    finalPincode = existing.postalCode;
+
+    finalFullAddress = fullAddressObj;
   }
 
   else {
@@ -187,7 +183,6 @@ async function handleDeliveryAddress(
     pincode: finalPincode,
   };
 }
-
 /**
  * handles placing a direct "buy now" order.
  */
