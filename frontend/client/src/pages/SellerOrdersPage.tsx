@@ -181,7 +181,7 @@ const SellerOrdersPage: React.FC = () => {
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-white divide-y divide-gray-200">
-                {filteredOrders.map((order) => (
+                {filteredOrders?.map((order) => (
                   <TableRow key={order.id}>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm font-medium text-gray-900">{order.subordernumber}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">
