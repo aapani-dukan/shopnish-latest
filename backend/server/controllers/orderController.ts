@@ -793,11 +793,11 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
 
         // Socket.io इवेंट
         // 🛑 FIX 4: getIO के बजाय getIo का उपयोग करें (केस-सेंसिटिविटी)
-        getIo().emit("new-master-order", {
+        getIO().emit("new-master-order", {
           masterOrder: masterOrder,
           subOrders: tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
         });
-        getIo().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
+        getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
 
         return res.status(201).json({
           message: "Orders placed successfully!",
