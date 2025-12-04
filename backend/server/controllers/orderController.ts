@@ -413,7 +413,7 @@ for (const vItem of validatedItems) {
         }
 
         // Emit events
-        getIo().emit("new-order", {
+        getIO().emit("new-order", {
           orderId: masterOrder.id,
           orderNumber: masterOrder.orderNumber,
           customerId: masterOrder.customerId,
@@ -421,7 +421,7 @@ for (const vItem of validatedItems) {
           status: masterOrder.status,
           createdAt: masterOrder.createdAt,
         });
-        getIo().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
+        getIO().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
 
         return res.status(201).json({
           message: "Order placed successfully!",
@@ -790,11 +790,11 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
       console.log("✅ Cart items deleted from cartItems table.");
 
       // Socket.io इवेंट
-      getIo().emit("new-master-order", {
+      getIO().emit("new-master-order", {
         masterOrder: masterOrder,
         subOrders: tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
       });
-      getIo().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
+      getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
 
       return res.status(201).json({
         message: "Orders placed successfully!",
