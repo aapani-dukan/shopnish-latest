@@ -309,37 +309,41 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
         }
 
         // 1. Create master order
-        const [masterOrder] = await tx.insert(orders).values({
-          orderNumber: `ORD-${Date.now()}-${userId}`,
-          customerId: userId,
-          deliveryAddressId: finalDeliveryAddressId,
-          // 🛑 FIX APPLIED HERE: Only save the addressLine1 string to the TEXT column
-          deliveryAddress: finalDeliveryAddressJson.addressLine1, 
-          // --------------------------------------------------------------------
-          deliveryCity: finalCity,
-          deliveryState: finalState,
-          deliveryPincode: finalPincode,
-          deliveryLat: finalDeliveryLat,
-          deliveryLng: finalDeliveryLng,
-          subtotal: calculatedSubtotal,
-          total: total,
-                
-      paymentMethod: paymentMethod.toUpperCase(), 
-      
-      paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
-      
-      status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
-      deliveryInstructions: deliveryInstructions || null,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning({ id: orders.id, orderNumber: orders.orderNumber, total: orders.total, status: orders.status, createdAt: orders.createdAt });
-          status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
-          deliveryInstructions: deliveryInstructions || null,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }).returning({ id: orders.id, orderNumber: orders.orderNumber, total: orders.total, status: orders.status, createdAt: orders.createdAt });
+const [masterOrder] = await tx.insert(orders).values({
+    orderNumber: `ORD-${Date.now()}-${userId}`,
+    customerId: userId,
+    deliveryAddressId: finalDeliveryAddressId,
+    // FIX APPLIED: Only save the addressLine1 string to the TEXT column
+    deliveryAddress: finalDeliveryAddressJson.addressLine1, 
+    
+    deliveryCity: finalCity,
+    deliveryState: finalState,
+    deliveryPincode: finalPincode,
+    deliveryLat: finalDeliveryLat,
+    deliveryLng: finalDeliveryLng,
+    subtotal: calculatedSubtotal,
+    total: total,
+    
+    // FIX APPLIED: Payment method converted to uppercase
+    paymentMethod: paymentMethod.toUpperCase(), 
+    
+    paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
+    
+    // यह पहली बार है जब ये कीज़ परिभाषित की गई हैं
+    status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
+    deliveryInstructions: deliveryInstructions || null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+}).returning({ 
+    id: orders.id, 
+    orderNumber: orders.orderNumber, 
+    total: orders.total, 
+    status: orders.status, 
+    createdAt: orders.createdAt 
+});
 
-        if (!masterOrder) throw new Error('Failed to create master order.');
+if (!masterOrder) throw new Error('Failed to create master order.');
+
 
         // 2. Create sub-order for the seller (buy-now expects single seller)
         const [sellerStore] = await tx.select().from(stores).where(eq(stores.sellerId, sellerId)).limit(1);
