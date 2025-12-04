@@ -369,20 +369,26 @@ if (!masterOrder) throw new Error('Failed to create master order.');
         if (!subOrder) throw new Error('Failed to create sub-order.');
 
         // 3. Insert order items (all validatedItems)
-        for (const vItem of validatedItems) {
-          await tx.insert(orderItems).values({
-            subOrderId: subOrder.id,
-            productId: vItem.productId,
-            productName: vItem.product.name,
-            productImage: vItem.product.image,
-            productPrice: vItem.unitPrice,
-            productUnit: vItem.product.unit,
-            quantity: vItem.quantity,
-            itemTotal: vItem.itemTotal,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          });
-        }
+for (const vItem of validatedItems) {
+    await tx.insert(orderItems).values({
+        // 🛑 FIX: order_id, seller_id, और user_id को स्पष्ट रूप से पास करें
+        subOrderId: subOrder.id,
+        orderId: masterOrder.id, // <--- नया! मास्टर ऑर्डर ID
+        sellerId: sellerId,       // <--- नया! विक्रेता ID
+        userId: userId,           // <--- नया! ग्राहक ID
+        
+        productId: vItem.productId,
+        productName: vItem.product.name,
+        productImage: vItem.product.image,
+        productPrice: vItem.unitPrice,
+        productUnit: vItem.product.unit,
+        quantity: vItem.quantity,
+        itemTotal: vItem.itemTotal,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    });
+}
+        
 
         // 4. Delivery batching if not self-delivery
         if (!isSelfDelivery) {
