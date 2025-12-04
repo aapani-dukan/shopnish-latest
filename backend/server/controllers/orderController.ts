@@ -106,7 +106,6 @@ async function handleDeliveryAddress(
       longitude: Number(safe.longitude) || 0,
     };
 
-    // 🟢 STORE OBJECT IN DB AS STRING — NO MIGRATION NEEDED
     const [inserted] = await tx.insert(deliveryAddresses).values({
       userId,
       fullName: fullAddressObj.fullName,
@@ -130,7 +129,6 @@ async function handleDeliveryAddress(
     finalState = inserted.state;
     finalPincode = inserted.postalCode;
 
-    // RETURN AS JSON OBJECT
     finalFullAddress = fullAddressObj;
   }
 
@@ -183,6 +181,15 @@ async function handleDeliveryAddress(
     pincode: finalPincode,
   };
 }
+
+/**
+ * handles placing a direct "buy now" order.
+ */
+ // client/src/pages/checkout2.tsx में `handleLocationUpdate` फ़ंक्शन के नीचे,
+// या `createOrderMutation` से पहले कहीं भी यह जोड़ें।
+
+// ... (handleDeliveryAddress फ़ंक्शन अपरिवर्तित है)
+
 /**
  * handles placing a direct "buy now" order.
  */
@@ -195,19 +202,17 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
   }
 
   try {
-    // Accept either `item` (single) OR `items` (array) from client.
-    // Many clients send `items: [...]` even for buy-now — handle both.
     const {
       deliveryAddressId,
       newDeliveryAddress,
       paymentMethod,
       deliveryInstructions,
-      item,    // single item object (legacy)
-      items,   // array of items (possible)
+      item,
+      items,
       subtotal: rawSubtotal,
       total: rawTotal,
       deliveryCharge: rawDeliveryCharge,
-      sellerId, // required for buy-now (single seller)
+      sellerId,
     } = req.body;
 
     // Normalize items: ensure we have an array with at least one item
@@ -215,7 +220,6 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
     if (Array.isArray(items) && items.length > 0) {
       normalizedItems = items;
     } else if (item) {
-      // if single item provided as object
       normalizedItems = [item];
     }
 
@@ -233,7 +237,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
       return res.status(400).json({ message: "Seller ID is required for 'buy now' order." });
     }
 
-    // Coerce numeric fields safely (frontend may send strings)
+    // Coerce numeric fields safely
     const subtotal = typeof rawSubtotal === "number" ? rawSubtotal : parseFloat(rawSubtotal);
     const total = typeof rawTotal === "number" ? rawTotal : parseFloat(rawTotal);
     const deliveryCharge = typeof rawDeliveryCharge === "number" ? rawDeliveryCharge : parseFloat(rawDeliveryCharge);
@@ -245,11 +249,11 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
     // Server-side transaction
     await db.transaction(async (tx) => {
       try {
-        // Handle delivery address (same as before)
-        const { 
-          id: finalDeliveryAddressId, 
-          lat: finalDeliveryLat, 
-          lng: finalDeliveryLng, 
+        // Handle delivery address (stores new address in `deliveryAddresses` table and returns details)
+        const {
+          id: finalDeliveryAddressId,
+          lat: finalDeliveryLat,
+          lng: finalDeliveryLng,
           fullAddress: finalDeliveryAddressJson,
           city: finalCity,
           state: finalState,
@@ -257,7 +261,6 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
         } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
 
         // --- Fetch product(s) and validate each item ---
-        // Also compute server-side subtotal from product prices to verify integrity
         let calculatedSubtotal = 0;
         const validatedItems: Array<{
           productId: number;
@@ -267,63 +270,41 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           itemTotal: number;
         }> = [];
 
+        // ... (product validation logic is unchanged and is assumed correct)
+        
         for (const it of normalizedItems) {
-          // Expect item to have productId and quantity (and possibly unitPrice/priceAtAdded)
-          const productId = Number(it.productId);
-          const quantity = Number(it.quantity ?? 1);
+            // ... (product validation logic is unchanged)
+            // ...
+            const productId = Number(it.productId);
+            const quantity = Number(it.quantity ?? 1);
+            if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
+            if (!quantity || Number.isNaN(quantity) || quantity <= 0) { throw new Error("Invalid quantity in item."); }
+            const [product] = await tx.select().from(products).where(eq(products.id, productId));
+            if (!product) { throw new Error(`Product ${productId} not found.`); }
+            if (product.approvalStatus !== "approved") { throw new Error(`Product ${productId} is not available or not approved.`); }
+            if (product.minOrderQty && quantity < product.minOrderQty) { throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`); }
+            if (product.maxOrderQty && quantity > product.maxOrderQty) { throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`); }
+            const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
+            if (Number.isNaN(unitPrice)) { throw new Error(`Invalid unit price for product ${productId}.`); }
+            const itemTotalPrice = unitPrice * quantity;
+            calculatedSubtotal += itemTotalPrice;
 
-          if (!productId || Number.isNaN(productId)) {
-            throw new Error("Invalid productId in item.");
-          }
-          if (!quantity || Number.isNaN(quantity) || quantity <= 0) {
-            throw new Error("Invalid quantity in item.");
-          }
-
-          const [product] = await tx.select().from(products).where(eq(products.id, productId));
-
-          if (!product) {
-            throw new Error(`Product ${productId} not found.`);
-          }
-
-          // IMPORTANT: check approved status robustly (avoid enum naming mismatches)
-          if (product.approvalStatus !== "approved") {
-            throw new Error(`Product ${productId} is not available or not approved.`);
-          }
-
-          // min/max order checks
-          if (product.minOrderQty && quantity < product.minOrderQty) {
-            throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
-          }
-          if (product.maxOrderQty && quantity > product.maxOrderQty) {
-            throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
-          }
-
-          // Determine unit price: prefer priceAtAdded -> unitPrice -> product.price
-          const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
-          if (Number.isNaN(unitPrice)) {
-            throw new Error(`Invalid unit price for product ${productId}.`);
-          }
-
-          const itemTotalPrice = unitPrice * quantity;
-          calculatedSubtotal += itemTotalPrice;
-
-          validatedItems.push({
-            productId,
-            product,
-            unitPrice,
-            quantity,
-            itemTotal: itemTotalPrice,
-          });
-        } // end for each item
-
-        // Compare calculatedSubtotal with client-provided subtotal (tolerance for floating)
+            validatedItems.push({
+                productId,
+                product,
+                unitPrice,
+                quantity,
+                itemTotal: itemTotalPrice,
+            });
+        }
+        
+        // Compare calculatedSubtotal with client-provided subtotal
         if (Math.abs(calculatedSubtotal - subtotal) > 0.01) {
           throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
         }
 
-        // You may also validate total = subtotal + deliveryCharge (or with discounts)
+        // Validate total
         if (Math.abs((calculatedSubtotal + deliveryCharge) - total) > 0.01) {
-          // Not fatal necessarily — but better to reject to avoid tampered totals
           throw new Error('Calculated total (subtotal + deliveryCharge) does not match provided total.');
         }
 
@@ -332,14 +313,16 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           orderNumber: `ORD-${Date.now()}-${userId}`,
           customerId: userId,
           deliveryAddressId: finalDeliveryAddressId,
-          deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
+          // 🛑 FIX APPLIED HERE: Only save the addressLine1 string to the TEXT column
+          deliveryAddress: finalDeliveryAddressJson.addressLine1, 
+          // --------------------------------------------------------------------
           deliveryCity: finalCity,
           deliveryState: finalState,
           deliveryPincode: finalPincode,
           deliveryLat: finalDeliveryLat,
           deliveryLng: finalDeliveryLng,
           subtotal: calculatedSubtotal,
-          total: total, // server trusts computed total (could recalc)
+          total: total,
           paymentMethod: paymentMethod,
           paymentStatus: paymentMethod === 'COD' ? 'pending' : 'pending',
           status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
@@ -431,7 +414,6 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
       } catch (error: any) {
         console.error("❌ Error placing buy now order (transaction rolled back):", error);
-        // For known validation errors, send 400; otherwise 500
         const errMsg = error?.message || "Failed to place order.";
         if (errMsg && (errMsg.includes("Invalid") || errMsg.includes("required") || errMsg.includes("does not match"))) {
           return res.status(400).json({ message: errMsg });
@@ -445,6 +427,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
     return res.status(500).json({ message: err?.message || "Internal server error." });
   }
 };
+
 
 /**
  * handles placing an order from the user's cart.
