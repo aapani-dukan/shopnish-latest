@@ -225,11 +225,11 @@ useEffect(() => {
       // 🛑 FIX: सर्वर की अपेक्षा के अनुसार 'newDeliveryAddress' का उपयोग करें
       newDeliveryAddress: { 
         fullName: deliveryAddress.fullName,
-        [span_1](start_span)// 🛑 FIX: 'phone' को 'phoneNumber' में बदलें, जैसा कि checkout2.tsx में है[span_1](end_span)
+        
         phoneNumber: deliveryAddress.phone, 
         address: deliveryAddress.address,
         city: deliveryAddress.city,
-        [span_2](start_span)// checkout2.tsx से 'state' फ़ील्ड कॉपी करें[span_2](end_span)
+        
         state: (deliveryAddress as any).state || "Rajasthan", 
         pincode: deliveryAddress.pincode,
         [span_3](start_span)// lat/lng को Number के रूप में भेजें[span_3](end_span)
@@ -240,8 +240,6 @@ useEffect(() => {
       paymentMethod,
       deliveryInstructions,
 
-      // 🛑 FIX: subtotal, total, deliveryCharge को STRING (.toFixed(2)) के बजाय NUMBER के रूप में भेजें
-      [span_4](start_span)// जैसा कि checkout2.tsx में है[span_4](end_span)
       subtotal: subtotal, 
       total: total,       
       deliveryCharge: deliveryCharge, 
@@ -255,9 +253,6 @@ useEffect(() => {
     console.log("FINAL CART PAYLOAD (UPDATED):", orderData);
     createOrderMutation.mutate(orderData);
   };
-
-// ... (बाकी कंपोनेंट कोड अपरिवर्तित)
-
 
   // ------------------- jsx loading / empty states -------------------
 
