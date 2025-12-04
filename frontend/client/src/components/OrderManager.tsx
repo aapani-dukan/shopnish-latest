@@ -194,7 +194,7 @@ export default function OrderManager({ // ✅ Consistent casing
 
     return (
       <div className="space-y-4"> {/* ✅ Consistent casing */}
-        {orders.map((order: OrderWithDeliveryBoy) => ( // ✅ Using the extended interface
+        {orders?.map((order: OrderWithDeliveryBoy) => ( // ✅ Using the extended interface
           <div key={order.id} className="border rounded-lg p-4 mb-4"> {/* ✅ Consistent casing */}
             <div className="flex flex-col md:flex-row md:justify-between md:items-center mb-2"> {/* ✅ Consistent casing */}
               <h2 className="font-bold text-lg">ऑर्डर #{order.orderNumber || order.id}</h2> {/* ✅ Consistent casing */}
@@ -222,7 +222,7 @@ export default function OrderManager({ // ✅ Consistent casing
             <p className="text-sm text-muted-foreground">ऑर्डर किया गया: {new Date(order.createdAt).toLocaleString()}</p> {/* ✅ Consistent casing */}
 
             <div className="mt-4 space-y-3"> {/* ✅ Consistent casing */}
-              {order.items.map((item) => (
+              {order.items?.map((item) => (
                 <div key={item.id} className="flex items-center space-x-4"> {/* ✅ Consistent casing */}
                   <img src={item.product?.image || "/placeholder.png"} alt={item.product?.name || item.product.name || "product"} className="w-12 h-12 object-cover rounded" /> {/* ✅ Consistent casing */}
                   <div>
@@ -241,11 +241,11 @@ export default function OrderManager({ // ✅ Consistent casing
   };
 
   return (
-    <Card> {/* ✅ Consistent casing */}
-      <CardHeader> {/* ✅ Consistent casing */}
-        <CardTitle>आपके ऑर्डर्स</CardTitle> {/* ✅ Consistent casing */}
+    <Card> 
+      <CardHeader> 
+        <CardTitle>आपके ऑर्डर्स</CardTitle> 
       </CardHeader>
-      <CardContent>{renderContent()}</CardContent> {/* ✅ Consistent casing */}
+      <CardContent>{renderContent()}</CardContent> 
     </Card>
   );
 }
