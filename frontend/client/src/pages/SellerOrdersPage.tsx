@@ -190,7 +190,7 @@ const SellerOrdersPage: React.FC = () => {
                       {!order.customerName && order.masterorderid && <span className="text-xs text-gray-400">मास्टर ऑर्डर ID: {order.masterorderid}</span>}
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{order.quantity}</TableCell>
-                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{order.total.toFixed(2)}</TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">₹{Number(order.total).toFixed(2)}</TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
                       {/* यहाँ पर बदलाव किया गया है: अनावश्यक {} और `` हटा दिए गए हैं */}
                       <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
