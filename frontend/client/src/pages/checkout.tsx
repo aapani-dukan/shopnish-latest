@@ -172,11 +172,14 @@ useEffect(() => {
 }, [contextAddress, contextCity, contextPincode, setDeliveryAddress, toast]);
   
   // =========================================================================
+// client/src/pages/checkout.tsx
+
+// ... (अन्य आयात और स्टेट्स अपरिवर्तित)
 
   const handlePlaceOrder = () => { // ✅ Corrected casing
     if (!user?.id) {
       toast({
-        title: "Authentication Error", // ✅ Consistent casing
+        title: "Authentication Error",
         description: "You must be logged in to place an order.",
         variant: "destructive",
       });
@@ -184,52 +187,77 @@ useEffect(() => {
     }
 
     // city फ़ील्ड को भी अनिवार्य करें (अगर Bundi के अलावा कुछ और है)
-    if (!deliveryAddress.fullName || !deliveryAddress.phone || !deliveryAddress.address || !deliveryAddress.pincode || !deliveryAddress.city || !deliveryAddress.latitude || !deliveryAddress.longitude) { // ✅ Corrected casing
+    if (!deliveryAddress.fullName || !deliveryAddress.phone || !deliveryAddress.address || !deliveryAddress.pincode || !deliveryAddress.city || !deliveryAddress.latitude || !deliveryAddress.longitude) {
       toast({
-        title: "Address Required", // ✅ Consistent casing
+        title: "Address Required",
         description: "Please fill in all delivery address fields and select a location on the map.",
         variant: "destructive",
       });
       return;
     }
 
-    if (!cartItems || cartItems.length === 0) { // ✅ Corrected casing
+    if (!cartItems || cartItems.length === 0) {
       toast({
-        title: "No Items to Order", // ✅ Consistent casing
+        title: "No Items to Order",
         description: "There are no items to place an order.",
         variant: "destructive",
       });
       return;
     }
 
-    const itemsToOrder = cartItems.map(item => ({ // ✅ Corrected casing
-      id: item.id,
-      productId: item.product.id, // ✅ Corrected to camelCase
-      sellerId: item.product.sellerId, // ✅ Corrected to camelCase
+    // --- 1. आइटम्स को सर्वर के अपेक्षित format में तैयार करें ---
+    // नोट: cartItems में पहले से ही priceAtAdded या totalPrice की जानकारी है।
+    const itemsToOrder = cartItems.map(item => ({
+      // id: item.id, // कार्ट आइटम ID को हटा दें
+      productId: item.product.id,
+      sellerId: item.product.sellerId,
       quantity: item.quantity,
-      unitPrice: item.product.price, // ✅ Corrected to camelCase
-      totalPrice: (item.product.price * item.quantity).toFixed(2), // ✅ Corrected calculation
+      // priceAtAdded buy-now के लिए आवश्यक है, कार्ट के लिए भी भेजें
+      unitPrice: Number(item.product.price), 
+      priceAtAdded: Number(item.product.price), 
+      totalPrice: Number(item.product.price) * item.quantity, 
     }));
 
-    const orderData = { // ✅ Corrected casing
-      customerId: user.id, // ✅ Corrected to camelCase
-      deliveryAddress: { // ✅ Corrected casing
-        ...deliveryAddress,
-        // lat/lng सुनिश्चित करें कि यह number है
-        latitude: deliveryAddress.latitude,
-        longitude: deliveryAddress.longitude,
+    // --- 2. पेलोड को सर्वर के अपेक्षित स्ट्रक्चर के अनुसार तैयार करें ---
+    const orderData = {
+      customerId: user.id,
+
+      // 🛑 FIX: सर्वर की अपेक्षा के अनुसार 'newDeliveryAddress' का उपयोग करें
+      newDeliveryAddress: { 
+        fullName: deliveryAddress.fullName,
+        [span_1](start_span)// 🛑 FIX: 'phone' को 'phoneNumber' में बदलें, जैसा कि checkout2.tsx में है[span_1](end_span)
+        phoneNumber: deliveryAddress.phone, 
+        address: deliveryAddress.address,
+        city: deliveryAddress.city,
+        [span_2](start_span)// checkout2.tsx से 'state' फ़ील्ड कॉपी करें[span_2](end_span)
+        state: (deliveryAddress as any).state || "Rajasthan", 
+        pincode: deliveryAddress.pincode,
+        [span_3](start_span)// lat/lng को Number के रूप में भेजें[span_3](end_span)
+        latitude: Number(deliveryAddress.latitude),
+        longitude: Number(deliveryAddress.longitude),
       },
-      paymentMethod, // ✅ Corrected casing
-      subtotal: subtotal.toFixed(2),
-      total: total.toFixed(2),
-      deliveryCharge: deliveryCharge.toFixed(2), // ✅ Corrected casing
-      deliveryInstructions, // ✅ Corrected casing
-      items: itemsToOrder, // ✅ Corrected casing
+
+      paymentMethod,
+      deliveryInstructions,
+
+      // 🛑 FIX: subtotal, total, deliveryCharge को STRING (.toFixed(2)) के बजाय NUMBER के रूप में भेजें
+      [span_4](start_span)// जैसा कि checkout2.tsx में है[span_4](end_span)
+      subtotal: subtotal, 
+      total: total,       
+      deliveryCharge: deliveryCharge, 
+
+      items: itemsToOrder,
       cartOrder: true,
+      
+      // cartOrder में sellerId आवश्यक नहीं है
     };
 
-    createOrderMutation.mutate(orderData); // ✅ Corrected casing
+    console.log("FINAL CART PAYLOAD (UPDATED):", orderData);
+    createOrderMutation.mutate(orderData);
   };
+
+// ... (बाकी कंपोनेंट कोड अपरिवर्तित)
+
 
   // ------------------- jsx loading / empty states -------------------
 
