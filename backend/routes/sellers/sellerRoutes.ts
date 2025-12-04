@@ -207,7 +207,7 @@ sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res
       ...sellerProfile,
       totalOrders: totalOrders || 0,
       totalProducts: totalProducts || 0,
-      totalRevenue: parseFloat(totalRevenue.toFixed(2)), // `toFixed` अब संख्या पर सुरक्षित रूप से कॉल किया जा सकता है
+      totalRevenue: parseFloat(Number(totalRevenue).toFixed(2)), // `toFixed` अब संख्या पर सुरक्षित रूप से कॉल किया जा सकता है
       averageRating: calculatedAverageRating // या averageRatingFromProfile, जो भी आप उपयोग करना चाहते हैं
     };
 
