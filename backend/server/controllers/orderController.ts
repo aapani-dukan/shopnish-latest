@@ -865,22 +865,6 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
 
     const formattedOrders = masterOrders.map(masterOrder => {
       
-let parsedDeliveryAddress: any = {};
-const addressData = masterOrder.deliveryAddress;
-if (addressData) {
-    if (typeof addressData === 'string') {
-        try {
-            parsedDeliveryAddress = JSON.parse(addressData);
-        } catch (e) {
-            console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
-            // यदि parsing विफल हो जाए, तो मूल स्ट्रिंग को addressLine1 के रूप में उपयोग करें
-            parsedDeliveryAddress = { addressLine1: addressData }; 
-        }
-    } else if (typeof addressData === 'object') {
-        // यदि Drizzle ने इसे पहले ही ऑब्जेक्ट के रूप में पार्स कर दिया है
-        parsedDeliveryAddress = addressData;
-    }
-}
 
 
       // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें
@@ -901,7 +885,7 @@ if (addressData) {
 
       return {
         ...masterOrder,
-        deliveryAddress: parsedDeliveryAddress,
+        deliveryAddress: masterOrder.deliveryAddress, 
         subOrders: subOrdersWithDeliveryInfo,
         // masterOrder.deliveryCharge और masterOrder.estimatedDeliveryTime हटा दिया गया है
         // क्योंकि यह अब सब-ऑर्डर और डिलीवरी बैच में है
@@ -965,12 +949,12 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       return res.status(404).json({ message: "Master order not found or access denied." });
     }
 
-    let parsedDeliveryAddress = {};
-    try {
-      parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
-    } catch (e) {
-      console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
-    }
+    //let parsedDeliveryAddress = {};
+   // try {
+   //   parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
+  //  } catch (e) {
+    //  console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
+   // }
 
     // डिलीवरी बॉय की स्थिति और अपेक्षित मार्ग दिखाने के लिए सब-ऑर्डर से डेटा एकत्र करें
     const deliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
@@ -1003,7 +987,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
         lng: masterOrder.deliveryLng || 0,
-        address: (parsedDeliveryAddress as any).addressLine1 || '',
+        address:  (masterOrder.deliveryAddress as any).addressLine1 || '', 
         city: (parsedDeliveryAddress as any).city || '',
         pincode: (parsedDeliveryAddress as any).pincode || '',
         fullName: (parsedDeliveryAddress as any).fullName || '',
