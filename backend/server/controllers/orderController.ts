@@ -314,7 +314,7 @@ const [masterOrder] = await tx.insert(orders).values({
     customerId: userId,
     deliveryAddressId: finalDeliveryAddressId,
     // FIX APPLIED: Only save the addressLine1 string to the TEXT column
-    deliveryAddress: finalDeliveryAddressJson.addressLine1, 
+    deliveryAddress: JSON.stringify(finalDeliveryAddressJson)
     
     deliveryCity: finalCity,
     deliveryState: finalState,
@@ -615,7 +615,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             customerId: userId,
             deliveryAddressId: finalDeliveryAddressId,
             // 🛑 FIX 1: deliveryAddress को JSON के बजाय TEXT कॉलम के लिए addressLine1 का उपयोग करें
-            deliveryAddress: finalDeliveryAddressJson.addressLine1, 
+            deliveryAddress: JSON.stringify(finalDeliveryAddressJson)
             deliveryCity: finalCity,
             deliveryState: finalState,
             deliveryPincode: finalPincode,
