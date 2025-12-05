@@ -1197,7 +1197,7 @@ sellerRouter.patch(
                // 🛑 FIX: यहाँ टर्मिनल स्टेटस जोड़ें
              'ready_for_pickup': [], // विक्रेता इसे और अपडेट नहीं कर सकता
   'delivered_by_seller': [], // डिलीवरी हो गई, विक्रेता अपडेट नहीं कर सकता
-  'delivered_by_delivery_boy': [],
+  
     'rejected': [], // Rejected के बाद कोई परिवर्तन नहीं
     'cancelled': [], // Cancelled के बाद कोई परिवर्तन नहीं
     
