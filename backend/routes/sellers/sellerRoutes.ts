@@ -1194,6 +1194,11 @@ sellerRouter.patch(
             'preparing': ['ready_for_pickup'],
             // 'ready_for_pickup' के बाद डिलीवरी बॉय द्वारा अपडेट किया जाएगा
             // 'rejected', 'delivered_by_seller', 'delivered_by_delivery_boy', 'cancelled' टर्मिनल स्टेटस हैं सेलर के लिए
+               // 🛑 FIX: यहाँ टर्मिनल स्टेटस जोड़ें
+    'rejected': [], // Rejected के बाद कोई परिवर्तन नहीं
+    'cancelled': [], // Cancelled के बाद कोई परिवर्तन नहीं
+    'delivered_by_seller': [], // Delivered के बाद कोई परिवर्तन नहीं
+    'delivered_by_delivery_boy': [], // Delivered के बाद कोई परिवर्तन नहीं
           };
 
           if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
