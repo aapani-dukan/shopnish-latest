@@ -314,7 +314,7 @@ const [masterOrder] = await tx.insert(orders).values({
     customerId: userId,
     deliveryAddressId: finalDeliveryAddressId,
     // FIX APPLIED: Only save the addressLine1 string to the TEXT column
-    deliveryAddress: JSON.stringify(finalDeliveryAddressJson)
+    deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
     
     deliveryCity: finalCity,
     deliveryState: finalState,
