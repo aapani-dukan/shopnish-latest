@@ -123,7 +123,7 @@ const SellerOrdersPage: React.FC = () => {
       
       case 'ready_for_pickup': return 'पिकअप के लिए तैयार';
       case 'picked_up': return 'पिकअप किया';
-      case 'out_for_delivery' return डिलीवरी के लिए निकला';
+      case 'out_for_delivery': return 'डिलीवरी के लिए निकला';
       case 'delivered': return 'डिलीवर किया गया';
       case 'rejected': return 'अस्वीकृत';
       case 'cancelled': return 'रद्द';
