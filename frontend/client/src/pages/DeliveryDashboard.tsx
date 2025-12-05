@@ -47,7 +47,7 @@ const getStatusText = (status: string) => {
   switch (status) {
     case "pending":          return "लंबित (उपलब्ध)";
     case "accepted":         return "स्वीकृत (असाइन)";
-    case "preparing":        return "तैयार हो रहा है";
+    
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
     case "picked_up":        return "पिकअप हो गया";
     case "out_for_delivery": return "डिलीवरी के लिए निकला";
