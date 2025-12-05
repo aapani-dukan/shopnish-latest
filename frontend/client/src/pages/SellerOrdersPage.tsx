@@ -32,13 +32,15 @@ interface SubOrder {
 
   // 🔥 Correct backend status enums
   status:
-    | 'pending'
-    | 'accepted'
-    | 'preparing'
-    | 'ready_for_pickup'
-    | 'cancelled'
-    | 'rejected'
-    | 'delivered_by_seller';
+  
+| 'pending'
+| 'accepted'
+| 'ready_for_pickup'
+| 'picked_up'
+| 'out_for_delivery'
+| 'delivered'
+| 'cancelled'
+| 'rejected'
 
   subtotal: number;
   deliverycharge: number;
@@ -96,12 +98,15 @@ const SellerOrdersPage: React.FC = () => {
         return <Clock className="h-4 w-4 text-yellow-600" />;
       case 'accepted':
         return <Package className="h-4 w-4 text-blue-600" />;
-      case 'preparing':
-        return <Package className="h-4 w-4 text-purple-600" />;
       case 'ready_for_pickup':
+        return <Package className="h-4 w-4 text-purple-600" />;
+      case 'picked_up':
         return <Bike className="h-4 w-4 text-green-600" />;
-      case 'delivered_by_seller':
+      case 'out_for_delivery':
         return <CheckCircle className="h-4 w-4 text-green-600" />;
+      case 'delivered':
+        return <XCircle className="h-4 w-4 text-green-600" />;
+      case 'cancelled':
       case 'rejected':
         return <XCircle className="h-4 w-4 text-red-600" />;
       case 'cancelled':
@@ -115,9 +120,11 @@ const SellerOrdersPage: React.FC = () => {
     switch (status) {
       case 'pending': return 'लंबित';
       case 'accepted': return 'स्वीकृत';
-      case 'preparing': return 'तैयार किया जा रहा है';
+      
       case 'ready_for_pickup': return 'पिकअप के लिए तैयार';
-      case 'delivered_by_seller': return 'सेलर द्वारा डिलीवर';
+      case 'picked_up': return 'पिकअप किया';
+      case 'out_for_delivery' return डिलीवरी के लिए निकला';
+      case 'delivered': return 'डिलीवर किया गया';
       case 'rejected': return 'अस्वीकृत';
       case 'cancelled': return 'रद्द';
       default: return status;
@@ -150,9 +157,12 @@ const SellerOrdersPage: React.FC = () => {
             <SelectItem value="all">सभी</SelectItem>
             <SelectItem value="pending">लंबित</SelectItem>
             <SelectItem value="accepted">स्वीकृत</SelectItem>
-            <SelectItem value="preparing">तैयारी</SelectItem>
+            
             <SelectItem value="ready_for_pickup">पिकअप हेतु तैयार</SelectItem>
-            <SelectItem value="delivered_by_seller">डिलीवर</SelectItem>
+            <SelectItem value="picked_up">पिकअप किया</SelectItem>
+            <SelectItem value="out_for_delivery">डिलीवरी के लिए निकला</SelectItem>
+            
+            <SelectItem value="delivered">डिलीवर</SelectItem>
             <SelectItem value="rejected">अस्वीकृत</SelectItem>
             <SelectItem value="cancelled">रद्द</SelectItem>
           </SelectContent>
