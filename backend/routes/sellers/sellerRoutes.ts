@@ -1190,17 +1190,14 @@ sellerRouter.patch(
           const currentStatus = existingSubOrder.status;
           const validStatusTransitions: { [key: string]: string[] } = {
             'pending': ['accepted', 'rejected'],
-            'accepted': ['preparing', 'rejected'],
-            'preparing': ['ready_for_pickup'],
-            // 'ready_for_pickup' के बाद डिलीवरी बॉय द्वारा अपडेट किया जाएगा
-            // 'rejected', 'delivered_by_seller', 'delivered_by_delivery_boy', 'cancelled' टर्मिनल स्टेटस हैं सेलर के लिए
-               // 🛑 FIX: यहाँ टर्मिनल स्टेटस जोड़ें
-             'ready_for_pickup': [], // विक्रेता इसे और अपडेट नहीं कर सकता
-  'delivered_by_seller': [], // डिलीवरी हो गई, विक्रेता अपडेट नहीं कर सकता
+            'accepted': ['ready_for_pickup', 'rejected'],
+            'ready_for_pickup': ['picked_up'],
+            'picked_up': ['out_for_delivery'],
+            'out_for_delivery': ['delivered'],     
   
-    'rejected': [], // Rejected के बाद कोई परिवर्तन नहीं
-    'cancelled': [], // Cancelled के बाद कोई परिवर्तन नहीं
-    
+    'rejected': [], 
+    'cancelled': [], 
+    'delivered': [],
           };
 
           if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
