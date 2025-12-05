@@ -615,7 +615,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             customerId: userId,
             deliveryAddressId: finalDeliveryAddressId,
             // 🛑 FIX 1: deliveryAddress को JSON के बजाय TEXT कॉलम के लिए addressLine1 का उपयोग करें
-            deliveryAddress: JSON.stringify(finalDeliveryAddressJson)
+            deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
             deliveryCity: finalCity,
             deliveryState: finalState,
             deliveryPincode: finalPincode,
