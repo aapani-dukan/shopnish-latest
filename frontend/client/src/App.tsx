@@ -94,7 +94,7 @@ function App() {
               <Route index element={<SellerDashboard />} />
               
               <Route path="apply" element={<SellerApplyPage />} />
-              <Route path="status" element={<SellerStatusPage />} />
+              <Route path="seller-status" element={<SellerStatusPage />} />
               <Route path="profile/edit" element={<SellerProfileEdit />} />
               <Route path="delivery-settings" element={<DeliverySettingsPage />} />
                 <Route path="products" element={<SellerProductsPage />} /> 
