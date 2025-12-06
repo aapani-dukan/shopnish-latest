@@ -75,6 +75,7 @@ function App() {
           <Route path="/admin-login" element={<AdminLogin />} />
           <Route path="/delivery-login" element={<DeliveryLogin />} />
           
+          <Route path="/seller-status" element={<SellerStatusPage />} />
           <Route path="/privacy-policy" element={<PrivacyPolicy />} />
           <Route path="/terms-of-service" element={<TermsOfService />} />
           <Route path="/cookies-policy" element={<CookiesPolicy />} />
@@ -94,7 +95,7 @@ function App() {
               <Route index element={<SellerDashboard />} />
               
               <Route path="apply" element={<SellerApplyPage />} />
-              <Route path="seller-status" element={<SellerStatusPage />} />
+              
               <Route path="profile/edit" element={<SellerProfileEdit />} />
               <Route path="delivery-settings" element={<DeliverySettingsPage />} />
                 <Route path="products" element={<SellerProductsPage />} /> 
