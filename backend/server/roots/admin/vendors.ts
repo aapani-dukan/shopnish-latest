@@ -7,9 +7,9 @@ import {
   approvalStatusEnum, // ✅ The enum definition
   userRoleEnum,
   deliveryAreas,
-  stores
+  stores // 🎯 FIX: stores टेबल इम्पोर्ट किया गया है
 } from '../../../shared/backend/schema';
-import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Check this path again if issues persist
+import { AuthenticatedRequest } from '../../middleware/verifyToken';
 import { eq, and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize';
 import { validateRequest } from '../../middleware/validation';
@@ -116,7 +116,7 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
 adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
-    const [seller] = await db.query.sellersPgTable.findMany({
+    const sellerResults = await db.query.sellersPgTable.findMany({ // 🎯 FIX: array destructuring हटाया
       where: eq(sellersPgTable.id, sellerId),
       with: {
         user: {
@@ -124,6 +124,7 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
         }
       }
     });
+    const seller = sellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
 
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
@@ -135,86 +136,81 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
   }
 });
 
+// -------------------------------------------------------------------------
 /**
  * ✅ PATCH /api/admin/vendors/approve/:id
- * एक सेलर को मंज़ूर करें
- */
-/**
- * ✅ PATCH /api/admin/vendors/approve/:id
- * एक सेलर को मंज़ूर करें
+ * एक सेलर को मंज़ूर करें (TRANSACTIONAL & STORE CREATION ADDED)
  */
 adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+  const sellerId = Number(req.params.id);
+  
   try {
-    const sellerId = Number(req.params.id);
-
-    // 1. सेलर को फ़ेच करें
-    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    // 1. Fetch seller safely (outside transaction for initial check)
+    const sellerResults = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    const seller = sellerResults[0]; 
+    
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
-    // 2. सेलर को 'approved' के रूप में अपडेट करें
-    const [approved] = await db
-      .update(sellersPgTable)
-      .set({
-        approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
-        approvedAt: new Date(),
-        updatedAt: new Date(),
-        rejectionReason: null
-      })
-      .where(eq(sellersPgTable.id, sellerId))
-      .returning();
+    // 2. Start Transaction
+    const finalApprovedSeller = await db.transaction(async (tx) => {
+        // 2a. Update Seller status
+        const approvedResults = await tx
+          .update(sellersPgTable)
+          .set({
+            approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
+            approvedAt: new Date(),
+            updatedAt: new Date(),
+            rejectionReason: null
+          })
+          .where(eq(sellersPgTable.id, sellerId))
+          .returning();
 
-    // 3. यूज़र की भूमिका और अप्रूवल स्टेटस अपडेट करें
-    await db.update(users)
-      .set({ role: userRoleEnum.enumValues[1], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'seller', 'approved'
-      .where(eq(users.id, seller.userId));
+        const approved = approvedResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
 
-    // ************ 🛑 FIX: डिफ़ॉल्ट स्टोर एंट्री बनाएँ ************
-    
-    // 4. जांचें कि क्या इस सेलर के लिए पहले से ही कोई स्टोर है
-    const existingStore = await db.query.stores.findFirst({
-      where: eq(stores.sellerId, sellerId),
-    });
-
-    if (!existingStore) {
-        console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
-        try {
-            await db.insert(stores).values({
-                sellerId: sellerId,
-                
-                // ✅ स्कीमा के अनुसार NOT NULL फ़ील्ड्स के लिए डेटा का उपयोग करें:
-                // sellersPgTable से उपलब्ध डेटा का उपयोग करें, या डिफ़ॉल्ट मान सेट करें
-                storeName: seller.businessName || `Store ${sellerId}`, 
-                storeType: 'General', // डिफ़ॉल्ट मान
-                address: seller.businessAddress || 'Pending Address Setup', 
-                city: seller.city || 'Pending City', 
-                pincode: seller.pincode || '000000', // डिफ़ॉल्ट मान
-                phone: seller.businessPhone || '0000000000', // डिफ़ॉल्ट मान
-                
-                // अन्य वैकल्पिक फ़ील्ड्स (लाइसेंस, GST आदि) को null के रूप में छोड़ दिया जाता है
-                
-            });
-        } catch (e) {
-            console.error(`🚨 Failed to create default store for Seller ${sellerId}:`, e);
-            // यदि यहाँ इन्सर्ट क्रैश होता है, तो ऑर्डर प्रोसेसिंग फ़ंक्शन क्रैश हो जाएगा। 
-            // सुनिश्चित करें कि 'stores' टेबल स्कीमा में कोई अन्य NOT NULL फ़ील्ड मिसिंग न हो।
+        if (!approved) {
+             throw new Error("Failed to update seller status.");
         }
-    }
-    // ***************************************************************
 
-    // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
-    // ...
+        // 2b. Update User role and approval status
+        await tx.update(users)
+          .set({ role: userRoleEnum.enumValues[1], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'seller', 'approved'
+          .where(eq(users.id, seller.userId));
 
+        // 2c. Check and create default Store Entry
+        const existingStore = await tx.query.stores.findFirst({
+            where: eq(stores.sellerId, sellerId),
+        });
+
+        if (!existingStore) {
+            console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
+            // NOT NULL fields must be provided based on your schema
+            await tx.insert(stores).values({
+                sellerId: sellerId,
+                storeName: seller.businessName || `Store ${sellerId}`, 
+                storeType: 'General Goods', 
+                address: seller.businessAddress || 'Pending Setup: Address', 
+                city: seller.city || 'Pending Setup: City', 
+                pincode: seller.pincode || '000000', 
+                phone: seller.businessPhone || '0000000000', 
+            });
+        }
+        
+        return approved;
+    });
+    
+    // 3. Success Response
     res.status(200).json({
-      message: 'Seller approved successfully.',
-      seller: approved,
+      message: 'Seller approved and store created successfully.',
+      seller: finalApprovedSeller,
     });
   } catch (error: any) {
-    console.error('Failed to approve seller:', error);
-    res.status(500).json({ message: 'Failed to approve seller.' });
+    console.error('❌ Failed to approve seller (Transaction Failed):', error);
+    res.status(500).json({ message: error.message || 'Failed to approve seller.' });
   }
 });
+// -------------------------------------------------------------------------
 
 /**
  * ✅ PATCH /api/admin/vendors/reject/:id
@@ -227,32 +223,30 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
 })), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
-    const { reason } = req.body;
 
-    const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    const sellerResults = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+    const seller = sellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
-    const [rejected] = await db
+    const rejectedResults = await db
       .update(sellersPgTable)
       .set({
-        approvalStatus: approvalStatusEnum.enumValues[2], // ✅ CONFIRMED FIX: Using enum value
+        approvalStatus: approvalStatusEnum.enumValues[2], // 'rejected'
         updatedAt: new Date(),
         rejectionReason: reason || null
       })
       .where(eq(sellersPgTable.id, sellerId))
       .returning();
+    const rejected = rejectedResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+
 
     await db.update(users)
       .set({ approvalStatus: approvalStatusEnum.enumValues[2], role: userRoleEnum.enumValues[3], updatedAt: new Date() })
       .where(eq(users.id, seller.userId));
 
     // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
-    // For example:
-    // const firebaseAdmin = require('firebase-admin'); // Ensure you have imported and initialized firebase-admin
-    // await firebaseAdmin.auth().setCustomUserClaims(seller.userId.toString(), { role: 'customer', approvalStatus: 'rejected' });
-    // ***************************************************************************************************
 
     res.status(200).json({
       message: 'Seller rejected successfully.',
@@ -264,9 +258,10 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
   }
 });
 
+// -------------------------------------------------------------------------
 /**
  * ✅ PATCH /api/admin/vendors/:id
- * एक मौजूदा सेलर के विवरण को अपडेट करें (एडमिन द्वारा)
+ * एक मौजूदा सेलर के विवरण को अपडेट करें (एडमिन द्वारा) - STORE UPDATE और SAFE INDEXING FIX
  */
 adminVendorsRouter.patch(
   '/:id',
@@ -289,7 +284,10 @@ adminVendorsRouter.patch(
         return res.status(400).json({ error: 'Invalid seller ID.' });
       }
 
-      const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
+      // 1. 🛑 FIX: सुरक्षित रूप से existingSeller फ़ेच करें
+      const existingSellerResults = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
+      const existingSeller = existingSellerResults[0];
+
       if (!existingSeller) {
         return res.status(404).json({ message: 'Seller not found.' });
       }
@@ -307,39 +305,91 @@ adminVendorsRouter.patch(
         updateData.deliveryRadius = parseInt(updateData.deliveryRadius);
       }
 
-      const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = {
+      // 2. Prepare updates for both tables
+      const storeUpdate: Partial<typeof stores.$inferInsert> = {};
+      
+      // Map seller fields that affect the store table
+      if (updateData.businessName !== undefined) {
+        storeUpdate.storeName = updateData.businessName;
+      }
+      if (updateData.businessAddress !== undefined) {
+        storeUpdate.address = updateData.businessAddress;
+      }
+      if (updateData.city !== undefined) {
+        storeUpdate.city = updateData.city;
+      }
+      if (updateData.pincode !== undefined) {
+        storeUpdate.pincode = updateData.pincode;
+      }
+      if (updateData.businessPhone !== undefined) {
+        storeUpdate.phone = updateData.businessPhone;
+      }
+      
+      const finalSellerUpdateData: Partial<typeof sellersPgTable.$inferInsert> = {
         ...updateData,
         updatedAt: new Date(),
       };
 
-      Object.keys(finalUpdateData).forEach(key => finalUpdateData[key as keyof typeof finalUpdateData] === undefined && delete finalUpdateData[key as keyof typeof finalUpdateData]);
+      Object.keys(finalSellerUpdateData).forEach(key => finalSellerUpdateData[key as keyof typeof finalSellerUpdateData] === undefined && delete finalSellerUpdateData[key as keyof typeof finalSellerUpdateData]);
 
-      const [updatedSeller] = await db.update(sellersPgTable)
-        .set(finalUpdateData)
-        .where(eq(sellersPgTable.id, sellerId))
-        .returning();
+      const finalUpdatedSeller = await db.transaction(async (tx) => {
+        
+        // A. Update SELLERS TABLE (using safe indexing)
+        const updatedSellerResults = await tx.update(sellersPgTable)
+          .set(finalSellerUpdateData)
+          .where(eq(sellersPgTable.id, sellerId))
+          .returning();
+        
+        const updatedSeller = updatedSellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
 
-      if (!updatedSeller) {
-        return res.status(500).json({ message: 'Failed to update seller.' });
-      }
+        if (!updatedSeller) {
+            throw new Error('Failed to update seller (No records updated).');
+        }
 
-      if (updateData.approvalStatus !== undefined || updateData.isActive !== undefined) {
-          const userUpdate: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
-          if (updateData.approvalStatus !== undefined) {
-              userUpdate.approvalStatus = updateData.approvalStatus;
-              if (updateData.approvalStatus === approvalStatusEnum.enumValues[2]) {
-                  userUpdate.role = userRoleEnum.enumValues[3];
-              } else if (updateData.approvalStatus === approvalStatusEnum.enumValues[1]) {
-                  userUpdate.role = userRoleEnum.enumValues[1];
-              }
+        // B. 🛑 FIX: Update or Create STORES TABLE
+        if (Object.keys(storeUpdate).length > 0) {
+          const existingStore = await tx.query.stores.findFirst({
+              where: eq(stores.sellerId, sellerId),
+          });
+
+          if (existingStore) {
+              // Update existing store
+              await tx.update(stores)
+                  .set({ ...storeUpdate, updatedAt: new Date() })
+                  .where(eq(stores.sellerId, sellerId));
+          } else {
+              // Create a default store for missing data
+              console.warn(`Seller ${sellerId} is missing a store entry. Creating default store during patch.`);
+              await tx.insert(stores).values({
+                  sellerId: sellerId,
+                  storeName: storeUpdate.storeName || updatedSeller.businessName || `Store ${sellerId}`,
+                  storeType: 'General', 
+                  address: storeUpdate.address || updatedSeller.businessAddress || 'Pending Address',
+                  city: storeUpdate.city || updatedSeller.city || 'Pending City',
+                  pincode: storeUpdate.pincode || updatedSeller.pincode || '000000',
+                  phone: storeUpdate.phone || updatedSeller.businessPhone || '0000000000',
+              });
           }
-          await db.update(users).set(userUpdate).where(eq(users.id, existingSeller.userId));
-           // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
-           // If approvalStatus is changed, you might need to update Firebase claims here too
-           // ***************************************************************************************************
-      }
+        }
+        
+        // C. Update User role/status if applicable
+        if (updateData.approvalStatus !== undefined || updateData.isActive !== undefined) {
+            const userUpdate: Partial<typeof users.$inferInsert> = { updatedAt: new Date() };
+            if (updateData.approvalStatus !== undefined) {
+                userUpdate.approvalStatus = updateData.approvalStatus;
+                if (updateData.approvalStatus === approvalStatusEnum.enumValues[2]) {
+                    userUpdate.role = userRoleEnum.enumValues[3];
+                } else if (updateData.approvalStatus === approvalStatusEnum.enumValues[1]) {
+                    userUpdate.role = userRoleEnum.enumValues[1];
+                }
+            }
+            await tx.update(users).set(userUpdate).where(eq(users.id, existingSeller.userId));
+        }
+        
+        return updatedSeller;
+      });
 
-      return res.status(200).json({ message: "Seller updated successfully.", seller: updatedSeller });
+      return res.status(200).json({ message: "Seller updated successfully.", seller: finalUpdatedSeller });
     } catch (error: any) {
       console.error(`❌ Error updating seller with ID ${req.params.id}:`, error);
       return res.status(500).json({ error: error.message || 'Failed to update seller.' });
@@ -347,36 +397,51 @@ adminVendorsRouter.patch(
   }
 );
 
+// -------------------------------------------------------------------------
 
 /**
  * ✅ DELETE /api/admin/vendors/:id
- * एक सेलर को हटाएं (एडमिन द्वारा)
+ * एक सेलर को हटाएं (एडमिन द्वारा) - STORE DELETION ADDED
  */
 adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+  const sellerId = parseInt(req.params.id);
+  
   try {
-    const sellerId = parseInt(req.params.id);
+    const deletedSeller = await db.transaction(async (tx) => {
+        // 1. 🛑 FIX: Store Table से एंट्री डिलीट करें
+        await tx.delete(stores)
+            .where(eq(stores.sellerId, sellerId));
+            
+        // 2. Seller Table से एंट्री डिलीट करें (using safe indexing)
+        const deletedSellerResults = await tx.delete(sellersPgTable)
+            .where(eq(sellersPgTable.id, sellerId))
+            .returning();
+            
+        const deletedSeller = deletedSellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
 
-    const [deletedSeller] = await db.delete(sellersPgTable)
-      .where(eq(sellersPgTable.id, sellerId))
-      .returning();
+        if (!deletedSeller) {
+            throw new Error("Seller not found.");
+        }
 
-    if (!deletedSeller) {
-      return res.status(404).json({ message: "Seller not found." });
-    }
-
-    await db.update(users)
-      .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date() })
-      .where(eq(users.id, deletedSeller.userId));
+        // 3. User Role को 'customer' (index 3) पर वापस सेट करें
+        await tx.update(users)
+            .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date() })
+            .where(eq(users.id, deletedSeller.userId));
+            
+        return deletedSeller;
+    });
 
     // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
-    // When deleting or changing user role significantly, update Firebase claims
-    // ***************************************************************************************************
 
     return res.status(200).json({ message: "Seller deleted successfully.", seller: deletedSeller });
   } catch (error: any) {
+    if (error.message === "Seller not found.") {
+        return res.status(404).json({ message: "Seller not found." });
+    }
     console.error(`❌ Error deleting seller with ID ${req.params.id}:`, error);
     return res.status(500).json({ error: 'Failed to delete seller.' });
   }
 });
 
 export default adminVendorsRouter;
+    
