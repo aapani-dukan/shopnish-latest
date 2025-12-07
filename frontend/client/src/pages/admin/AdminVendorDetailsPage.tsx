@@ -72,18 +72,18 @@ const AdminVendorDetailsPage: React.FC = () => {
   // 2. Approve Seller Mutation
   const approveMutation = useMutation<void, Error, number>({
     mutationFn: async (idToApprove: number) => {
-      // NOTE: Your backend patch endpoint was `/api/admin/vendors/approve/:id`
       await apiRequest('PATCH', `/api/admin/vendors/approve/${idToApprove}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
+      // 🛑 FIX 1: Title and Description wrapped in JSX with explicit text color
       toast({
-        title: "विक्रेता स्वीकृत",
-        description: "विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।",
+        title: <div className="text-white font-bold">विक्रेता स्वीकृत</div>,
+        description: <div className="text-white/90">विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।</div>,
         variant: "success",
-        className: "bg-green-600 text-white", // ✅ FIX: Forced high contrast for success
+        className: "bg-green-600",
       });
     },
     onError: (err) => {
@@ -98,7 +98,6 @@ const AdminVendorDetailsPage: React.FC = () => {
   // 3. Reject Seller Mutation
   const rejectMutation = useMutation<void, Error, { sellerId: number; reason: string }>({
     mutationFn: async ({ sellerId: idToReject, reason }) => {
-      // NOTE: Your backend patch endpoint was `/api/admin/vendors/reject/:id`
       await apiRequest('PATCH', `/api/admin/vendors/reject/${idToReject}`, { reason });
     },
     onSuccess: () => {
@@ -106,11 +105,12 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       setShowRejectModal(false);
       setRejectionReason("");
+      // 🛑 FIX 2: Title and Description wrapped in JSX with explicit text color (Main fix for the white strip)
       toast({
-        title: "विक्रेता अस्वीकृत",
-        description: "विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।",
+        title: <div className="text-white font-bold">विक्रेता अस्वीकृत</div>,
+        description: <div className="text-white/90">विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।</div>,
         variant: "destructive",
-        className: "bg-red-600 text-white", // ✅ FIX: Forced high contrast for rejection
+        className: "bg-red-600",
       });
     },
     onError: (err) => {
@@ -125,16 +125,16 @@ const AdminVendorDetailsPage: React.FC = () => {
   // 4. Update Seller Settings Mutation (New)
   const updateSellerSettingsMutation = useMutation<void, Error, Partial<Seller>>({
     mutationFn: async (dataToUpdate: Partial<Seller>) => {
-      // NOTE: Your backend patch endpoint was `/api/admin/vendors/:id`
       await apiRequest('PATCH', `/api/admin/vendors/${sellerId}`, dataToUpdate); 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
+      // 🛑 FIX 3: Title and Description wrapped in JSX with explicit text color
       toast({
-        title: "विक्रेता सेटिंग्स अपडेटेड",
-        description: "विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।",
+        title: <div className="text-white font-bold">विक्रेता सेटिंग्स अपडेटेड</div>,
+        description: <div className="text-white/90">विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।</div>,
         variant: "success",
-        className: "bg-green-600 text-white", // ✅ FIX: Forced high contrast for update success
+        className: "bg-green-600",
       });
     },
     onError: (err) => {
