@@ -2,12 +2,12 @@
 import { Router, Response } from 'express';
 import { db } from '../../db';
 import {
-  sellersPgTable, // ✅ Confirmed: This is the correct import for the Drizzle table
+  sellersPgTable, 
   users,
-  approvalStatusEnum, // ✅ The enum definition
+  approvalStatusEnum, 
   userRoleEnum,
   deliveryAreas,
-  stores // 🎯 FIX: stores टेबल इम्पोर्ट किया गया है
+  stores 
 } from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken';
 import { eq, and } from 'drizzle-orm';
@@ -116,7 +116,7 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
 adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
-    const sellerResults = await db.query.sellersPgTable.findMany({ // 🎯 FIX: array destructuring हटाया
+    const sellerResults = await db.query.sellersPgTable.findMany({ 
       where: eq(sellersPgTable.id, sellerId),
       with: {
         user: {
@@ -124,7 +124,7 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
         }
       }
     });
-    const seller = sellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+    const seller = sellerResults[0]; 
 
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
@@ -167,7 +167,7 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
           .where(eq(sellersPgTable.id, sellerId))
           .returning();
 
-        const approved = approvedResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+        const approved = approvedResults[0]; 
 
         if (!approved) {
              throw new Error("Failed to update seller status.");
@@ -223,9 +223,10 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
 })), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
+    const { reason } = req.body; // 🎯 FIX: req.body से 'reason' को एक्सट्रैक्ट किया गया
 
     const sellerResults = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
-    const seller = sellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+    const seller = sellerResults[0]; 
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
@@ -239,7 +240,7 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
       })
       .where(eq(sellersPgTable.id, sellerId))
       .returning();
-    const rejected = rejectedResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+    const rejected = rejectedResults[0]; 
 
 
     await db.update(users)
@@ -340,7 +341,7 @@ adminVendorsRouter.patch(
           .where(eq(sellersPgTable.id, sellerId))
           .returning();
         
-        const updatedSeller = updatedSellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+        const updatedSeller = updatedSellerResults[0]; 
 
         if (!updatedSeller) {
             throw new Error('Failed to update seller (No records updated).');
@@ -417,7 +418,7 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
             .where(eq(sellersPgTable.id, sellerId))
             .returning();
             
-        const deletedSeller = deletedSellerResults[0]; // 🎯 FIX: सुरक्षित इंडेक्सिंग
+        const deletedSeller = deletedSellerResults[0]; 
 
         if (!deletedSeller) {
             throw new Error("Seller not found.");
