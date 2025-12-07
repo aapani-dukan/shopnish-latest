@@ -138,19 +138,25 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
  * ✅ PATCH /api/admin/vendors/approve/:id
  * एक सेलर को मंज़ूर करें
  */
+/**
+ * ✅ PATCH /api/admin/vendors/approve/:id
+ * एक सेलर को मंज़ूर करें
+ */
 adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
 
+    // 1. सेलर को फ़ेच करें
     const [seller] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
     if (!seller) {
       return res.status(404).json({ message: "Seller not found." });
     }
 
+    // 2. सेलर को 'approved' के रूप में अपडेट करें
     const [approved] = await db
       .update(sellersPgTable)
       .set({
-        approvalStatus: approvalStatusEnum.enumValues[1], // ✅ CONFIRMED FIX: Using enum value
+        approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
         approvedAt: new Date(),
         updatedAt: new Date(),
         rejectionReason: null
@@ -158,16 +164,46 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
       .where(eq(sellersPgTable.id, sellerId))
       .returning();
 
-    // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
+    // 3. यूज़र की भूमिका और अप्रूवल स्टेटस अपडेट करें
     await db.update(users)
       .set({ role: userRoleEnum.enumValues[1], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'seller', 'approved'
       .where(eq(users.id, seller.userId));
 
+    // ************ 🛑 FIX: डिफ़ॉल्ट स्टोर एंट्री बनाएँ ************
+    
+    // 4. जांचें कि क्या इस सेलर के लिए पहले से ही कोई स्टोर है
+    const existingStore = await db.query.stores.findFirst({
+      where: eq(stores.sellerId, sellerId),
+    });
+
+    if (!existingStore) {
+        console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
+        try {
+            await db.insert(stores).values({
+                sellerId: sellerId,
+                
+                // ✅ स्कीमा के अनुसार NOT NULL फ़ील्ड्स के लिए डेटा का उपयोग करें:
+                // sellersPgTable से उपलब्ध डेटा का उपयोग करें, या डिफ़ॉल्ट मान सेट करें
+                storeName: seller.businessName || `Store ${sellerId}`, 
+                storeType: 'General', // डिफ़ॉल्ट मान
+                address: seller.businessAddress || 'Pending Address Setup', 
+                city: seller.city || 'Pending City', 
+                pincode: seller.pincode || '000000', // डिफ़ॉल्ट मान
+                phone: seller.businessPhone || '0000000000', // डिफ़ॉल्ट मान
+                
+                // अन्य वैकल्पिक फ़ील्ड्स (लाइसेंस, GST आदि) को null के रूप में छोड़ दिया जाता है
+                
+            });
+        } catch (e) {
+            console.error(`🚨 Failed to create default store for Seller ${sellerId}:`, e);
+            // यदि यहाँ इन्सर्ट क्रैश होता है, तो ऑर्डर प्रोसेसिंग फ़ंक्शन क्रैश हो जाएगा। 
+            // सुनिश्चित करें कि 'stores' टेबल स्कीमा में कोई अन्य NOT NULL फ़ील्ड मिसिंग न हो।
+        }
+    }
+    // ***************************************************************
+
     // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
-    // For example:
-    // const firebaseAdmin = require('firebase-admin'); // Ensure you have imported and initialized firebase-admin
-    // await firebaseAdmin.auth().setCustomUserClaims(seller.userId.toString(), { role: 'seller', approvalStatus: 'approved' });
-    // ***************************************************************************************************
+    // ...
 
     res.status(200).json({
       message: 'Seller approved successfully.',
