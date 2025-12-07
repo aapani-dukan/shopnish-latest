@@ -1,4 +1,6 @@
-import * as React from "react"
+// components/ui/toast.tsx
+
+Import * as React from "react"
 import * as ToastPrimitives from "@radix-ui/react-toast"
 import { cva, type VariantProps } from "class-variance-authority"
 import { X } from "lucide-react"
@@ -27,7 +29,10 @@ const toastVariants = cva(
   {
     variants: {
       variant: {
-        default: "border bg-background text-foreground",
+        // 🛑 FIX: text-foreground को हटाकर, एक विशिष्ट उच्च-कंट्रास्ट रंग का उपयोग करें।
+        default: "border bg-background text-gray-900", 
+        // ✅ NEW: Success variant जोड़ें
+        success: "border-green-600 bg-green-600 text-white", 
         destructive:
           "destructive group border-destructive bg-destructive text-destructive-foreground",
       },
@@ -92,7 +97,8 @@ const ToastTitle = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Title
     ref={ref}
-    className={cn("text-sm font-semibold", className)}
+    // 🛑 FIX: सुनिश्चित करें कि success और destructive वेरिएंट में टेक्स्ट रंग white हो (यदि वे परिभाषित हैं)
+    className={cn("text-sm font-semibold group-[.destructive]:text-white group-[.success]:text-white", className)}
     {...props}
   />
 ))
@@ -104,7 +110,8 @@ const ToastDescription = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <ToastPrimitives.Description
     ref={ref}
-    className={cn("text-sm opacity-90", className)}
+    // 🛑 FIX: सुनिश्चित करें कि success और destructive वेरिएंट में टेक्स्ट रंग white हो
+    className={cn("text-sm opacity-90 group-[.destructive]:text-white/90 group-[.success]:text-white/90", className)}
     {...props}
   />
 ))
@@ -124,4 +131,4 @@ export {
   ToastDescription,
   ToastClose,
   ToastAction,
-}
+  }
