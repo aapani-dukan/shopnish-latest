@@ -2,53 +2,53 @@
 
 "use client";
 
-import React, { useState, useEffect } from "react"; // Added useEffect
+import React, { useState, useEffect } from "react"; 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useParams, useNavigate } from "react-router-dom"; // Added useNavigate
+import { useParams, useNavigate } from "react-router-dom"; 
 import { toast as useToastHook } from "../../hooks/use-toast"; 
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Textarea } from "../../components/ui/textarea"; // Assuming you have a Textarea component
-import { Loader2, ArrowLeft } from "lucide-react"; // Added ArrowLeft icon
-import { apiRequest } from "../../lib/queryClient"; // Changed from axios to apiRequest (assuming it's a wrapper over axios)
+import { Textarea } from "../../components/ui/textarea"; 
+import { Loader2, ArrowLeft } from "lucide-react"; 
+import { apiRequest } from "../../lib/queryClient"; 
 
 // Interfaces
-interface Seller { // Renamed from seller to Seller for consistency
+interface Seller { 
   id: number;
-  businessName: string; // Corrected casing
-  email: string; // Added email, assuming it exists
-  approvalStatus: "pending" | "approved" | "rejected"; // Corrected casing
-  rejectionReason: string | null; // Corrected casing
-  approvedAt: string | null; // Corrected casing
+  businessName: string; 
+  email: string; 
+  approvalStatus: "pending" | "approved" | "rejected"; 
+  rejectionReason: string | null; 
+  approvedAt: string | null; 
   // New fields for settings
-  deliveryRadiusKm?: number; // Optional delivery radius for the seller
-  deliveryPincodes?: string[]; // Optional array of pincodes for the seller
-  baseDeliveryCharge?: number; // Optional base delivery charge for the seller
-  chargePerKm?: number; // Optional charge per km for the seller
+  deliveryRadiusKm?: number; 
+  deliveryPincodes?: string[]; 
+  baseDeliveryCharge?: number; 
+  chargePerKm?: number; 
 }
 
-const AdminVendorDetailsPage: React.FC = () => { // Renamed component
-  const { id } = useParams<{ id: string }>(); // Get seller ID from URL params
+const AdminVendorDetailsPage: React.FC = () => { 
+  const { id } = useParams<{ id: string }>(); 
   const sellerId = Number(id);
   const { toast } = useToastHook(); 
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [showRejectModal, setShowRejectModal] = useState(false); // Corrected casing
-  const [rejectionReason, setRejectionReason] = useState(""); // Corrected casing
-  const [sellerData, setSellerData] = useState<Partial<Seller>>({}); // State for form data
+  const [showRejectModal, setShowRejectModal] = useState(false); 
+  const [rejectionReason, setRejectionReason] = useState(""); 
+  const [sellerData, setSellerData] = useState<Partial<Seller>>({}); 
 
   // 1. Fetch Seller Details
   const { data: seller, isLoading: isLoadingSeller, error: sellerError } = useQuery<Seller, Error>({
     queryKey: ["adminSellerDetails", sellerId],
-    queryFn: () => apiRequest('GET', `/api/admin/vendors/${sellerId}`), // Assumed API endpoint for single seller
-    enabled: !!sellerId, // Only fetch if sellerId is available
+    queryFn: () => apiRequest('GET', `/api/admin/vendors/${sellerId}`), 
+    enabled: !!sellerId, 
   });
 
   useEffect(() => {
     if (seller) {
-      setSellerData(seller); // Initialize form data with fetched seller data
+      setSellerData(seller); 
     }
   }, [seller]);
 
@@ -72,7 +72,8 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
   // 2. Approve Seller Mutation
   const approveMutation = useMutation<void, Error, number>({
     mutationFn: async (idToApprove: number) => {
-      await apiRequest('POST', `/api/admin/vendors/${idToApprove}/approve`);
+      // NOTE: Your backend patch endpoint was `/api/admin/vendors/approve/:id`
+      await apiRequest('PATCH', `/api/admin/vendors/approve/${idToApprove}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
@@ -81,23 +82,24 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
       toast({
         title: "विक्रेता स्वीकृत",
         description: "विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।",
-        variant: "success", // ✅ FIX: Changed from "default" to "success"
+        variant: "success",
+        className: "bg-green-600 text-white", // ✅ FIX: Forced high contrast for success
       });
     },
     onError: (err) => {
       toast({
         title: "स्वीकृति विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता को स्वीकृत करने में विफल।",
-        variant: "destructive", // ✅ This is correct for errors
+        variant: "destructive",
       });
     },
   });
-  
 
   // 3. Reject Seller Mutation
   const rejectMutation = useMutation<void, Error, { sellerId: number; reason: string }>({
     mutationFn: async ({ sellerId: idToReject, reason }) => {
-      await apiRequest('POST', `/api/admin/vendors/${idToReject}/reject`, { reason });
+      // NOTE: Your backend patch endpoint was `/api/admin/vendors/reject/:id`
+      await apiRequest('PATCH', `/api/admin/vendors/reject/${idToReject}`, { reason });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
@@ -107,51 +109,53 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
       toast({
         title: "विक्रेता अस्वीकृत",
         description: "विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।",
-        variant: "destructive", // ✅ FIX: Changed from "default" to "destructive" (Red for rejection)
+        variant: "destructive",
+        className: "bg-red-600 text-white", // ✅ FIX: Forced high contrast for rejection
       });
     },
     onError: (err) => {
       toast({
         title: "अस्वीकृति विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।",
-        variant: "destructive", // ✅ This is correct for errors
+        variant: "destructive",
       });
     },
   });
-  
 
   // 4. Update Seller Settings Mutation (New)
   const updateSellerSettingsMutation = useMutation<void, Error, Partial<Seller>>({
     mutationFn: async (dataToUpdate: Partial<Seller>) => {
-      await apiRequest('PUT', `/api/admin/vendors/${sellerId}`, dataToUpdate); // Assumed API endpoint for updating seller
+      // NOTE: Your backend patch endpoint was `/api/admin/vendors/:id`
+      await apiRequest('PATCH', `/api/admin/vendors/${sellerId}`, dataToUpdate); 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
       toast({
         title: "विक्रेता सेटिंग्स अपडेटेड",
         description: "विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।",
-        variant: "success", // ✅ FIX: Changed from "default" to "success"
+        variant: "success",
+        className: "bg-green-600 text-white", // ✅ FIX: Forced high contrast for update success
       });
     },
     onError: (err) => {
       toast({
         title: "अपडेट विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता की सेटिंग्स अपडेट करने में विफल।",
-        variant: "destructive", // ✅ This is correct for errors
+        variant: "destructive",
       });
     },
   });
 
 
-  const handleApprove = () => { // Corrected casing
+  const handleApprove = () => { 
     approveMutation.mutate(sellerId);
   };
 
-  const openRejectModal = () => { // Corrected casing
+  const openRejectModal = () => { 
     setShowRejectModal(true);
   };
 
-  const handleRejectSubmit = () => { // Corrected casing
+  const handleRejectSubmit = () => { 
     if (!rejectionReason.trim()) {
       toast({
         title: "अस्वीकृति रद्द",
@@ -199,7 +203,7 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
           <h2 className="text-xl font-semibold mb-4 text-gray-700">मूलभूत जानकारी</h2>
           <p className="mb-2"><strong>ID:</strong> {seller.id}</p>
           <p className="mb-2"><strong>व्यवसाय का नाम:</strong> {seller.businessName}</p>
-          <p className="mb-2"><strong>Email:</strong> {seller.email}</p> {/* Display email */}
+          <p className="mb-2"><strong>Email:</strong> {seller.email}</p> 
           <p className="mb-2">
             <strong>स्थिति:</strong>
             <span className={`ml-2 px-3 py-1 rounded-full text-sm font-medium ${
@@ -328,7 +332,7 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
         <div className="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full flex items-center justify-center z-50">
           <div className="relative bg-white p-6 rounded-lg shadow-xl w-96">
             <h3 className="text-lg font-bold mb-4">अस्वीकृति का कारण बताएं</h3>
-            <Textarea // Changed to Textarea component
+            <Textarea 
               className="w-full h-24 p-2 border rounded-md resize-none focus:outline-none focus:ring-2 focus:ring-red-500"
               placeholder="अस्वीकृति का कारण यहां लिखें..."
               value={rejectionReason}
@@ -342,7 +346,7 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
                 रद्द करें
               </Button>
               <Button
-                className="bg-red-600 hover:bg-red-700 text-white" // Added text-white
+                className="bg-red-600 hover:bg-red-700 text-white" 
                 onClick={handleRejectSubmit}
                 disabled={rejectMutation.isPending}
               >
@@ -357,4 +361,3 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
 };
 
 export default AdminVendorDetailsPage;
-          
