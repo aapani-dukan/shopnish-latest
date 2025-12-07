@@ -1,20 +1,19 @@
-
 // client/src/pages/admin/AdminDashboard.tsx // ✅ File name change for consistency
 
 "use client";
 
-import React, { useState, useEffect } from "react"; // ✅ React, useState, useEffect
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; // ✅ tanstack/react-query
+import React, { useState, useEffect } from "react"; 
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; 
 import { toast } from "../../hooks/use-toast";
-import { Button } from "../../components/ui/button"; // ✅ Button
+import { Button } from "../../components/ui/button"; 
 import { Check, X, Loader2, Pencil } from "lucide-react";
 import api from "../../lib/api"; // ✅ api - assuming this is your Axios instance
-import { useSocket } from "../../hooks/useSocket"; // ✅ useSocket
-import { useNavigate } from "react-router-dom"; // ✅ useNavigate
-import AdminSettingsPage from "./AdminSettingsPage"; // ✅ AdminSettingsPage
-import AdminOrderDashboard from "./AdminOrderDashboard"; // ✅ AdminOrderDashboard
+import { useSocket } from "../../hooks/useSocket"; 
+import { useNavigate } from "react-router-dom"; 
+import AdminSettingsPage from "./AdminSettingsPage"; 
+import AdminOrderDashboard from "./AdminOrderDashboard"; 
 
-// Interfaces (✅ camelCase for properties)
+// Interfaces
 interface Vendor {
   id: number;
   businessName: string;
@@ -31,7 +30,7 @@ interface Product {
 
 interface DeliveryBoy {
   id: number;
-  name: string; // Assuming name is directly available, otherwise it would be dboy.user.firstName
+  name: string; 
   approvalStatus: "pending" | "approved" | "rejected";
   rejectionReason?: string;
 }
@@ -55,6 +54,7 @@ const AdminDashboard: React.FC = () => {
       console.log("Vendor update event received.");
       queryClient.invalidateQueries({ queryKey: ["adminPendingVendors"] });
       queryClient.invalidateQueries({ queryKey: ["adminApprovedVendors"] });
+      queryClient.invalidateQueries({ queryKey: ["adminRejectedVendors"] }); // ✅ ADDED: Invalidate Rejected Vendors
     };
 
     const handleProductUpdate = () => {
@@ -71,16 +71,16 @@ const AdminDashboard: React.FC = () => {
 
     socket.on("admin:vendor-updated", handleVendorUpdate);
     socket.on("admin:product-updated", handleProductUpdate);
-    socket.on("admin:deliveryboy-updated", handleDeliveryBoyUpdate); // Note: Backend event name
+    socket.on("admin:deliveryboy-updated", handleDeliveryBoyUpdate);
 
     return () => {
       socket.off("admin:vendor-updated", handleVendorUpdate);
       socket.off("admin:product-updated", handleProductUpdate);
       socket.off("admin:deliveryboy-updated", handleDeliveryBoyUpdate);
     };
-  }, [socket, queryClient]); // ✅ queryClient dependency
+  }, [socket, queryClient]); 
 
-  // Vendors API calls (✅ camelCase queryKey)
+  // --- Vendors API calls ---
   const { data: pendingVendors } = useQuery<Vendor[]>({
     queryKey: ["adminPendingVendors"],
     queryFn: async () => {
@@ -97,7 +97,17 @@ const AdminDashboard: React.FC = () => {
     },
   });
 
-  // Products API calls (✅ camelCase queryKey)
+  // ✅ ADDED: Rejected Vendors Query
+  const { data: rejectedVendors } = useQuery<Vendor[]>({
+    queryKey: ["adminRejectedVendors"],
+    queryFn: async () => {
+      const res = await api.get("/api/admin/vendors/rejected"); // Backend में यह रूट पहले ही जोड़ा जा चुका है
+      return res.data;
+    },
+  });
+
+
+  // --- Products API calls ---
   const { data: pendingProducts } = useQuery<Product[]>({
     queryKey: ["adminPendingProducts"],
     queryFn: async () => {
@@ -114,11 +124,11 @@ const AdminDashboard: React.FC = () => {
     },
   });
 
-  // Delivery Boys API calls (✅ camelCase queryKey and CORRECTED URL)
+  // --- Delivery Boys API calls ---
   const { data: pendingDeliveryBoys } = useQuery<DeliveryBoy[]>({
     queryKey: ["adminPendingDeliveryBoys"],
     queryFn: async () => {
-      const res = await api.get("/api/admin/delivery-boys/pending"); // ✅ CORRECTED URL
+      const res = await api.get("/api/admin/delivery-boys/pending"); 
       return res.data;
     },
   });
@@ -126,31 +136,32 @@ const AdminDashboard: React.FC = () => {
   const { data: approvedDeliveryBoys } = useQuery<DeliveryBoy[]>({
     queryKey: ["adminApprovedDeliveryBoys"],
     queryFn: async () => {
-      const res = await api.get("/api/admin/delivery-boys/approved"); // ✅ CORRECTED URL
+      const res = await api.get("/api/admin/delivery-boys/approved"); 
       return res.data;
     },
   });
 
-  // Mutations (existing logic for approval/rejection remains)
+  // --- Mutations (existing logic for approval/rejection remains) ---
   const approveVendorMutation = useMutation({
-    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/approve/${vendorId}`), // ✅ Corrected method (PATCH)
+    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/approve/${vendorId}`), 
     onSuccess: () => {
       toast({ title: "Vendor approved" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingVendors"] });
       queryClient.invalidateQueries({ queryKey: ["adminApprovedVendors"] });
     },
-    onError: (error: any) => { // ✅ Added type for error
+    onError: (error: any) => { 
       console.error("Error approving vendor:", error);
       toast({ title: "Failed to approve vendor", description: error.message || "An unexpected error occurred.", variant: "destructive" });
     }
   });
 
   const rejectVendorMutation = useMutation({
-    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/reject/${vendorId}`, { reason: "not eligible" }), // ✅ Corrected method (PATCH)
+    mutationFn: (vendorId: number) => api.patch(`/api/admin/vendors/reject/${vendorId}`, { reason: "not eligible" }), 
     onSuccess: () => {
       toast({ title: "Vendor rejected" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingVendors"] });
-      queryClient.invalidateQueries({ queryKey: ["adminApprovedVendors"] }); // ✅ Also invalidate approved list
+      queryClient.invalidateQueries({ queryKey: ["adminApprovedVendors"] }); 
+      queryClient.invalidateQueries({ queryKey: ["adminRejectedVendors"] }); // ✅ ADDED: Invalidate Rejected Vendors
     },
     onError: (error: any) => {
       console.error("Error rejecting vendor:", error);
@@ -159,7 +170,7 @@ const AdminDashboard: React.FC = () => {
   });
 
   const approveProductMutation = useMutation({
-    mutationFn: (productId: number) => api.patch(`/api/admin/products/${productId}/approve`), // ✅ Corrected method (PATCH) and URL path
+    mutationFn: (productId: number) => api.patch(`/api/admin/products/${productId}/approve`), 
     onSuccess: () => {
       toast({ title: "Product approved" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingProducts"] });
@@ -172,11 +183,11 @@ const AdminDashboard: React.FC = () => {
   });
 
   const rejectProductMutation = useMutation({
-    mutationFn: (productId: number) => api.patch(`/api/admin/products/${productId}/reject`, { reason: "not eligible" }), // ✅ Corrected method (PATCH) and URL path
+    mutationFn: (productId: number) => api.patch(`/api/admin/products/${productId}/reject`, { reason: "not eligible" }), 
     onSuccess: () => {
       toast({ title: "Product rejected" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingProducts"] });
-      queryClient.invalidateQueries({ queryKey: ["adminApprovedProducts"] }); // ✅ Also invalidate approved list
+      queryClient.invalidateQueries({ queryKey: ["adminApprovedProducts"] }); 
     },
     onError: (error: any) => {
       console.error("Error rejecting product:", error);
@@ -199,11 +210,11 @@ const AdminDashboard: React.FC = () => {
   });
 
   const rejectDeliveryBoyMutation = useMutation({
-    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/reject/${deliveryBoyId}`, { reason: "not eligible" }), // ✅ CORRECTED METHOD (PATCH) AND URL PATH
+    mutationFn: (deliveryBoyId: number) => api.patch(`/api/admin/delivery-boys/reject/${deliveryBoyId}`, { reason: "not eligible" }), 
     onSuccess: () => {
       toast({ title: "Delivery boy rejected" });
       queryClient.invalidateQueries({ queryKey: ["adminPendingDeliveryBoys"] });
-      queryClient.invalidateQueries({ queryKey: ["adminApprovedDeliveryBoys"] }); // ✅ Also invalidate approved list
+      queryClient.invalidateQueries({ queryKey: ["adminApprovedDeliveryBoys"] }); 
     },
     onError: (error: any) => {
       console.error("Error rejecting delivery boy:", error);
@@ -212,13 +223,13 @@ const AdminDashboard: React.FC = () => {
   });
 
   // Render content based on active tab
-  const renderContent = () => { // ✅ renderContent
+  const renderContent = () => { 
     switch (activeTab) {
       case "pending-vendors":
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Pending Vendors</h2> 
-            {pendingVendors?.map((vendor) => ( // ✅ pendingVendors
+            {pendingVendors?.map((vendor) => ( 
               <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{vendor.businessName}</span> 
                 <div className="flex items-center space-x-2"> 
@@ -241,7 +252,7 @@ const AdminDashboard: React.FC = () => {
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Approved Vendors</h2> 
-            {approvedVendors?.map((vendor) => ( // ✅ approvedVendors
+            {approvedVendors?.map((vendor) => ( 
               <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{vendor.businessName}</span> 
                 <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> 
@@ -251,12 +262,38 @@ const AdminDashboard: React.FC = () => {
             ))}
           </div>
         );
+        
+      // ✅ ADDED: Rejected Vendors Case
+      case "rejected-vendors": 
+        return (
+          <div>
+            <h2 className="text-lg font-semibold mb-2 text-red-700">Rejected Vendors (Cleanup List)</h2> 
+            {Array.isArray(rejectedVendors) && rejectedVendors.length > 0 ? (
+                rejectedVendors.map((vendor) => ( 
+                <div key={vendor.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm border-l-4 border-red-500"> 
+                    <span>
+                        {vendor.businessName} 
+                        {vendor.rejectionReason && <span className="ml-2 text-xs text-red-500 italic"> (Reason: {vendor.rejectionReason})</span>}
+                    </span> 
+                    <div className="flex items-center space-x-2"> 
+                        {/* यह बटन Vendor Details Page पर ले जाएगा जहाँ Delete बटन मौजूद है */}
+                        <Button variant="outline" size="sm" onClick={() => navigate(`/admin/vendors/${vendor.id}`)}> 
+                            <Pencil className="h-4 w-4 mr-1" /> View/Delete
+                        </Button>
+                    </div>
+                </div>
+            ))
+            ) : (
+                <p className="text-gray-500">कोई भी अस्वीकृत (Rejected) विक्रेता नहीं है।</p>
+            )}
+          </div>
+        );
 
       case "pending-products":
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Pending Products</h2> 
-            {pendingProducts?.map((product) => ( // ✅ pendingProducts
+            {pendingProducts?.map((product) => ( 
               <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{product.name}</span>
                 <div className="flex items-center space-x-2"> 
@@ -279,7 +316,7 @@ const AdminDashboard: React.FC = () => {
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Approved Products</h2> 
-            {approvedProducts?.map((product) => ( // ✅ approvedProducts
+            {approvedProducts?.map((product) => ( 
               <div key={product.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                 <span>{product.name}</span>
                 <Button variant="outline" size="sm" onClick={() => navigate(`/admin/products/${product.id}`)}> 
@@ -290,12 +327,12 @@ const AdminDashboard: React.FC = () => {
           </div>
         );
 
-      case "pending-deliveryboys": // ✅ activeTab
+      case "pending-deliveryboys": 
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Pending Delivery Boys</h2> 
-            {Array.isArray(pendingDeliveryBoys) && pendingDeliveryBoys.length > 0 ? ( // ✅ Array.isArray, pendingDeliveryBoys
-              pendingDeliveryBoys.map((dboy) => ( // ✅ pendingDeliveryBoys
+            {Array.isArray(pendingDeliveryBoys) && pendingDeliveryBoys.length > 0 ? ( 
+              pendingDeliveryBoys.map((dboy) => ( 
                 <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
                   <span>{dboy.name}</span>
                   <div className="flex items-center space-x-2"> 
@@ -314,12 +351,12 @@ const AdminDashboard: React.FC = () => {
           </div>
         );
 
-      case "approved-deliveryboys": // ✅ activeTab
+      case "approved-deliveryboys": 
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Approved Delivery Boys</h2> 
-            {Array.isArray(approvedDeliveryBoys) && approvedDeliveryBoys.length > 0 ? ( // ✅ Array.isArray, approvedDeliveryBoys
-              approvedDeliveryBoys.map((dboy) => ( // ✅ approvedDeliveryBoys
+            {Array.isArray(approvedDeliveryBoys) && approvedDeliveryBoys.length > 0 ? ( 
+              approvedDeliveryBoys.map((dboy) => ( 
                 <div key={dboy.id} className="bg-white p-2 rounded mb-2 shadow-sm"> 
                   <span>{dboy.name}</span>
                 </div>
@@ -331,13 +368,13 @@ const AdminDashboard: React.FC = () => {
         );
 
       case "platform-settings":
-        return <AdminSettingsPage />; // ✅ AdminSettingsPage
+        return <AdminSettingsPage />; 
 
       case "orders":
-        return <AdminOrderDashboard />; // ✅ AdminOrderDashboard
+        return <AdminOrderDashboard />; 
 
       default:
-        return <p>Select a tab</p>; // ✅ capital S
+        return <p>Select a tab</p>; 
     }
   };
 
@@ -347,6 +384,16 @@ const AdminDashboard: React.FC = () => {
       <div className="flex flex-wrap gap-4 mb-6"> 
         <Button variant={activeTab === "pending-vendors" ? "default" : "outline"} onClick={() => setActiveTab("pending-vendors")}>Pending Vendors</Button> 
         <Button variant={activeTab === "approved-vendors" ? "default" : "outline"} onClick={() => setActiveTab("approved-vendors")}>Approved Vendors</Button>
+        
+        {/* ✅ ADDED: Rejected Vendors Button */}
+        <Button 
+            variant={activeTab === "rejected-vendors" ? "destructive" : "outline"} 
+            className={activeTab === "rejected-vendors" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
+            onClick={() => setActiveTab("rejected-vendors")}
+        >
+            Rejected Vendors ({rejectedVendors?.length || 0})
+        </Button> 
+        
         <Button variant={activeTab === "pending-products" ? "default" : "outline"} onClick={() => setActiveTab("pending-products")}>Pending Products</Button>
         <Button variant={activeTab === "approved-products" ? "default" : "outline"} onClick={() => setActiveTab("approved-products")}>Approved Products</Button>
         <Button variant={activeTab === "pending-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("pending-deliveryboys")}>Pending Delivery Boys</Button>
@@ -360,6 +407,5 @@ const AdminDashboard: React.FC = () => {
   );
 };
 
-export default AdminDashboard; // ✅ AdminDashboard
-
-              
+export default AdminDashboard;
+          
