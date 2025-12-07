@@ -76,22 +76,23 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); // Invalidate also pending vendors list
-      queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); // Invalidate approved vendors list
+      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
+      queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
       toast({
         title: "विक्रेता स्वीकृत",
         description: "विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।",
-        variant: "default",
+        variant: "success", // ✅ FIX: Changed from "default" to "success"
       });
     },
     onError: (err) => {
       toast({
         title: "स्वीकृति विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता को स्वीकृत करने में विफल।",
-        variant: "destructive",
+        variant: "destructive", // ✅ This is correct for errors
       });
     },
   });
+  
 
   // 3. Reject Seller Mutation
   const rejectMutation = useMutation<void, Error, { sellerId: number; reason: string }>({
@@ -100,23 +101,24 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
-      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); // Invalidate also pending vendors list
+      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       setShowRejectModal(false);
       setRejectionReason("");
       toast({
         title: "विक्रेता अस्वीकृत",
         description: "विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।",
-        variant: "default",
+        variant: "destructive", // ✅ FIX: Changed from "default" to "destructive" (Red for rejection)
       });
     },
     onError: (err) => {
       toast({
         title: "अस्वीकृति विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।",
-        variant: "destructive",
+        variant: "destructive", // ✅ This is correct for errors
       });
     },
   });
+  
 
   // 4. Update Seller Settings Mutation (New)
   const updateSellerSettingsMutation = useMutation<void, Error, Partial<Seller>>({
@@ -128,14 +130,14 @@ const AdminVendorDetailsPage: React.FC = () => { // Renamed component
       toast({
         title: "विक्रेता सेटिंग्स अपडेटेड",
         description: "विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।",
-        variant: "default",
+        variant: "success", // ✅ FIX: Changed from "default" to "success"
       });
     },
     onError: (err) => {
       toast({
         title: "अपडेट विफल",
         description: (err as any).response?.data?.message || err.message || "विक्रेता की सेटिंग्स अपडेट करने में विफल।",
-        variant: "destructive",
+        variant: "destructive", // ✅ This is correct for errors
       });
     },
   });
