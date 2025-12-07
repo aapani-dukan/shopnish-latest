@@ -78,7 +78,7 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
-      // FIX: Success toast with JSX content wrapper
+      // Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता स्वीकृत</div>,
         description: <div className="text-white/90">विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।</div>,
@@ -105,7 +105,7 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       setShowRejectModal(false);
       setRejectionReason("");
-      // FIX: Success toast with JSX content wrapper
+      // Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता अस्वीकृत</div>,
         description: <div className="text-white/90">विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।</div>,
@@ -115,7 +115,7 @@ const AdminVendorDetailsPage: React.FC = () => {
     },
     onError: (err) => {
       const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।";
-      // FIX: Error toast with JSX content wrapper and explicit red background
+      // Error toast with JSX content wrapper and explicit red background
       toast({
         title: <div className="text-white font-bold">❌ अस्वीकृति विफल</div>,
         description: <div className="text-white/90">{errorMessage}</div>,
@@ -125,14 +125,14 @@ const AdminVendorDetailsPage: React.FC = () => {
     },
   });
 
-  // 4. Update Seller Settings Mutation (New)
+  // 4. Update Seller Settings Mutation
   const updateSellerSettingsMutation = useMutation<void, Error, Partial<Seller>>({
     mutationFn: async (dataToUpdate: Partial<Seller>) => {
       await apiRequest('PATCH', `/api/admin/vendors/${sellerId}`, dataToUpdate); 
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
-      // FIX: Success toast with JSX content wrapper
+      // Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता सेटिंग्स अपडेटेड</div>,
         description: <div className="text-white/90">विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।</div>,
@@ -148,31 +148,30 @@ const AdminVendorDetailsPage: React.FC = () => {
       });
     },
   });
-// 5. Delete Seller Mutation
+
+  // 5. Delete Seller Mutation (Permanent Cleanup)
   const deleteMutation = useMutation<void, Error, number>({
     mutationFn: async (idToDelete: number) => {
-      // DELETE API को ट्रिगर करें
       await apiRequest('DELETE', `/api/admin/vendors/${idToDelete}`);
     },
     onSuccess: () => {
-      // सफल होने पर, कैश (cache) को इनवैलिडेट करें
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
       
-      // FIX: Success toast with JSX content wrapper
+      // Success toast for deletion
       toast({
         title: <div className="text-white font-bold">🗑️ विक्रेता हटाया गया</div>,
         description: <div className="text-white/90">विक्रेता रिकॉर्ड डेटाबेस से सफलतापूर्वक हटा दिया गया है।</div>,
-        variant: "destructive", // डिलीट के लिए destructive variant का उपयोग करें
+        variant: "destructive", 
         className: "bg-red-700",
       });
       
-      // सूची पृष्ठ पर वापस नेविगेट करें
+      // Navigate back to the list page
       navigate('/admin/vendors'); 
     },
     onError: (err) => {
       const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को हटाने में विफल।";
-      // FIX: Error toast with JSX content wrapper
+      // Error toast 
       toast({
         title: <div className="text-white font-bold">❌ डिलीट विफल</div>,
         description: <div className="text-white/90">{errorMessage}</div>,
@@ -181,13 +180,6 @@ const AdminVendorDetailsPage: React.FC = () => {
       });
     },
   });
-
-  const handleDelete = () => {
-    // कन्फर्मेशन के बाद डिलीट ट्रिगर करें
-    if (window.confirm("क्या आप इस विक्रेता को स्थायी रूप से हटाना चाहते हैं?")) {
-        deleteMutation.mutate(sellerId);
-    }
-  };
 
   const handleApprove = () => { 
     approveMutation.mutate(sellerId);
@@ -213,6 +205,13 @@ const AdminVendorDetailsPage: React.FC = () => {
     e.preventDefault();
     updateSellerSettingsMutation.mutate(sellerData);
   };
+
+  const handleDelete = () => {
+    if (window.confirm("क्या आप इस विक्रेता को स्थायी रूप से हटाना चाहते हैं? यह कार्रवाई अपरिवर्तनीय है।")) {
+        deleteMutation.mutate(sellerId);
+    }
+  };
+
 
   if (isLoadingSeller) {
     return (
@@ -273,14 +272,14 @@ const AdminVendorDetailsPage: React.FC = () => {
                 <Button
                   className="bg-green-600 hover:bg-green-700 text-white"
                   onClick={handleApprove}
-                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
                 >
                   {approveMutation.isPending ? "स्वीकृत हो रहा है..." : "स्वीकृत करें"}
                 </Button>
                 <Button
                   className="bg-red-600 hover:bg-red-700 text-white"
                   onClick={openRejectModal}
-                  disabled={approveMutation.isPending || rejectMutation.isPending}
+                  disabled={approveMutation.isPending || rejectMutation.isPending || deleteMutation.isPending}
                 >
                   अस्वीकृत करें
                 </Button>
@@ -291,20 +290,25 @@ const AdminVendorDetailsPage: React.FC = () => {
                 <Button
                     variant="destructive"
                     onClick={openRejectModal}
-                    disabled={rejectMutation.isPending}
+                    disabled={rejectMutation.isPending || deleteMutation.isPending}
                 >
                     अस्वीकृत करें (पुनः)
                 </Button>
-                  <Button
-                variant="destructive"
-                className="bg-gray-800 hover:bg-gray-900 text-white" // हाई-कंट्रास्ट के लिए काला रंग
+            )}
+            
+            {/* 🗑️ DELETE BUTTON ADDED HERE */}
+            {/* यह बटन Reject या Approve बटन के साथ भी दिखना चाहिए ताकि एडमिन cleanup कर सके */}
+            <Button
+                // ✅ FIX: The incorrect closing tag issue is resolved by ensuring proper JSX syntax.
+                // We use bg-gray-800 for a distinct "Cleanup" action.
+                variant="default" 
+                className="bg-gray-800 hover:bg-gray-900 text-white" 
                 onClick={handleDelete}
                 disabled={deleteMutation.isPending}
             >
                 {deleteMutation.isPending ? "हटाया जा रहा है..." : "स्थायी रूप से हटाएं"}
             </Button>
-      
-            )}
+
           </div>
         </div>
 
@@ -371,7 +375,7 @@ const AdminVendorDetailsPage: React.FC = () => {
               </p>
             </div>
 
-            <Button type="submit" disabled={updateSellerSettingsMutation.isPending}>
+            <Button type="submit" disabled={updateSellerSettingsMutation.isPending || deleteMutation.isPending}>
               {updateSellerSettingsMutation.isPending ? 'सेटिंग्स सेव हो रही हैं...' : 'सेटिंग्स सेव करें'}
             </Button>
           </form>
@@ -399,7 +403,7 @@ const AdminVendorDetailsPage: React.FC = () => {
               <Button
                 className="bg-red-600 hover:bg-red-700 text-white" 
                 onClick={handleRejectSubmit}
-                disabled={rejectMutation.isPending}
+                disabled={rejectMutation.isPending || deleteMutation.isPending}
               >
                 {rejectMutation.isPending ? "अस्वीकृत हो रहा है..." : "अस्वीकृत करें"}
               </Button>
@@ -412,3 +416,4 @@ const AdminVendorDetailsPage: React.FC = () => {
 };
 
 export default AdminVendorDetailsPage;
+
