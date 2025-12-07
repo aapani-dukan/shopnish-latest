@@ -78,7 +78,7 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
-      // 🛑 FIX 1: Title and Description wrapped in JSX with explicit text color
+      // FIX: Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता स्वीकृत</div>,
         description: <div className="text-white/90">विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।</div>,
@@ -105,7 +105,7 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       setShowRejectModal(false);
       setRejectionReason("");
-      // 🛑 FIX 2: Title and Description wrapped in JSX with explicit text color (Main fix for the white strip)
+      // FIX: Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता अस्वीकृत</div>,
         description: <div className="text-white/90">विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।</div>,
@@ -114,10 +114,13 @@ const AdminVendorDetailsPage: React.FC = () => {
       });
     },
     onError: (err) => {
+      const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।";
+      // FIX: Error toast with JSX content wrapper and explicit red background
       toast({
-        title: "अस्वीकृति विफल",
-        description: (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।",
+        title: <div className="text-white font-bold">❌ अस्वीकृति विफल</div>,
+        description: <div className="text-white/90">{errorMessage}</div>,
         variant: "destructive",
+        className: "bg-red-700",
       });
     },
   });
@@ -129,7 +132,7 @@ const AdminVendorDetailsPage: React.FC = () => {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
-      // 🛑 FIX 3: Title and Description wrapped in JSX with explicit text color
+      // FIX: Success toast with JSX content wrapper
       toast({
         title: <div className="text-white font-bold">विक्रेता सेटिंग्स अपडेटेड</div>,
         description: <div className="text-white/90">विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।</div>,
