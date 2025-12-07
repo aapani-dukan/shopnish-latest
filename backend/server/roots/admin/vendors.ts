@@ -6,7 +6,8 @@ import {
   users,
   approvalStatusEnum, // ✅ The enum definition
   userRoleEnum,
-  deliveryAreas
+  deliveryAreas,
+  stores
 } from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken'; // Check this path again if issues persist
 import { eq, and } from 'drizzle-orm';
