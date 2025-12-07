@@ -148,7 +148,46 @@ const AdminVendorDetailsPage: React.FC = () => {
       });
     },
   });
+// 5. Delete Seller Mutation
+  const deleteMutation = useMutation<void, Error, number>({
+    mutationFn: async (idToDelete: number) => {
+      // DELETE API को ट्रिगर करें
+      await apiRequest('DELETE', `/api/admin/vendors/${idToDelete}`);
+    },
+    onSuccess: () => {
+      // सफल होने पर, कैश (cache) को इनवैलिडेट करें
+      queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
+      queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
+      
+      // FIX: Success toast with JSX content wrapper
+      toast({
+        title: <div className="text-white font-bold">🗑️ विक्रेता हटाया गया</div>,
+        description: <div className="text-white/90">विक्रेता रिकॉर्ड डेटाबेस से सफलतापूर्वक हटा दिया गया है।</div>,
+        variant: "destructive", // डिलीट के लिए destructive variant का उपयोग करें
+        className: "bg-red-700",
+      });
+      
+      // सूची पृष्ठ पर वापस नेविगेट करें
+      navigate('/admin/vendors'); 
+    },
+    onError: (err) => {
+      const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को हटाने में विफल।";
+      // FIX: Error toast with JSX content wrapper
+      toast({
+        title: <div className="text-white font-bold">❌ डिलीट विफल</div>,
+        description: <div className="text-white/90">{errorMessage}</div>,
+        variant: "destructive",
+        className: "bg-red-700",
+      });
+    },
+  });
 
+  const handleDelete = () => {
+    // कन्फर्मेशन के बाद डिलीट ट्रिगर करें
+    if (window.confirm("क्या आप इस विक्रेता को स्थायी रूप से हटाना चाहते हैं?")) {
+        deleteMutation.mutate(sellerId);
+    }
+  };
 
   const handleApprove = () => { 
     approveMutation.mutate(sellerId);
@@ -256,6 +295,15 @@ const AdminVendorDetailsPage: React.FC = () => {
                 >
                     अस्वीकृत करें (पुनः)
                 </Button>
+                  <Button
+                variant="destructive"
+                className="bg-gray-800 hover:bg-gray-900 text-white" // हाई-कंट्रास्ट के लिए काला रंग
+                onClick={handleDelete}
+                disabled={deleteMutation.isPending}
+            >
+                {deleteMutation.isPending ? "हटाया जा रहा है..." : "स्थायी रूप से हटाएं"}
+            </Button>
+      
             )}
           </div>
         </div>
