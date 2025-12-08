@@ -7,7 +7,8 @@ import {
   approvalStatusEnum, 
   userRoleEnum,
   deliveryAreas,
-  stores 
+  stores,
+  products
 } from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken';
 import { eq, and } from 'drizzle-orm';
@@ -423,34 +424,46 @@ adminVendorsRouter.patch(
 
 // -------------------------------------------------------------------------
 
-/**
- * ✅ DELETE /api/admin/vendors/:id
- * एक सेलर को हटाएं (एडमिन द्वारा) - STORE DELETION ADDED
- */
+// backend/server/routes/adminVendorsRoutes.ts (DELETE route)
+
 adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
   const sellerId = parseInt(req.params.id);
   
   try {
     const deletedSeller = await db.transaction(async (tx) => {
-        // 1. 🛑 FIX: Store Table से एंट्री डिलीट करें
+        
+        // 1. Fetch seller safely to get userId
+        const sellerResults = await tx.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
+        const sellerToDelete = sellerResults[0]; 
+        
+        if (!sellerToDelete) {
+             throw new Error("Seller not found."); 
+        }
+
+        // 2. 🛑 FIX: Foreign Key Constraints को संतुष्ट करने के लिए संबंधित डेटा को डिलीट करें
+        // A. Products को डिलीट करें (जो 'products' constraint violation को ठीक करता है)
+        await tx.delete(products)
+            .where(eq(products.sellerId, sellerId));
+        
+        // B. Delivery Areas को डिलीट करें
+        await tx.delete(deliveryAreas)
+            .where(eq(deliveryAreas.sellerId, sellerId));
+            
+        // C. Store Table से एंट्री डिलीट करें
         await tx.delete(stores)
             .where(eq(stores.sellerId, sellerId));
             
-        // 2. Seller Table से एंट्री डिलीट करें (using safe indexing)
+        // 3. Seller Table से एंट्री डिलीट करें
         const deletedSellerResults = await tx.delete(sellersPgTable)
             .where(eq(sellersPgTable.id, sellerId))
             .returning();
             
         const deletedSeller = deletedSellerResults[0]; 
 
-        if (!deletedSeller) {
-            throw new Error("Seller not found.");
-        }
-
-        // 3. User Role को 'customer' (index 3) पर वापस सेट करें
+        // 4. User Role को 'customer' पर वापस सेट करें
         await tx.update(users)
             .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date() })
-            .where(eq(users.id, deletedSeller.userId));
+            .where(eq(users.id, sellerToDelete.userId)); 
             
         return deletedSeller;
     });
@@ -462,8 +475,10 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
     if (error.message === "Seller not found.") {
         return res.status(404).json({ message: "Seller not found." });
     }
+    // 500 एरर को बेहतर ढंग से हैंडल करें
     console.error(`❌ Error deleting seller with ID ${req.params.id}:`, error);
-    return res.status(500).json({ error: 'Failed to delete seller.' });
+    // यह सुनिश्चित करता है कि डेटाबेस की विस्तृत त्रुटियाँ क्लाइंट को लीक न हों।
+    return res.status(500).json({ error: 'Failed to delete seller due to related data constraints or server error.' });
   }
 });
 
