@@ -47,7 +47,6 @@ const updateSellerBodySchema = z.object({
   rejectionReason: z.string().optional().nullable(),
 }).partial();
 
-// --- Routes ---
 
 /**
  * ✅ GET /api/admin/vendors - सभी सेलर्स फ़ेच करें (पेंडिंग, अप्रूव्ड, रिजेक्टेड)
@@ -105,6 +104,30 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
     res.status(200).json(approvedSellers);
   } catch (error: any) {
     console.error('Failed to fetch approved sellers:', error);
+    res.status(500).json({ error: 'Internal server error.' });
+  }
+});
+
+
+/**
+ * ✅ GET /api/admin/vendors/rejected
+ * सभी अस्वीकृत (rejected) सेलर्स को फ़ेच करें
+ */
+adminVendorsRouter.get('/rejected', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+  try {
+    const rejectedSellers = await db.query.sellersPgTable.findMany({
+      where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[2]), // 'rejected'
+      
+      // 🛑 FIX: 'user' रिलेशन को अस्थायी रूप से हटाएं, जिससे Drizzle क्रैश न हो
+      // with: {
+      //   user: { columns: { id: true, firstName: true, lastName: true, email: true, phone: true } }
+      // },
+      
+      orderBy: (s, { desc }) => [desc(s.createdAt)],
+    });
+    res.status(200).json(rejectedSellers);
+  } catch (error: any) {
+    console.error('Failed to fetch rejected sellers:', error);
     res.status(500).json({ error: 'Internal server error.' });
   }
 });
