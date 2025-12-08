@@ -446,8 +446,8 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
             .where(eq(products.sellerId, sellerId));
         
         // B. Delivery Areas को डिलीट करें
-        await tx.delete(deliveryAreas)
-            .where(eq(deliveryAreas.sellerId, sellerId));
+     //   await tx.delete(deliveryAreas)
+      //      .where(eq(deliveryAreas.sellerId, sellerId));
             
         // C. Store Table से एंट्री डिलीट करें
         await tx.delete(stores)
