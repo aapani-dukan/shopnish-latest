@@ -546,7 +546,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
                 groupedBySeller.set(cartItem.sellerId, []);
             }
             groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product });
-            masterOrderCalculatedSubtotal += cartItem.totalPrice;
+            masterOrderCalculatedSubtotal += Number(cartItem.totalPrice);
         }
 
         // --- इंटीग्रिटी चेक ---
@@ -614,16 +614,20 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             orderNumber: `ORD-${Date.now()}-${userId}`,
             customerId: userId,
             deliveryAddressId: finalDeliveryAddressId,
-            // 🛑 FIX 1: deliveryAddress को JSON के बजाय TEXT कॉलम के लिए addressLine1 का उपयोग करें
+            // 🛑 FIX 1: deliveryAddress को JSON.stringify से हटा दें यदि यह सादा TEXT कॉलम है
+            // यहाँ finalDeliveryAddressJson (एक ऑब्जेक्ट) को स्ट्रिंगिफाई करना ठीक है 
+            // यदि deliveryAddress कॉलम JSON या TEXT है
             deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
             deliveryCity: finalCity,
             deliveryState: finalState,
             deliveryPincode: finalPincode,
             deliveryLat: finalDeliveryLat,
             deliveryLng: finalDeliveryLng,
-            subtotal: masterOrderCalculatedSubtotal,
+            
+            // 🛑 FIX 2: masterOrderCalculatedSubtotal और Total का उपयोग करें, न कि Frontend वाले का
+            subtotal: masterOrderCalculatedSubtotal, 
             total: masterOrderCalculatedTotal,
-            // 🛑 FIX 2: paymentMethod को ENUM कंपैटिबिलिटी के लिए UPPERCASE में बदलें
+            
             paymentMethod: paymentMethod.toUpperCase(),
             paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
             status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
@@ -633,6 +637,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
         }).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
         if (!masterOrder) throw new Error('Failed to create master order.');
+        masterOrderResult = masterOrder; // ट्रांज़ैक्शन के बाहर उपयोग के लिए
 
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
         const batchesToCreate: { 
@@ -787,33 +792,44 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             }
         }
         
-        // 4. कार्ट को खाली करें
+             // 4. कार्ट को खाली करें
         await tx.delete(cartItems).where(eq(cartItems.userId, userId));
         console.log("✅ Cart items deleted from cartItems table.");
 
-        // Socket.io इवेंट
-        // 🛑 FIX 4: getIO के बजाय getIo का उपयोग करें (केस-सेंसिटिविटी)
-        getIO().emit("new-master-order", {
-          masterOrder: masterOrder,
-          subOrders: tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
-        });
-        getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrder });
-
-        return res.status(201).json({
-          message: "Orders placed successfully!",
-          masterOrderId: masterOrder.id,
-          masterOrderNumber: masterOrder.orderNumber,
-          data: masterOrder,
-        });
-
-      } catch (error: any) {
-        console.error("❌ Error placing cart order (transaction rolled back):", error);
-        return res.status(500).json({ message: error.message || "Failed to place order." });
-      }
+        // Socket.io इवेंट (ट्रांज़ैक्शन के बाहर emit करना बेहतर है)
+        
+        // 🛑 FIX 3: getIO().emit को हटा दें, इसे ट्रांज़ैक्शन के बाहर भेजें (या सुनिश्चित करें कि यह ट्रांज़ैक्शन को ब्लॉक नहीं करता है)
+        // हम इसे ट्रांज़ैक्शन के बाहर भेजेंगे।
+        
+        return { masterOrder, tempSubOrders }; // ट्रांज़ैक्शन से डेटा रिटर्न करें
+        
     }); // end transaction
+
+    // 🛑 FIX 4: Response Sending और Socket.io को ट्रांज़ैक्शन के बाहर हैंडल करें
+    if (!masterOrderResult) {
+        // यदि ट्रांज़ैक्शन विफल हो गया लेकिन कोई एक्सेप्शन नहीं फेंका गया
+        return res.status(500).json({ message: "Failed to place order due to an unknown transaction error." });
+    }
+
+    // Socket.io इवेंट को अब यहाँ emit करें
+    getIO().emit("new-master-order", {
+      masterOrder: masterOrderResult,
+      subOrders: masterOrderResult.tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
+    });
+    getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrderResult });
+
+
+    return res.status(201).json({
+        message: "Orders placed successfully!",
+        masterOrderId: masterOrderResult.id,
+        masterOrderNumber: masterOrderResult.orderNumber,
+        data: masterOrderResult,
+    });
+
 
   } catch (err: any) {
     console.error("❌ Unexpected error in placeOrderFromCart:", err);
+    // सुनिश्चित करें कि यहां से 500 एरर वापस हो
     return res.status(500).json({ message: err?.message || "Internal server error." });
   }
 };
