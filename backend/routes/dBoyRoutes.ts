@@ -58,7 +58,7 @@ router.post('/register', async (req: Request, res: Response) => {
       // Update existing user's role and approvalStatus
       await db.update(users)
         .set({
-          role: userRoleEnum.enumValues[2], // 'delivery_boy'
+          role: userRoleEnum.enumValues[3], // 'delivery_boy'
           approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
           firstName: fullName.split(' ')[0] || null,
           lastName: fullName.split(' ').slice(1).join(' ') || null,
