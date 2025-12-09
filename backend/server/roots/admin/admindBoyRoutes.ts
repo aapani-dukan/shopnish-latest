@@ -151,7 +151,7 @@ adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequ
 
     // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
     await db.update(users)
-      .set({ role: userRoleEnum.enumValues[2], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'delivery_boy', 'approved'
+      .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'delivery_boy', 'approved'
       .where(eq(users.id, deliveryBoy.userId));
 
     res.status(200).json({
