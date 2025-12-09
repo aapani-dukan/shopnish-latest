@@ -53,6 +53,7 @@ import SellerOrdersPage from "./pages/SellerOrdersPage";
 import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; // Capitalized
 import SellerAddProductPage from "./pages/SellerAddProductPage"; // आपके द्वारा प्रदान किए गए पाथ के अनुसार
 import SellerEditProductPage from "./pages/SellerEditProductPage"; 
+import OrderDetailsPage from "./pages/order-details/[id].tsx";
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
