@@ -450,7 +450,6 @@ for (const vItem of validatedItems) {
 /**
  * handles placing an order from the user's cart.
  */
-// सुनिश्चित करें कि handleDeliveryAddress, calculateDistance, और अन्य फ़ंक्शंस/इंपोर्ट उपलब्ध हैं।
 
 export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("🚀 [API] Received request to place order from cart.");
@@ -465,9 +464,9 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
       newDeliveryAddress,
       paymentMethod,
       deliveryInstructions,
-      subtotal: frontendSubtotal, // फ्रंटएंड से प्राप्त
-      total: frontendTotal,      // फ्रंटएंड से प्राप्त
-      deliveryCharge: frontendDeliveryCharge, // फ्रंटएंड से प्राप्त (कुल डिलीवरी चार्ज)
+      subtotal: frontendSubtotal,
+      total: frontendTotal,
+      deliveryCharge: frontendDeliveryCharge,
     } = req.body;
 
     // --- इनपुट वैलिडेशन ---
@@ -477,7 +476,8 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
     if (!paymentMethod) {
       return res.status(400).json({ message: "Invalid or missing payment method." });
     }
-    // Coerce numeric fields safely (ensure they are numbers)
+    
+    // Coerce numeric fields safely
     const subtotal = typeof frontendSubtotal === "number" ? frontendSubtotal : parseFloat(frontendSubtotal);
     const total = typeof frontendTotal === "number" ? frontendTotal : parseFloat(frontendTotal);
     const deliveryCharge = typeof frontendDeliveryCharge === "number" ? frontendDeliveryCharge : parseFloat(frontendDeliveryCharge);
@@ -486,10 +486,11 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
       return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be valid numbers." });
     }
 
+    let transactionResult: { masterOrder: any, tempSubOrders: any[] };
+
     // Server-side transaction
-    await db.transaction(async (tx) => {
-      try {
-        // Handle delivery address (same as BuyNow)
+    const result = await db.transaction(async (tx) => {
+        // Handle delivery address
         const {
             id: finalDeliveryAddressId,
             lat: finalDeliveryLat,
@@ -530,8 +531,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
 
         for (const cartItem of userCartItems) {
             const product = cartItem.product;
-            // Note: Assuming `approvalStatusEnum.enumvalues[1]` is 'approved'
-            if (!product || product.approvalStatus !== 'approved') { // Using 'approved' string for safety
+            if (!product || product.approvalStatus !== 'approved') {
               console.warn(`[order_from_cart] Product ${cartItem.productId} not found or not approved, skipping.`);
               continue;
             }
@@ -545,11 +545,13 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             if (!groupedBySeller.has(cartItem.sellerId)) {
                 groupedBySeller.set(cartItem.sellerId, []);
             }
-            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product });
-            masterOrderCalculatedSubtotal += Number(cartItem.totalPrice);
+            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product: cartItem.product });
+            
+            // 🛑 FIX: सुनिश्चित करें कि totalPrice संख्या के रूप में जोड़ा जाए
+            masterOrderCalculatedSubtotal += Number(cartItem.totalPrice); 
         }
 
-        // --- इंटीग्रिटी चेक ---
+        // --- इंटीग्रिटी चेक (Subtotal) ---
         if (Math.abs(masterOrderCalculatedSubtotal - subtotal) > 0.01) {
           throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
         }
@@ -581,7 +583,7 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
                 throw new Error(`Store or seller details missing for seller ${sellerId}`);
             }
 
-            const subtotal = items.reduce((sum, item) => sum + item.totalPrice, 0);
+            const subtotal = items.reduce((sum, item) => sum + Number(item.totalPrice), 0);
             const currentSubOrderDeliveryCharge = seller.isSelfDeliveryBySeller ? 0 : 50; // DUMMY CHARGE
             masterOrderCalculatedDeliveryCharge += currentSubOrderDeliveryCharge;
 
@@ -593,8 +595,8 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
                 deliveryCharge: currentSubOrderDeliveryCharge,
                 total: subtotal + currentSubOrderDeliveryCharge,
                 items: items,
-                storeLat: store.latitude,
-                storeLng: store.longitude,
+                storeLat: Number(store.latitude), 
+                storeLng: Number(store.longitude),
                 estimatedTime: 60,
             });
         }
@@ -614,9 +616,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             orderNumber: `ORD-${Date.now()}-${userId}`,
             customerId: userId,
             deliveryAddressId: finalDeliveryAddressId,
-            // 🛑 FIX 1: deliveryAddress को JSON.stringify से हटा दें यदि यह सादा TEXT कॉलम है
-            // यहाँ finalDeliveryAddressJson (एक ऑब्जेक्ट) को स्ट्रिंगिफाई करना ठीक है 
-            // यदि deliveryAddress कॉलम JSON या TEXT है
             deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
             deliveryCity: finalCity,
             deliveryState: finalState,
@@ -624,7 +623,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             deliveryLat: finalDeliveryLat,
             deliveryLng: finalDeliveryLng,
             
-            // 🛑 FIX 2: masterOrderCalculatedSubtotal और Total का उपयोग करें, न कि Frontend वाले का
             subtotal: masterOrderCalculatedSubtotal, 
             total: masterOrderCalculatedTotal,
             
@@ -637,7 +635,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
         }).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
         if (!masterOrder) throw new Error('Failed to create master order.');
-        masterOrderResult = masterOrder; // ट्रांज़ैक्शन के बाहर उपयोग के लिए
 
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
         const batchesToCreate: { 
@@ -648,10 +645,9 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
         const nonSelfDeliverySubOrders = tempSubOrders.filter(s => !s.isSelfDelivery);
         const selfDeliverySubOrders = tempSubOrders.filter(s => s.isSelfDelivery);
         
-        const consoleTimeDiffThreshold = 30;
         const consoleDistThreshold = 2.0;
 
-        // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए बैच बनाएं (Create Sub-Orders first)
+        // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए (Create Sub-Orders first)
         let currentBatchGroup: (typeof tempSubOrders[number] & { subOrderId: number })[] = [];
         
         nonSelfDeliverySubOrders.sort((a, b) => {
@@ -661,7 +657,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
         });
 
         for (const subOrderData of nonSelfDeliverySubOrders) {
-            // सब-ऑर्डर बनाएं
             const [subOrder] = await tx.insert(subOrders).values({
                 masterOrderId: masterOrder.id,
                 subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}`,
@@ -721,11 +716,9 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             for (const item of subOrderData.items) {
                 await tx.insert(orderItems).values({
                     subOrderId: subOrder.id,
-                    // 🛑 FIX 3: order_items स्कीमा के लिए orderId, sellerId, userId जोड़ें
                     orderId: masterOrder.id, 
                     sellerId: subOrderData.sellerId,
                     userId: userId,
-                    
                     productId: item.product.id,
                     productName: item.product.name,
                     productImage: item.product.image,
@@ -741,7 +734,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
 
         // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
         for (const batch of batchesToCreate) {
-            // deliveryBoyId असाइन करें
             const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
 
             // a) डिलीवरी बैच बनाएं
@@ -773,11 +765,9 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
                 for (const item of subOrderData.items) {
                     await tx.insert(orderItems).values({
                         subOrderId: subOrderData.subOrderId,
-                        // 🛑 FIX 3: order_items स्कीमा के लिए orderId, sellerId, userId जोड़ें
                         orderId: masterOrder.id, 
                         sellerId: subOrderData.sellerId,
                         userId: userId,
-                        
                         productId: item.product.id,
                         productName: item.product.name,
                         productImage: item.product.image,
@@ -791,39 +781,34 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
                 }
             }
         }
-        
-             // 4. कार्ट को खाली करें
+
+        // 4. कार्ट को खाली करें
         await tx.delete(cartItems).where(eq(cartItems.userId, userId));
         console.log("✅ Cart items deleted from cartItems table.");
-
-        // Socket.io इवेंट (ट्रांज़ैक्शन के बाहर emit करना बेहतर है)
         
-        // 🛑 FIX 3: getIO().emit को हटा दें, इसे ट्रांज़ैक्शन के बाहर भेजें (या सुनिश्चित करें कि यह ट्रांज़ैक्शन को ब्लॉक नहीं करता है)
-        // हम इसे ट्रांज़ैक्शन के बाहर भेजेंगे।
-        
-        return { masterOrder, tempSubOrders }; // ट्रांज़ैक्शन से डेटा रिटर्न करें
+        return { masterOrder, tempSubOrders }; 
         
     }); // end transaction
+    
+    // 🛑 FIX: ट्रांज़ैक्शन के परिणाम को असाइन करें
+    transactionResult = result;
 
-    // 🛑 FIX 4: Response Sending और Socket.io को ट्रांज़ैक्शन के बाहर हैंडल करें
-    if (!masterOrderResult) {
-        // यदि ट्रांज़ैक्शन विफल हो गया लेकिन कोई एक्सेप्शन नहीं फेंका गया
+    if (!transactionResult || !transactionResult.masterOrder) {
         return res.status(500).json({ message: "Failed to place order due to an unknown transaction error." });
     }
-
+    
     // Socket.io इवेंट को अब यहाँ emit करें
     getIO().emit("new-master-order", {
-      masterOrder: masterOrderResult,
-      subOrders: masterOrderResult.tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
+      masterOrder: transactionResult.masterOrder,
+      subOrders: transactionResult.tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
     });
-    getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: masterOrderResult });
-
+    getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: transactionResult.masterOrder });
 
     return res.status(201).json({
         message: "Orders placed successfully!",
-        masterOrderId: masterOrderResult.id,
-        masterOrderNumber: masterOrderResult.orderNumber,
-        data: masterOrderResult,
+        masterOrderId: transactionResult.masterOrder.id,
+        masterOrderNumber: transactionResult.masterOrder.orderNumber,
+        data: transactionResult.masterOrder,
     });
 
 
@@ -833,6 +818,8 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
     return res.status(500).json({ message: err?.message || "Internal server error." });
   }
 };
+              
+        
 
 
 /**
