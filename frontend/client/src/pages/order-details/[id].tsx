@@ -1,7 +1,8 @@
 // pages/order-details/[id].tsx
 
 import React, { useEffect, useState } from 'react';
-import { useRouter } from 'next/router';
+import { useParams, useLocation } from 'react-router-dom'; // ✅ USE THIS
+
 // मान लीजिए कि आपके पास एक लेआउट कंपोनेंट और एक API फ़ेचर फ़ंक्शन है
 // import Layout from '../../components/Layout';
 // import { fetchSubOrderDetails } from '../../api/orderApi'; 
