@@ -3,6 +3,8 @@
 import React, { useEffect, useState } from 'react';
 // ✅ Next.js के बजाय React Router हुक्स का उपयोग करें
 import { useParams, useLocation } from 'react-router-dom'; 
+// ✅ Firebase Auth SDK को इंपोर्ट करें
+import { getAuth } from 'firebase/auth'; 
 
 // मान लीजिए कि आपके पास एक लेआउट कंपोनेंट और एक API फ़ेचर फ़ंक्शन है
 // import Layout from '../../components/Layout';
@@ -36,32 +38,55 @@ const OrderDetailsPage = () => {
   const queryParams = new URLSearchParams(location.search);
   const sellerId = queryParams.get('sellerId'); 
 
+  // Firebase Auth इंस्टेंस प्राप्त करें
+  // ⚠️ सुनिश्चित करें कि आपके मुख्य app.js/main.js में Firebase initialize हो चुका है।
+  const auth = getAuth(); 
+
   const [loading, setLoading] = useState(true);
   const [orderDetails, setOrderDetails] = useState<SubOrderDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // router.isReady की आवश्यकता नहीं है, useParams/useLocation तुरंत उपलब्ध हैं
+    
+    // useParams/useLocation तुरंत उपलब्ध हैं
     if (orderId && sellerId) {
+      const user = auth.currentUser;
+
+      if (!user) {
+          setError("User not logged in. Redirecting to login...");
+          setLoading(false);
+          // ⚠️ TODO: यहां यूजर को लॉगिन पेज पर रीडायरेक्ट करें
+          return;
+      }
+      
       const fetchDetails = async () => {
         setLoading(true);
         setError(null);
         
-        // Backend API कॉल (आपने जो Backend में परिभाषित किया है)
-        const apiUrl = `/api/orders/${orderId}/details?sellerId=${sellerId}`; 
-        
         try {
-          // **मान लीजिए कि आप fetch का उपयोग कर रहे हैं**
-          // ⚠️ NOTE: YOUR_AUTH_TOKEN को वास्तविक टोकन से बदलना सुनिश्चित करें
+          // 🛑 FIX: हर बार कॉल करने से पहले Firebase से वर्तमान ID Token प्राप्त करें
+          const authToken = await user.getIdToken(); 
+          
+          // Backend API कॉल (आपने जो Backend में परिभाषित किया है)
+          const apiUrl = `/api/orders/${orderId}/details?sellerId=${sellerId}`; 
+          
           const response = await fetch(apiUrl, {
               headers: {
-                  Authorization: `Bearer YOUR_AUTH_TOKEN`, 
+                  // 🛑 FIX: वास्तविक authToken का उपयोग करें
+                  Authorization: `Bearer ${authToken}`, 
+                  'Content-Type': 'application/json'
               },
           });
 
           if (!response.ok) {
               const errorData = await response.json();
-              throw new Error(errorData.message || 'Failed to fetch order details.');
+              
+              if (response.status === 401) {
+                  // यदि Firebase टोकन अस्वीकृत हो जाता है (जैसे एक्सपायर्ड)
+                  setError("Session expired. Please log in again.");
+              } else {
+                  throw new Error(errorData.message || 'Failed to fetch order details.');
+              }
           }
 
           const data: SubOrderDetails = await response.json();
@@ -81,7 +106,7 @@ const OrderDetailsPage = () => {
         setLoading(false);
         setError("Invalid URL parameters (Order ID or Seller ID is missing).");
     }
-  }, [orderId, sellerId]); // Dependencies list में केवल orderId और sellerId शामिल करें
+  }, [orderId, sellerId]); // Dependencies list में orderId और sellerId शामिल करें
 
   if (loading) {
     return (
