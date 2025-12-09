@@ -203,23 +203,23 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
           .where(eq(users.id, seller.userId));
 
         // 2c. Check and create default Store Entry
-        const existingStore = await tx.query.stores.findFirst({
-            where: eq(stores.sellerId, sellerId),
-        });
+       // const existingStore = await tx.query.stores.findFirst({
+          //  where: eq(stores.sellerId, sellerId),
+     //   });
 
-        if (!existingStore) {
-            console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
+     //   if (!existingStore) {
+          //  console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
             // NOT NULL fields must be provided based on your schema
-            await tx.insert(stores).values({
-                sellerId: sellerId,
-                storeName: seller.businessName || `Store ${sellerId}`, 
-                storeType: 'General Goods', 
-                address: seller.businessAddress || 'Pending Setup: Address', 
-                city: seller.city || 'Pending Setup: City', 
-                pincode: seller.pincode || '000000', 
-                phone: seller.businessPhone || '0000000000', 
-            });
-        }
+         //   await tx.insert(stores).values({
+             //   sellerId: sellerId,
+            //    storeName: seller.businessName || `Store ${sellerId}`, 
+          //      storeType: 'General Goods', 
+              //  address: seller.businessAddress || 'Pending Setup: Address', 
+              //  city: seller.city || 'Pending Setup: City', 
+             //   pincode: seller.pincode || '000000', 
+             //   phone: seller.businessPhone || '0000000000', 
+            //});
+      //  }
         
         return approved;
     });
