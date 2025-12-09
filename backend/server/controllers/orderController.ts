@@ -1075,8 +1075,8 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
             items: orderItemsList.map(item => ({
                 productName: item.productName,
                 quantity: item.quantity,
-                unitPrice: item.productPrice,
-                itemTotal: item.itemTotal,
+                unitPrice: Number(item.productPrice),
+                itemTotal: Number(item.itemTotal),
             })),
             // अन्य आवश्यक डेटा जोड़ें
         });
