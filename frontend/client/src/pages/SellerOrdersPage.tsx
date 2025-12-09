@@ -109,8 +109,7 @@ const SellerOrdersPage: React.FC = () => {
       case 'cancelled':
       case 'rejected':
         return <XCircle className="h-4 w-4 text-red-600" />;
-      case 'cancelled':
-        return <XCircle className="h-4 w-4 text-red-600" />;
+      
       default:
         return null;
     }
