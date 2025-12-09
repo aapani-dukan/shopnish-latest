@@ -22,7 +22,7 @@ ordersRouter.get("/", requireAuth, getUserOrders);
 
 // ⭐ NEW: विशिष्ट ऑर्डर विवरण प्राप्त करने के लिए (e.g., /api/orders/170)
 ordersRouter.get("/:orderId", requireAuth, getOrderDetail);
-
+ordersRouter.get("/:orderId/details", authorize(['customer']), getSubOrderDetails); 
 // ✅ ट्रैकिंग रूट (e.g., /api/orders/170/tracking)
 ordersRouter.get("/:orderId/tracking", requireAuth, getOrderTrackingDetails);
 
