@@ -89,7 +89,7 @@ function App() {
             <Route path="/customer/orders" element={<CustomerOrdersPage />} />
             <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
-
+            <Route path="/order-details/:id" element={<OrderDetailsPage />} />
             {/* Seller Routes (using a shared layout for the dashboard) */}
               <Route path="/seller-dashboard" element={<SellerDashboardLayout />}>
               <Route index element={<SellerDashboard />} />
