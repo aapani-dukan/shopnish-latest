@@ -8,6 +8,7 @@ import {
   approvalStatusEnum,
   categories,
   products,
+  stores,
   // orders, // ✅ अब master orders की बजाय subOrders पर काम करेंगे
   // orderItems, // ✅ अब orderItems सीधे subOrders से जुड़े हैं
   // orderStatusEnum, // ✅ अब masterOrderStatusEnum और subOrderStatusEnum का उपयोग करेंगे
@@ -50,6 +51,7 @@ const upload = multer({
 
 
 // ✅ POST /api/sellers/apply
+// ✅ POST /api/sellers/apply (FINAL FIXED VERSION)
 sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
@@ -68,9 +70,12 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
       bankAccountNumber,
       ifscCode,
       businessType,
+      latitude,
+      longitude, 
     } = req.body;
 
-    if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType) {
+    // ✅ VALIDATION: Lat/Lng सहित सभी आवश्यक फ़ील्ड्स की जाँच करें
+    if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType || !latitude || !longitude) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
@@ -86,47 +91,71 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
       });
     }
 
-    const newSeller = await db
-      .insert(sellersPgTable)
-      .values({
-        userId,
-        businessName,
-        businessAddress,
-        businessPhone,
-        description: description || null,
-        city,
-        pincode,
-        gstNumber: gstNumber || null,
-        bankAccountNumber: bankAccountNumber || null,
-        ifscCode: ifscCode || null,
-        deliveryRadius: null,
-        isDistanceBasedDelivery: false,
-        latitude: null,
-        longitude: null,
-        deliveryPincodes: [],
-        businessType,
-        approvalStatus: approvalStatusEnum.enumValues[0],
-      })
-      .returning();
+    // 🛑 FIX 1: सभी डेटाबेस ऑपरेशनों को एक Transaction में लपेटें (Wrap all DB operations in a Transaction)
+    const newSellerTransaction = await db.transaction(async (tx) => {
 
-    const [updatedUser] = await db
-      .update(users)
-      .set({
-        role: userRoleEnum.enumValues[1],
-        approvalStatus: approvalStatusEnum.enumValues[0],
-      })
-      .where(eq(users.id, userId))
-      .returning();
+        // 1. Sellers Table Insertion (अब tx का उपयोग करें)
+        const [sellerEntry] = await tx
+            .insert(sellersPgTable)
+            .values({
+                userId,
+                businessName,
+                businessAddress,
+                businessPhone,
+                description: description || null,
+                city,
+                pincode,
+                gstNumber: gstNumber || null,
+                bankAccountNumber: bankAccountNumber || null,
+                ifscCode: ifscCode || null,
+                deliveryRadius: null,
+                isDistanceBasedDelivery: false,
+                latitude: String(latitude), 
+                longitude: String(longitude),
+                deliveryPincodes: [],
+                businessType,
+                approvalStatus: approvalStatusEnum.enumValues[0],
+            })
+            .returning();
+        
+        // 2. Stores Table Insertion (The missing piece that caused 500 Order Error)
+        // 🛑 FIX 2: sellerEntry.id का उपयोग करें (जो अब ट्रांज़ैक्शन के अंदर परिभाषित है)
+        await tx.insert(stores).values({
+            sellerId: sellerEntry.id, // ✅ Seller ID का उपयोग करें
+            storeName: businessName,
+            storeType: businessType,
+            address: businessAddress,
+            city: city,
+            pincode: pincode,
+            phone: businessPhone,
+            isActive: false, 
+            latitude: String(latitude),
+            longitude: String(longitude),
+        });
 
+        // 3. Users Table Update
+        const [updatedUser] = await tx
+            .update(users)
+            .set({
+                role: userRoleEnum.enumValues[1],
+                approvalStatus: approvalStatusEnum.enumValues[0],
+            })
+            .where(eq(users.id, userId))
+            .returning();
+            
+        return { sellerEntry, updatedUser };
+    });
+
+    // 4. Response
     return res.status(201).json({
       message: "Application submitted.",
-      seller: newSeller[0],
+      seller: newSellerTransaction.sellerEntry, // ✅ ट्रांज़ैक्शन ऑब्जेक्ट से सही डेटा प्राप्त करें
       user: {
-        firebaseUid: updatedUser.firebaseUid,
-        role: updatedUser.role,
-        email: updatedUser.email,
-        firstName: updatedUser.firstName,
-        lastName: updatedUser.lastName,
+        firebaseUid: newSellerTransaction.updatedUser.firebaseUid,
+        role: newSellerTransaction.updatedUser.role,
+        email: newSellerTransaction.updatedUser.email,
+        firstName: newSellerTransaction.updatedUser.firstName,
+        lastName: newSellerTransaction.updatedUser.lastName,
       },
     });
   } catch (error: any) {
@@ -134,6 +163,7 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
     next(error);
   }
 });
+
 
 // ✅ GET /api/sellers/me
 
