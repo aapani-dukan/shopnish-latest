@@ -1,7 +1,7 @@
 // backend/src/controllers/sellercontroller.ts
 import { Request, Response, NextFunction } from 'express'; // 'request', 'response', 'nextfunction' को सही केस में बदला
 import { db } from '../db'; // आपका drizzle db इंस्टेंस
-import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
+import { sellersPgTable, users, stores, approvalStatusEnum, userRoleEnum } from '../../shared/backend/schema'; // आपके drizzle स्कीमा
 import { eq } from 'drizzle-orm';
 import { z } from 'zod'; // आपके validation schemas के लिए
 // ✅ अपनी zod-schema फाइल के सही पाथ को एडजस्ट करें
@@ -75,58 +75,89 @@ export const getMySellerProfile = asyncHandler(async (req: Request, res: Respons
 // desc    update authenticated seller's own profile
 // route   patch /api/sellers/:id
 // access  private/seller
-export const updateMySellerProfile = asyncHandler(async (req: Request, res: Response) => { // 'updatemysellerprofile' को 'updateMySellerProfile' में बदला
-  const sellerId = parseInt(req.params.id, 10); // 'sellerid' को 'sellerId' में बदला और parseInt में रेडिक्स जोड़ा
+export const updateMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
+  const sellerId = parseInt(req.params.id, 10);
 
-  // सुनिश्चित करें कि लॉग इन यूजर req.user.id आपके authentication middleware से आता है
   if (!req.user || !req.user.id) {
     res.status(401);
     throw new Error('Not authorized, user ID not found.');
   }
 
-  // सुरक्षा जांच: सुनिश्चित करें कि लॉग इन सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
-  // यदि req.user.id आपके User मॉडल का ID है, और sellerId आपके Seller मॉडल का ID है,
-  // तो आपको पहले sellerId से संबंधित userId को fetch करना होगा।
-  // यदि req.user.id सीधे seller के ID को दर्शाता है, तो यह तुलना सीधी हो सकती है।
-  // मैं मान रहा हूँ कि req.user.id यूजर का ID है, और sellerId सेलर का ID है।
-  const [sellerBeingUpdated] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) }); // 'findmany' को 'findMany' और 'sellerbeingupdated' को 'sellerBeingUpdated' में बदला
+  // सुरक्षा जांच
+  const [sellerBeingUpdated] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
   
-  if (!sellerBeingUpdated || sellerBeingUpdated.userId !== req.user.id) { // 'userid' को 'userId' में बदला
+  if (!sellerBeingUpdated || sellerBeingUpdated.userId !== req.user.id) {
       res.status(403);
-      throw new Error('Not authorized to update another seller\'s profile or seller not found.'); // संदेश में सुधार
+      throw new Error('Not authorized to update another seller\'s profile or seller not found.');
   }
 
+  const updateData = sellerUpdateSchema.parse(req.body); 
 
-  const updateData = sellerUpdateSchema.parse(req.body); // 'updatedata' को 'updateData' और 'sellerupdateschema' को 'sellerUpdateSchema' में बदला
-
-  if (isNaN(sellerId)) { // 'isnan' को 'isNaN' में बदला
-    return res.status(400).json({ error: 'Invalid seller ID.' }); // संदेश में सुधार
+  if (isNaN(sellerId)) {
+    return res.status(400).json({ error: 'Invalid seller ID.' });
   }
 
-  const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) }); // 'existingseller' को 'existingSeller' में बदला
+  const [existingSeller] = await db.query.sellersPgTable.findMany({ where: eq(sellersPgTable.id, sellerId) });
   if (!existingSeller) {
     return res.status(404).json({ message: 'Seller not found.' });
   }
 
-  const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = { // 'partial' को 'Partial' में और '$inferinsert' को '$inferInsert' में बदला
+  const finalUpdateData: Partial<typeof sellersPgTable.$inferInsert> = {
     ...updateData,
-    updatedAt: new Date(), // 'updatedat' को 'updatedAt' और 'new date()' को 'new Date()' में बदला
+    updatedAt: new Date(),
+    // सुनिश्चित करें कि latitude/longitude स्ट्रिंग के रूप में हैं, जैसा कि आपके स्कीमा में है
+    latitude: updateData.latitude ? String(updateData.latitude) : updateData.latitude,
+    longitude: updateData.longitude ? String(updateData.longitude) : updateData.longitude,
   };
 
-  // undefined values को हटा दें ताकि वे डेटाबेस में null के रूप में सेट न हों
-  Object.keys(finalUpdateData).forEach(key => { // 'object.keys' को 'Object.keys' और 'foreach' को 'forEach' में बदला
+  // undefined values को हटा दें
+  Object.keys(finalUpdateData).forEach(key => {
     if (finalUpdateData[key as keyof typeof finalUpdateData] === undefined) {
       delete finalUpdateData[key as keyof typeof finalUpdateData];
     }
   });
 
-  const [updatedSeller] = await db.update(sellersPgTable) // 'updatedseller' को 'updatedSeller' में बदला
-    .set(finalUpdateData)
-    .where(eq(sellersPgTable.id, sellerId))
-    .returning();
+  let updatedSeller: typeof sellersPgTable.$inferSelect;
 
+  // 🛑 FIX 1: Transaction शुरू करें
+  await db.transaction(async (tx) => {
+    
+    // 1. SELLERS TABLE UPDATE
+    const [sellerResult] = await tx.update(sellersPgTable)
+      .set(finalUpdateData)
+      .where(eq(sellersPgTable.id, sellerId))
+      .returning();
+      
+    updatedSeller = sellerResult;
+
+    // 2. 🛑 FIX 2: STORES TABLE UPDATE
+    const storeUpdateData: Partial<typeof stores.$inferInsert> = {
+        // केवल वे फ़ील्ड्स लें जो stores टेबल में हैं और updateData में उपलब्ध हैं
+        storeName: updateData.businessName, // storeName = businessName
+        address: updateData.businessAddress,
+        city: updateData.city,
+        pincode: updateData.pincode,
+        // CRITICAL FIX: Lat/Lng अपडेट करें
+        latitude: finalUpdateData.latitude, // Sellers से उपयोग करें (string format)
+        longitude: finalUpdateData.longitude, // Sellers से उपयोग करें (string format)
+        updatedAt: new Date(),
+    };
+    
+    // undefined values हटाएँ (stores अपडेट के लिए)
+    Object.keys(storeUpdateData).forEach(key => {
+        if (storeUpdateData[key as keyof typeof storeUpdateData] === undefined) {
+            delete storeUpdateData[key as keyof typeof storeUpdateData];
+        }
+    });
+
+    await tx.update(stores)
+        .set(storeUpdateData)
+        .where(eq(stores.sellerId, sellerId));
+  });
+  
+  // यदि अपडेटेडसेलर किसी कारण से अनुपलब्ध है, तो 500 एरर दें
   if (!updatedSeller) {
-    return res.status(500).json({ message: 'Failed to update seller.' });
+    return res.status(500).json({ message: 'Failed to update seller or transaction failed.' });
   }
 
   return res.status(200).json({ message: "Seller profile updated successfully.", seller: updatedSeller });
