@@ -1,7 +1,8 @@
 // pages/order-details/[id].tsx
 
 import React, { useEffect, useState } from 'react';
-import { useParams, useLocation } from 'react-router-dom'; // ✅ USE THIS
+// ✅ Next.js के बजाय React Router हुक्स का उपयोग करें
+import { useParams, useLocation } from 'react-router-dom'; 
 
 // मान लीजिए कि आपके पास एक लेआउट कंपोनेंट और एक API फ़ेचर फ़ंक्शन है
 // import Layout from '../../components/Layout';
@@ -26,30 +27,35 @@ interface SubOrderDetails {
 }
 
 const OrderDetailsPage = () => {
-  const router = useRouter();
-  // URL से डायनामिक पैरामीटर और क्वेरी पैरामीटर प्राप्त करें
-  const { id: orderId, sellerId } = router.query; 
+  // 1. URL Path पैरामीटर प्राप्त करें (e.g., /order-details/9 -> id=9)
+  const { id } = useParams<{ id: string }>(); 
+  const orderId = id;
+
+  // 2. URL Query पैरामीटर प्राप्त करें (e.g., ?sellerId=7)
+  const location = useLocation();
+  const queryParams = new URLSearchParams(location.search);
+  const sellerId = queryParams.get('sellerId'); 
 
   const [loading, setLoading] = useState(true);
   const [orderDetails, setOrderDetails] = useState<SubOrderDetails | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
-    // router.isReady सुनिश्चित करता है कि URL पैरामीटर उपलब्ध हैं
-    if (router.isReady && orderId && sellerId) {
+    // router.isReady की आवश्यकता नहीं है, useParams/useLocation तुरंत उपलब्ध हैं
+    if (orderId && sellerId) {
       const fetchDetails = async () => {
         setLoading(true);
         setError(null);
         
-        // 🚨 महत्वपूर्ण: आपको इस API एंडपॉइंट को अपने Backend में परिभाषित करना होगा
-        // उदा: GET /api/orders/suborder-details/:orderId?sellerId=sellerId
+        // Backend API कॉल (आपने जो Backend में परिभाषित किया है)
         const apiUrl = `/api/orders/${orderId}/details?sellerId=${sellerId}`; 
         
         try {
           // **मान लीजिए कि आप fetch का उपयोग कर रहे हैं**
+          // ⚠️ NOTE: YOUR_AUTH_TOKEN को वास्तविक टोकन से बदलना सुनिश्चित करें
           const response = await fetch(apiUrl, {
               headers: {
-                  Authorization: `Bearer YOUR_AUTH_TOKEN`, // ऑथेंटिकेशन टोकन जोड़ें
+                  Authorization: `Bearer YOUR_AUTH_TOKEN`, 
               },
           });
 
@@ -70,8 +76,12 @@ const OrderDetailsPage = () => {
       };
 
       fetchDetails();
+    } else {
+        // यदि कोई पैरामीटर गुम है तो तुरंत लोड होना बंद कर दें
+        setLoading(false);
+        setError("Invalid URL parameters (Order ID or Seller ID is missing).");
     }
-  }, [router.isReady, orderId, sellerId]);
+  }, [orderId, sellerId]); // Dependencies list में केवल orderId और sellerId शामिल करें
 
   if (loading) {
     return (
