@@ -1006,6 +1006,86 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     res.status(500).json({ message: "Failed to fetch tracking details." });
   }
 };
+/**
+ * ✅ GET /api/orders/:orderId/details
+ * ग्राहक के लिए विशिष्ट सब-ऑर्डर विवरण (Seller-specific order details)
+ * यह सुनिश्चित करता है कि ग्राहक केवल वह सब-ऑर्डर देखे जो sellerId से संबंधित है।
+ */
+export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    const userId = req.user?.id;
+    const orderId = Number(req.params.orderId);
+    const sellerId = Number(req.query.sellerId); // Query parameter से sellerId प्राप्त करें
+
+    if (!userId) {
+        return res.status(401).json({ message: "Unauthorized." });
+    }
+    if (Number.isNaN(orderId) || Number.isNaN(sellerId)) {
+        return res.status(400).json({ message: "Invalid Order ID or Seller ID." });
+    }
+
+    try {
+        // 1. सब-ऑर्डर विवरण फ़ेच करें (Sub-Order details)
+        const subOrder = await db.query.subOrders.findFirst({
+            where: and(
+                eq(subOrders.masterOrderId, orderId),
+                eq(subOrders.sellerId, sellerId)
+            ),
+            with: {
+                seller: {
+                    columns: { businessName: true }
+                }
+            }
+        });
+
+        if (!subOrder) {
+            return res.status(404).json({ message: "Sub-Order not found for this customer or seller." });
+        }
+        
+        // सुरक्षा जाँच (Security Check): सुनिश्चित करें कि यह सब-ऑर्डर इस ग्राहक के मास्टर ऑर्डर से संबंधित है।
+        // (इसके लिए आपको masterOrders टेबल में customerId को orderId से जोड़कर जाँच करनी होगी, 
+        // जो subOrders table में masterOrderId से जुड़ा है)
+        const masterOrder = await db.query.orders.findFirst({
+            where: and(
+                eq(orders.id, orderId),
+                eq(orders.customerId, userId)
+            ),
+            columns: { deliveryAddress: true, deliveryCity: true }
+        });
+
+        if (!masterOrder) {
+            return res.status(403).json({ message: "Access forbidden. Order does not belong to user." });
+        }
+
+        // 2. सब-ऑर्डर आइटम्स फ़ेच करें (Order Items)
+        const orderItemsList = await db.query.orderItems.findMany({
+            where: eq(orderItems.subOrderId, subOrder.id),
+        });
+
+        // 3. प्रतिक्रिया (Response)
+        res.status(200).json({
+            subOrderId: subOrder.id,
+            masterOrderId: subOrder.masterOrderId,
+            orderNumber: subOrder.subOrderNumber,
+            sellerName: subOrder.seller?.businessName,
+            deliveryStatus: subOrder.status,
+            subtotal: subOrder.subtotal,
+            deliveryCharge: subOrder.deliveryCharge,
+            total: subOrder.total,
+            deliveryAddress: JSON.parse(masterOrder.deliveryAddress), // Address को JSON से parse करें
+            items: orderItemsList.map(item => ({
+                productName: item.productName,
+                quantity: item.quantity,
+                unitPrice: item.productPrice,
+                itemTotal: item.itemTotal,
+            })),
+            // अन्य आवश्यक डेटा जोड़ें
+        });
+
+    } catch (error: any) {
+        console.error("❌ Error fetching sub-order details:", error);
+        next(error);
+    }
+};
 
 /**
  * fetches details for a specific master order id.
