@@ -123,9 +123,9 @@ router.post('/login', verifyToken, async (req: AuthenticatedRequest, res: Respon
       return res.status(404).json({ message: "Account not found or not approved." });
     }
 
-    if (!deliveryBoy.user || deliveryBoy.user.role !== userRoleEnum.enumValues[3] /* 'delivery-boy' */) { // ✅ userRoleEnum[3] = 'delivery-boy'
-      await db.update(users).set({ role: userRoleEnum.enumValues[3] as any }).where(eq(users.id, deliveryBoy.userId)); // ✅ 'as any' for enum update
-    }
+   // if (!deliveryBoy.user || deliveryBoy.user.role !== userRoleEnum.enumValues[3] /* 'delivery-boy' */) { // ✅ userRoleEnum[3] = 'delivery-boy'
+  //    await db.update(users).set({ role: userRoleEnum.enumValues[3] as any }).where(eq(users.id, deliveryBoy.userId)); // ✅ 'as any' for enum update
+   // }
 
     res.status(200).json({ message: "Login successful", user: deliveryBoy });
 
