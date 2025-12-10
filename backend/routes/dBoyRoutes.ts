@@ -164,11 +164,9 @@ router.get('/me', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res:
 });
 
 
-// ---
-/**
- * ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
- * /api/delivery-boys/batches
- */
+
+ // ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
+ 
 router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -189,9 +187,11 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     const assignedBatches = await db.query.deliveryBatches.findMany({
       where: and(
         eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
-        not(inArray(deliveryBatches.status, [deliveryStatusEnum.enumValues[5], deliveryStatusEnum.enumValues[8]])) // 'delivered', 'cancelled'
+        // ✅ Index 5 ('delivered') और Index 8 ('cancelled') के बजाय स्ट्रिंग का उपयोग करें
+        not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
       ),
       with: {
+        // ... (Nested relational data remains the same) ...
         subOrders: {
           with: {
             masterOrder: {
@@ -218,11 +218,13 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
       orderBy: desc(deliveryBatches.createdAt),
     });
 
+    // ... (Formatting logic remains the same) ...
     const formattedBatches = assignedBatches.map(batch => {
       const parsedSubOrders = batch.subOrders.map(subOrder => {
         let parsedDeliveryAddress = {};
         try {
           if (subOrder.masterOrder?.deliveryAddress) {
+            // Address JSON string to object conversion
             parsedDeliveryAddress = JSON.parse(subOrder.masterOrder.deliveryAddress as string);
           }
         } catch (e) {
@@ -242,6 +244,7 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
         subOrders: parsedSubOrders,
       };
     });
+
 
     return res.status(200).json({ batches: formattedBatches });
   } catch (error: any) {
@@ -271,7 +274,7 @@ router.patch(
       if (isNaN(batchId)) {
         return res.status(400).json({ error: 'Invalid delivery batch ID.' });
       }
-      // ✅ deliveryStatusEnum में 'delivered' (इंडेक्स 5) और 'cancelled' (इंडेक्स 8) है
+      // ✅ deliveryStatusEnum में स्ट्रिंग मानों की जाँच करें
       if (!newStatus || !Object.values(deliveryStatusEnum.enumValues).includes(newStatus as any)) {
         return res.status(400).json({ error: 'Invalid or missing status provided.' });
       }
@@ -314,13 +317,15 @@ router.patch(
         return res.status(403).json({ error: 'Not authorized to update this delivery batch or batch not found.' });
       }
 
+      // --- स्थिति परिवर्तन वैलिडेशन (Transition Logic) ---
       const currentStatus = existingBatch.status;
+      // ✅ Index के बजाय स्ट्रिंग का उपयोग करें
       const validStatusTransitions: { [key: string]: string[] } = {
-        'pending': [],
-        'assigned': [deliveryStatusEnum.enumValues[2], deliveryStatusEnum.enumValues[8]], // 'out_for_pickup', 'cancelled'
-        'out_for_pickup': [deliveryStatusEnum.enumValues[3], deliveryStatusEnum.enumValues[8]], // 'picked_up', 'cancelled'
-        'picked_up': [deliveryStatusEnum.enumValues[4], deliveryStatusEnum.enumValues[8]], // 'out_for_delivery', 'cancelled'
-        'out_for_delivery': [deliveryStatusEnum.enumValues[5], deliveryStatusEnum.enumValues[8], deliveryStatusEnum.enumValues[6]], // 'delivered', 'cancelled', 'failed'
+        'pending': [], // 'pending' से 'assigned' केवल Seller/System द्वारा सेट किया जाता है
+        'assigned': ['out_for_pickup', 'cancelled'], 
+        'out_for_pickup': ['picked_up', 'cancelled'], 
+        'picked_up': ['out_for_delivery', 'cancelled'], 
+        'out_for_delivery': ['delivered', 'cancelled', 'failed'], 
         'delivered': [],
         'failed': [],
         'exepted': [],
@@ -331,16 +336,17 @@ router.patch(
         return res.status(400).json({ error: `Invalid status transition from '${currentStatus}' to '${newStatus}'.` });
       }
 
-      // OTP वेरिफिकेशन केवल 'delivered' स्टेटस (इंडेक्स 5) के लिए
-      if (newStatus === deliveryStatusEnum.enumValues[5] /* 'delivered' */) {
+      // 1. OTP वेरिफिकेशन केवल 'delivered' स्टेटस के लिए
+      if (newStatus === 'delivered') {
         if (!otp) {
           return res.status(400).json({ error: 'OTP is required to mark as delivered.' });
         }
         if (otp !== existingBatch.deliveryOtp) {
           return res.status(401).json({ error: 'Invalid OTP.' });
         }
-      } else if (newStatus === deliveryStatusEnum.enumValues[3] /* 'picked_up' */ && !existingBatch.deliveryOtp) {
-        // यदि 'picked_up' पर पहली बार अपडेट हो रहा है और OTP जेनरेट नहीं हुआ है, तो जेनरेट करें
+      } 
+      // 2. OTP जेनरेशन 'picked_up' पर
+      else if (newStatus === 'picked_up' && !existingBatch.deliveryOtp) {
         const generatedOtp = generateOTP();
         await db.update(deliveryBatches)
           .set({ deliveryOtp: generatedOtp, deliveryOtpSentAt: new Date() })
@@ -351,21 +357,23 @@ router.patch(
         const customerPhone = existingBatch.subOrders[0]?.masterOrder?.customer?.phone;
         if (customerPhone) {
           const message = `Your OTP for order delivery is: ${generatedOtp}. Please provide this to the delivery person.`;
-          await sendWhatsappMessage(customerPhone, message); // ✅ केवल WhatsApp
+          await sendWhatsappMessage(customerPhone, message); 
           console.log(`[NOTIFICATION] Sent OTP to customer ${customerPhone}: ${message}`);
         }
-
-      } else if (newStatus === deliveryStatusEnum.enumValues[8] /* 'cancelled' */) {
+      } 
+      // 3. कैंसलेशन
+      else if (newStatus === 'cancelled') {
         console.log(`[INFO] Delivery batch ${batchId} cancelled by delivery boy ${deliveryBoyId}`);
       }
 
+      // --- ट्रांजेक्शन का उपयोग करें ---
       await db.transaction(async (tx) => {
         // 1. डिलीवरी बैच की स्थिति अपडेट करें
         const [updatedBatch] = await tx.update(deliveryBatches)
           .set({
             status: newStatus as any,
             updatedAt: new Date(),
-            deliveredAt: newStatus === deliveryStatusEnum.enumValues[5] ? new Date() : existingBatch.deliveredAt, // deliveredAt सेट करें
+            deliveredAt: newStatus === 'delivered' ? new Date() : existingBatch.deliveredAt, 
           })
           .where(eq(deliveryBatches.id, batchId))
           .returning();
@@ -380,19 +388,23 @@ router.patch(
           deliveryBatchId: batchId,
           status: newStatus as any,
           updatedByUserId: userId,
-          updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+          updatedByUserRole: 'delivery-boy', // ✅ स्ट्रिंग का उपयोग करें
           timestamp: new Date(),
           message: `Delivery batch status updated to '${newStatus}' by delivery boy.`,
         });
 
-        // 3. यदि बैच 'delivered' (इंडेक्स 5) या 'cancelled' (इंडेक्स 8) हो गया है, तो संबंधित subOrders और Master Order को भी अपडेट करें
-        if (newStatus === deliveryStatusEnum.enumValues[5] /* 'delivered' */ || newStatus === deliveryStatusEnum.enumValues[8] /* 'cancelled' */) {
+        // 3. यदि बैच 'delivered' या 'cancelled' हो गया है, तो संबंधित subOrders और Master Order को भी अपडेट करें
+        if (newStatus === 'delivered' || newStatus === 'cancelled') {
           const subOrderIdsInBatch = existingBatch.subOrders.map(so => so.id);
 
-          // ✅ subOrderStatusEnum में 'cancelled' (इंडेक्स 4) पर है।
-          const subOrderStatus = newStatus === deliveryStatusEnum.enumValues[5]
-            ? subOrderStatusEnum.enumValues[6] /* 'delivered_by_delivery_boy' */
-            : subOrderStatusEnum.enumValues[4]; /* 'cancelled' */
+          // ✅ Sub-Order Status Mapping
+          // (Delivery Boy द्वारा डिलीवरी के लिए delivered_by_delivery_boy का उपयोग करें)
+          const DELIVERED_BY_DBOY_STATUS = 'delivered_by_delivery_boy'; 
+          const CANCELLED_STATUS = 'cancelled';
+          
+          const subOrderStatus = newStatus === 'delivered'
+            ? DELIVERED_BY_DBOY_STATUS
+            : CANCELLED_STATUS;
 
           // सभी संबंधित subOrders को 'delivered_by_delivery_boy' या 'cancelled' पर अपडेट करें
           await tx.update(subOrders)
@@ -406,13 +418,13 @@ router.patch(
               subOrderId: so.id,
               status: subOrderStatus as any,
               updatedByUserId: userId,
-              updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+              updatedByUserRole: 'delivery-boy', 
               timestamp: new Date(),
               message: `Sub-order status updated to '${subOrderStatus}' by delivery boy.`,
             });
           }
 
-          // मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें
+          // 4. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें
           const masterOrderId = existingBatch.subOrders[0].masterOrder.id;
           const allRelatedSubOrders = await tx.query.subOrders.findMany({
             where: eq(subOrders.masterOrderId, masterOrderId),
@@ -422,20 +434,20 @@ router.patch(
             }
           });
 
-          // जाँचें कि क्या मास्टर ऑर्डर के सभी sub-orders 'delivered_by_seller' (इंडेक्स 6), 'delivered_by_delivery_boy' (इंडेक्स 6), या 'cancelled' (इंडेक्स 4) हैं
+          // ✅ जाँचें कि सभी sub-orders अंतिम अवस्था (delivered_by_seller, delivered_by_delivery_boy, cancelled, या rejected) में हैं
           const allSubOrdersFinalized = allRelatedSubOrders.every(so =>
-            so.status === subOrderStatusEnum.enumValues[5] || // delivered_by_seller
-            so.status === subOrderStatusEnum.enumValues[6] || // delivered_by_delivery_boy
-            so.status === subOrderStatusEnum.enumValues[4]    // cancelled
+            so.status === 'delivered_by_seller' || 
+            so.status === DELIVERED_BY_DBOY_STATUS || 
+            so.status === 'cancelled' ||
+            so.status === 'rejected'
           );
 
           if (allSubOrdersFinalized) {
-            // masterOrderStatusEnum में 'fulfilled' (इंडेक्स 3) और 'cancelled' (इंडेक्स 4) है
+            // Master Order Status: यदि सभी सबऑर्डर डिलीवर हो गए हैं, तो 'fulfilled' पर सेट करें
             const masterOrderStatus = allRelatedSubOrders.every(so =>
-              so.status === subOrderStatusEnum.enumValues[5] ||
-              so.status === subOrderStatusEnum.enumValues[6]
-            ) ? masterOrderStatusEnum.enumValues[3] /* 'fulfilled' */
-              : masterOrderStatusEnum.enumValues[4] /* 'cancelled' */;
+              so.status === 'delivered_by_seller' ||
+              so.status === DELIVERED_BY_DBOY_STATUS
+            ) ? 'fulfilled' : 'cancelled'; // ✅ स्ट्रिंग का उपयोग करें
 
             await tx.update(orders)
               .set({ status: masterOrderStatus as any, updatedAt: new Date() })
@@ -445,7 +457,7 @@ router.patch(
               masterOrderId: masterOrderId,
               status: masterOrderStatus as any,
               updatedByUserId: userId,
-              updatedByUserRole: userRoleEnum.enumValues[3], // 'delivery-boy'
+              updatedByUserRole: 'delivery-boy', 
               timestamp: new Date(),
               message: `Master order status updated to '${masterOrderStatus}' as all sub-orders are finalized.`,
             });
@@ -455,47 +467,25 @@ router.patch(
             });
           }
         }
-
-        // Socket.io: कस्टमर को रियल-time अपडेट भेजें
-        const customerId = existingBatch.subOrders[0].masterOrder.customerId;
-        getIO().emit(`user:${customerId}:order-update`, {
-          deliveryBatchId: batchId,
-          status: newStatus,
-          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
-          message: `Your delivery is now '${newStatus}'.`,
+        
+        // Socket.io: कस्टमर को बैच अपडेट भेजें
+        getIO().emit(`user:${existingBatch.subOrders[0].masterOrder.customerId}:batch-update`, {
+            batchId: batchId,
+            status: newStatus,
+            message: `Your delivery batch is now '${newStatus}'.`,
         });
-        // डिलीवरी बॉय को भी अपडेट भेजें
-        getIO().emit(`delivery-boy:${deliveryBoyId}:batch-update`, {
-          deliveryBatchId: batchId,
-          status: newStatus,
-          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
-        });
-        // सेलर को भी सूचित करें
-        for (const subOrder of existingBatch.subOrders) {
-          getIO().emit(`seller:${subOrder.seller.id}:order-update`, {
-            subOrderId: subOrder.id,
-            status: subOrderStatusEnum.enumValues[6], // यह मानते हुए कि यह 'delivered_by_delivery_boy' या 'cancelled' होगा
-            masterOrderId: existingBatch.subOrders[0].masterOrder.id,
-          });
-        }
-
 
         return res.status(200).json({
           message: 'Delivery batch status updated successfully.',
-          deliveryBatch: updatedBatch,
-          masterOrderId: existingBatch.subOrders[0].masterOrder.id,
+          batch: updatedBatch,
         });
-
       });
 
     } catch (error: any) {
       console.error('❌ Error in PATCH /api/delivery-boys/batches/:batchId/status:', error);
-      return res.status(500).json({ error: error.message || 'Failed to update delivery boy location.' });
+      return res.status(500).json({ error: error.message || 'Failed to update delivery batch status.' });
     }
   }
 );
 
-
-// Export router
 export default router;
-        
