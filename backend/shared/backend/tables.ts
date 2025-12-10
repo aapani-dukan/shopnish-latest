@@ -17,7 +17,8 @@ export const subOrderStatusEnum = pgEnum('sub_order_status', [
   'ready_for_pickup',
   'cancelled',
   'rejected',
-   'delivered_by_seller'
+   'delivered_by_seller',
+  'deliverd_by_delivery_boy'
   ]);
 export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
   "pending", "processing", "shipped", "delivered", "cancelled", "returned"
