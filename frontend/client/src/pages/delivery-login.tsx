@@ -44,7 +44,7 @@ export default function DeliveryLogin() { // `DeliveryLogin` में `delivery
 
         if (deliveryBoy.approvalStatus === "approved") { // `approvalStatus` में `approvalstatus` को ठीक किया
           toast({ title: "Login Successful", description: `Welcome ${deliveryBoy.name || deliveryBoy.email}` }); // `Login Successful` और `Welcome` में `login successful` और `welcome` को ठीक किया
-          navigate("/delivery-page");
+          navigate("/delivery");
         } else {
           toast({
             title: "Approval Pending",
