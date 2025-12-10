@@ -1,7 +1,11 @@
+// client/src/pages/deliveryBoy/DeliveryOrdersList.tsx (UPDATED for Batch Model)
+
 import React from "react";
-import { Navigation, Phone, MapPin, Loader2 } from "lucide-react"; // Loader2 जोड़ा गया है
+import { Navigation, Phone, MapPin, Loader2 } from "lucide-react"; 
 
 // --- TypeScript Type Definitions ---
+// (Address, Seller, Product, OrderItem types are retained)
+
 export interface Address {
   fullName?: string;
   phone?: string;
@@ -41,17 +45,17 @@ export interface OrderItem {
   product?: Product;
 }
 
-export interface Order {
-  id: number;
-  orderNumber?: string;
-  total?: string | number;
-  items?: OrderItem[];
-  deliveryStatus?: string; // ✅ deliveryStatus का उपयोग सही ढंग से
-  status?: string;
-  deliveryAddress?: any;
-  seller?: any;
-  sellerDetails?: any;
-  deliveryBoyId?: number | null; // ✅ deliveryBoyId null हो सकता है
+// 🛑 नया: DeliveryBatch टाइप
+// बैच में डिलीवरी के लिए आवश्यक सभी जानकारी होती है, जिसमें ऑर्डर की सूची भी शामिल है।
+export interface DeliveryBatch {
+  id: number; // Batch ID
+  masterOrderId?: string; // इसे OrderNumber के रूप में उपयोग करें
+  totalAmount?: string | number; // Batch का कुल मूल्य
+  status?: string; // Batch का वर्तमान डिलीवरी स्टेटस ('pending', 'assigned', 'picked_up' आदि)
+  deliveryAddress?: any; // ग्राहक का पता
+  items: OrderItem[]; // बैच के अंदर के सभी आइटम (सभी सब-ऑर्डर से मर्ज किए गए)
+  sellerDetails?: any; // एक ही विक्रेता के लिए, या यदि कई हैं तो array
+  deliveryBoyId?: number | null; // असाइन किया गया डिलीवरी बॉय ID
 }
 
 export interface UIComponents {
@@ -63,21 +67,25 @@ export interface UIComponents {
   Badge: React.FC<any>;
 }
 
+// 🛑 Updated Props: अब orders के बजाय batches का उपयोग कर रहे हैं
 export interface DeliveryOrdersListProps extends UIComponents {
-  orders: Order[];
-  onAcceptOrder: (orderId: number) => void;
-  onUpdateStatus: (order: Order) => void;
+  orders: DeliveryBatch[]; // 🛑 Batch[] का उपयोग करें
+  onAcceptOrder: (batchId: number) => void; // Batch ID स्वीकार करें
+  onUpdateStatus: (batch: DeliveryBatch) => void; // Batch ऑब्जेक्ट पास करें
   statusColor: (status: string) => string;
   statusText: (status: string) => string;
   nextStatus: (status: string) => string | null;
   nextStatusLabel: (status: string) => string;
   acceptLoading: boolean;
   updateLoading: boolean;
-  myDeliveryBoyId: number | undefined; // ✅ DeliveryOrdersListProps में myDeliveryBoyId जोड़ा गया
+  myDeliveryBoyId: number | undefined; 
 }
 
-// --- Normalizers ---
+// --- Normalizers (Updated to Handle Batch Structure) ---
+
+// (normalizeDeliveryAddress remains the same)
 const normalizeDeliveryAddress = (raw: any): Address | null => {
+  // ... (Address normalization logic remains the same)
   if (!raw) return null;
 
   if (raw.fullName || raw.phone || raw.address) {
@@ -106,20 +114,23 @@ const normalizeDeliveryAddress = (raw: any): Address | null => {
   return null;
 };
 
-
-const normalizeSeller = (order: Order): Seller | null => {
-  let rawSellerData = null;
-
-  // 1. Drizzle से आने वाले नेस्टेड पाथ को सुरक्षित रूप से खोजें: items[0].product.seller
-  // ✅ Nullish coalescing और Optional Chaining का उपयोग करके सुरक्षित एक्सेस
-  rawSellerData = order.items?.[0]?.product?.seller;
+// 🛑 Updated normalizeSeller: Batch से Seller Details खींचना
+const normalizeSeller = (batch: DeliveryBatch): Seller | null => {
+  // हम मान रहे हैं कि 'sellerDetails' फ़ील्ड बैच पर मौजूद है,
+  // या यदि बैच में केवल एक ऑर्डर है, तो हम items[0].product.seller का उपयोग कर सकते हैं।
   
-  // 2. पुराने/सीधे पाथ को फॉलबैक के तौर पर रखें
-  if (!rawSellerData && order.seller) {
-    rawSellerData = order.seller;
+  let rawSellerData = batch.sellerDetails;
+
+  // यदि sellerDetails एक array है (कई विक्रेता), तो हम सिर्फ पहले वाले को प्रदर्शित कर सकते हैं
+  if (Array.isArray(rawSellerData) && rawSellerData.length > 0) {
+      rawSellerData = rawSellerData[0];
+  }
+
+  // यदि rawSellerData अभी भी उपलब्ध नहीं है, तो हम items array से विक्रेता डेटा निकालने की कोशिश कर सकते हैं (जैसा कि पुराने कोड में था)
+  if (!rawSellerData) {
+      rawSellerData = batch.items?.[0]?.product?.seller;
   }
   
-  // 3. यदि कोई विक्रेता डेटा नहीं मिला, तो बाहर निकलें।
   if (!rawSellerData) {
     return null;
   }
@@ -127,15 +138,10 @@ const normalizeSeller = (order: Order): Seller | null => {
   // 4. विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
   return {
     id: rawSellerData.id ?? undefined,
-    // businessName को name और businessName दोनों से लें
     name: rawSellerData.name ?? rawSellerData.businessName, 
     businessName: rawSellerData.businessName ?? rawSellerData.name,
-    
-    // BACKEND FIELD NAMES (businessPhone, businessAddress) को map करें
     phone: rawSellerData.businessPhone ?? rawSellerData.phone ?? rawSellerData.phoneNumber,
     email: rawSellerData.email ?? null,
-    
-    // ✅ address को businessAddress से map करें
     address: rawSellerData.businessAddress ?? rawSellerData.address ?? rawSellerData.addressLine1,
     city: rawSellerData.city,
     pincode: rawSellerData.pincode ?? rawSellerData.postalCode,
@@ -144,7 +150,7 @@ const normalizeSeller = (order: Order): Seller | null => {
 };
 
 
-// --- AddressBlock ---
+// --- AddressBlock (Logic remains the same) ---
 const AddressBlock: React.FC<{
   title: string;
   details: Address | Seller | null;
@@ -181,14 +187,13 @@ const AddressBlock: React.FC<{
 
   const email = (details as Seller).email ?? null;
 
-// AddressBlock कॉम्पोनेंट के अंदर handleNavigate फ़ंक्शन
-
-const handleNavigate = () => {
-    const addressString = `${addressLine}, ${city}, ${pincode}`;
-    const query = encodeURIComponent(addressString);
-    // ✅ Google Maps URL को सही फॉर्मेट में बदला गया
-    window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
-};
+  // ✅ Google Maps URL को सही फॉर्मेट में बदला गया
+  const handleNavigate = () => {
+      const addressString = `${addressLine}, ${city}, ${pincode}`;
+      const query = encodeURIComponent(addressString);
+      // पुराने फॉर्मेट को सही Google Maps URL से बदलें
+      window.open(`https://www.google.com/maps/search/?api=1&query=${query}`, "_blank");
+  };
 
 
   const handleCall = () => {
@@ -234,7 +239,7 @@ const handleNavigate = () => {
   );
 };
 
-// --- OrderItems ---
+// --- OrderItems (Logic remains the same, but now uses Batch.items) ---
 const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
   <div className="mt-6 pt-4 border-t">
     <h4 className="font-medium mb-2">ऑर्डर आइटम</h4>
@@ -267,16 +272,16 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
   </div>
 );
 
-// --- OrderCard ---
-const OrderCard: React.FC<
+// --- BatchCard (Replaced OrderCard) ---
+const BatchCard: React.FC<
   Omit<DeliveryOrdersListProps, "orders" | "acceptLoading" | "updateLoading"> & {
-    order: Order;
+    batch: DeliveryBatch; // 🛑 Batch type
     isLoading: boolean;
-    myDeliveryBoyId: number | undefined; // ✅ यहां भी myDeliveryBoyId प्रॉप जोड़ा गया है
+    myDeliveryBoyId: number | undefined; 
   }
 > = React.memo(
   ({
-    order,
+    batch, // 🛑 Order के बजाय Batch का उपयोग करें
     onAcceptOrder,
     onUpdateStatus,
     statusColor,
@@ -284,50 +289,54 @@ const OrderCard: React.FC<
     nextStatus,
     nextStatusLabel,
     isLoading,
-    myDeliveryBoyId, // ✅ myDeliveryBoyId डीस्ट्रक्चर किया गया
+    myDeliveryBoyId,
     ...ui
   }) => {
-    if (!order) return null;
+    if (!batch) return null;
 
-    const mainStatus = (order.status ?? "").toLowerCase();
-    const actualDeliveryStatus = (order.deliveryStatus ?? "").toLowerCase(); // ✅ deliveryStatus का उपयोग
+    const mainStatus = (batch.status ?? "").toLowerCase();
 
-    // ✅ "ऑर्डर स्वीकार करें" बटन कब दिखाएं:
-    // यह ऑर्डर किसी को असाइन नहीं किया गया है (deliveryBoyId === null)
-    // और actualDeliveryStatus 'pending' है
-    // और मुख्य स्टेटस 'pending' या 'ready_for_pickup' है
-    const canAcceptOrder =
-      order.deliveryBoyId === null && // ✅ डिलीवरी बॉय ID null होना चाहिए
-      actualDeliveryStatus === "pending" &&
-      (mainStatus === "pending" || mainStatus === "ready_for_pickup");
+    // 🛑 "बैच स्वीकार करें" बटन कब दिखाएं (Available Batches के लिए):
+    // यह बैच किसी को असाइन नहीं किया गया है (deliveryBoyId === null)
+    // और बैच का मुख्य स्टेटस 'pending' है
+    const canClaimBatch =
+      batch.deliveryBoyId === null && // डिलीवरी बॉय ID null होना चाहिए
+      mainStatus === "pending"; // 'pending' या 'ready_for_pickup' हो सकता है (backend logic के आधार पर, यहाँ pending मान रहे हैं)
 
 
-    // ✅ "स्टेटस अपडेट करें" बटन कब दिखाएं (आपके सुझाव के अनुसार):
-    // 1. actualDeliveryStatus 'accepted' है
-    // 2. मुख्य स्टेटस 'ready_for_pickup', 'picked_up', या 'out_for_delivery' है
-    const canUpdateOrder =
-      actualDeliveryStatus === "accepted" &&
-      (mainStatus === "ready_for_pickup" ||
+    // 🛑 "स्टेटस अपडेट करें" बटन कब दिखाएं (Assigned Batches के लिए):
+    // 1. बैच मुझे असाइन किया गया है (यानी deliveryBoyId मेरा ID है)
+    // 2. स्टेटस 'assigned', 'ready_for_pickup', 'picked_up', या 'out_for_delivery' है
+    const canUpdateStatus =
+      batch.deliveryBoyId === myDeliveryBoyId &&
+      (mainStatus === "assigned" || // यदि आपने इसे स्वीकार कर लिया है, तो पहला एक्शन
+       mainStatus === "ready_for_pickup" ||
        mainStatus === "picked_up" ||
        mainStatus === "out_for_delivery");
     
     // अगले एक्शन का लेबल
     const nextActionLabel = nextStatusLabel(mainStatus);
 
-
-    const normalizedAddress = normalizeDeliveryAddress(order.deliveryAddress);
-    const normalizedSeller = normalizeSeller(order);
+    // 🛑 Batch डेटा का उपयोग करें
+    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
+    const normalizedSeller = normalizeSeller(batch); 
 
     return (
       <ui.Card>
         <ui.CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <ui.CardTitle>ऑर्डर #{order.orderNumber ?? "N/A"}</ui.CardTitle>
+              <ui.CardTitle>बैच ID #{batch.id}</ui.CardTitle>
               <p className="text-sm text-gray-600">
-                {order.items?.length || 0} आइटम • {/* ✅ order.total को सुरक्षित रूप से प्रारूपित किया गया */}
-                ₹{Number(order.total ?? 0).toLocaleString('en-IN')} 
+                {batch.items?.length || 0} आइटम • 
+                ₹{Number(batch.totalAmount ?? 0).toLocaleString('en-IN')} 
               </p>
+              {/* मास्टर ऑर्डर ID भी दिखाएँ यदि उपलब्ध हो */}
+              {batch.masterOrderId && (
+                <p className="text-xs text-gray-500 mt-1">
+                    ऑर्डर संख्या: {batch.masterOrderId}
+                </p>
+              )}
             </div>
             <ui.Badge
               className={`${statusColor(mainStatus)} text-white px-3 py-1 rounded-full text-xs font-semibold`}
@@ -343,24 +352,26 @@ const OrderCard: React.FC<
             <AddressBlock title="विक्रेता विवरण" details={normalizedSeller} Button={ui.Button} />
           </div>
 
-          <OrderItems items={order.items ?? []} />
+          <OrderItems items={batch.items ?? []} />
 
           <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
-            {/* ✅ "ऑर्डर स्वीकार करें" बटन */}
-            {canAcceptOrder && (
-              <ui.Button size="sm" onClick={() => onAcceptOrder(order.id)} disabled={isLoading}>
+            {/* 🛑 "बैच दावा करें" बटन */}
+            {canClaimBatch && (
+              <ui.Button size="sm" onClick={() => onAcceptOrder(batch.id)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                ऑर्डर स्वीकार करें
+                बैच दावा करें (Claim)
               </ui.Button>
             )}
 
-            {/* ✅ "स्टेटस अपडेट करें" बटन */}
-            {canUpdateOrder && nextActionLabel && (
-              <ui.Button size="sm" onClick={() => onUpdateStatus(order)} disabled={isLoading}>
+            {/* 🛑 "स्टेटस अपडेट करें" बटन */}
+            {canUpdateStatus && nextActionLabel && (
+              <ui.Button size="sm" onClick={() => onUpdateStatus(batch)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 {nextActionLabel}
               </ui.Button>
             )}
+            
+            {/* Note: History tab items will show neither button */}
           </div>
         </ui.CardContent>
       </ui.Card>
@@ -368,23 +379,23 @@ const OrderCard: React.FC<
   }
 );
 
-// --- DeliveryOrdersList ---
+// --- DeliveryOrdersList (Updated to use BatchCard) ---
 const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
-  orders,
-  myDeliveryBoyId, // ✅ myDeliveryBoyId को डीस्ट्रक्चर करें
+  orders, // 🛑 अब यह DeliveryBatch[] है
+  myDeliveryBoyId,
   ...props
 }) => {
   return (
     <div className="space-y-6">
       {orders.length === 0 && (
-        <div className="text-sm text-gray-500">कोई ऑर्डर उपलब्ध नहीं</div>
+        <div className="text-sm text-gray-500">कोई बैच उपलब्ध नहीं</div>
       )}
-      {orders.map((order) => (
-        <OrderCard
-          key={order.id}
-          order={order}
+      {orders.map((batch) => ( // 🛑 order के बजाय batch का उपयोग करें
+        <BatchCard
+          key={batch.id}
+          batch={batch} // 🛑 OrderCard के बजाय BatchCard का उपयोग करें
           isLoading={props.acceptLoading || props.updateLoading}
-          myDeliveryBoyId={myDeliveryBoyId} // ✅ myDeliveryBoyId को OrderCard में पास करें
+          myDeliveryBoyId={myDeliveryBoyId}
           {...props}
         />
       ))}
