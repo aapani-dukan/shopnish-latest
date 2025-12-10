@@ -163,6 +163,167 @@ router.get('/me', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res:
   }
 });
 
+// backend/server/routes/deliveryBoyRoutes.ts (मौजूदा फ़ाइल में नया रूट जोड़ें)
+
+// ... (Imports and existing logic like /batches GET route) ...
+
+/**
+ * 🟡 GET Available Delivery Batches for Claiming
+ * /api/delivery-boys/available-batches
+ */
+router.get('/available-batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        if (!userId) {
+            return res.status(401).json({ error: 'Unauthorized.' });
+        }
+
+        // 🛑 NOTE: हम यहां DeliveryBoy Profile को चेक नहीं कर रहे हैं,
+        // क्योंकि हम चाहते हैं कि सभी लॉग-इन किए गए डिलीवरी बॉय उपलब्ध बैच देख सकें।
+
+        const availableBatches = await db.query.deliveryBatches.findMany({
+            where: and(
+                // 1. किसी डिलीवरी बॉय को असाइन नहीं किया गया है
+                isNull(deliveryBatches.deliveryBoyId), 
+                // 2. बैच की स्थिति 'pending' होनी चाहिए (जैसे ही Master Order बनता है)
+                eq(deliveryBatches.status, 'pending') 
+            ),
+            with: {
+                customerDeliveryAddress: true, // ग्राहक का पता
+                subOrders: {
+                    with: {
+                        seller: {
+                            columns: { id: true, businessName: true, businessAddress: true }
+                        },
+                        orderItems: {
+                             with: {
+                                product: {
+                                    columns: { id: true, name: true, image: true }
+                                }
+                            }
+                        }
+                    }
+                },
+                masterOrder: {
+                    columns: { orderNumber: true }
+                }
+            },
+            orderBy: desc(deliveryBatches.createdAt),
+            // ✅ IMPROVEMENT: आप यहां ग्राहक के स्थान से दूरी के आधार पर फ़िल्टर कर सकते हैं।
+            // For now, we fetch all pending unassigned batches.
+        });
+        
+        // ... (Formatting logic for available batches if needed, similar to /batches route) ...
+        const formattedBatches = availableBatches.map(batch => {
+            // यहां आप Haversine का उपयोग करके DBoy के स्थान से दूरी की गणना कर सकते हैं
+            // (यदि DBoy की currentLat/currentLng req.user से उपलब्ध हो)
+            // ...
+            return {
+                ...batch,
+                // Simple formatting: Find the first store location for distance calculation
+                firstSubOrderSeller: batch.subOrders[0]?.seller,
+                totalSubOrders: batch.subOrders.length
+            };
+        });
+
+        return res.status(200).json({ batches: formattedBatches });
+    } catch (error: any) {
+        console.error('❌ Error in GET /api/delivery-boys/available-batches:', error);
+        return res.status(500).json({ error: 'Failed to fetch available batches.' });
+    }
+});
+
+
+/**
+ * 🚀 PATCH Claim Delivery Batch
+ * /api/delivery-boys/batches/:batchId/claim
+ * जब डिलीवरी बॉय एक उपलब्ध बैच का दावा करता है
+ */
+router.patch(
+    '/batches/:batchId/claim',
+    requireDeliveryBoyAuth,
+    async (req: AuthenticatedRequest, res: Response) => {
+        try {
+            const userId = req.user?.id;
+            const batchId = parseInt(req.params.batchId);
+
+            if (!userId) return res.status(401).json({ error: 'Unauthorized.' });
+            if (isNaN(batchId)) return res.status(400).json({ error: 'Invalid delivery batch ID.' });
+
+            const [deliveryBoyProfile] = await db
+                .select()
+                .from(deliveryBoys)
+                .where(eq(deliveryBoys.userId, userId));
+            
+            if (!deliveryBoyProfile) {
+                return res.status(404).json({ error: 'Delivery Boy profile not found.' });
+            }
+            const deliveryBoyId = deliveryBoyProfile.id;
+
+            // ट्रांजेक्शन का उपयोग करें
+            await db.transaction(async (tx) => {
+                // 1. बैच को लॉक करके जांचें कि यह अभी भी उपलब्ध है
+                const [existingBatch] = await tx
+                    .select()
+                    .from(deliveryBatches)
+                    .where(and(
+                        eq(deliveryBatches.id, batchId),
+                        isNull(deliveryBatches.deliveryBoyId), // सुनिश्चित करें कि किसी और को असाइन न हो
+                        eq(deliveryBatches.status, 'pending')  // सुनिश्चित करें कि स्थिति 'pending' है
+                    ))
+                    // PostgreSQL में FOR UPDATE का उपयोग करके रेस कंडीशन को रोकें
+                    .for('update'); 
+
+                if (!existingBatch) {
+                    return res.status(409).json({ error: 'This batch is no longer available or has already been claimed.' });
+                }
+
+                // 2. बैच को इस डिलीवरी बॉय को असाइन करें और स्थिति 'assigned' पर अपडेट करें
+                const [updatedBatch] = await tx.update(deliveryBatches)
+                    .set({
+                        deliveryBoyId: deliveryBoyId,
+                        // ✅ स्थिति को 'pending' से 'assigned' में बदलें
+                        status: 'assigned', 
+                        updatedAt: new Date(),
+                        // पहली पिकअप का अनुमानित समय यहीं सेट कर सकते हैं
+                        estimatedPickupTime: new Date(Date.now() + 30 * 60 * 1000) 
+                    })
+                    .where(eq(deliveryBatches.id, batchId))
+                    .returning();
+
+                if (!updatedBatch) {
+                    throw new Error('Failed to claim batch.');
+                }
+                
+                // 3. ट्रैकिंग इतिहास जोड़ें (Batch status transition)
+                 await tx.insert(orderTracking).values({
+                    masterOrderId: updatedBatch.masterOrderId,
+                    deliveryBatchId: batchId,
+                    status: 'assigned' as any,
+                    updatedByUserId: userId,
+                    updatedByUserRole: 'delivery-boy',
+                    timestamp: new Date(),
+                    message: `Delivery batch claimed and assigned to Delivery Boy ${deliveryBoyId}.`,
+                });
+                
+                // 4. Socket.io इवेंट: अन्य डिलीवरी बॉय को सूचित करें कि यह बैच उपलब्ध नहीं है।
+                getIO().emit(`batch-update:claimed`, { batchId, deliveryBoyId });
+
+                return res.status(200).json({
+                    message: 'Batch claimed successfully!',
+                    batch: updatedBatch,
+                });
+
+            }); // end transaction
+
+        } catch (error: any) {
+            console.error('❌ Error in PATCH /api/delivery-boys/batches/:batchId/claim:', error);
+            // 409 Conflict यदि ट्रांजेक्शन विफल हो गया (जैसे रेस कंडीशन)
+            if (error.code === '409') return res.status(409).json({ error: error.message });
+            return res.status(500).json({ error: error.message || 'Failed to claim delivery batch.' });
+        }
+    }
+);
 
 
  // ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
