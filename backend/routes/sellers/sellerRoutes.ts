@@ -1230,6 +1230,7 @@ sellerRouter.patch(
         'delivered_by_seller': [],
         'rejected': [],
         'cancelled': [],
+         'delivered_by_delivery_boy': [],
         // पुराने या अप्रासंगिक स्टेटस को यहां हैंडल करें यदि वे डेटाबेस में अभी भी हैं
       };
 
