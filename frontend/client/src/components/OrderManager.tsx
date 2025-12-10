@@ -33,24 +33,25 @@ type OrderWithDeliveryBoy = {
 const VALID_STATUSES = [
   "pending",
   "accepted",
+  "preparing",
   "ready_for_pickup",
-  "picked_up",
-  "out_for_delivery",
-  "delivered",
   "cancelled",
   "rejected",
+  "delivered_by_seller",
 ];
 
 const getStatusBadgeVariant = (status: string) => {
   switch (status) {
     case "pending": return "secondary";
     case "accepted": return "info";
+    case "preparing": return "info";
     case "ready_for_pickup": return "info";
-    case "picked_up": return "info";
-    case "out_for_delivery": return "warning";
-    case "delivered": return "success";
-    case "cancelled":
+    
+    
+    case "cancelled": return "info";
     case "rejected": return "destructive";
+    
+    case "delivered_by_seller": return "success";
     default: return "default";
   }
 };
@@ -59,12 +60,11 @@ const getStatusText = (status: string) => {
   switch (status) {
     case "pending": return "लंबित";
     case "accepted": return "स्वीकृत";
+    case "preparing": return "तैयार किया जा रहा है";
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
-    case "picked_up": return "पिकअप किया गया";
-    case "out_for_delivery": return "डिलीवरी के लिए निकला";
-    case "delivered": return "डिलीवर किया गया";
     case "cancelled": return "रद्द किया गया";
     case "rejected": return "अस्वीकृत";
+    case "delivered_by_seller": return "डिलीवर किया गया";
     default: return status;
   }
 };
