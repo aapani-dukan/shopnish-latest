@@ -1299,30 +1299,52 @@ sellerRouter.patch(
           // क्योंकि इस रूट का उद्देश्य केवल सेलर के कार्यों के आधार पर Master Order को 'processing' पर सेट करना है।
         );
 
+        // ... (विक्रेता के सब-ऑर्डर अपडेट के बाद का लॉजिक)
+
+        // 3. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें (जारी...)
+        // ... (relatedSubOrders और allSubOrdersReadyOrFinalizedBySeller की गणना यहाँ की जाती है)
+        
         if (allSubOrdersReadyOrFinalizedBySeller) {
           const [currentMasterOrder] = await tx.select().from(orders).where(eq(orders.id, existingSubOrder.masterOrder.id));
           
-          // यदि मास्टर ऑर्डर अभी भी 'pending' या 'accepted' है, तो उसे 'processing' पर अपडेट करें
-          if (currentMasterOrder && currentMasterOrder.status !== 'processing' && currentMasterOrder.status !== 'fulfilled') {
+          // --- ✅ लॉजिक अपडेट: ENUM त्रुटि निवारण और टर्मिनल स्टेटस गार्ड ---
+          
+          // 1. यदि मास्टर ऑर्डर पहले से ही अंतिम (Terminal) स्थिति में है, तो अपडेट न करें।
+          //    टर्मिनल स्टेटस: 'fulfilled', 'cancelled', 'failed'
+          if (
+              currentMasterOrder && 
+              currentMasterOrder.status !== 'fulfilled' &&
+              currentMasterOrder.status !== 'cancelled' &&
+              currentMasterOrder.status !== 'failed'
+          ) {
+            
+            // 2. ENUM सुधार: 'processing' को 'confirmed' से बदलें
+            //    ('confirmed' आपके ENUM में विक्रेता द्वारा स्वीकार किए जाने के बाद की अगली सक्रिय स्थिति है)
+            const newMasterStatus = 'confirmed'; 
+            
+            // 3. मास्टर ऑर्डर अपडेट करें
             await tx.update(orders)
-              .set({ status: 'processing', updatedAt: new Date() }) // ✅ स्ट्रिंग का उपयोग करें
+              .set({ status: newMasterStatus as any, updatedAt: new Date() }) 
               .where(eq(orders.id, existingSubOrder.masterOrder.id));
 
-            // master order tracking में भी एंट्री जोड़ें
+            // 4. master order tracking में एंट्री जोड़ें
             await tx.insert(orderTracking).values({
               masterOrderId: existingSubOrder.masterOrder.id,
-              status: 'processing', // ✅ स्ट्रिंग का उपयोग करें
+              status: newMasterStatus as any, // ✅ 'confirmed'
               updatedByUserId: userId,
-              updatedByUserRole: 'seller', // ✅ स्ट्रिंग का उपयोग करें
+              updatedByUserRole: 'seller', 
               timestamp: new Date(),
-              message: `Master order status updated to 'processing' as all sub-orders are ready for delivery/self-delivered.`,
+              message: `Master order status updated to '${newMasterStatus}' as all sub-orders are ready for delivery/self-delivered.`,
             });
+            
+            // 5. Socket emit करें
             getIO().emit(`master-order:${existingSubOrder.masterOrder.id}:status-updated`, {
-              status: 'processing',
-              message: `Master order status updated to 'processing'.`,
+              status: newMasterStatus,
+              message: `Master order status updated to '${newMasterStatus}'.`,
             });
           }
         }
+        
 
         // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
         if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
