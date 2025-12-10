@@ -1,4 +1,4 @@
-// client/src/pages/deliveryBoy/DeliveryDashboard.tsx (Part 1/2 - Updated to Batch Logic)
+// client/src/pages/deliveryBoy/DeliveryDashboard.tsx (Part 1/2 - Error Corrected: useMemo moved to Part 2)
 
 import React, { useState, useEffect, useMemo } from "react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
@@ -18,10 +18,10 @@ import {
 import { format } from "date-fns"; 
 
 import DeliveryOtpDialog from "./DeliveryOtpDialog"; 
-import DeliveryOrdersList from "./DeliveryOrdersList"; 
+import DeliveryOrdersList from "./DeliveryOrdersList"; // सुनिश्चित करें कि यह बैच कंपोनेंट है
 import { useAuth } from "../hooks/useAuth"; 
 import { useSocket } from "../hooks/useSocket"; 
-// import { apiRequest } from "../lib/queryClient"; // ❌ यह अब आवश्यक नहीं है
+// import { apiRequest } from "../lib/queryClient"; // यदि आप इसे उपयोग नहीं कर रहे हैं
 import api from "../lib/api";
 import { Card, CardHeader, CardTitle, CardContent } from "../components/ui/card"; 
 import { Badge } from "../components/ui/badge"; 
@@ -29,8 +29,7 @@ import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast"; 
 import { Label } from "../components/ui/label"; 
 import { Input } from "../components/ui/input"; 
-// ✅ DatePicker कंपोनेंट को जोड़ें
-import { DatePicker } from "../components/ui/date-picker"; 
+import { DatePicker } from "../components/ui/date-picker"; // मान लें कि आपके पास DatePicker कंपोनेंट है
 
 
 // --- Utility Functions (Batch Statuses) ---
@@ -51,7 +50,7 @@ const getStatusColor = (status: string) => {
 const getStatusText = (status: string) => {
   switch (status.toLowerCase().trim()) {
     case "pending":          return "लंबित (उपलब्ध)";
-    case "assigned":         return "असाइन किया गया"; // ✅ Updated from 'स्वीकृत (असाइन)'
+    case "assigned":         return "असाइन किया गया"; 
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
     case "picked_up":        return "पिकअप हो गया";
     case "out_for_delivery": return "डिलीवरी के लिए निकला";
@@ -74,19 +73,20 @@ const getNextStatus = (current: string) => {
 const getNextStatusLabel = (status: string) => {
   switch (status.toLowerCase().trim()) {
     case "ready_for_pickup":  return "पिकअप करें";
-    case "picked_up":         return "डिलीवरी के लिए निकले (OTP)"; // ✅ Added (OTP)
+    case "picked_up":         return "डिलीवरी के लिए निकले (OTP)"; 
     case "out_for_delivery":  return "डिलीवरी पूरी करें (OTP)";
     default:                  return "";
   }
 };
 
+// --- OrdersListViewProps Interface (Required for Part 2) ---
 interface OrdersListViewProps {
-  orders: any[]; // अब यह Batches की Array है
+  orders: any[]; 
   title: string;
   subtitle?: string;
   myDeliveryBoyId: number | null | undefined;
-  onAcceptOrder: (batchId: number) => void; // ✅ Updated to accept Batch ID
-  onUpdateStatus: (batch: any) => void; // ✅ Updated to accept Batch object
+  onAcceptOrder: (batchId: number) => void; 
+  onUpdateStatus: (batch: any) => void; 
   acceptLoading: boolean;
   updateLoading: boolean;
   Button: React.ElementType;
@@ -109,7 +109,7 @@ export default function DeliveryDashboard() {
   const rawSocket = useSocket() as any;
   const socket = rawSocket?.socket ?? rawSocket;
 
-  const [selectedOrder, setSelectedOrder] = useState<any>(null); // यह अब Batch ऑब्जेक्ट है
+  const [selectedOrder, setSelectedOrder] = useState<any>(null); // Batch ऑब्जेक्ट
   const [otpDialogOpen, setOtpDialogOpen] = useState(false);
   const [activeTab, setActiveTab] = useState(0); 
   const [dateFilter, setDateFilter] = useState<Date | null>(() => {
@@ -118,44 +118,26 @@ export default function DeliveryDashboard() {
     return fiveDaysAgo;
   });
 
-  // यह लॉजिक अब Auth Hook में ही बेहतर तरीके से मैनेज किया जाना चाहिए, 
-  // लेकिन मैं इसे आपके कोड स्ट्रक्चर के अनुसार यहाँ टिप्पणी कर रहा हूँ:
-  // useEffect(() => {
-  //   if (!user || !auth?.currentUser) return;
-  //   try {
-  //     const deliveryBoyId = user?.deliveryBoyId;
-  //     if (deliveryBoyId !== undefined) {
-  //       sessionStorage.setItem("deliveryBoyUser", JSON.stringify({ ...user, deliveryBoyId }));
-  //     }
-  //   } catch (err) {
-  //     console.error("Delivery boy session store error:", err);
-  //   }
-  // }, [user, auth?.currentUser]);
-
-
   const myDeliveryBoyId = useMemo(() => user?.deliveryBoyId, [user]); 
   console.log("DEBUG: myDeliveryBoyId from user object (before useQuery):", myDeliveryBoyId); 
 
 
-  // 🛑 प्रमुख परिवर्तन: ऑर्डर API से बैच API पर स्विच करें
+  // --- Data Fetching Hook (Batch Logic) ---
   const { data: batchesRaw = [], isLoading: isLoadingBatches } = useQuery({
-    // ✅ Query Key को 'delivery-batches' में बदलें
     queryKey: ["delivery-batches"],
     queryFn: async () => {
       try {
+        // एक साथ उपलब्ध और असाइन किए गए बैचेस को लाएं
         const [availableRes, myRes] = await Promise.allSettled([
-          // ✅ API एंडपॉइंट्स को बैचिंग एंडपॉइंट्स में बदलें
           api.get("/api/delivery-boys/available-batches"),
           api.get("/api/delivery-boys/batches"), 
         ]);
         
-        // ✨ Axios Response को हैंडल करने के लिए बदलाव: .data.batches का उपयोग करें
         const availableBatches =
           availableRes.status === "fulfilled" && availableRes.value && Array.isArray((availableRes.value as any).data?.batches)
             ? (availableRes.value as any).data.batches
             : [];
             
-        // ✨ Axios Response को हैंडल करने के लिए बदलाव: .data.batches का उपयोग करें
         const myAssignedBatches =
           myRes.status === "fulfilled" && myRes.value && Array.isArray((myRes.value as any).data?.batches)
             ? (myRes.value as any).data.batches
@@ -167,15 +149,12 @@ export default function DeliveryDashboard() {
           if (b && typeof b.id === "number") {
             map.set(b.id, {
               ...b,
-              // isMine फ़्लैग को deliveryBoyId के आधार पर सेट करें
               isMine: Number(b.deliveryBoyId) === Number(user?.deliveryBoyId),
             });
           }
         });
         
         console.log("✅ Fetched Batches Count:", map.size);
-        // ✨ यहाँ हम सभी बैचेस (available + assigned) को एक ही Array में वापस कर रहे हैं,
-        //    और फ़िल्टरिंग नीचे useMemo में करेंगे।
         return Array.from(map.values());
         
       } catch (err) {
@@ -188,85 +167,22 @@ export default function DeliveryDashboard() {
         return [];
       }
     },
-    // ऑथेंटिकेशन और ID होने पर ही इनेबल करें
     enabled: isAuthenticated && !!user && myDeliveryBoyId !== undefined && myDeliveryBoyId !== null,
   });
   
-  // ✅ Loading State को अपडेट करें
   const isLoading = isLoadingAuth || isLoadingBatches;
 
 
-  // 🛑 Data Filtering and Summary Calculation (useMemo)
-  const { 
-    assignedBatches, 
-    availableBatches, 
-    historyBatches, 
-    assignedCount, 
-    availableCount, 
-    deliveredCount, 
-    outForDeliveryCount,
-    totalOrdersCount, // यह कुल बैचेस की संख्या होगी
-  } = useMemo(() => {
-    
-    // 1. Assigned Batches (जो मुझे असाइन हैं और अभी पूरे नहीं हुए हैं)
-    const activeAssigned = batchesRaw.filter((b: any) => 
-        Number(b.deliveryBoyId) === Number(myDeliveryBoyId) && 
-        (b.status ?? "").toLowerCase() !== "delivered" && 
-        (b.status ?? "").toLowerCase() !== "rejected" && 
-        (b.status ?? "").toLowerCase() !== "cancelled"
-    );
-
-    // 2. Available Batches (जो किसी को असाइन नहीं हैं और स्टेटस 'pending' है)
-    const available = batchesRaw.filter((b: any) => 
-        b.deliveryBoyId === null || b.deliveryBoyId === undefined
-    );
-    
-    // 3. History Batches (पूरे हुए/रद्द/अस्वीकृत)
-    const history = batchesRaw.filter((b: any) => {
-        const status = (b.status ?? "").toLowerCase();
-        const isCompleted = status === "delivered" || status === "rejected" || status === "cancelled";
-        
-        // तारीख़ फ़िल्टर लागू करें
-        if (isCompleted && dateFilter && b.updatedAt) { 
-            const batchDate = new Date(b.updatedAt); batchDate.setHours(0,0,0,0);
-            const filterDateMidnight = new Date(dateFilter); filterDateMidnight.setHours(0,0,0,0);
-            return batchDate >= filterDateMidnight; 
-        }
-        return isCompleted; 
-    });
-
-    // 4. Counts
-    const assignedCount = activeAssigned.length;
-    const availableCount = available.length;
-    const deliveredCount = history.filter((b: any) => (b.status ?? "").toLowerCase() === "delivered").length;
-    const outForDeliveryCount = activeAssigned.filter((b: any) => (b.status ?? "").toLowerCase() === "out_for_delivery").length;
-    
-    const totalOrdersCount = batchesRaw.length; 
-
-    return {
-        assignedBatches: activeAssigned,
-        availableBatches: available,
-        historyBatches: history,
-        assignedCount,
-        availableCount,
-        deliveredCount,
-        outForDeliveryCount,
-        totalOrdersCount
-    };
-  }, [batchesRaw, myDeliveryBoyId, dateFilter]);
-
-
-  // --- Socket.io for Realtime Updates (Updated Batch Query Key) ---
+  // --- Socket.io for Realtime Updates ---
   useEffect(() => {
     if (!socket || !user) return;
-    // ✅ Query Key को 'delivery-batches' में बदलें
     const onBatchesChanged = () => queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
 
     if (typeof socket.emit === 'function') socket.emit("register-client", { role: "delivery", userId: user.uid ?? user.id });
     if (typeof socket.on === 'function') {
-      socket.on("delivery:orders-changed", onBatchesChanged); // यह उपलब्ध बैचेस को प्रभावित कर सकता है
-      socket.on("new-order", onBatchesChanged); // नया ऑर्डर/बैच
-      socket.on("order:update", onBatchesChanged); // असाइन किए गए बैचेस पर अपडेट
+      socket.on("delivery:orders-changed", onBatchesChanged); 
+      socket.on("new-order", onBatchesChanged); 
+      socket.on("order:update", onBatchesChanged); 
     }
     return () => {
       if (typeof socket.off === 'function') {
@@ -282,20 +198,22 @@ export default function DeliveryDashboard() {
     if (!socket || !user || isLoading || myDeliveryBoyId === undefined || myDeliveryBoyId === null) return;
 
     let watchId: number | null = null;
-
-    // 🛑 Batch-based tracking: सक्रिय बैच खोजें
-    const activeBatch = assignedBatches.find((b: any) => // activeAssigned (जो filtered है) का उपयोग करें
+    
+    // 🛑 हम GPS ट्रैकिंग के लिए बैचेस को फ़िल्टर करने के लिए useMemo का उपयोग नहीं कर सकते क्योंकि 
+    // वह भाग 2 में है। इसलिए हमें यहीं `batchesRaw` को फ़िल्टर करना होगा।
+    const activeBatch = batchesRaw.find((b: any) =>
+      Number(b.deliveryBoyId) === Number(myDeliveryBoyId) &&
       (b.status === "picked_up" || b.status === "out_for_delivery")
     );
 
     if (activeBatch && navigator.geolocation) {
-      console.log(`📡 Starting GPS tracking for batch ${activeBatch.id}`); // ✅ Batch ID का उपयोग करें
+      console.log(`📡 Starting GPS tracking for batch ${activeBatch.id}`); 
 
       const sendLocation = (position: GeolocationPosition) => {
         const { latitude, longitude } = position.coords;
         if (typeof socket.emit === 'function') {
           socket.emit("deliveryBoy:location_update", {
-            batchId: activeBatch.id, // ✅ Batch ID भेजें
+            batchId: activeBatch.id, 
             lat: latitude,
             lng: longitude,
             timestamp: new Date().toISOString()
@@ -324,15 +242,16 @@ export default function DeliveryDashboard() {
     return () => {
       if (watchId !== null) navigator.geolocation.clearWatch(watchId);
     };
-  }, [assignedBatches, socket, user, isLoading, toast, myDeliveryBoyId]); // ✅ Dependency 'orders' को 'assignedBatches' में बदलें
+  }, [batchesRaw, socket, user, isLoading, toast, myDeliveryBoyId]);
+
 
   // --- Mutations (Batch ID-based) ---
   
-  // 🛑 Claim Batch Mutation
-  const acceptOrderMutation = useMutation({ // नाम भले ही acceptOrderMutation रहे, यह बैच को क्लेम करता है
-    mutationFn: (batchId: number) => api.patch(`/api/delivery-boys/batches/${batchId}/claim`), // ✅ Batch Claim Endpoint
+  // Claim Batch Mutation
+  const acceptOrderMutation = useMutation({ 
+    mutationFn: (batchId: number) => api.patch(`/api/delivery-boys/batches/${batchId}/claim`), 
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); // ✅ Batch Query Key
+      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
       toast({ title: "सफलता", description: "बैच सफलतापूर्वक असाइन किया गया।", variant: "success" });
     },
     onError: (error: any) => {
@@ -341,22 +260,21 @@ export default function DeliveryDashboard() {
     },
   });
 
-  // 🛑 Update Batch Status Mutation
+  // Update Batch Status Mutation
   const updateStatusMutation = useMutation({
-    mutationFn: ({ batchId, newStatus }: { batchId: number; newStatus: string }) => // ✅ batchId का उपयोग करें
-      api.patch(`/api/delivery-boys/batches/${batchId}/status`, { newStatus }), // ✅ Batch Status Endpoint
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }), // ✅ Batch Query Key
+    mutationFn: ({ batchId, newStatus }: { batchId: number; newStatus: string }) => 
+      api.patch(`/api/delivery-boys/batches/${batchId}/status`, { newStatus }), 
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }), 
     onError: () => toast({ title: "त्रुटि", description: "बैच स्थिति अपडेट करने में विफल", variant: "destructive" }),
   });
 
 
-  // ✅ OTP Submit + Complete Delivery (Batch-based)
+  // OTP Submit + Complete Delivery (Batch-based)
   const handleOtpSubmitMutation = useMutation({ 
-    mutationFn: async ({ batchId, otp }: { batchId: number; otp: string }) => { // ✅ batchId का उपयोग करें
+    mutationFn: async ({ batchId, otp }: { batchId: number; otp: string }) => { 
       let data; 
 
       try {
-        // ✅ Batch Complete Delivery Endpoint का उपयोग करें
         const response = await api.post(`/api/delivery-boys/batches/${batchId}/complete-delivery`, { otp }); 
         data = response.data; 
 
@@ -369,10 +287,8 @@ export default function DeliveryDashboard() {
           throw new Error(error.message || "अनपेक्षित त्रुटि हुई।"); 
         }
       }
-
-      // ✅ whatsapp पर "thanks" मैसेज भेजो (Batch से MasterOrderId और ग्राहक जानकारी चाहिए होगी)
+      // WhatsApp Thanks Message (Backend details are in data)
       await api.post(`/api/whatsapp/send-delivery-thanks`, {
-        // ✨ यहाँ हमें Batch से MasterOrderId, customerPhone, customerName चाहिए
         orderId: data?.masterOrderId, 
         customerPhone: data?.customerPhone, 
         customerName: data?.customerName, 
@@ -382,82 +298,55 @@ export default function DeliveryDashboard() {
     },
 
     onSuccess: () => { 
-      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); // ✅ Batch Query Key
-      toast({
-        title: "डिलीवरी पूरी हुई",
-        description: "बैच सफलतापूर्वक डिलीवर हो गया है।",
-        variant: "success",
-      });
+      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
+      toast({ title: "डिलीवरी पूरी हुई", description: "बैच सफलतापूर्वक डिलीवर हो गया है।", variant: "success" });
       setOtpDialogOpen(false); 
       setSelectedOrder(null); 
     },
 
     onError: (error: any) => { 
-      toast({
-        title: "OTP त्रुटि",
-        description: error.message || "OTP जमा करने में विफल।",
-        variant: "destructive",
-      });
+      toast({ title: "OTP त्रुटि", description: error.message || "OTP जमा करने में विफल।", variant: "destructive" });
     },
   });
 
-  // ✅ ग्राहक को WhatsApp पर OTP भेजने वाला mutation (Batch-based)
+  // Send OTP to Customer (Batch-based)
   const sendOtpToCustomerMutation = useMutation({
-    mutationFn: async (batchId: number) => { // ✅ batchId का उपयोग करें
-      
+    mutationFn: async (batchId: number) => { 
       let data; 
-
       try {
-        // ✅ Batch Send OTP Endpoint का उपयोग करें
         const response = await api.post(`/api/delivery-boys/batches/${batchId}/send-otp`); 
         data = response.data; 
-
       } catch (error: any) {
         console.error("sendOtpToCustomerMutation error:", error);
-
         if (error.response) {
           throw new Error(error.response.data.message || "ग्राहक को OTP भेजने में विफल");
         } else {
           throw new Error(error.message || "अनपेक्षित त्रुटि हुई।");
         }
       }
-
       return data; 
     },
 
     onSuccess: () => {
-      toast({
-        title: "OTP भेजा गया",
-        description: "ग्राहक को WhatsApp पर OTP भेजा गया है।",
-        variant: "success",
-      });
-      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); // ✅ Batch Query Key
+      toast({ title: "OTP भेजा गया", description: "ग्राहक को WhatsApp पर OTP भेजा गया है।", variant: "success" });
+      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
     },
 
     onError: (error: any) => {
-      toast({
-        title: "OTP भेजने में विफल",
-        description: error.message || "कृपया पुनः प्रयास करें।",
-        variant: "destructive",
-      });
+      toast({ title: "OTP भेजने में विफल", description: error.message || "कृपया पुनः प्रयास करें।", variant: "destructive" });
     },
   });
 
 
-  // ✅ बिना OTP के डिलीवरी पूरी करने वाला mutation (Batch-based)
+  // Complete Without OTP (Batch-based)
   const completeWithoutOtpMutation = useMutation({
-    mutationFn: async (batchId: number) => { // ✅ batchId का उपयोग करें
-
+    mutationFn: async (batchId: number) => { 
       let data; 
-
       try {
-        // ✅ Batch Complete Without OTP Endpoint का उपयोग करें
         const response = await api.post(`/api/delivery-boys/batches/${batchId}/complete-without-otp`);
         data = response.data; 
-
       } catch (error: any) {
         console.error("completeWithoutOtpMutation error:", error);
-
         if (error.response) {
           throw new Error(error.response.data.message || "बिना OTP के डिलीवरी पूरी करने में विफल।");
         } else {
@@ -465,9 +354,7 @@ export default function DeliveryDashboard() {
         }
       }
 
-      // ✅ WhatsApp Thanks Message भेजो (Batch से MasterOrderId और ग्राहक जानकारी चाहिए होगी)
       await api.post(`/api/whatsapp/send-delivery-thanks`, {
-        // ✨ यहाँ हमें Batch से MasterOrderId, customerPhone, customerName चाहिए
         orderId: data?.masterOrderId,
         customerPhone: data?.customerPhone, 
         customerName: data?.customerName,
@@ -477,85 +364,21 @@ export default function DeliveryDashboard() {
     },
 
     onSuccess: () => {
-      toast({
-        title: "डिलीवरी पूरी हुई",
-        description: "बैच बिना OTP के सफलतापूर्वक डिलीवर हो गया है।",
-        variant: "success",
-      });
+      toast({ title: "डिलीवरी पूरी हुई", description: "बैच बिना OTP के सफलतापूर्वक डिलीवर हो गया है।", variant: "success" });
       setOtpDialogOpen(false);
       setSelectedOrder(null);
-      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); // ✅ Batch Query Key
+      queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
     },
 
     onError: (error: any) => {
-      toast({
-        title: "त्रुटि",
-        description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।",
-        variant: "destructive",
-      });
+      toast({ title: "त्रुटि", description: error.message || "बिना OTP के डिलीवरी पूरी करने में विफल।", variant: "destructive" });
     },
   });
 
+// यहाँ से कोड भाग 2 में जारी रहेगा...
 
   // --- Status Progression Logic (Batch-based) ---
-  const handleStatusProgress = (batch: any) => { // ✅ Batch ऑब्जेक्ट प्राप्त करें
-    const batchId = batch.id; // ✅ Batch ID का उपयोग करें
-    const currentStatus = (batch.status ?? "").toLowerCase().trim();
-
-    if (currentStatus === "out_for_delivery") {
-      setSelectedOrder(batch); // ✅ Batch को Dialog के लिए सेट करें
-      setOtpDialogOpen(true);
-      return;
-    }
-
-    const next = getNextStatus(currentStatus);
-    if (!next) return;
-
-    if (currentStatus === "picked_up" && next === "out_for_delivery") { 
-      // Picked Up के बाद, OTP भेजें और status को 'out_for_delivery' पर अपडेट करें
-      sendOtpToCustomerMutation.mutate(batchId); 
-    } else {
-        // 'ready_for_pickup' -> 'picked_up'
-        updateStatusMutation.mutate({ batchId: batchId, newStatus: next }); // ✅ batchId का उपयोग करें
-    }
-  };
-
-  const handleOtpConfirmation = (otpValue: string) => {
-    if (!selectedOrder || otpValue.trim().length !== 4) {
-      toast({ title: "OTP दर्ज करें", description: "4-अंकों का OTP आवश्यक है।", variant: "destructive" });
-      return;
-    }
-    handleOtpSubmitMutation.mutate({ batchId: selectedOrder.id, otp: otpValue }); // ✅ batchId का उपयोग करें
-  };
-  
-  const handleSendManualOtp = () => {
-    if (selectedOrder?.id) {
-        sendOtpToCustomerMutation.mutate(selectedOrder.id); // ✅ batchId का उपयोग करें
-    }
-  };
-
-  const handleCompleteWithoutOtp = () => {
-    if (selectedOrder?.id) {
-      if (window.confirm("क्या आप वाकई इस बैच को बिना OTP के डिलीवर करना चाहते हैं?")) {
-        completeWithoutOtpMutation.mutate(selectedOrder.id); // ✅ batchId का उपयोग करें
-      }
-    }
-  };
-
-  const handleLogout = () => auth?.signOut().then(() => window.location.reload());
-
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
-        <Loader2 className="h-8 w-8 animate-spin text-blue-500" />
-        <p className="text-gray-500 mt-2">सर्वर से कनेक्ट हो रहा है...</p>
-      </div>
-    ); 
-  }
-  
-
-// --- Status Progression Logic (Batch-based) ---
-  const handleStatusProgress = (batch: any) => { // ✅ Batch ऑब्जेक्ट प्राप्त करें
+  const handleStatusProgress = (batch: any) => { 
     console.log("handleStatusProgress: Batch ID:", batch.id, "Current Status:", batch.status);
     
     const batchId = batch.id;
@@ -564,7 +387,7 @@ export default function DeliveryDashboard() {
 
     if (currentStatus === "out_for_delivery") {
       console.log("handleStatusProgress: Status is 'out_for_delivery'. Opening OTP dialog.");
-      setSelectedOrder(batch); // ✅ Batch को Dialog के लिए सेट करें
+      setSelectedOrder(batch); // Batch को Dialog के लिए सेट करें
       setOtpDialogOpen(true);
       return;
     }
@@ -577,12 +400,12 @@ export default function DeliveryDashboard() {
         return;
     }
 
-    if (currentStatus === "picked_up" && next === "out_for_delivery") { // ✅ 'picked_up' से 'out_for_delivery' पर जाने से पहले OTP भेजें
+    if (currentStatus === "picked_up" && next === "out_for_delivery") { 
       console.log(`handleStatusProgress: Moving to 'out_for_delivery' from '${currentStatus}'. Triggering sendOtpToCustomerMutation.`);
-      sendOtpToCustomerMutation.mutate(batchId); // ✅ batchId का उपयोग करें
+      sendOtpToCustomerMutation.mutate(batchId); // batchId का उपयोग करें
     } else {
         console.log(`handleStatusProgress: Updating status for batch ${batchId} to '${next}'.`);
-        updateStatusMutation.mutate({ batchId: batchId, newStatus: next }); // ✅ batchId का उपयोग करें
+        updateStatusMutation.mutate({ batchId: batchId, newStatus: next }); // batchId का उपयोग करें
     }
   };
 
@@ -593,24 +416,22 @@ export default function DeliveryDashboard() {
       toast({ title: "OTP दर्ज करें", description: "4-अंकों का OTP आवश्यक है।", variant: "destructive" });
       return;
     }
-    // ✅ handleOtpSubmitMutation में batchId का उपयोग करें
+    // handleOtpSubmitMutation में batchId का उपयोग करें
     handleOtpSubmitMutation.mutate({ batchId: selectedOrder.id, otp: otpValue }); 
   };
 
-  // ✅ Manual OTP Send (Dialog के अंदर से कॉल किया जाता है)
   const handleSendManualOtp = () => {
     if (selectedOrder?.id) {
         console.log("handleSendManualOtp: Initiating manual OTP send for Batch ID:", selectedOrder.id);
-        sendOtpToCustomerMutation.mutate(selectedOrder.id); // ✅ batchId का उपयोग करें
+        sendOtpToCustomerMutation.mutate(selectedOrder.id); 
     }
   };
 
-  // ✅ Complete Without OTP (Dialog के अंदर से कॉल किया जाता है)
   const handleCompleteWithoutOtp = () => {
     if (selectedOrder?.id) {
         console.log("handleCompleteWithoutOtp: Attempting to complete delivery without OTP for Batch ID:", selectedOrder.id);
         if (window.confirm("क्या आप वाकई इस बैच को बिना OTP के डिलीवर करना चाहते हैं? यह केवल विशेष परिस्थितियों के लिए है और ऑडिट के लिए लॉग किया जाएगा।")) {
-            completeWithoutOtpMutation.mutate(selectedOrder.id); // ✅ batchId का उपयोग करें
+            completeWithoutOtpMutation.mutate(selectedOrder.id); 
         }
     }
   };
@@ -620,31 +441,19 @@ export default function DeliveryDashboard() {
 
   // 🛑 प्रमुख परिवर्तन: useMemo को बैच फ़िल्टरिंग के लिए अपडेट करें
   const { 
-    assignedOrders: assignedBatches, // ✅ नाम बदलकर Batches करें
-    availableOrders: availableBatches, // ✅ नाम बदलकर Batches करें
-    historyOrders: historyBatches, // ✅ नाम बदलकर Batches करें
-    totalOrdersCount, 
-    pendingCount: availableCount, // ✅ नाम बदलकर availableCount करें
-    deliveredCount, 
-    outForDeliveryCount 
+    assignedBatches,
+    availableBatches,
+    historyBatches, 
+    totalOrdersCount, // कुल बैचेस की संख्या
+    availableCount,   // क्लेम करने के लिए उपलब्ध बैचेस की संख्या
+    deliveredCount,   // डिलीवर हुए बैचेस की संख्या
+    outForDeliveryCount // रास्ते में बैचेस की संख्या
   } = useMemo(() => {
-      // 🛑 batchesRaw का उपयोग करें
+      
       const allBatches = batchesRaw || []; 
       const myId = myDeliveryBoyId !== undefined && myDeliveryBoyId !== null ? Number(myDeliveryBoyId) : null; 
 
-      // 1. Available Batches (Claim के लिए उपलब्ध)
-      const available = allBatches.filter((b: any) => {
-        const status = (b.status ?? "").toLowerCase();
-        
-        // वह बैच जिसे किसी को असाइन नहीं किया गया है
-        const isAvailable = (
-            b.deliveryBoyId === null && 
-            (status === "pending" || status === "assigned") // बैकएंड के आधार पर 'pending' या 'assigned' हो सकता है
-        );
-        return isAvailable;
-      });
-
-      // 2. Assigned Batches (सक्रिय रूप से मुझे असाइन किए गए)
+      // 1. Assigned Batches (सक्रिय रूप से मुझे असाइन किए गए)
       const assigned = allBatches.filter((b: any) => {
         const status = (b.status ?? "").toLowerCase();
         
@@ -660,13 +469,26 @@ export default function DeliveryDashboard() {
         
         return isAssigned;
       });
+      
+      // 2. Available Batches (Claim के लिए उपलब्ध)
+      const available = allBatches.filter((b: any) => {
+        const status = (b.status ?? "").toLowerCase();
+        
+        // वह बैच जिसे किसी को असाइन नहीं किया गया है
+        const isAvailable = (
+            b.deliveryBoyId === null && 
+            (status === "pending" || status === "assigned") 
+        );
+        return isAvailable;
+      });
+
 
       // 3. History Batches (पूरे हुए/रद्द/अस्वीकृत)
       const history = allBatches.filter((b: any) => {
         const status = (b.status ?? "").toLowerCase();
         const isCompleted = status === "delivered" || status === "rejected" || status === "cancelled";
         
-        if (isCompleted && dateFilter && b.updatedAt) { // ✅ createdAt के बजाय updatedAt का उपयोग करें (समाप्ति तिथि)
+        if (isCompleted && dateFilter && b.updatedAt) { 
             const batchDate = new Date(b.updatedAt); batchDate.setHours(0,0,0,0);
             const filterDateMidnight = new Date(dateFilter); filterDateMidnight.setHours(0,0,0,0);
             return batchDate >= filterDateMidnight; 
@@ -676,23 +498,23 @@ export default function DeliveryDashboard() {
 
       // 4. Counts
       const total = allBatches.length;
-      const availableCount = available.length;
+      const currentAvailableCount = available.length; // टकराव से बचने के लिए नया नाम
       const delivered = history.filter((b: any) => (b.status ?? "").toLowerCase() === "delivered").length;
       const outForDelivery = assigned.filter((b: any) => (b.status ?? "").toLowerCase() === "out_for_delivery").length;
 
       return {
-        assignedOrders: assigned, // Batch
-        availableOrders: available, // Batch
-        historyOrders: history, // Batch
+        assignedBatches: assigned,
+        availableBatches: available,
+        historyBatches: history,
         totalOrdersCount: total,
-        pendingCount: availableCount,
+        availableCount: currentAvailableCount,
         deliveredCount: delivered,
         outForDeliveryCount: outForDelivery,
       };
-      // 🛑 Dependency Array को अपडेट करें
+      
     }, [batchesRaw, dateFilter, myDeliveryBoyId]); 
 
-  // 🛑 Loading state: batchesRaw के लोडिंग को शामिल करें
+
   if (isLoadingAuth || !isAuthenticated || !user || !socket || isLoadingBatches) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-gray-50">
@@ -731,7 +553,7 @@ export default function DeliveryDashboard() {
             <Package className="w-8 h-8 text-blue-600" />
             <div>
               <p className="text-2xl font-bold">{totalOrdersCount}</p>
-              <p className="text-sm text-gray-600">कुल बैच</p> {/* ✅ Batch */}
+              <p className="text-sm text-gray-600">कुल बैच</p>
             </div>
           </CardContent>
         </Card>
@@ -774,7 +596,7 @@ export default function DeliveryDashboard() {
               className={activeTab === 0 ? "bg-blue-600 text-white hover:bg-blue-700" : "hover:bg-gray-100"}
             >
               <Zap className="w-4 h-4 mr-2" />
-              आपके असाइन किए गए ({assignedBatches.length}) {/* ✅ Batch Count */}
+              आपके असाइन किए गए ({assignedBatches.length})
             </Button>
             <Button 
               variant={activeTab === 1 ? "default" : "outline"} 
@@ -782,7 +604,7 @@ export default function DeliveryDashboard() {
               className={activeTab === 1 ? "bg-amber-600 text-white hover:bg-amber-700" : "hover:bg-gray-100"}
             >
               <Clock className="w-4 h-4 mr-2" />
-              उपलब्ध बैच ({availableBatches.length}) {/* ✅ Batch Count */}
+              उपलब्ध बैच ({availableBatches.length})
             </Button>
             <Button 
               variant={activeTab === 2 ? "default" : "outline"} 
@@ -790,14 +612,14 @@ export default function DeliveryDashboard() {
               className={activeTab === 2 ? "bg-green-600 text-white hover:bg-green-700" : "hover:bg-gray-100"}
             >
               <CheckCircle className="w-4 h-4 mr-2" />
-              डिलीवर किए गए / हिस्ट्री ({historyBatches.length}) {/* ✅ Batch Count */}
+              डिलीवर किए गए / हिस्ट्री ({historyBatches.length})
             </Button>
           </div>
 
           {/* Date filter for history */}
           {activeTab === 2 && (
             <div className="flex items-center space-x-2">
-              <Label htmlFor="date-filter" className="text-sm text-gray-600 whitespace-nowrap">से बैच दिखाएँ:</Label> {/* ✅ Batch text */}
+              <Label htmlFor="date-filter" className="text-sm text-gray-600 whitespace-nowrap">से बैच दिखाएँ:</Label> 
               <div className="relative">
                 <Input
                   id="date-filter"
@@ -816,21 +638,21 @@ export default function DeliveryDashboard() {
       {/* Batches List */}
       <section className="max-w-6xl mx-auto px-4 pb-16 space-y-10">
         <h2 className="text-2xl font-bold mb-4">
-          {activeTab === 0 && "आपके असाइन किए गए डिलीवरी बैच"} {/* ✅ Batch text */}
-          {activeTab === 1 && "उपलब्ध पिकअप के लिए डिलीवरी बैच"} {/* ✅ Batch text */}
-          {activeTab === 2 && `पूरे हुए/कैंसल बैच (शुरुआत: ${dateFilter ? format(dateFilter, "dd MMM yyyy") : 'सभी'})`} {/* ✅ Batch text */}
+          {activeTab === 0 && "आपके असाइन किए गए डिलीवरी बैच"}
+          {activeTab === 1 && "उपलब्ध पिकअप के लिए डिलीवरी बैच"}
+          {activeTab === 2 && `पूरे हुए/कैंसल बैच (शुरुआत: ${dateFilter ? format(dateFilter, "dd MMM yyyy") : 'सभी'})`}
         </h2>
 
         {activeTab === 0 && (
           <OrdersListView 
-            orders={assignedBatches} // ✅ Batches
-            title="कोई असाइन किए गए बैच नहीं" // ✅ Batch text
-            subtitle="नए बैच स्वीकार करें या पुराने बैच डिलीवर करें।" // ✅ Batch text
+            orders={assignedBatches} 
+            title="कोई असाइन किए गए बैच नहीं" 
+            subtitle="नए बैच स्वीकार करें या पुराने बैच डिलीवर करें।" 
             myDeliveryBoyId={myDeliveryBoyId} 
             onAcceptOrder={(() => {}) as any} 
-            onUpdateStatus={(batch: any) => handleStatusProgress(batch)} // ✅ Batch
+            onUpdateStatus={(batch: any) => handleStatusProgress(batch)}
             acceptLoading={false}
-            updateLoading={updateStatusMutation.isPending || sendOtpToCustomerMutation.isPending} // ✅ Added OTP send loading
+            updateLoading={updateStatusMutation.isPending || sendOtpToCustomerMutation.isPending} 
             Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader} CardTitle={CardTitle} Badge={Badge}
             statusColor={getStatusColor} statusText={getStatusText} nextStatus={getNextStatus} nextStatusLabel={getNextStatusLabel}
           />
@@ -838,11 +660,11 @@ export default function DeliveryDashboard() {
 
         {activeTab === 1 && (
           <OrdersListView 
-            orders={availableBatches} // ✅ Batches
-            title="कोई उपलब्ध बैच नहीं" // ✅ Batch text
-            subtitle="नए बैच के लिए बाद में जाँच करें।" // ✅ Batch text
+            orders={availableBatches} 
+            title="कोई उपलब्ध बैच नहीं" 
+            subtitle="नए बैच के लिए बाद में जाँच करें।" 
             myDeliveryBoyId={myDeliveryBoyId} 
-            onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)} // ✅ Batch ID
+            onAcceptOrder={(id: number) => acceptOrderMutation.mutate(id)}
             onUpdateStatus={(() => {}) as any}
             acceptLoading={acceptOrderMutation.isPending}
             updateLoading={false} 
@@ -853,9 +675,9 @@ export default function DeliveryDashboard() {
 
         {activeTab === 2 && (
           <OrdersListView 
-            orders={historyBatches} // ✅ Batches
-            title="कोई इतिहास बैच नहीं" // ✅ Batch text
-            subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ बैच नहीं मिला।`} // ✅ Batch text
+            orders={historyBatches} 
+            title="कोई इतिहास बैच नहीं" 
+            subtitle={`चुनी हुई तारीख़ (${format(dateFilter ?? new Date(), "dd MMM yyyy")}) के बाद कोई पूरा हुआ बैच नहीं मिला।`} 
             myDeliveryBoyId={myDeliveryBoyId} 
             onAcceptOrder={(() => {}) as any} 
             onUpdateStatus={(() => {}) as any}
@@ -873,23 +695,20 @@ export default function DeliveryDashboard() {
   <DeliveryOtpDialog
     isOpen={otpDialogOpen}
     onOpenChange={setOtpDialogOpen}
-    order={selectedOrder} // ✅ यह अब Batch है
+    order={selectedOrder} // यह अब Batch ऑब्जेक्ट है
 
     onConfirm={async (otp: string) => {
-      // ✅ handleOtpConfirmation फ़ंक्शन का उपयोग करें, जो selectedOrder.id (Batch ID) का उपयोग करता है
       handleOtpConfirmation(otp); 
     }}
     isSubmitting={handleOtpSubmitMutation.isPending}
     error={handleOtpSubmitMutation.error ? handleOtpSubmitMutation.error.message : null}
 
     onSendManualOtp={async () => {
-      // ✅ handleSendManualOtp फ़ंक्शन का उपयोग करें, जो selectedOrder.id (Batch ID) का उपयोग करता है
       handleSendManualOtp(); 
     }}
     isSendingManualOtp={sendOtpToCustomerMutation.isPending}
 
     onCompleteWithoutOtp={async () => {
-      // ✅ handleCompleteWithoutOtp फ़ंक्शन का उपयोग करें, जो selectedOrder.id (Batch ID) का उपयोग करता है
       handleCompleteWithoutOtp();
     }}
     isCompletingWithoutOtp={completeWithoutOtpMutation.isPending}
@@ -903,7 +722,7 @@ export default function DeliveryDashboard() {
 // --- Helper Component for Batches List ---
 
 const OrdersListView: React.FC<OrdersListViewProps> = ({ 
-  orders, // ✅ Batches
+  orders, // Batches
   title, 
   subtitle, 
   myDeliveryBoyId, 
@@ -933,19 +752,15 @@ const OrdersListView: React.FC<OrdersListViewProps> = ({
           </CardContent>
         </Card>
       ) : (
-        // ✅ DeliveryOrdersList अब Batches को स्वीकार करता है
         <DeliveryOrdersList
           orders={orders} 
-          onAcceptOrder={onAcceptOrder} // Batch ID पास होगा
-          onUpdateStatus={onUpdateStatus} // Batch ऑब्जेक्ट पास होगा
+          onAcceptOrder={onAcceptOrder}
+          onUpdateStatus={onUpdateStatus}
           acceptLoading={acceptLoading}
           updateLoading={updateLoading}
           Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader}
           CardTitle={CardTitle} Badge={Badge} statusColor={statusColor}
-          statusText={statusText} nextStatus={nextStatus} nextStatusLabel={nextStatusLabel}
-          // Note: myDeliveryBoyId को DeliveryOrdersListProps में पास करने की आवश्यकता नहीं है, 
-          // क्योंकि यह केवल OrderCard/BatchCard में ही उपयोग होता है, 
-          // और myDeliveryBoyId पहले ही props द्वारा List Component के माध्यम से passed हो चुका है।
+          statusText={statusText} nextStatus={nextStatus} nextStatusLabel={getNextStatusLabel}
         />
       )}
     </>
