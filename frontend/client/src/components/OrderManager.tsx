@@ -38,6 +38,7 @@ const VALID_STATUSES = [
   "cancelled",
   "rejected",
   "delivered_by_seller",
+  "delivered_by_delivery_boy",
 ];
 
 const getStatusBadgeVariant = (status: string) => {
@@ -52,6 +53,7 @@ const getStatusBadgeVariant = (status: string) => {
     case "rejected": return "destructive";
     
     case "delivered_by_seller": return "success";
+      case "delivered_by_delivery_boy": return "success";
     default: return "default";
   }
 };
@@ -65,6 +67,7 @@ const getStatusText = (status: string) => {
     case "cancelled": return "रद्द किया गया";
     case "rejected": return "अस्वीकृत";
     case "delivered_by_seller": return "डिलीवर किया गया";
+    case "delivered_by_delivery_boy": return "डिलीवर किया गया";
     default: return status;
   }
 };
