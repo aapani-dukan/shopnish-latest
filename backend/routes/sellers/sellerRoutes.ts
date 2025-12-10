@@ -1169,217 +1169,223 @@ sellerRouter.patch(
 );
 
     // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
-    sellerRouter.patch(
-      '/sub-orders/:id/status',
-      requireSellerAuth,
-      async (req: AuthenticatedRequest, res: Response) => {
-        try {
-          const userId = req.user?.id;
-          const subOrderId = parseInt(req.params.id);
-          const { status: newStatus } = req.body; // नया स्टेटस रिक्वेस्ट बॉडी से मिलेगा
+    // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
+sellerRouter.patch(
+  '/sub-orders/:id/status',
+  requireSellerAuth,
+  async (req: AuthenticatedRequest, res: Response) => {
+    try {
+      const userId = req.user?.id;
+      const subOrderId = parseInt(req.params.id);
+      const { status: newStatus } = req.body; // नया स्टेटस रिक्वेस्ट बॉडी से मिलेगा
 
-          if (!userId) {
-            return res.status(401).json({ error: 'Unauthorized.' });
-          }
-          if (isNaN(subOrderId)) {
-            return res.status(400).json({ error: 'Invalid sub-order ID.' });
-          }
-          if (!newStatus || !Object.values(subOrderStatusEnum.enumValues).includes(newStatus)) {
-            return res.status(400).json({ error: 'Invalid or missing status provided.' });
-          }
-
-          // सेलर प्रोफाइल प्राप्त करें
-          const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
-          if (!sellerProfile) {
-            return res.status(404).json({ error: 'Seller profile not found.' });
-          }
-          const sellerId = sellerProfile.id;
-
-          // सुनिश्चित करें कि यह सब-ऑर्डर इस सेलर का है
-          const existingSubOrder = await db.query.subOrders.findFirst({
-            where: and(
-              eq(subOrders.id, subOrderId),
-              eq(subOrders.sellerId, sellerId)
-            ),
-            with: {
-              masterOrder: {
-                columns: { id: true, customerId: true }
-              },
-              deliveryBatch: {
-                columns: { id: true, status: true, deliveryBoyId: true }
-              }
-            }
-          });
-
-          if (!existingSubOrder) {
-            return res.status(403).json({ error: 'Not authorized to update this sub-order or sub-order not found.' });
-          }
-
-          // स्थिति अपडेट करने से पहले कुछ वैलिडेशन
-          // उदा. 'ready_for_pickup' तभी हो सकता है जब 'accepted' या 'preparing' हो।
-          const currentStatus = existingSubOrder.status;
-          const validStatusTransitions: { [key: string]: string[] } = {
-            'pending': ['accepted', 'rejected'],
-            'accepted': ['preparing', 'rejected'],
-            'preparing': ['ready_for_pickup'],
-            'ready_for_pickup': [],
-            'delivered_by_seller': [],
-               
-  
-    'rejected': [], 
-    'cancelled': [], 
-    
-          };
-
-          if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
-            return res.status(400).json({ error: `Invalid status transition from '${currentStatus}' to '${newStatus}'.` });
-          }
-
-          // यदि सेलर 'ready_for_pickup' पर सेट कर रहा है और सेल्फ-डिलीवरी है, तो इसे सीधे 'delivered_by_seller' पर भी सेट कर सकते हैं (तुम्हारे बिज़नेस लॉजिक पर निर्भर करता है)
-          let finalStatusForSubOrder = newStatus;
-          if (newStatus === subOrderStatusEnum.enumValues[3] /* ready_for_pickup */ && existingSubOrder.isSelfDeliveryBySeller) {
-            finalStatusForSubOrder = subOrderStatusEnum.enumValues[5] /* delivered_by_seller */;
-          }
-
-
-          // ट्रांजेक्शन का उपयोग करें क्योंकि हम कई टेबल्स को अपडेट कर रहे हैं
-          await db.transaction(async (tx) => {
-            // 1. सब-ऑर्डर की स्थिति अपडेट करें
-            const [updatedSubOrder] = await tx.update(subOrders)
-              .set({
-                status: finalStatusForSubOrder,
-                updatedAt: new Date(),
-              })
-              .where(eq(subOrders.id, subOrderId))
-              .returning();
-
-            if (!updatedSubOrder) {
-              throw new Error('Failed to update sub-order status.');
-            }
-
-            // 2. orderTracking में एक नई एंट्री जोड़ें
-            await tx.insert(orderTracking).values({
-              masterOrderId: existingSubOrder.masterOrderId,
-              subOrderId,
-              status: finalStatusForSubOrder,
-              updatedBy: userId, // सेलर का यूजर ID
-              updatedByRole: userRoleEnum.enumValues[1], // 'seller'
-              timestamp: new Date(),
-              message: `Sub-order status updated to '${finalStatusForSubOrder}' by seller.`,
-            });
-
-            // 3. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें (यदि आवश्यक हो)
-            // मास्टर ऑर्डर की स्थिति तभी अपडेट होगी जब उसके सभी सब-ऑर्डर किसी विशिष्ट स्टेज पर पहुँच जाएं।
-            const relatedSubOrders = await tx.query.subOrders.findMany({
-              where: eq(subOrders.masterOrderId, existingSubOrder.masterOrder.id),
-              columns: {
-                id: true,
-                status: true,
-                isSelfDeliveryBySeller: true,
-              },
-              with: {
-                deliveryBatch: {
-                  columns: {
-                    status: true
-                  }
-                }
-              }
-            });
-
-            // सभी सब-ऑर्डर 'ready_for_pickup' या 'delivered_by_seller' या 'delivered_by_delivery_boy' हैं?
-            const allSubOrdersReadyForDeliveryOrSelfDelivered = relatedSubOrders.every(so =>
-              so.status === subOrderStatusEnum.enumValues[3] || // ready_for_pickup
-              so.status === subOrderStatusEnum.enumValues[5] || // delivered_by_seller
-                so.status === subOrderStatusEnum.enumValues[6]      
-                );
-
-            // यदि सभी sub-orders 'ready_for_pickup' या 'delivered_by_seller' हैं,
-            // और मास्टर ऑर्डर अभी भी 'pending' या 'accepted' है, तो उसे 'processing' पर अपडेट करें।
-            // या यदि सभी 'ready_for_pickup' हो गए हैं और नॉन-सेल्फ डिलीवरी हैं, तो डिलीवरी बैच को भी अपडेट करें।
-            if (allSubOrdersReadyForDeliveryOrSelfDelivered) {
-              const [currentMasterOrder] = await tx.select().from(orders).where(eq(orders.id, existingSubOrder.masterOrder.id));
-              if (currentMasterOrder && currentMasterOrder.status !== masterOrderStatusEnum.enumValues[2] /* processing */) {
-                await tx.update(orders)
-                  .set({ status: masterOrderStatusEnum.enumValues[2], updatedAt: new Date().toISOString() }) // 'processing'
-                  .where(eq(orders.id, existingSubOrder.masterOrder.id));
-
-                // master order tracking में भी एंट्री जोड़ें
-                await tx.insert(orderTracking).values({
-                  masterOrderId: existingSubOrder.masterOrder.id,
-                  status: masterOrderStatusEnum.enumValues[2],
-                  updatedBy: userId,
-                  updatedByRole: userRoleEnum.enumValues[1],
-                  timestamp: new Date(),
-                  message: `Master order status updated to 'processing' as all sub-orders are ready for delivery/self-delivered.`,
-                });
-                getIO().emit(`master-order:${existingSubOrder.masterOrder.id}:status-updated`, {
-                  status: masterOrderStatusEnum.enumValues[2],
-                  message: `Master order status updated to 'processing'.`,
-                });
-              }
-            }
-
-            // यदि सब-ऑर्डर 'ready_for_pickup' पर अपडेट होता है
-            if (finalStatusForSubOrder === subOrderStatusEnum.enumValues[3] /* ready_for_pickup */ && existingSubOrder.deliveryBatch) {
-              // संबंधित डिलीवरी बैच की स्थिति को 'pending' से 'ready_for_pickup' पर अपडेट करें
-              // यह इंगित करता है कि डिलीवरी बॉय अब इसे पिक कर सकता है।
-              if (existingSubOrder.deliveryBatch.status === deliveryStatusEnum.enumValues[0] /* pending */) {
-                await tx.update(deliveryBatches)
-                  .set({ status: deliveryStatusEnum.enumValues[1], updatedAt: new Date() }) // 'ready_for_pickup'
-                  .where(eq(deliveryBatches.id, existingSubOrder.deliveryBatch.id));
-
-                await tx.insert(orderTracking).values({
-                  masterOrderId: existingSubOrder.masterOrder.id,
-                  deliveryBatchId: existingSubOrder.deliveryBatch.id,
-                  status: deliveryStatusEnum.enumValues[1],
-                  updatedBy: userId,
-                  updatedByRole: userRoleEnum.enumValues[1],
-                  timestamp: new Date(),
-                  message: `Delivery batch status updated to 'ready_for_pickup' by seller for sub-order ${subOrderId}.`,
-                });
-                getIO().emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
-                  status: deliveryStatusEnum.enumValues[1],
-                  message: `Delivery batch ready for pickup.`,
-                });
-                // डिलीवरी बॉय को सूचित करें कि उसका बैच तैयार है
-                if (existingSubOrder.deliveryBatch.deliveryBoyId) {
-                  getIO().emit(`delivery-boy:${existingSubOrder.deliveryBatch.deliveryBoyId}:new-pickup-alert`, {
-                    deliveryBatchId: existingSubOrder.deliveryBatch.id,
-                    masterOrderId: existingSubOrder.masterOrder.id,
-                    message: "A new delivery batch is ready for pickup!",
-                  });
-                }
-              }
-            }
-
-            // Socket.io: कस्टमर को रियल-टाइम अपडेट भेजें
-            getIO().emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
-              subOrderId: subOrderId,
-              status: finalStatusForSubOrder,
-              masterOrderId: existingSubOrder.masterOrder.id,
-              message: `Your order from ${sellerProfile.businessName} is now '${finalStatusForSubOrder}'.`,
-            });
-            // सेलर को भी अपडेट भेजें
-            getIO().emit(`seller:${sellerId}:order-update`, {
-              subOrderId: subOrderId,
-              status: finalStatusForSubOrder,
-              masterOrderId: existingSubOrder.masterOrder.id,
-            });
-
-            return res.status(200).json({
-              message: 'Sub-order status updated successfully.',
-              subOrder: updatedSubOrder,
-              masterOrderId: existingSubOrder.masterOrder.id,
-            });
-          });
-
-        } catch (error: any) {
-          console.error('❌ Error in PATCH /api/sellers/sub-orders/:id/status:', error);
-          // next(error); // केंद्रीय त्रुटि हैंडलिंग के लिए
-          return res.status(500).json({ error: error.message || 'Failed to update sub-order status.' });
-        }
+      if (!userId) {
+        return res.status(401).json({ error: 'Unauthorized.' });
       }
-    );
+      if (isNaN(subOrderId)) {
+        return res.status(400).json({ error: 'Invalid sub-order ID.' });
+      }
+
+      // ✅ Enum में सीधे स्ट्रिंग मानों की जाँच करें
+      if (!newStatus || !Object.values(subOrderStatusEnum.enumValues).includes(newStatus)) {
+        return res.status(400).json({ error: 'Invalid or missing status provided.' });
+      }
+
+      // सेलर प्रोफाइल प्राप्त करें
+      const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+      if (!sellerProfile) {
+        return res.status(404).json({ error: 'Seller profile not found.' });
+      }
+      const sellerId = sellerProfile.id;
+
+      // सुनिश्चित करें कि यह सब-ऑर्डर इस सेलर का है
+      const existingSubOrder = await db.query.subOrders.findFirst({
+        where: and(
+          eq(subOrders.id, subOrderId),
+          eq(subOrders.sellerId, sellerId)
+        ),
+        with: {
+          masterOrder: {
+            columns: { id: true, customerId: true }
+          },
+          deliveryBatch: {
+            columns: { id: true, status: true, deliveryBoyId: true }
+          }
+        }
+      });
+
+      if (!existingSubOrder) {
+        return res.status(403).json({ error: 'Not authorized to update this sub-order or sub-order not found.' });
+      }
+
+      // --- स्थिति परिवर्तन वैलिडेशन (Transition Logic) ---
+      const currentStatus = existingSubOrder.status;
+      const validStatusTransitions: { [key: string]: string[] } = {
+        'pending': ['accepted', 'rejected'],
+        'accepted': ['preparing', 'rejected'],
+        'preparing': ['ready_for_pickup'],
+        // 'ready_for_pickup' के बाद केवल सिस्टम या डिलीवरी बॉय ही स्थिति बदल सकता है,
+        // जब तक कि सेल्फ-डिलीवरी न हो (जिसे हम नीचे संभालेंगे)।
+        'ready_for_pickup': existingSubOrder.isSelfDeliveryBySeller ? ['delivered_by_seller'] : [],
+        'delivered_by_seller': [],
+        'rejected': [],
+        'cancelled': [],
+        // पुराने या अप्रासंगिक स्टेटस को यहां हैंडल करें यदि वे डेटाबेस में अभी भी हैं
+      };
+
+      if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
+        return res.status(400).json({ error: `Invalid status transition from '${currentStatus}' to '${newStatus}'.` });
+      }
+      
+      let finalStatusForSubOrder = newStatus;
+      
+      // यदि सेलर सेल्फ-डिलीवरी नहीं कर रहा है लेकिन 'delivered_by_seller' भेजने की कोशिश कर रहा है, 
+      // तो उसे रोकें (हालांकि क्लाइंट-साइड f low को अब इसे रोकना चाहिए)।
+      if (newStatus === 'delivered_by_seller' && !existingSubOrder.isSelfDeliveryBySeller) {
+          return res.status(403).json({ error: 'Unauthorized delivery status change.' });
+      }
+
+      // --- ट्रांजेक्शन का उपयोग करें ---
+      await db.transaction(async (tx) => {
+        // 1. सब-ऑर्डर की स्थिति अपडेट करें
+        const [updatedSubOrder] = await tx.update(subOrders)
+          .set({
+            status: finalStatusForSubOrder as any, // 'as any' for pgEnum types
+            updatedAt: new Date(),
+          })
+          .where(eq(subOrders.id, subOrderId))
+          .returning();
+
+        if (!updatedSubOrder) {
+          throw new Error('Failed to update sub-order status.');
+        }
+
+        // 2. orderTracking में एक नई एंट्री जोड़ें
+        await tx.insert(orderTracking).values({
+          masterOrderId: existingSubOrder.masterOrder.id,
+          subOrderId,
+          status: finalStatusForSubOrder as any,
+          updatedByUserId: userId,
+          updatedByUserRole: 'seller', // ✅ स्ट्रिंग का उपयोग करें
+          timestamp: new Date(),
+          message: `Sub-order status updated to '${finalStatusForSubOrder}' by seller.`,
+        });
+
+        // 3. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें
+        const relatedSubOrders = await tx.query.subOrders.findMany({
+          where: eq(subOrders.masterOrderId, existingSubOrder.masterOrder.id),
+          columns: {
+            id: true,
+            status: true,
+            isSelfDeliveryBySeller: true,
+          },
+          with: {
+            deliveryBatch: {
+              columns: {
+                status: true
+              }
+            }
+          }
+        });
+
+        // ✅ जाँचें कि सभी sub-orders डिलीवरी के लिए तैयार (ready_for_pickup) या सेलर द्वारा अंतिम रूप से डिलीवर (delivered_by_seller) हैं
+        const allSubOrdersReadyOrFinalizedBySeller = relatedSubOrders.every(so =>
+          so.status === 'ready_for_pickup' || 
+          so.status === 'delivered_by_seller' ||
+          so.status === 'cancelled' ||
+          so.status === 'rejected'
+          // **नोट:** 'delivered' (डिलीवरी बॉय द्वारा) को यहाँ शामिल न करें, 
+          // क्योंकि इस रूट का उद्देश्य केवल सेलर के कार्यों के आधार पर Master Order को 'processing' पर सेट करना है।
+        );
+
+        if (allSubOrdersReadyOrFinalizedBySeller) {
+          const [currentMasterOrder] = await tx.select().from(orders).where(eq(orders.id, existingSubOrder.masterOrder.id));
+          
+          // यदि मास्टर ऑर्डर अभी भी 'pending' या 'accepted' है, तो उसे 'processing' पर अपडेट करें
+          if (currentMasterOrder && currentMasterOrder.status !== 'processing' && currentMasterOrder.status !== 'fulfilled') {
+            await tx.update(orders)
+              .set({ status: 'processing', updatedAt: new Date() }) // ✅ स्ट्रिंग का उपयोग करें
+              .where(eq(orders.id, existingSubOrder.masterOrder.id));
+
+            // master order tracking में भी एंट्री जोड़ें
+            await tx.insert(orderTracking).values({
+              masterOrderId: existingSubOrder.masterOrder.id,
+              status: 'processing', // ✅ स्ट्रिंग का उपयोग करें
+              updatedByUserId: userId,
+              updatedByUserRole: 'seller', // ✅ स्ट्रिंग का उपयोग करें
+              timestamp: new Date(),
+              message: `Master order status updated to 'processing' as all sub-orders are ready for delivery/self-delivered.`,
+            });
+            getIO().emit(`master-order:${existingSubOrder.masterOrder.id}:status-updated`, {
+              status: 'processing',
+              message: `Master order status updated to 'processing'.`,
+            });
+          }
+        }
+
+        // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
+        if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
+          
+          // यदि डिलीवरी बैच अभी भी 'pending' स्थिति में है, तो उसे 'assigned' पर अपडेट करें 
+          // (यह मानते हुए कि 'assigned' का मतलब पिकअप के लिए तैयार है)
+          if (existingSubOrder.deliveryBatch.status === 'pending') { 
+            
+            // ✅ deliveryStatusEnum: 'assigned' पर सेट करें
+            await tx.update(deliveryBatches)
+              .set({ status: 'assigned' as any, updatedAt: new Date() }) 
+              .where(eq(deliveryBatches.id, existingSubOrder.deliveryBatch.id));
+
+            await tx.insert(orderTracking).values({
+              masterOrderId: existingSubOrder.masterOrder.id,
+              deliveryBatchId: existingSubOrder.deliveryBatch.id,
+              status: 'assigned' as any,
+              updatedByUserId: userId,
+              updatedByUserRole: 'seller', 
+              timestamp: new Date(),
+              message: `Delivery batch status updated to 'assigned' (ready for pickup) by seller for sub-order ${subOrderId}.`,
+            });
+            getIO().emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
+              status: 'assigned',
+              message: `Delivery batch ready for pickup.`,
+            });
+            // डिलीवरी बॉय को सूचित करें कि उसका बैच तैयार है
+            if (existingSubOrder.deliveryBatch.deliveryBoyId) {
+              getIO().emit(`delivery-boy:${existingSubOrder.deliveryBatch.deliveryBoyId}:new-pickup-alert`, {
+                deliveryBatchId: existingSubOrder.deliveryBatch.id,
+                masterOrderId: existingSubOrder.masterOrder.id,
+                message: "A new delivery batch is ready for pickup!",
+              });
+            }
+          }
+        }
+
+        // 5. Socket.io: कस्टमर और सेलर को रियल-टाइम अपडेट भेजें
+        getIO().emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
+          subOrderId: subOrderId,
+          status: finalStatusForSubOrder,
+          masterOrderId: existingSubOrder.masterOrder.id,
+          message: `Your order from ${sellerProfile.businessName} is now '${finalStatusForSubOrder}'.`,
+        });
+        getIO().emit(`seller:${sellerId}:order-update`, {
+          subOrderId: subOrderId,
+          status: finalStatusForSubOrder,
+          masterOrderId: existingSubOrder.masterOrder.id,
+        });
+
+        return res.status(200).json({
+          message: 'Sub-order status updated successfully.',
+          subOrder: updatedSubOrder,
+          masterOrderId: existingSubOrder.masterOrder.id,
+        });
+      });
+
+    } catch (error: any) {
+      console.error('❌ Error in PATCH /api/sellers/sub-orders/:id/status:', error);
+      return res.status(500).json({ error: error.message || 'Failed to update sub-order status.' });
+    }
+  }
+);
 
 
-    export default sellerRouter;
+export default sellerRouter;
+            
