@@ -13,13 +13,12 @@ export const masterOrderStatusEnum = pgEnum('master_order_status', [
 export const subOrderStatusEnum = pgEnum('sub_order_status', [
   'pending',
   'accepted',
+  'preparing', 
   'ready_for_pickup',
-  'picked_up',
-  'out_for_delivery',
-  'delivered',
   'cancelled',
-  'rejected'
-]);
+  'rejected',
+   'delivered_by_seller'
+  ]);
 export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
   "pending", "processing", "shipped", "delivered", "cancelled", "returned"
 ]);
