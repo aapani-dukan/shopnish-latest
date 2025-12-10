@@ -66,8 +66,8 @@ const getStatusText = (status: string) => {
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
     case "cancelled": return "रद्द किया गया";
     case "rejected": return "अस्वीकृत";
-    case "delivered_by_seller": return "डिलीवर किया गया";
-    case "delivered_by_delivery_boy": return "डिलीवर किया गया";
+    case "delivered_by_seller": return "सेलर द्वारा डिलीवर किया";
+    case "delivered_by_delivery_boy": return "डिलीवरी बॉय द्वारा डिलीवर किया";
     default: return status;
   }
 };
