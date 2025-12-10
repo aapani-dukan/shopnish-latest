@@ -596,6 +596,10 @@ router.patch(
           });
 
           // ✅ जाँचें कि सभी sub-orders अंतिम अवस्था (delivered_by_seller, delivered_by_delivery_boy, cancelled, या rejected) में हैं
+          
+// ... (आपके कोड का मौजूदा भाग)
+
+          // ✅ जाँचें कि सभी sub-orders अंतिम अवस्था (delivered_by_seller, delivered_by_delivery_boy, cancelled, या rejected) में हैं
           const allSubOrdersFinalized = allRelatedSubOrders.every(so =>
             so.status === 'delivered_by_seller' || 
             so.status === DELIVERED_BY_DBOY_STATUS || 
@@ -604,19 +608,39 @@ router.patch(
           );
 
           if (allSubOrdersFinalized) {
-            // Master Order Status: यदि सभी सबऑर्डर डिलीवर हो गए हैं, तो 'fulfilled' पर सेट करें
-            const masterOrderStatus = allRelatedSubOrders.every(so =>
+            
+            // 1. जाँचें कि क्या सभी सब-ऑर्डर सफलतापूर्वक डिलीवर हुए थे (delivered_by_seller/DBOY)
+            const allDelivered = allRelatedSubOrders.every(so =>
               so.status === 'delivered_by_seller' ||
               so.status === DELIVERED_BY_DBOY_STATUS
-            ) ? 'fulfilled' : 'cancelled'; // ✅ स्ट्रिंग का उपयोग करें
+            );
+            
+            // 2. जाँचें कि क्या कम से कम एक सब-ऑर्डर डिलीवर हुआ है
+            const someDelivered = allRelatedSubOrders.some(so =>
+              so.status === 'delivered_by_seller' ||
+              so.status === DELIVERED_BY_DBOY_STATUS
+            );
 
+            let masterOrderStatus: string;
+
+            if (allDelivered) {
+              masterOrderStatus = 'fulfilled'; // ✅ सभी डिलीवर हुए
+            } else if (someDelivered) {
+              masterOrderStatus = 'partially_fulfilled'; // ✅ कुछ डिलीवर हुए, कुछ रद्द/रिजेक्ट हुए
+            } else {
+              // यदि कोई भी डिलीवर नहीं हुआ, लेकिन सभी फ़ाइनलाइज़ हो गए हैं (यानी सभी cancelled/rejected)
+              masterOrderStatus = 'cancelled'; // ✅ कोई डिलीवर नहीं हुआ (सभी रद्द/रिजेक्ट)
+            }
+            
+            // --- अपडेट लॉजिक (पहले जैसा) ---
             await tx.update(orders)
               .set({ status: masterOrderStatus as any, updatedAt: new Date() })
               .where(eq(orders.id, masterOrderId));
-
+            
+            // ... (rest of the tracking and socket emission logic is the same)
             await tx.insert(orderTracking).values({
               masterOrderId: masterOrderId,
-              status: masterOrderStatus as any,
+              status: masterOrderStatus as any, // ✅ अपडेटेड स्टेटस का उपयोग करें
               updatedByUserId: userId,
               updatedByUserRole: 'delivery-boy', 
               timestamp: new Date(),
@@ -628,6 +652,8 @@ router.patch(
             });
           }
         }
+        
+          
         
         // Socket.io: कस्टमर को बैच अपडेट भेजें
         getIO().emit(`user:${existingBatch.subOrders[0].masterOrder.customerId}:batch-update`, {
