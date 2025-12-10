@@ -47,19 +47,19 @@ const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: numbe
 
 // एक डमी डिलीवरी बॉय असाइनमेंट फंक्शन
 // वास्तविक कार्यान्वयन में, यह उपलब्धता, स्थान, लोड आदि के आधार पर एक डिलीवरी बॉय ढूंढेगा।
-async function assignDeliveryBoy(tx: any, masterOrderId: number, customerLat: number, customerLng: number): Promise<number | null> {
+//async function assignDeliveryBoy(tx: any, masterOrderId: number, customerLat: number, customerLng: number): Promise<number | null> {
     // यहाँ आप डेटाबेस से उपलब्ध डिलीवरी बॉय को क्वेरी कर सकते हैं
     // उदाहरण के लिए, 5 किमी के भीतर और उपलब्ध
-    const availableDeliveryBoys = await tx.select()
-        .from(deliveryBoys)
-        .where(eq(deliveryBoys.isAvailable, true));
+  //  const availableDeliveryBoys = await tx.select()
+    //    .from(deliveryBoys)
+    //    .where(eq(deliveryBoys.isAvailable, true));
     
     // सरल बनाने के लिए, बस पहला उपलब्ध डिलीवरी बॉय लौटा दें
-    if (availableDeliveryBoys.length > 0) {
-        return availableDeliveryBoys[0].id;
-    }
-    return null;
-}
+  //  if (availableDeliveryBoys.length > 0) {
+   //     return availableDeliveryBoys[0].id;
+ //   }
+ //   return null;
+// }
 
 /**
  * helper function to validate delivery address or create a new one.
@@ -392,15 +392,16 @@ for (const vItem of validatedItems) {
 
         // 4. Delivery batching if not self-delivery
         if (!isSelfDelivery) {
-          const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
+       //   const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
 
           const [deliveryBatch] = await tx.insert(deliveryBatches).values({
             masterOrderId: masterOrder.id,
-            deliveryBoyId: assignedDeliveryBoyId,
+            deliveryBoyId: null,
             customerDeliveryAddressId: finalDeliveryAddressId,
             status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
             estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // dummy: 1 hour
-            deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+            deliveryOtp: null,//Math.floor(1000 + Math.random() * 9000).toString(),
+            deliveryOtpSentAt: null,
             createdAt: new Date(),
             updatedAt: new Date(),
           }).returning({ id: deliveryBatches.id });
@@ -734,16 +735,17 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
 
         // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
         for (const batch of batchesToCreate) {
-            const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
+          //  const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
 
             // a) डिलीवरी बैच बनाएं
             const [deliveryBatch] = await tx.insert(deliveryBatches).values({
                 masterOrderId: masterOrder.id,
-                deliveryBoyId: assignedDeliveryBoyId,
+                deliveryBoyId:null,// assignedDeliveryBoyId,
                 customerDeliveryAddressId: finalDeliveryAddressId,
                 status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
                 estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),
-                deliveryOtp: Math.floor(1000 + Math.random() * 9000).toString(),
+                deliveryOtp:null,// Math.floor(1000 + Math.random() * 9000).toString(),
+              deliveryOtpSentAt: null,
                 createdAt: new Date(),
                 updatedAt: new Date(),
             }).returning({ id: deliveryBatches.id });
@@ -873,7 +875,7 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
       // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें
       const subOrdersWithDeliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
-        const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned'); // ✅ सेल्फ-डिलीवरी के लिए अलग स्टेटस
+        const deliveryStatus = subOrder.deliveryBatch?.status || subOrder.status; //(subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned'); // ✅ सेल्फ-डिलीवरी के लिए अलग स्टेटस
         const estimatedDeliveryTime = subOrder.deliveryBatch?.estimatedDeliveryTime || null;
         const actualDeliveryTime = subOrder.deliveryBatch?.actualDeliveryTime || null;
 
@@ -952,17 +954,17 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       return res.status(404).json({ message: "Master order not found or access denied." });
     }
 
-    //let parsedDeliveryAddress = {};
-   // try {
-   //   parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
-  //  } catch (e) {
-    //  console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
-   // }
+    let parsedDeliveryAddress = {};
+    try {
+      parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
+    } catch (e) {
+      console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
+    }
 
     // डिलीवरी बॉय की स्थिति और अपेक्षित मार्ग दिखाने के लिए सब-ऑर्डर से डेटा एकत्र करें
     const deliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy;
-        const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned');
+        const deliveryStatus = subOrder.deliveryBatch?.status || subOrder.status;// (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : 'not_assigned');
         const storeLocation = { lat: subOrder.store?.latitude, lng: subOrder.store?.longitude };
 
         return {
@@ -990,7 +992,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
         lng: masterOrder.deliveryLng || 0,
-        address:  (masterOrder.deliveryAddress as any).addressLine1 || '', 
+        address: (parsedDeliveryAddress as any).addressLine1 || '', 
         city: (parsedDeliveryAddress as any).city || '',
         pincode: (parsedDeliveryAddress as any).pincode || '',
         fullName: (parsedDeliveryAddress as any).fullName || '',
