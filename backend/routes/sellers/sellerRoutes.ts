@@ -1220,14 +1220,15 @@ sellerRouter.patch(
           const currentStatus = existingSubOrder.status;
           const validStatusTransitions: { [key: string]: string[] } = {
             'pending': ['accepted', 'rejected'],
-            'accepted': ['ready_for_pickup', 'rejected'],
-            'ready_for_pickup': ['picked_up'],
-            'picked_up': ['out_for_delivery'],
-            'out_for_delivery': ['delivered'],     
+            'accepted': ['preparing', 'rejected'],
+            'preparing': ['ready_for_pickup'],
+            'ready_for_pickup': [],
+            'delivered_by_seller': [],
+               
   
     'rejected': [], 
     'cancelled': [], 
-    'delivered': [],
+    
           };
 
           if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
