@@ -44,8 +44,8 @@ const getStatusBadgeVariant = (status: string) => {
   switch (status) {
     case "pending": return "secondary";
     case "accepted": return "info";
-    case "preparing": return "info";
-    case "ready_for_pickup": return "info";
+    case "preparing": return "warning";
+    case "ready_for_pickup": return "primary";
     
     
     case "cancelled": return "info";
@@ -181,8 +181,8 @@ export default function OrderManager({
       // seller marks ready for pickup
       return (
         <>
-          <Button onClick={() => handleStatusUpdate(order.id, "ready_for_pickup")} disabled={mutation.isLoading}>
-            पिकअप के लिए तैयार करें
+          <Button onClick={() => handleStatusUpdate(order.id, "preparing")} disabled={mutation.isLoading}>
+            तैयारी शुरू करें 
           </Button>
           <Button variant="destructive" onClick={() => handleStatusUpdate(order.id, "rejected")} disabled={mutation.isLoading}>
             अस्वीकार करें
@@ -190,12 +190,24 @@ export default function OrderManager({
         </>
       );
     }
-
+  if (s === "preparing") {
+      // ✅ नया फ्लो: तैयारी से पिकअप के लिए तैयार
+      return (
+        <>
+          <Button variant="secondary" onClick={() => handleStatusUpdate(order.id, "ready_for_pickup")} disabled={mutation.isLoading}>
+            पिकअप के लिए तैयार करें
+          </Button>
+          <Button variant="destructive" onClick={() => handleStatusUpdate(order.id, "rejected")} disabled={mutation.isLoading}>
+            अस्वीकार करें
+          </Button>
+        </>
+      );
+  }
     if (s === "ready_for_pickup") {
       // If seller does self delivery, allow marking delivered
       if (order.isSelfDeliveryBySeller) {
         return (
-          <Button onClick={() => handleStatusUpdate(order.id, "delivered")} disabled={mutation.isLoading}>
+          <Button onClick={() => handleStatusUpdate(order.id, "delivered_by_seller")} disabled={mutation.isLoading}>
             डिलीवर के रूप में चिह्नित करें
           </Button>
         );
