@@ -1347,7 +1347,7 @@ sellerRouter.patch(
         
 
         // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
-        if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
+         (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
           
           // यदि डिलीवरी बैच अभी भी 'pending' स्थिति में है, तो उसे 'assigned' पर अपडेट करें 
           // (यह मानते हुए कि 'assigned' का मतलब पिकअप के लिए तैयार है)
@@ -1380,7 +1380,7 @@ sellerRouter.patch(
               });
             }
           }
-        }
+         }
 
         // 5. Socket.io: कस्टमर और सेलर को रियल-टाइम अपडेट भेजें
         getIO().emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
