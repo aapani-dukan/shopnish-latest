@@ -1347,7 +1347,7 @@ sellerRouter.patch(
         
 
         // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
-         (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
+       if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
           
           // यदि डिलीवरी बैच अभी भी 'pending' स्थिति में है, तो उसे 'assigned' पर अपडेट करें 
           // (यह मानते हुए कि 'assigned' का मतलब पिकअप के लिए तैयार है)
