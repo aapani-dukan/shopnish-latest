@@ -129,8 +129,8 @@ export default function DeliveryDashboard() {
       try {
         // एक साथ उपलब्ध और असाइन किए गए बैचेस को लाएं
         const [availableRes, myRes] = await Promise.allSettled([
-          api.get("/api/delivery-boys/available-batches"),
-          api.get("/api/delivery-boys/batches"), 
+          api.get("/api/delivery/available-batches"),
+          api.get("/api/delivery/batches"), 
         ]);
         
         const availableBatches =
