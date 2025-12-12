@@ -249,7 +249,7 @@ export default function DeliveryDashboard() {
   
   // Claim Batch Mutation
   const acceptOrderMutation = useMutation({ 
-    mutationFn: (batchId: number) => api.patch(`/api/delivery-boys/batches/${batchId}/claim`), 
+    mutationFn: (batchId: number) => api.patch(`/api/delivery/batches/${batchId}/claim`), 
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }); 
       toast({ title: "सफलता", description: "बैच सफलतापूर्वक असाइन किया गया।", variant: "success" });
@@ -263,7 +263,7 @@ export default function DeliveryDashboard() {
   // Update Batch Status Mutation
   const updateStatusMutation = useMutation({
     mutationFn: ({ batchId, newStatus }: { batchId: number; newStatus: string }) => 
-      api.patch(`/api/delivery-boys/batches/${batchId}/status`, { newStatus }), 
+      api.patch(`/api/delivery/batches/${batchId}/status`, { newStatus }), 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }), 
     onError: () => toast({ title: "त्रुटि", description: "बैच स्थिति अपडेट करने में विफल", variant: "destructive" }),
   });
@@ -275,7 +275,7 @@ export default function DeliveryDashboard() {
       let data; 
 
       try {
-        const response = await api.post(`/api/delivery-boys/batches/${batchId}/complete-delivery`, { otp }); 
+        const response = await api.post(`/api/delivery/batches/${batchId}/complete-delivery`, { otp }); 
         data = response.data; 
 
       } catch (error: any) {
@@ -314,7 +314,7 @@ export default function DeliveryDashboard() {
     mutationFn: async (batchId: number) => { 
       let data; 
       try {
-        const response = await api.post(`/api/delivery-boys/batches/${batchId}/send-otp`); 
+        const response = await api.post(`/api/delivery/batches/${batchId}/send-otp`); 
         data = response.data; 
       } catch (error: any) {
         console.error("sendOtpToCustomerMutation error:", error);
@@ -343,7 +343,7 @@ export default function DeliveryDashboard() {
     mutationFn: async (batchId: number) => { 
       let data; 
       try {
-        const response = await api.post(`/api/delivery-boys/batches/${batchId}/complete-without-otp`);
+        const response = await api.post(`/api/delivery/batches/${batchId}/complete-without-otp`);
         data = response.data; 
       } catch (error: any) {
         console.error("completeWithoutOtpMutation error:", error);
