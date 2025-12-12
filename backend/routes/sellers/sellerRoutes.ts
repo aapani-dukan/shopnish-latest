@@ -1347,41 +1347,53 @@ sellerRouter.patch(
         
 
         // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
-       if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
+
+        // विक्रेता के /sub-orders/:id/status रूट के अंदर
+
+// 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
+        if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
           
-          // यदि डिलीवरी बैच अभी भी 'pending' स्थिति में है, तो उसे 'assigned' पर अपडेट करें 
-          // (यह मानते हुए कि 'assigned' का मतलब पिकअप के लिए तैयार है)
+          // ✅ सिर्फ़ तभी आगे बढ़ें जब डिलीवरी बैच अभी भी 'pending' स्थिति में हो
           if (existingSubOrder.deliveryBatch.status === 'pending') { 
             
-            // ✅ deliveryStatusEnum: 'assigned' पर सेट करें
-            await tx.update(deliveryBatches)
-              .set({ status: 'assigned' as any, updatedAt: new Date() }) 
-              .where(eq(deliveryBatches.id, existingSubOrder.deliveryBatch.id));
+            // 🛑 ध्यान दें: 'assigned' पर अपडेट करने वाले कोड को हटा दिया गया है।
+            // बैच का स्टेटस 'pending' ही रहेगा।
 
+            // ✅ ऑर्डर ट्रैकिंग में एंट्री जोड़ें (status: pending का उपयोग करके)
+            const currentBatchStatus = existingSubOrder.deliveryBatch.status; // 'pending'
+            
             await tx.insert(orderTracking).values({
               masterOrderId: existingSubOrder.masterOrder.id,
               deliveryBatchId: existingSubOrder.deliveryBatch.id,
-              status: 'assigned' as any,
+              status: currentBatchStatus as any, 
               updatedByUserId: userId,
               updatedByUserRole: 'seller', 
               timestamp: new Date(),
-              message: `Delivery batch status updated to 'assigned' (ready for pickup) by seller for sub-order ${subOrderId}.`,
+              message: `Delivery batch is now Ready for Claiming (Status: Pending) by seller.`, 
             });
+            
+            // --- ✅ OLD STYLE EMIT, BUT NEW LOGIC ---
+            
+            // 1. बैच स्टेटस अपडेट को emit करें (पुराने स्टाइल का उपयोग करते हुए)
             getIO().emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
-              status: 'assigned',
-              message: `Delivery batch ready for pickup.`,
+              // ✅ स्टेटस अभी भी 'pending' है, लेकिन यह दर्शाता है कि यह पिकअप के लिए तैयार है
+              status: currentBatchStatus, 
+              message: `Delivery batch is ready for claiming.`,
             });
-            // डिलीवरी बॉय को सूचित करें कि उसका बैच तैयार है
-            if (existingSubOrder.deliveryBatch.deliveryBoyId) {
-              getIO().emit(`delivery-boy:${existingSubOrder.deliveryBatch.deliveryBoyId}:new-pickup-alert`, {
-                deliveryBatchId: existingSubOrder.deliveryBatch.id,
-                masterOrderId: existingSubOrder.masterOrder.id,
-                message: "A new delivery batch is ready for pickup!",
-              });
-            }
-          }
-         }
-
+            
+            // 2. किसी विशिष्ट डिलीवरी बॉय को सूचित न करें, क्योंकि यह NULL है।
+            // पुराने IF ब्लॉक को हटा दिया गया है, क्योंकि यह अब असाइन नहीं हुआ है।
+            
+            // ✅ सभी डिलीवरी बॉय को सूचना भेजें कि एक नया बैच उपलब्ध है (यह सुनिश्चित करता है कि वे इसे अपने 'Available' टैब में देखें)
+            getIO().emit(`available-batches:new-batch-ready`, {
+                 deliveryBatchId: existingSubOrder.deliveryBatch.id,
+                 message: "A new batch is available for claiming!",
+            });
+            // --- END OF EMIT ---
+            
+          } 
+        }
+        
         // 5. Socket.io: कस्टमर और सेलर को रियल-टाइम अपडेट भेजें
         getIO().emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
           subOrderId: subOrderId,
