@@ -61,12 +61,22 @@ const getStatusText = (status: string) => {
   }
 };
 
-const getNextStatus = (current: string) => {
-  switch (current.toLowerCase().trim()) {
-    case "ready_for_pickup":  return "picked_up";
-    case "picked_up":         return "out_for_delivery";
-    case "out_for_delivery":  return null; 
-    default:                  return null;
+const getNextStatus = (status: string): string | null => {
+  switch (status.toLowerCase().trim()) {
+    case "assigned":
+      return "ready_for_pickup";
+
+    case "ready_for_pickup":
+      return "picked_up";
+
+    case "picked_up":
+      return "out_for_delivery";
+
+    case "out_for_delivery":
+      return "delivered";
+
+    default:
+      return null;
   }
 };
 
