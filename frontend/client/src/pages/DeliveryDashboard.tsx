@@ -509,7 +509,7 @@ export default function DeliveryDashboard() {
       sendOtpToCustomerMutation.mutate(batchId); // batchId का उपयोग करें
     } else {
         console.log(`handleStatusProgress: Updating status for batch ${batchId} to '${next}'.`);
-        updateStatusMutation.mutate({ batchId: batchId, status: next }); // batchId का उपयोग करें
+        updateStatusMutation.mutate({ batchId: batchId, newStatus: next }); // batchId का उपयोग करें
     }
   };
 
