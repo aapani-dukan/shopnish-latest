@@ -483,13 +483,13 @@ router.patch(
       // ✅ Index के बजाय स्ट्रिंग का उपयोग करें
       const validStatusTransitions: { [key: string]: string[] } = {
         'pending': [], // 'pending' से 'assigned' केवल Seller/System द्वारा सेट किया जाता है
-        'assigned': ['out_for_pickup', 'cancelled'], 
-        'out_for_pickup': ['picked_up', 'cancelled'], 
+        'assigned': ['ready_for_pickup', 'cancelled'], 
+        'ready_for_pickup': ['picked_up', 'cancelled'], 
         'picked_up': ['out_for_delivery', 'cancelled'], 
         'out_for_delivery': ['delivered', 'cancelled', 'failed'], 
         'delivered': [],
         'failed': [],
-        'exepted': [],
+        
         'cancelled': [],
       };
 
