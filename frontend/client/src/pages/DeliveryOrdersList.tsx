@@ -298,10 +298,10 @@ const BatchCard: React.FC<
     // यह बैच किसी को असाइन नहीं किया गया है (deliveryBoyId === null)
     // और बैच का मुख्य स्टेटस 'pending' है
        // batch.deliveryAddress में अब ग्राहक का पता है (JSON से टॉप-लेवल पर आया है)
-    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
+   // const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
     
     // batch.sellerDetails में अब विक्रेता का पता है
-    const normalizedSeller = normalizeSeller(batch); 
+  //  const normalizedSeller = normalizeSeller(batch); 
     const canClaimBatch =
       batch.deliveryBoyId === null && // डिलीवरी बॉय ID null होना चाहिए
       mainStatus === "pending"; // 'pending' या 'ready_for_pickup' हो सकता है (backend logic के आधार पर, यहाँ pending मान रहे हैं)
