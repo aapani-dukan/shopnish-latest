@@ -539,7 +539,7 @@ export default function DeliveryDashboard() {
 
       // 1. Assigned Batches (सक्रिय रूप से मुझे असाइन किए गए)
       const assigned = allBatches.filter((b: any) => {
-        const status = (b.status ?? "").toLowerCase();
+        const status = (b.status ?? "").toLowerCase().trim();
         
         const batchDeliveryBoyId = b.deliveryBoyId !== null && b.deliveryBoyId !== undefined ? Number(b.deliveryBoyId) : null;
         
