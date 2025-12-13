@@ -47,16 +47,18 @@ export interface OrderItem {
 
 // 🛑 नया: DeliveryBatch टाइप
 // बैच में डिलीवरी के लिए आवश्यक सभी जानकारी होती है, जिसमें ऑर्डर की सूची भी शामिल है।
+// 🛑 UPDATED: DeliveryBatch Type (Normalizer से आने वाले टॉप-लेवल फ़ील्ड्स)
 export interface DeliveryBatch {
-  id: number; // Batch ID
-  masterOrderId?: string; // इसे OrderNumber के रूप में उपयोग करें
-  totalAmount?: string | number; // Batch का कुल मूल्य
-  status?: string; // Batch का वर्तमान डिलीवरी स्टेटस ('pending', 'assigned', 'picked_up' आदि)
-  deliveryAddress?: any; // ग्राहक का पता
-  items: OrderItem[]; // बैच के अंदर के सभी आइटम (सभी सब-ऑर्डर से मर्ज किए गए)
-  sellerDetails?: any; // एक ही विक्रेता के लिए, या यदि कई हैं तो array
-  deliveryBoyId?: number | null; // असाइन किया गया डिलीवरी बॉय ID
+  id: number; 
+  masterOrderId?: string; 
+  totalAmount?: string | number; // Normalizer द्वारा गणना की गई
+  status?: string; 
+  deliveryAddress: any; // Normalizer द्वारा टॉप-लेवल पर सेट किया गया
+  items: OrderItem[]; // Normalizer द्वारा सभी सब-ऑर्डर से मर्ज किया गया
+  sellerDetails?: Seller[] | null; // Normalizer द्वारा सभी विक्रेताओं का array
+  deliveryBoyId?: number | null; 
 }
+
 
 export interface UIComponents {
   Button: React.FC<any>;
@@ -115,32 +117,26 @@ const normalizeDeliveryAddress = (raw: any): Address | null => {
 };
 
 // 🛑 Updated normalizeSeller: Batch से Seller Details खींचना
+// 🛑 UPDATED normalizeSeller: अब सीधे batch.sellerDetails का उपयोग करता है
 const normalizeSeller = (batch: DeliveryBatch): Seller | null => {
-  // हम मान रहे हैं कि 'sellerDetails' फ़ील्ड बैच पर मौजूद है,
-  // या यदि बैच में केवल एक ऑर्डर है, तो हम items[0].product.seller का उपयोग कर सकते हैं।
-  
   let rawSellerData = batch.sellerDetails;
 
-  // यदि sellerDetails एक array है (कई विक्रेता), तो हम सिर्फ पहले वाले को प्रदर्शित कर सकते हैं
+  // यदि विक्रेता array है (कई पिकअप), तो हम सिर्फ पहले वाले को प्रदर्शित कर सकते हैं
   if (Array.isArray(rawSellerData) && rawSellerData.length > 0) {
       rawSellerData = rawSellerData[0];
-  }
-
-  // यदि rawSellerData अभी भी उपलब्ध नहीं है, तो हम items array से विक्रेता डेटा निकालने की कोशिश कर सकते हैं (जैसा कि पुराने कोड में था)
-  if (!rawSellerData) {
-      rawSellerData = batch.items?.[0]?.product?.seller;
   }
   
   if (!rawSellerData) {
     return null;
   }
 
-  // 4. विक्रेता के डेटा को सही नामों के साथ नॉर्मलाइज़ करें
+  // Seller के डेटा को normalise करें
   return {
-    id: rawSellerData.id ?? undefined,
+    id: rawSellerData.id,
     name: rawSellerData.name ?? rawSellerData.businessName, 
     businessName: rawSellerData.businessName ?? rawSellerData.name,
     phone: rawSellerData.businessPhone ?? rawSellerData.phone ?? rawSellerData.phoneNumber,
+    
     email: rawSellerData.email ?? null,
     address: rawSellerData.businessAddress ?? rawSellerData.address ?? rawSellerData.addressLine1,
     city: rawSellerData.city,
@@ -295,10 +291,17 @@ const BatchCard: React.FC<
     if (!batch) return null;
 
     const mainStatus = (batch.status ?? "").toLowerCase();
-
+     // 🛑 DATA: अब ये फ़ील्ड्स Normalizer से आ रहे हैं
+    const totalItems = batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    const grandTotal = Number(batch.totalAmount ?? 0);
     // 🛑 "बैच स्वीकार करें" बटन कब दिखाएं (Available Batches के लिए):
     // यह बैच किसी को असाइन नहीं किया गया है (deliveryBoyId === null)
     // और बैच का मुख्य स्टेटस 'pending' है
+       // batch.deliveryAddress में अब ग्राहक का पता है (JSON से टॉप-लेवल पर आया है)
+    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
+    
+    // batch.sellerDetails में अब विक्रेता का पता है
+    const normalizedSeller = normalizeSeller(batch); 
     const canClaimBatch =
       batch.deliveryBoyId === null && // डिलीवरी बॉय ID null होना चाहिए
       mainStatus === "pending"; // 'pending' या 'ready_for_pickup' हो सकता है (backend logic के आधार पर, यहाँ pending मान रहे हैं)
