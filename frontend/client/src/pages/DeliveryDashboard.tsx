@@ -367,7 +367,7 @@ export default function DeliveryDashboard() {
   // Update Batch Status Mutation
   const updateStatusMutation = useMutation({
     mutationFn: ({ batchId, newStatus }: { batchId: number; newStatus: string }) => 
-      api.patch(`/api/delivery/batches/${batchId}/status`, { newStatus }), 
+      api.patch(`/api/delivery/batches/${batchId}/status`, { status:newStatus, }), 
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ["delivery-batches"] }), 
     onError: () => toast({ title: "त्रुटि", description: "बैच स्थिति अपडेट करने में विफल", variant: "destructive" }),
   });
@@ -509,7 +509,7 @@ export default function DeliveryDashboard() {
       sendOtpToCustomerMutation.mutate(batchId); // batchId का उपयोग करें
     } else {
         console.log(`handleStatusProgress: Updating status for batch ${batchId} to '${next}'.`);
-        updateStatusMutation.mutate({ batchId: batchId, newStatus: next }); // batchId का उपयोग करें
+        updateStatusMutation.mutate({ batchId: batchId, status: next }); // batchId का उपयोग करें
     }
   };
 
