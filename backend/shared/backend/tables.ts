@@ -18,13 +18,13 @@ export const subOrderStatusEnum = pgEnum('sub_order_status', [
   'cancelled',
   'rejected',
    'delivered_by_seller',
-  'deliverd_by_delivery_boy'
+  'delivered_by_delivery_boy'
   ]);
 export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
   "pending", "processing", "shipped", "delivered", "cancelled", "returned"
 ]);
 export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
-  "pending", "assigned", "out_for_pickup", "picked_up", "out_for_delivery", "delivered", "failed", "exepted", "cancelled"
+  "pending", "assigned", "ready_for_pickup", "picked_up", "out_for_delivery", "delivered", "failed", "exepted", "cancelled"
 ]);
 export const productCategoryEnum = pgEnum("product_category", [
   "Electronics", "Fashion", "Home & Kitchen", "Books", "Groceries", "Health & Beauty",
