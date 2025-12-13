@@ -269,11 +269,13 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 );
 
 // --- BatchCard (Replaced OrderCard) ---
+
+  // --- BatchCard (Replaced OrderCard) ---
 const BatchCard: React.FC<
   Omit<DeliveryOrdersListProps, "orders" | "acceptLoading" | "updateLoading"> & {
     batch: DeliveryBatch; // 🛑 Batch type
     isLoading: boolean;
-    myDeliveryBoyId: number | undefined; 
+    myDeliveryBoyId: number | undefined | null; // Null/Undefined हैंडलिंग के लिए
   }
 > = React.memo(
   ({
@@ -290,50 +292,47 @@ const BatchCard: React.FC<
   }) => {
     if (!batch) return null;
 
-    const mainStatus = (batch.status ?? "").toLowerCase().trim();
-     // 🛑 DATA: अब ये फ़ील्ड्स Normalizer से आ रहे हैं
+    const mainStatus = (batch.status ?? "").toLowerCase().trim(); // ✅ Status Trimmed
+     
+    // --- 1. Normalization और Utility Vars को सबसे पहले परिभाषित करें (ReferenceError FIX) ---
+    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
+    const normalizedSeller = normalizeSeller(batch); 
+
     const totalItems = batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
     const grandTotal = Number(batch.totalAmount ?? 0);
-    // 🛑 "बैच स्वीकार करें" बटन कब दिखाएं (Available Batches के लिए):
-    // यह बैच किसी को असाइन नहीं किया गया है (deliveryBoyId === null)
-    // और बैच का मुख्य स्टेटस 'pending' है
-       // batch.deliveryAddress में अब ग्राहक का पता है (JSON से टॉप-लेवल पर आया है)
-   // const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
     
-    // batch.sellerDetails में अब विक्रेता का पता है
-  //  const normalizedSeller = normalizeSeller(batch); 
+    // --- 2. Button Logic ---
+    const safeMyDeliveryBoyId = myDeliveryBoyId ?? 0; // nullish coalescing operator FIX
+
+    // 🛑 "बैच स्वीकार करें" बटन कब दिखाएं (Available Batches के लिए):
     const canClaimBatch =
       batch.deliveryBoyId === null && // डिलीवरी बॉय ID null होना चाहिए
-      mainStatus === "pending"; // 'pending' या 'ready_for_pickup' हो सकता है (backend logic के आधार पर, यहाँ pending मान रहे हैं)
+      mainStatus === "pending"; 
 
 
-       // --- Batches के लिए Update लॉजिक ---
-    // 🛑 FIX: null/undefined होने पर 0 का उपयोग करें
-    const safeMyDeliveryBoyId = myDeliveryBoyId ?? 0; 
-    
-    // myDeliveryBoyId को 0 मानकर तुलना करें
-    const isMineAndAssigned = 
-        Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId);
-
+    // 🛑 "स्टेटस अपडेट करें" बटन कब दिखाएं (Assigned Batches के लिए):
     const canUpdateStatus =
-      isMineAndAssigned &&
+      // FIX: safeMyDeliveryBoyId का उपयोग करें
+      Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId) &&
       (mainStatus === "assigned" || 
        mainStatus === "ready_for_pickup" ||
        mainStatus === "picked_up" ||
        mainStatus === "out_for_delivery");
     
+    // अगले एक्शन का लेबल
     const nextActionLabel = nextStatusLabel(mainStatus);
 
-    // --- DEBUGGING CODE (Cleaned) ---
-    // यह दिखाएगा कि अब तुलना 7 === 7 होनी चाहिए (जब data लोड हो जाए)
-    console.log(`--- Batch ID ${batch.id} Final Check ---`);
-    console.log(`Batch DBoy ID: ${batch.deliveryBoyId}`);
-    console.log(`My Safe DBoy ID: ${safeMyDeliveryBoyId}`);
-    console.log(`Is Mine Match? ${isMineAndAssigned}`); // अब यह फाइनल तुलना है
-    console.log(`Can Update Status? ${canUpdateStatus}`);
-    console.log(`------------------------------`);
-    // --------------------------------
+// 🛑 DEBUGGING CODE (Updated to use safeMyDeliveryBoyId)
+const isIdMatchDebug = Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId);
 
+console.log(`--- Batch ID ${batch.id} Final Check ---`);
+console.log(`Batch DBoy ID: ${batch.deliveryBoyId} (Type: ${typeof batch.deliveryBoyId})`);
+console.log(`My Safe DBoy ID: ${safeMyDeliveryBoyId} (Type: ${typeof safeMyDeliveryBoyId})`);
+console.log(`Is ID Match? ${isIdMatchDebug}`); 
+console.log(`Status: ${mainStatus}`);
+console.log(`Can Update Status? ${canUpdateStatus}`);
+console.log(`------------------------------`);
+// 🛑 DEBUGGING CODE ENDS HERE
     
     return (
       <ui.Card>
@@ -342,8 +341,8 @@ const BatchCard: React.FC<
             <div>
               <ui.CardTitle>बैच ID #{batch.id}</ui.CardTitle>
               <p className="text-sm text-gray-600">
-                {batch.items?.length || 0} आइटम • 
-                ₹{Number(batch.totalAmount ?? 0).toLocaleString('en-IN')} 
+                {totalItems} आइटम • 
+                ₹{grandTotal.toLocaleString('en-IN')} 
               </p>
               {/* मास्टर ऑर्डर ID भी दिखाएँ यदि उपलब्ध हो */}
               {batch.masterOrderId && (
@@ -361,6 +360,7 @@ const BatchCard: React.FC<
         </ui.CardHeader>
 
         <ui.CardContent>
+          {/* FIX: ReferenceError solve हो गया है */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <AddressBlock title="ग्राहक विवरण" details={normalizedAddress} Button={ui.Button} />
             <AddressBlock title="विक्रेता विवरण" details={normalizedSeller} Button={ui.Button} />
@@ -369,7 +369,7 @@ const BatchCard: React.FC<
           <OrderItems items={batch.items ?? []} />
 
           <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
-              {/* 🛑 "बैच दावा करें" बटन */}
+            {/* 🛑 "बैच दावा करें" बटन */}
             {canClaimBatch && (
               <ui.Button size="sm" onClick={() => onAcceptOrder(batch.id)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -385,12 +385,15 @@ const BatchCard: React.FC<
               </ui.Button>
             )}
             
+            {/* Note: History tab items will show neither button */}
           </div>
         </ui.CardContent>
       </ui.Card>
     );
   }
 );
+
+    
 
 // --- DeliveryOrdersList (Updated to use BatchCard) ---
 const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
