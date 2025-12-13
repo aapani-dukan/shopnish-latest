@@ -292,6 +292,9 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 
     const mainStatus = (batch.status ?? "").toLowerCase().trim();
 
+    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
+    const normalizedSeller = normalizeSeller(batch); 
+    
     const totalItems =
       batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
 
