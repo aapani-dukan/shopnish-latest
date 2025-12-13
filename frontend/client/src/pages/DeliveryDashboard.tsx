@@ -155,13 +155,29 @@ const normalizeBatchData = (rawBatch: RawBatch, myDeliveryBoyId: number | null):
 
     // Master Order Number (if available from subOrders.masterOrder)
     const masterOrderNum = rawBatch.subOrders[0]?.masterOrder?.orderNumber ?? rawBatch.masterOrderId;
+   Try to build the address if rawBatch.customerDeliveryAddress is empty {}
+    let finalAddress = rawBatch.customerDeliveryAddress;
     
+    // यदि एड्रेस खाली है, तो हम masterOrder से विवरण खींचते हैं
+    if (rawBatch.subOrders.length > 0 && (!finalAddress || Object.keys(finalAddress).length === 0)) {
+        const masterOrderDetails = rawBatch.subOrders[0].masterOrder;
+        
+        finalAddress = {
+            fullName: masterOrderDetails?.customer?.firstName + ' ' + masterOrderDetails?.customer?.lastName,
+            phone: masterOrderDetails?.customer?.phone || '',
+            city: masterOrderDetails?.deliveryCity,
+            pincode: masterOrderDetails?.deliveryPincode,
+            // ध्यान दें: addressLine1/address यहाँ उपलब्ध नहीं है, लेकिन city/pincode तो है
+            // यदि backend से पूरा पता लाना है, तो आपको /users/me से customerAddresses को भी देखना होगा
+        };
+    } 
     return {
         id: rawBatch.id,
         masterOrderId: String(masterOrderNum),
         totalAmount: grandTotal,
         items: allItems,
-        deliveryAddress: rawBatch.customerDeliveryAddress, 
+        deliveryAddress: finalAddress, 
+        
         sellerDetails: allSellers.length > 0 ? allSellers : null, 
         status: rawBatch.status,
         deliveryBoyId: rawBatch.deliveryBoyId,
