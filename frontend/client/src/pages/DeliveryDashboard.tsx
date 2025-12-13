@@ -155,7 +155,7 @@ const normalizeBatchData = (rawBatch: RawBatch, myDeliveryBoyId: number | null):
 
     // Master Order Number (if available from subOrders.masterOrder)
     const masterOrderNum = rawBatch.subOrders[0]?.masterOrder?.orderNumber ?? rawBatch.masterOrderId;
-   Try to build the address if rawBatch.customerDeliveryAddress is empty {}
+   // Try to build the address if rawBatch.customerDeliveryAddress is empty {}
     let finalAddress = rawBatch.customerDeliveryAddress;
     
     // यदि एड्रेस खाली है, तो हम masterOrder से विवरण खींचते हैं
