@@ -380,15 +380,15 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
             )}
 
             {/* UPDATE STATUS */}
-            {canUpdateStatus && nextActionLabel && (
-              <ui.Button
-                size="sm"
-                onClick={() => onUpdateStatus(batch)}
-                disabled={isLoading}
-              >
-                {nextActionLabel}
-              </ui.Button>
-            )}
+            {canUpdateStatus && (
+  <ui.Button
+    size="sm"
+    onClick={() => onUpdateStatus(batch)}
+    disabled={isLoading}
+  >
+    {nextActionLabel || "स्टेटस आगे बढ़ाएँ"}
+  </ui.Button>
+)}
           </div>
         </ui.CardContent>
       </ui.Card>
