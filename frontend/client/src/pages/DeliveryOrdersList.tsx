@@ -290,7 +290,7 @@ const BatchCard: React.FC<
   }) => {
     if (!batch) return null;
 
-    const mainStatus = (batch.status ?? "").toLowerCase();
+    const mainStatus = (batch.status ?? "").toLowerCase().trim();
      // 🛑 DATA: अब ये फ़ील्ड्स Normalizer से आ रहे हैं
     const totalItems = batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
     const grandTotal = Number(batch.totalAmount ?? 0);
