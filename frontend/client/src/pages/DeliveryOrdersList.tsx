@@ -270,21 +270,19 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 
 // --- BatchCard (Replaced OrderCard) ---
 
-  // --- BatchCard (Replaced OrderCard) ---
-const BatchCard: React.FC<
+  const BatchCard: React.FC<
   Omit<DeliveryOrdersListProps, "orders" | "acceptLoading" | "updateLoading"> & {
-    batch: DeliveryBatch; // 🛑 Batch type
+    batch: DeliveryBatch;
     isLoading: boolean;
-    myDeliveryBoyId: number | undefined | null; // Null/Undefined हैंडलिंग के लिए
+    myDeliveryBoyId?: number;
   }
 > = React.memo(
   ({
-    batch, // 🛑 Order के बजाय Batch का उपयोग करें
+    batch,
     onAcceptOrder,
     onUpdateStatus,
     statusColor,
     statusText,
-    nextStatus,
     nextStatusLabel,
     isLoading,
     myDeliveryBoyId,
@@ -292,67 +290,68 @@ const BatchCard: React.FC<
   }) => {
     if (!batch) return null;
 
-    const mainStatus = (batch.status ?? "").toLowerCase().trim(); // ✅ Status Trimmed
-     
-    // --- 1. Normalization और Utility Vars को सबसे पहले परिभाषित करें (ReferenceError FIX) ---
-    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
-    const normalizedSeller = normalizeSeller(batch); 
+    const mainStatus = (batch.status ?? "").toLowerCase().trim();
 
-    const totalItems = batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+    const totalItems =
+      batch.items?.reduce((sum, item) => sum + Number(item.quantity || 0), 0) || 0;
+
     const grandTotal = Number(batch.totalAmount ?? 0);
-    
-    // --- 2. Button Logic ---
-    const safeMyDeliveryBoyId = myDeliveryBoyId ?? 0; // nullish coalescing operator FIX
 
-    // 🛑 "बैच स्वीकार करें" बटन कब दिखाएं (Available Batches के लिए):
+    /* ---------------- CLAIM LOGIC ---------------- */
+
     const canClaimBatch =
-      batch.deliveryBoyId === null && // डिलीवरी बॉय ID null होना चाहिए
-      mainStatus === "pending"; 
+      batch.deliveryBoyId === null &&
+      mainStatus === "pending";
 
+    /* ---------------- UPDATE STATUS LOGIC ---------------- */
 
-    // 🛑 "स्टेटस अपडेट करें" बटन कब दिखाएं (Assigned Batches के लिए):
+    // ⚠️ IMPORTANT: deliveryBoyId MUST exist
+    if (!myDeliveryBoyId) {
+      console.warn("DeliveryBoy ID not ready yet, skipping status actions");
+    }
+
+    const isMine =
+      myDeliveryBoyId !== undefined &&
+      Number(batch.deliveryBoyId) === Number(myDeliveryBoyId);
+
     const canUpdateStatus =
-      // FIX: safeMyDeliveryBoyId का उपयोग करें
-      Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId) &&
-      (mainStatus === "assigned" || 
-       mainStatus === "ready_for_pickup" ||
-       mainStatus === "picked_up" ||
-       mainStatus === "out_for_delivery");
-    
-    // अगले एक्शन का लेबल
-    const nextActionLabel = nextStatusLabel(mainStatus);
+      isMine &&
+      [
+        "assigned",
+        "ready_for_pickup",
+        "picked_up",
+        "out_for_delivery",
+      ].includes(mainStatus);
 
-// 🛑 DEBUGGING CODE (Updated to use safeMyDeliveryBoyId)
-const isIdMatchDebug = Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId);
+    const nextActionLabel = canUpdateStatus
+      ? nextStatusLabel(mainStatus)
+      : null;
 
-console.log(`--- Batch ID ${batch.id} Final Check ---`);
-console.log(`Batch DBoy ID: ${batch.deliveryBoyId} (Type: ${typeof batch.deliveryBoyId})`);
-console.log(`My Safe DBoy ID: ${safeMyDeliveryBoyId} (Type: ${typeof safeMyDeliveryBoyId})`);
-console.log(`Is ID Match? ${isIdMatchDebug}`); 
-console.log(`Status: ${mainStatus}`);
-console.log(`Can Update Status? ${canUpdateStatus}`);
-console.log(`------------------------------`);
-// 🛑 DEBUGGING CODE ENDS HERE
-    
+    /* ---------------- DEBUG (FINAL & CLEAN) ---------------- */
+
+    console.log(`--- Batch ${batch.id} ---`);
+    console.log("Batch deliveryBoyId:", batch.deliveryBoyId);
+    console.log("My deliveryBoyId:", myDeliveryBoyId);
+    console.log("Is Mine:", isMine);
+    console.log("Main Status:", mainStatus);
+    console.log("Can Update:", canUpdateStatus);
+    console.log("--------------------------");
+
+    /* ---------------- UI ---------------- */
+
     return (
       <ui.Card>
         <ui.CardHeader>
-          <div className="flex items-center justify-between">
+          <div className="flex justify-between items-center">
             <div>
-              <ui.CardTitle>बैच ID #{batch.id}</ui.CardTitle>
+              <ui.CardTitle>बैच #{batch.id}</ui.CardTitle>
               <p className="text-sm text-gray-600">
-                {totalItems} आइटम • 
-                ₹{grandTotal.toLocaleString('en-IN')} 
+                {totalItems} आइटम • ₹{grandTotal.toLocaleString("en-IN")}
               </p>
-              {/* मास्टर ऑर्डर ID भी दिखाएँ यदि उपलब्ध हो */}
-              {batch.masterOrderId && (
-                <p className="text-xs text-gray-500 mt-1">
-                    ऑर्डर संख्या: {batch.masterOrderId}
-                </p>
-              )}
             </div>
+
             <ui.Badge
-              className={`${statusColor(mainStatus)} text-white px-3 py-1 rounded-full text-xs font-semibold`}
+              className={`${statusColor(mainStatus)} text-white px-3 py-1 rounded-full`}
             >
               {statusText(mainStatus)}
             </ui.Badge>
@@ -360,39 +359,36 @@ console.log(`------------------------------`);
         </ui.CardHeader>
 
         <ui.CardContent>
-          {/* FIX: ReferenceError solve हो गया है */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <AddressBlock title="ग्राहक विवरण" details={normalizedAddress} Button={ui.Button} />
-            <AddressBlock title="विक्रेता विवरण" details={normalizedSeller} Button={ui.Button} />
-          </div>
-
           <OrderItems items={batch.items ?? []} />
 
-          <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
-            {/* 🛑 "बैच दावा करें" बटन */}
+          <div className="mt-6 flex gap-2 flex-wrap">
+            {/* CLAIM */}
             {canClaimBatch && (
-              <ui.Button size="sm" onClick={() => onAcceptOrder(batch.id)} disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                बैच दावा करें (Claim)
+              <ui.Button
+                size="sm"
+                onClick={() => onAcceptOrder(batch.id)}
+                disabled={isLoading}
+              >
+                बैच दावा करें
               </ui.Button>
             )}
 
-            {/* 🛑 "स्टेटस अपडेट करें" बटन */}
+            {/* UPDATE STATUS */}
             {canUpdateStatus && nextActionLabel && (
-              <ui.Button size="sm" onClick={() => onUpdateStatus(batch)} disabled={isLoading}>
-                {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              <ui.Button
+                size="sm"
+                onClick={() => onUpdateStatus(batch)}
+                disabled={isLoading}
+              >
                 {nextActionLabel}
               </ui.Button>
             )}
-            
-            {/* Note: History tab items will show neither button */}
           </div>
         </ui.CardContent>
       </ui.Card>
     );
   }
 );
-
     
 
 // --- DeliveryOrdersList (Updated to use BatchCard) ---
