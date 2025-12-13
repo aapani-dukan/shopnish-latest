@@ -307,40 +307,33 @@ const BatchCard: React.FC<
       mainStatus === "pending"; // 'pending' या 'ready_for_pickup' हो सकता है (backend logic के आधार पर, यहाँ pending मान रहे हैं)
 
 
-    // 🛑 "स्टेटस अपडेट करें" बटन कब दिखाएं (Assigned Batches के लिए):
-    // 1. बैच मुझे असाइन किया गया है (यानी deliveryBoyId मेरा ID है)
-    // 2. स्टेटस 'assigned', 'ready_for_pickup', 'picked_up', या 'out_for_delivery' है
-    const safeMyDeliveryBoyId = myDeliveryBoyId ?? 0; // nullish coalescing operator
+       // --- Batches के लिए Update लॉजिक ---
+    // 🛑 FIX: null/undefined होने पर 0 का उपयोग करें
+    const safeMyDeliveryBoyId = myDeliveryBoyId ?? 0; 
+    
+    // myDeliveryBoyId को 0 मानकर तुलना करें
+    const isMineAndAssigned = 
+        Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId);
+
     const canUpdateStatus =
-      Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId) &&
-      (mainStatus === "assigned" || // यदि आपने इसे स्वीकार कर लिया है, तो पहला एक्शन
+      isMineAndAssigned &&
+      (mainStatus === "assigned" || 
        mainStatus === "ready_for_pickup" ||
        mainStatus === "picked_up" ||
        mainStatus === "out_for_delivery");
     
-    // अगले एक्शन का लेबल
     const nextActionLabel = nextStatusLabel(mainStatus);
 
-    // 🛑 Batch डेटा का उपयोग करें
-    const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
-    const normalizedSeller = normalizeSeller(batch); 
-// 🛑 DEBUGGING CODE
-const isIdMatch = Number(batch.deliveryBoyId) === Number(myDeliveryBoyId);
-const isStatusOk = 
-  (mainStatus === "assigned" || 
-   mainStatus === "ready_for_pickup" ||
-   mainStatus === "picked_up" ||
-   mainStatus === "out_for_delivery");
+    // --- DEBUGGING CODE (Cleaned) ---
+    // यह दिखाएगा कि अब तुलना 7 === 7 होनी चाहिए (जब data लोड हो जाए)
+    console.log(`--- Batch ID ${batch.id} Final Check ---`);
+    console.log(`Batch DBoy ID: ${batch.deliveryBoyId}`);
+    console.log(`My Safe DBoy ID: ${safeMyDeliveryBoyId}`);
+    console.log(`Is Mine Match? ${isMineAndAssigned}`); // अब यह फाइनल तुलना है
+    console.log(`Can Update Status? ${canUpdateStatus}`);
+    console.log(`------------------------------`);
+    // --------------------------------
 
-console.log(`--- Batch ID ${batch.id} Debug ---`);
-console.log(`DeliveryBoyId from Batch: ${batch.deliveryBoyId} (Type: ${typeof batch.deliveryBoyId})`);
-console.log(`My DeliveryBoyId: ${myDeliveryBoyId} (Type: ${typeof myDeliveryBoyId})`);
-console.log(`ID Match? ${isIdMatch}`); 
-console.log(`Status: ${mainStatus}`);
-console.log(`Status OK? ${isStatusOk}`);
-console.log(`Can Update Status? ${canUpdateStatus}`);
-console.log(`------------------------------`);
-// 🛑 DEBUGGING CODE ENDS HERE
     
     return (
       <ui.Card>
@@ -376,7 +369,7 @@ console.log(`------------------------------`);
           <OrderItems items={batch.items ?? []} />
 
           <div className="mt-6 pt-4 border-t flex flex-wrap gap-2">
-            {/* 🛑 "बैच दावा करें" बटन */}
+              {/* 🛑 "बैच दावा करें" बटन */}
             {canClaimBatch && (
               <ui.Button size="sm" onClick={() => onAcceptOrder(batch.id)} disabled={isLoading}>
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
@@ -392,7 +385,6 @@ console.log(`------------------------------`);
               </ui.Button>
             )}
             
-            {/* Note: History tab items will show neither button */}
           </div>
         </ui.CardContent>
       </ui.Card>
