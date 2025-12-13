@@ -100,7 +100,74 @@ interface OrdersListViewProps {
   nextStatus: (status: string) => string | null; 
   nextStatusLabel: (status: string) => string;
 }
+// 🛑 NEW: Raw Batch Interface (Backend Response)
+interface RawBatch {
+    id: number;
+    masterOrderId: number; 
+    deliveryBoyId?: number | null;
+    status: string;
+    // Drizzle Nested Fields
+    customerDeliveryAddress: any;
+    subOrders: Array<any>;
+    // अन्य top-level fields
+}
+// 🛑 NEW: Data Normalizer Function (Solves the "0 items" issue)
+const normalizeBatchData = (rawBatch: RawBatch, myDeliveryBoyId: number | null): DeliveryBatch => {
+    
+    if (!rawBatch.subOrders || rawBatch.subOrders.length === 0) {
+        return { 
+            id: rawBatch.id,
+            masterOrderId: rawBatch.masterOrderId.toString(),
+            totalAmount: 0, 
+            items: [], 
+            deliveryAddress: rawBatch.customerDeliveryAddress,
+            sellerDetails: null,
+            status: rawBatch.status,
+            deliveryBoyId: rawBatch.deliveryBoyId,
+        } as DeliveryBatch;
+    }
 
+    let grandTotal = 0;
+    const allItems: OrderItem[] = [];
+    const allSellers: Seller[] = [];
+
+    rawBatch.subOrders.forEach(sub => {
+        // A. आइटम और मात्रा जोड़ें
+        if (sub.orderItems) {
+            sub.orderItems.forEach((item: any) => {
+                allItems.push({
+                    id: item.id,
+                    quantity: Number(item.quantity || 0),
+                    product: item.product,
+                    // यदि आपके पास price, itemTotal जैसे फ़ील्ड हैं, तो उन्हें यहाँ जोड़ें
+                } as OrderItem);
+            });
+        }
+        
+        // B. कुल योग जोड़ें (JSON से स्ट्रिंग के रूप में आता है)
+        grandTotal += Number(sub.total || 0);
+        
+        // C. विक्रेता विवरण इकट्ठा करें (केवल एक विक्रेता पर्याप्त है या सभी को रखें)
+        if (sub.seller && sub.seller.id) {
+            allSellers.push(sub.seller);
+        }
+    });
+
+    // Master Order Number (if available from subOrders.masterOrder)
+    const masterOrderNum = rawBatch.subOrders[0]?.masterOrder?.orderNumber ?? rawBatch.masterOrderId;
+    
+    return {
+        id: rawBatch.id,
+        masterOrderId: String(masterOrderNum),
+        totalAmount: grandTotal,
+        items: allItems,
+        deliveryAddress: rawBatch.customerDeliveryAddress, 
+        sellerDetails: allSellers.length > 0 ? allSellers : null, 
+        status: rawBatch.status,
+        deliveryBoyId: rawBatch.deliveryBoyId,
+        // isMine: Number(rawBatch.deliveryBoyId) === myDeliveryBoyId, // filtering in useMemo now
+    } as DeliveryBatch;
+};
 // --- Main Component ---
 export default function DeliveryDashboard() {
   const { toast } = useToast();
@@ -123,54 +190,55 @@ export default function DeliveryDashboard() {
 
 
   // --- Data Fetching Hook (Batch Logic) ---
-  const { data: batchesRaw = [], isLoading: isLoadingBatches } = useQuery({
-    queryKey: ["delivery-batches"],
-    queryFn: async () => {
-      try {
-        // एक साथ उपलब्ध और असाइन किए गए बैचेस को लाएं
-        const [availableRes, myRes] = await Promise.allSettled([
-          api.get("/api/delivery/available-batches"),
-          api.get("/api/delivery/batches"), 
-        ]);
-        
-        const availableBatches =
-          availableRes.status === "fulfilled" && availableRes.value && Array.isArray((availableRes.value as any).data?.batches)
-            ? (availableRes.value as any).data.batches
-            : [];
-            
-        const myAssignedBatches =
-          myRes.status === "fulfilled" && myRes.value && Array.isArray((myRes.value as any).data?.batches)
-            ? (myRes.value as any).data.batches
-            : [];
-            
-        // Batches को मर्ज करें
-        const map = new Map();
-        [...availableBatches, ...myAssignedBatches].forEach((b) => {
-          if (b && typeof b.id === "number") {
-            map.set(b.id, {
-              ...b,
-              isMine: Number(b.deliveryBoyId) === Number(user?.deliveryBoyId),
-            });
-          }
-        });
-        
-        console.log("✅ Fetched Batches Count:", map.size);
-        return Array.from(map.values());
-        
-      } catch (err) {
-        console.error("बैच लाने में त्रुटि:", err);
-        toast({
-          title: "डेटा लाने में त्रुटि",
-          description: "डिलीवरी बैच लाते समय कोई समस्या आई",
-          variant: "destructive",
-        });
-        return [];
-      }
-    },
-    enabled: isAuthenticated && !!user && myDeliveryBoyId !== undefined && myDeliveryBoyId !== null,
-  });
-  
-  const isLoading = isLoadingAuth || isLoadingBatches;
+   // --- Data Fetching Hook (Batch Logic) ---
+    const { data: batchesRaw = [], isLoading: isLoadingBatches } = useQuery({
+        queryKey: ["delivery-batches"],
+        queryFn: async () => {
+            try {
+                // एक साथ उपलब्ध और असाइन किए गए बैचेस को लाएं
+                const [availableRes, myRes] = await Promise.allSettled([
+                    api.get("/api/delivery/available-batches"),
+                    api.get("/api/delivery/batches"), // GET /api/delivery/batches 
+                ]);
+
+                // 🛑 ध्यान दें: response.data?.batches प्राप्त करने के लिए API को ठीक किया गया है
+                const availableBatches =
+                    availableRes.status === "fulfilled" && availableRes.value && Array.isArray((availableRes.value as any).data?.batches)
+                        ? (availableRes.value as any).data.batches
+                        : [];
+                        
+                const myAssignedBatches =
+                    myRes.status === "fulfilled" && myRes.value && Array.isArray((myRes.value as any).data?.batches)
+                        ? (myRes.value as any).data.batches
+                        : [];
+
+                // 🛑 महत्वपूर्ण: Normalization लागू करें
+                const normalizedBatches: DeliveryBatch[] = [];
+                const allRawBatches = [...availableBatches, ...myAssignedBatches];
+                
+                // Batches को मर्ज करें और Normalizer चलाएं
+                const map = new Map();
+                allRawBatches.forEach((b: RawBatch) => {
+                    if (b && typeof b.id === "number") {
+                        // 🛑 Normalizer यहाँ डेटा को ठीक करता है
+                        const normalized = normalizeBatchData(b, myDeliveryBoyId); 
+                        map.set(b.id, normalized);
+                    }
+                });
+                
+                console.log("✅ Fetched and Normalized Batches Count:", map.size);
+                return Array.from(map.values());
+
+            } catch (err) {
+                console.error("बैच लाने में त्रुटि:", err);
+                toast({ title: "डेटा लाने में त्रुटि", description: "डिलीवरी बैच लाते समय कोई समस्या आई", variant: "destructive", });
+                return [];
+            }
+        },
+        enabled: isAuthenticated && !!user && myDeliveryBoyId !== undefined && myDeliveryBoyId !== null,
+    });
+    
+    const isLoading = isLoadingAuth || isLoadingBatches;
 
 
   // --- Socket.io for Realtime Updates ---
