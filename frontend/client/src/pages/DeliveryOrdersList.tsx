@@ -312,7 +312,7 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 
     const canUpdateStatus = [
       "assigned",
-      "ready_for_pickup",
+      "out_for_pickup",
       "picked_up",
       "out_for_delivery",
     ].includes(mainStatus);
