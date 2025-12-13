@@ -72,10 +72,20 @@ const getNextStatus = (current: string) => {
 
 const getNextStatusLabel = (status: string) => {
   switch (status.toLowerCase().trim()) {
-    case "ready_for_pickup":  return "पिकअप करें";
-    case "picked_up":         return "डिलीवरी के लिए निकले (OTP)"; 
-    case "out_for_delivery":  return "डिलीवरी पूरी करें (OTP)";
-    default:                  return "";
+    case "assigned":
+      return "पिकअप के लिए तैयार करें";
+
+    case "ready_for_pickup":
+      return "पिकअप करें";
+
+    case "picked_up":
+      return "डिलीवरी के लिए निकले (OTP)";
+
+    case "out_for_delivery":
+      return "डिलीवर करें";
+
+    default:
+      return null; // ❗ बहुत जरूरी
   }
 };
 
