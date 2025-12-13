@@ -311,7 +311,7 @@ const BatchCard: React.FC<
     // 1. बैच मुझे असाइन किया गया है (यानी deliveryBoyId मेरा ID है)
     // 2. स्टेटस 'assigned', 'ready_for_pickup', 'picked_up', या 'out_for_delivery' है
     const canUpdateStatus =
-      batch.deliveryBoyId === myDeliveryBoyId &&
+      Number(batch.deliveryBoyId) === Number(myDeliveryBoyId) &&
       (mainStatus === "assigned" || // यदि आपने इसे स्वीकार कर लिया है, तो पहला एक्शन
        mainStatus === "ready_for_pickup" ||
        mainStatus === "picked_up" ||
