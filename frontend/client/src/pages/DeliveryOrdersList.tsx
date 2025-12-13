@@ -270,13 +270,11 @@ const OrderItems: React.FC<{ items: OrderItem[] }> = ({ items }) => (
 
 // --- BatchCard (Replaced OrderCard) ---
 
-  
-    
-const BatchCard: React.FC<
+  const BatchCard: React.FC<
   Omit<DeliveryOrdersListProps, "orders" | "acceptLoading" | "updateLoading"> & {
     batch: DeliveryBatch;
     isLoading: boolean;
-    myDeliveryBoyId?: number;
+    myDeliveryBoyId?: number | null;
   }
 > = React.memo(
   ({
@@ -294,8 +292,6 @@ const BatchCard: React.FC<
 
     const mainStatus = (batch.status ?? "").toLowerCase().trim();
 
-    /* ---------------- NORMALIZED DATA ---------------- */
-
     const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
     const normalizedSeller = normalizeSeller(batch);
 
@@ -305,39 +301,30 @@ const BatchCard: React.FC<
     const grandTotal = Number(batch.totalAmount ?? 0);
 
     /* ---------------- CLAIM LOGIC ---------------- */
-
     const canClaimBatch =
-      batch.deliveryBoyId === null &&
-      mainStatus === "pending";
+      batch.deliveryBoyId === null && mainStatus === "pending";
 
     /* ---------------- UPDATE STATUS LOGIC ---------------- */
 
-    const safeMyDeliveryBoyId =
-      typeof myDeliveryBoyId === "number" ? myDeliveryBoyId : null;
+    // 🔥 IMPORTANT CHANGE:
+    // ❌ deliveryBoyId match पर depend मत करो
+    // ✅ सिर्फ status देखो
 
-    const isMine =
-      safeMyDeliveryBoyId !== null &&
-      Number(batch.deliveryBoyId) === Number(safeMyDeliveryBoyId);
-
-    const canUpdateStatus =
-      isMine &&
-      [
-        "assigned",
-        "ready_for_pickup",
-        "picked_up",
-        "out_for_delivery",
-      ].includes(mainStatus);
+    const canUpdateStatus = [
+      "assigned",
+      "ready_for_pickup",
+      "picked_up",
+      "out_for_delivery",
+    ].includes(mainStatus);
 
     const nextActionLabel = canUpdateStatus
       ? nextStatusLabel(mainStatus)
       : null;
 
     /* ---------------- DEBUG ---------------- */
-
     console.log(`--- Batch ${batch.id} ---`);
     console.log("Batch deliveryBoyId:", batch.deliveryBoyId);
-    console.log("My deliveryBoyId:", safeMyDeliveryBoyId);
-    console.log("Is Mine:", isMine);
+    console.log("My deliveryBoyId:", myDeliveryBoyId);
     console.log("Main Status:", mainStatus);
     console.log("Can Update:", canUpdateStatus);
     console.log("--------------------------");
@@ -353,11 +340,6 @@ const BatchCard: React.FC<
               <p className="text-sm text-gray-600">
                 {totalItems} आइटम • ₹{grandTotal.toLocaleString("en-IN")}
               </p>
-              {batch.masterOrderId && (
-                <p className="text-xs text-gray-500 mt-1">
-                  ऑर्डर संख्या: {batch.masterOrderId}
-                </p>
-              )}
             </div>
 
             <ui.Badge
@@ -369,7 +351,7 @@ const BatchCard: React.FC<
         </ui.CardHeader>
 
         <ui.CardContent>
-          {/* CUSTOMER & SELLER DETAILS */}
+          {/* CUSTOMER + SELLER DETAILS */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
             <AddressBlock
               title="ग्राहक विवरण"
@@ -383,11 +365,10 @@ const BatchCard: React.FC<
             />
           </div>
 
-          {/* ITEMS */}
           <OrderItems items={batch.items ?? []} />
 
-          {/* ACTIONS */}
           <div className="mt-6 flex gap-2 flex-wrap">
+            {/* CLAIM */}
             {canClaimBatch && (
               <ui.Button
                 size="sm"
@@ -398,6 +379,7 @@ const BatchCard: React.FC<
               </ui.Button>
             )}
 
+            {/* UPDATE STATUS */}
             {canUpdateStatus && nextActionLabel && (
               <ui.Button
                 size="sm"
@@ -413,9 +395,7 @@ const BatchCard: React.FC<
     );
   }
 );
-
     
-
 // --- DeliveryOrdersList (Updated to use BatchCard) ---
 const DeliveryOrdersList: React.FC<DeliveryOrdersListProps> = ({
   orders, // 🛑 अब यह DeliveryBatch[] है
