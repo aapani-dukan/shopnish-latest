@@ -323,7 +323,24 @@ const BatchCard: React.FC<
     // 🛑 Batch डेटा का उपयोग करें
     const normalizedAddress = normalizeDeliveryAddress(batch.deliveryAddress);
     const normalizedSeller = normalizeSeller(batch); 
+// 🛑 DEBUGGING CODE
+const isIdMatch = Number(batch.deliveryBoyId) === Number(myDeliveryBoyId);
+const isStatusOk = 
+  (mainStatus === "assigned" || 
+   mainStatus === "ready_for_pickup" ||
+   mainStatus === "picked_up" ||
+   mainStatus === "out_for_delivery");
 
+console.log(`--- Batch ID ${batch.id} Debug ---`);
+console.log(`DeliveryBoyId from Batch: ${batch.deliveryBoyId} (Type: ${typeof batch.deliveryBoyId})`);
+console.log(`My DeliveryBoyId: ${myDeliveryBoyId} (Type: ${typeof myDeliveryBoyId})`);
+console.log(`ID Match? ${isIdMatch}`); 
+console.log(`Status: ${mainStatus}`);
+console.log(`Status OK? ${isStatusOk}`);
+console.log(`Can Update Status? ${canUpdateStatus}`);
+console.log(`------------------------------`);
+// 🛑 DEBUGGING CODE ENDS HERE
+    
     return (
       <ui.Card>
         <ui.CardHeader>
