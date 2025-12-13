@@ -37,7 +37,7 @@ const getStatusColor = (status: string) => {
   switch (status.toLowerCase().trim()) {
     case "pending":          return "bg-amber-600 hover:bg-amber-700";
     case "assigned":         return "bg-blue-600 hover:bg-blue-700";
-    case "ready_for_pickup": return "bg-yellow-500 hover:bg-yellow-600";
+    case "out_for_pickup": return "bg-yellow-500 hover:bg-yellow-600";
     case "picked_up":        return "bg-indigo-600 hover:bg-indigo-700";
     case "out_for_delivery": return "bg-purple-600 hover:bg-purple-700";
     case "delivered":        return "bg-green-600 hover:bg-green-700";
@@ -51,7 +51,7 @@ const getStatusText = (status: string) => {
   switch (status.toLowerCase().trim()) {
     case "pending":          return "लंबित (उपलब्ध)";
     case "assigned":         return "असाइन किया गया"; 
-    case "ready_for_pickup": return "पिकअप के लिए तैयार";
+    case "out_for_pickup": return "डिलीवरी बॉय पिकअप के लिए निकला";
     case "picked_up":        return "पिकअप हो गया";
     case "out_for_delivery": return "डिलीवरी के लिए निकला";
     case "delivered":        return "डिलीवर हो गया";
@@ -64,9 +64,9 @@ const getStatusText = (status: string) => {
 const getNextStatus = (status: string): string | null => {
   switch (status.toLowerCase().trim()) {
     case "assigned":
-      return "ready_for_pickup";
+      return "out_for_pickup";
 
-    case "ready_for_pickup":
+    case "out_for_pickup":
       return "picked_up";
 
     case "picked_up":
@@ -83,9 +83,9 @@ const getNextStatus = (status: string): string | null => {
 const getNextStatusLabel = (status: string) => {
   switch (status.toLowerCase().trim()) {
     case "assigned":
-      return "पिकअप के लिए तैयार करें";
+      return "पिकअप के लिए तैयार ";
 
-    case "ready_for_pickup":
+    case "out_for_pickup":
       return "पिकअप करें";
 
     case "picked_up":
