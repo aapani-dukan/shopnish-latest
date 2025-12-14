@@ -447,6 +447,7 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: Au
                                 customer:{
                                    columns: { id: true, firstName: true, phone: true } 
                                } 
+                              deliveryAddress: true 
                                }
                             }
                         }
