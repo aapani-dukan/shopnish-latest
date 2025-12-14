@@ -246,6 +246,8 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
       return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be valid numbers." });
     }
 
+     const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
+    
     // Server-side transaction
     await db.transaction(async (tx) => {
       try {
@@ -260,6 +262,22 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           pincode: finalPincode,
         } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
 
+           if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
+            // हम यहाँ users टेबल को tx के माध्यम से अपडेट कर रहे हैं
+            await tx.update(users)
+                .set({
+                    phone: userPhoneNumberForUpdate,
+                    updatedAt: new Date(),
+                })
+                  .where(
+                    // 1. उपयोगकर्ता आईडी से मिलान करें
+                    eq(users.id, userId), 
+                    // 2. OPTIONAL: केवल तभी अपडेट करें जब फ़ोन नंबर अभी खाली हो
+                    // or(isNull(users.phone), eq(users.phone, '')) 
+                    // सुरक्षा के लिए, हम सीधे अपडेट कर सकते हैं।
+                );
+            console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
+           }
         // --- Fetch product(s) and validate each item ---
         let calculatedSubtotal = 0;
         const validatedItems: Array<{
@@ -488,7 +506,8 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
     }
 
     let transactionResult: { masterOrder: any, tempSubOrders: any[] };
-
+const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
+    
     // Server-side transaction
     const result = await db.transaction(async (tx) => {
         // Handle delivery address
@@ -501,7 +520,22 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
             state: finalState,
             pincode: finalPincode,
         } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
-
+  if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
+            // हम यहाँ users टेबल को tx के माध्यम से अपडेट कर रहे हैं
+            await tx.update(users)
+                .set({
+                    phone: userPhoneNumberForUpdate,
+                    updatedAt: new Date(),
+                })
+                .where(
+                    // 1. उपयोगकर्ता आईडी से मिलान करें
+                    eq(users.id, userId), 
+                    // 2. OPTIONAL: केवल तभी अपडेट करें जब फ़ोन नंबर अभी खाली हो
+                    // or(isNull(users.phone), eq(users.phone, '')) 
+                    // सुरक्षा के लिए, हम सीधे अपडेट कर सकते हैं।
+                );
+            console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
+  }
         // --- Fetch and Validate Cart Items ---
         const userCartItems = await tx.query.cartItems.findMany({
           where: eq(cartItems.userId, userId),
