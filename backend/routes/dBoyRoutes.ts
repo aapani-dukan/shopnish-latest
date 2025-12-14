@@ -205,7 +205,11 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: Authenticat
                     }
                 },
                 masterOrder: {
+                      with: {
+                        deliveryAddress: true, 
+                        customer: true, 
                     columns: { orderNumber: true }
+                }
                 }
             },
             orderBy: desc(deliveryBatches.createdAt),
@@ -356,11 +360,13 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
         subOrders: {
           with: {
             masterOrder: {
+                   
               with: {
+                deliveryAddress: true,
                 customer: {
                   columns: { id: true, firstName: true, lastName: true, phone: true }
                 },
-                deliveryAddress: true,
+              //  deliveryAddress: true,
               }
             },
             seller: {
@@ -380,7 +386,7 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     });
 
     // ... (Formatting logic remains the same) ...
-    const formattedBatches = assignedBatches.map(batch => {
+   /* const formattedBatches = assignedBatches.map(batch => {
       const parsedSubOrders = batch.subOrders.map(subOrder => {
         let parsedDeliveryAddress = {};
         try {
@@ -404,10 +410,10 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
         ...batch,
         subOrders: parsedSubOrders,
       };
-    });
+    });  */
 
 
-    return res.status(200).json({ batches: formattedBatches });
+    return res.status(200).json({ batches: asignedBatches });
   } catch (error: any) {
     console.error('❌ Error in GET /api/delivery-boys/batches:', error);
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
