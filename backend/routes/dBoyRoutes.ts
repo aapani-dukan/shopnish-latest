@@ -444,14 +444,15 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: Au
                     with: {
                         masterOrder: {
                             with: {
-                                customer:
-                                {columns: { id: true, firstName: true, phone: true } 
-        } }
+                                customer:{
+                                   columns: { id: true, firstName: true, phone: true } 
+                               } 
+                               }
                             }
                         }
                     }
                 }
-            }
+            
         });
 
         if (!batch) {
