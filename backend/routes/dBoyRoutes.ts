@@ -208,7 +208,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: Authenticat
                       with: {
                         deliveryAddress: true, 
                         customer: true, 
-                    columns: { orderNumber: true }
+                 //   columns: { orderNumber: true }
                 }
                 }
             },
