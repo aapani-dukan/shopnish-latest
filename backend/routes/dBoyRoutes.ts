@@ -459,7 +459,11 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: Au
             return res.status(404).json({ message: "Batch not found or not assigned to you." });
         }
 
-        const customerPhone = batch.subOrders[0]?.masterOrder?.customer?.phone;
+      const customerPhoneFromUserTable = batch.subOrders[0]?.masterOrder?.customer?.phone;
+        
+      const customerPhoneFromAddress = batch.subOrders[0]?.masterOrder?.deliveryAddress?.phoneNumber;
+      const customerPhone = customerPhoneFromUserTable || customerPhoneFromAddress;
+        
         const customerName = batch.subOrders[0]?.masterOrder?.customer?.firstName || 'Customer';
 
         if (!customerPhone) {
