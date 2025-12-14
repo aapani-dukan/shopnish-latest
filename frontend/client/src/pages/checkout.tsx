@@ -221,7 +221,7 @@ useEffect(() => {
     // --- 2. पेलोड को सर्वर के अपेक्षित स्ट्रक्चर के अनुसार तैयार करें ---
     const orderData = {
       customerId: user.id,
-
+     userPhoneNumberForUpdate: deliveryAddress.phone,
       // 🛑 FIX: सर्वर की अपेक्षा के अनुसार 'newDeliveryAddress' का उपयोग करें
       newDeliveryAddress: { 
         fullName: deliveryAddress.fullName,
