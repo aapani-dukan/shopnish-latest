@@ -444,7 +444,9 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: Au
                     with: {
                         masterOrder: {
                             with: {
-                                customer: true // ग्राहक का फ़ोन नंबर प्राप्त करने के लिए
+                                customer:
+                                {columns: { id: true, firstName: true, phone: true } 
+        } }
                             }
                         }
                     }
