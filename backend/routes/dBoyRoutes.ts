@@ -477,7 +477,10 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: Au
 
         // 3. OTP को डेटाबेस में सेव करें
         await db.update(deliveryBatches)
-            .set({ deliveryOtp: otp, deliveryOtpSentAt: new Date() })
+            .set({ deliveryOtp: otp, deliveryOtpSentAt: new Date(),
+                 status: 'out_for_delivery', // 🟢 FIX: स्टेटस अपडेट किया गया
+        updatedAt: new Date(),
+                 })
             .where(eq(deliveryBatches.id, batchId));
 
         // 4. WhatsApp संदेश भेजें
