@@ -176,21 +176,29 @@ const normalizeBatchData = (rawBatch: RawBatch, myDeliveryBoyId: number | null):
     // Master Order Number (if available from subOrders.masterOrder)
     const masterOrderNum = rawBatch.subOrders[0]?.masterOrder?.orderNumber ?? rawBatch.masterOrderId;
    // Try to build the address if rawBatch.customerDeliveryAddress is empty {}
-    let finalAddress = rawBatch.customerDeliveryAddress;
-    
-    // यदि एड्रेस खाली है, तो हम masterOrder से विवरण खींचते हैं
-    if (rawBatch.subOrders.length > 0 && (!finalAddress || Object.keys(finalAddress).length === 0)) {
-        const masterOrderDetails = rawBatch.subOrders[0].masterOrder;
+    const masterOrderDetails = rawBatch.subOrders[0]?.masterOrder;
+const customerAddressFromOrder = masterOrderDetails?.deliveryAddress; // यह पूरा पता ऑब्जेक्ट है!
+
+// 1. प्राथमिक पता: Drizzle द्वारा लोड किया गया पूरा पता ऑब्जेक्ट
+let finalAddress = customerAddressFromOrder;
+
+// 2. यदि पूरा पता ऑब्जेक्ट (Drizzle से) उपलब्ध नहीं है, तभी fallback पर जाएं
+//    (यह शायद ही कभी होगा, क्योंकि हमने API ठीक कर दिया है)
+if (!finalAddress || Object.keys(finalAddress).length === 0) {
+    // Fallback: masterOrder के कॉलम (city, pincode) और ग्राहक का डेटा उपयोग करें
+    finalAddress = {
+        // चूंकि masterOrder.deliveryAddress में अब fullName/phone नहीं है,
+        // इसे masterOrder.customer से लेना होगा:
+        fullName: masterOrderDetails?.customer?.firstName + ' ' + masterOrderDetails?.customer?.lastName,
+        phone: masterOrderDetails?.customer?.phone || '',
         
-        finalAddress = {
-            fullName: masterOrderDetails?.customer?.firstName + ' ' + masterOrderDetails?.customer?.lastName,
-            phone: masterOrderDetails?.customer?.phone || '',
-            city: masterOrderDetails?.deliveryCity,
-            pincode: masterOrderDetails?.deliveryPincode,
-            // ध्यान दें: addressLine1/address यहाँ उपलब्ध नहीं है, लेकिन city/pincode तो है
-            // यदि backend से पूरा पता लाना है, तो आपको /users/me से customerAddresses को भी देखना होगा
-        };
-    } 
+        // और masterOrder के direct columns से भी ले सकते हैं (यदि deliveryAddress ऑब्जेक्ट खाली हो)
+        city: masterOrderDetails?.deliveryCity, 
+        pincode: masterOrderDetails?.deliveryPincode,
+        
+        // यदि पता खाली आता है, तो हम यहाँ deliveryAddressObj के बजाय masterOrder के columns का उपयोग कर रहे हैं।
+    };
+} 
     return {
         id: rawBatch.id,
         masterOrderId: String(masterOrderNum),
