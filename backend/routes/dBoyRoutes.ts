@@ -189,7 +189,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: Authenticat
                 eq(deliveryBatches.status, 'pending') 
             ),
             with: {
-                customerDeliveryAddress: true, // ग्राहक का पता
+                //customerDeliveryAddress: true,
                 subOrders: {
                     with: {
                         seller: {
@@ -413,7 +413,7 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     });  */
 
 
-    return res.status(200).json({ batches: asignedBatches });
+    return res.status(200).json({ batches: assignedBatches });
   } catch (error: any) {
     console.error('❌ Error in GET /api/delivery-boys/batches:', error);
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
