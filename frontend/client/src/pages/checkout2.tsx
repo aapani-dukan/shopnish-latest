@@ -227,7 +227,7 @@ const singleItem = {
 const sellerId = productData?.sellerId;
 const orderData = {
   customerId: user.id,
-
+userPhoneNumberForUpdate: deliveryAddress.phone, 
   newDeliveryAddress: {
     fullName: deliveryAddress.fullName,
     phoneNumber: deliveryAddress.phone,
