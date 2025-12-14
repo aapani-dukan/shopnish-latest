@@ -413,6 +413,81 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
 });
+// deliveryBoyRoutes.ts के अंत में जोड़ें
+/**
+ * ✅ Send OTP to Customer (Dedicated Route for Delivery Boy Dashboard)
+ * POST /api/delivery/batches/:batchId/send-otp
+ */
+router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+    try {
+        const deliveryBoyId = req.user?.deliveryBoyId;
+        const batchId = parseInt(req.params.batchId);
+
+        if (!batchId || !deliveryBoyId) {
+            return res.status(400).json({ message: "Batch ID and Delivery Boy ID required." });
+        }
+
+        // 1. बैच को ढूंढें और सुनिश्चित करें कि यह डिलीवरी बॉय को असाइन किया गया है
+        const batch = await db.query.deliveryBatches.findFirst({
+            where: and(
+                eq(deliveryBatches.id, batchId),
+                eq(deliveryBatches.deliveryBoyId, deliveryBoyId)
+            ),
+            with: { 
+                subOrders: {
+                    with: {
+                        masterOrder: {
+                            with: {
+                                customer: true // ग्राहक का फ़ोन नंबर प्राप्त करने के लिए
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!batch) {
+            return res.status(404).json({ message: "Batch not found or not assigned to you." });
+        }
+
+        const customerPhone = batch.subOrders[0]?.masterOrder?.customer?.phone;
+        const customerName = batch.subOrders[0]?.masterOrder?.customer?.firstName || 'Customer';
+
+        if (!customerPhone) {
+            return res.status(400).json({ message: "No valid customer phone number available." });
+        }
+        
+        // 2. OTP जनरेट करें
+        const otp = generateOTP(4); // 4-अंकों का OTP पर्याप्त हो सकता है
+        const otpMessage = `आपका ऑर्डर डिलीवरी OTP है: ${otp}. कृपया इसे डिलीवरी बॉय को प्रदान करें।`;
+
+        // 3. OTP को डेटाबेस में सेव करें
+        await db.update(deliveryBatches)
+            .set({ deliveryOtp: otp, deliveryOtpSentAt: new Date() })
+            .where(eq(deliveryBatches.id, batchId));
+
+        // 4. WhatsApp संदेश भेजें
+        const whatsappResult = await sendWhatsAppMessage(customerPhone, otpMessage, { batchId, customerName });
+        
+        if (!whatsappResult) {
+            console.error("Failed to send OTP via WhatsApp for batch:", batchId);
+            return res.status(500).json({ message: "Failed to send OTP via WhatsApp." });
+        }
+
+        return res.status(200).json({
+            success: true,
+            message: "OTP sent successfully.",
+            otp, // टेस्टिंग के लिए शामिल, प्रोडक्शन में इसे हटा दें
+        });
+
+    } catch (error) {
+        console.error("Error sending OTP from dedicated dBoy route:", error);
+        return res.status(500).json({ message: "Server error." });
+    }
+});
+
+// 🛑 महत्वपूर्ण: PATCH /status लॉजिक से WhatsApp OTP भेजने का कोड हटा दें 
+// (क्योंकि यह अब ऊपर दिए गए dedicated route द्वारा नियंत्रित किया जाएगा)
 
 
 // ---
@@ -507,21 +582,21 @@ router.patch(
         }
       } 
       // 2. OTP जेनरेशन 'picked_up' पर
-      else if (newStatus === 'picked_up' && !existingBatch.deliveryOtp) {
-        const generatedOtp = generateOTP();
-        await db.update(deliveryBatches)
-          .set({ deliveryOtp: generatedOtp, deliveryOtpSentAt: new Date() })
-          .where(eq(deliveryBatches.id, batchId));
-        existingBatch.deliveryOtp = generatedOtp;
+    //  else if (newStatus === 'picked_up' && !existingBatch.deliveryOtp) {
+     //   const generatedOtp = generateOTP();
+    //    await db.update(deliveryBatches)
+     //     .set({ deliveryOtp: generatedOtp, deliveryOtpSentAt: new Date() })
+     //     .where(eq(deliveryBatches.id, batchId));
+    //    existingBatch.deliveryOtp = generatedOtp;
 
         // ग्राहक को WhatsApp के माध्यम से OTP भेजें
-        const customerPhone = existingBatch.subOrders[0]?.masterOrder?.customer?.phone;
-        if (customerPhone) {
-          const message = `Your OTP for order delivery is: ${generatedOtp}. Please provide this to the delivery person.`;
-          await sendWhatsappMessage(customerPhone, message); 
-          console.log(`[NOTIFICATION] Sent OTP to customer ${customerPhone}: ${message}`);
-        }
-      } 
+     //   const customerPhone = existingBatch.subOrders[0]?.masterOrder?.customer?.phone;
+     //   if (customerPhone) {
+     //     const message = `Your OTP for order delivery is: ${generatedOtp}. Please provide this to the delivery person.`;
+      //    await sendWhatsappMessage(customerPhone, message); 
+     //     console.log(`[NOTIFICATION] Sent OTP to customer ${customerPhone}: ${message}`);
+     //   }
+   //   } 
       // 3. कैंसलेशन
       else if (newStatus === 'cancelled') {
         console.log(`[INFO] Delivery batch ${batchId} cancelled by delivery boy ${deliveryBoyId}`);
