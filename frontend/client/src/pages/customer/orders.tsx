@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Skeleton } from "../../components/ui/skeleton";
-import { Package, Truck } from "lucide-react"; // Truck icon added for visual
+import { Package, Truck, Search } from "lucide-react"; // Search icon added for batch details
 import { useSocket } from "../../hooks/useSocket";
 
 // -------------------------------------------------------------------------
@@ -90,8 +90,6 @@ const getStatusText = (status: string) => {
   }
 };
 
-// ... (fetch function is good)
-
 export default function CustomerOrdersPage() {
   const queryClient = useQueryClient();
   const { socket } = useSocket();
@@ -103,19 +101,70 @@ export default function CustomerOrdersPage() {
       return response as CustomerOrder[];
     },
   });
+  
+  // -------------------------------------------------------------------------
+  // Socket Logic (जैसा आपने प्रदान किया था, उसे यहाँ रहने दें)
+  // -------------------------------------------------------------------------
+  
+  // (Socket useEffect logic goes here, assuming it's correctly handling updates)
+  useEffect(() => {
+    if (!socket) return;
+    
+    // Example: Master order status update listener
+    const handleOrderUpdate = (data: { orderId: number; status: string; overallDeliveryStatus?: string }) => {
+      queryClient.setQueryData(["customerOrders"], (oldOrders: CustomerOrder[] | undefined) => {
+        if (!oldOrders) return [];
+        return oldOrders.map(order => 
+          order.id === data.orderId 
+            ? { 
+                ...order, 
+                status: data.status, 
+                overallDeliveryStatus: data.overallDeliveryStatus || order.overallDeliveryStatus
+              } 
+            : order
+        );
+      });
+    };
 
-  // ... (useEffect for socket is good)
+    socket.on("order:status_update", handleOrderUpdate);
+
+    // You might also need a listener for deliveryBatches updates
+    // socket.on("batch:status_update", handleBatchUpdate); 
+
+    return () => {
+      socket.off("order:status_update", handleOrderUpdate);
+    };
+  }, [socket, queryClient]);
+
 
   if (isLoading) {
-    // ... (Loading state)
+    return (
+      <div className="container mx-auto p-4 space-y-4">
+        <Skeleton className="h-8 w-64 mb-6" />
+        {Array(3).fill(0).map((_, i) => (
+          <Card key={i} className="p-4">
+            <Skeleton className="h-20 w-full" />
+          </Card>
+        ))}
+      </div>
+    );
   }
 
   if (isError) {
-    // ... (Error state)
+    return (
+      <div className="container mx-auto p-4 text-red-600 text-center">
+        Error loading orders: {(error as Error).message}
+      </div>
+    );
   }
 
   if (!orders || orders.length === 0) {
-    // ... (No orders state)
+    return (
+      <div className="container mx-auto p-4 text-center text-gray-600">
+        <Package className="h-12 w-12 mx-auto mb-4 text-gray-400" />
+        <p>आपके पास अभी कोई ऑर्डर नहीं है।</p>
+      </div>
+    );
   }
   
   // -------------------------------------------------------------------------
@@ -133,7 +182,7 @@ export default function CustomerOrdersPage() {
           
           // चेक करें कि कम से कम एक बैच ट्रैकिंग के लिए योग्य है
           const isTrackable = order.deliveryBatches?.some(b => 
-              b.status === 'picked_up' || b.status === 'out_for_delivery'
+              b.status === 'picked_up' || b.status === 'out_for_delivery' || b.status === 'in transit'
           );
 
           return (
@@ -171,21 +220,33 @@ export default function CustomerOrdersPage() {
                 {/* 🟢 FIX 3: बैच-वाइज समरी डिस्प्ले */}
                 {order.deliveryBatches && order.deliveryBatches.length > 0 && (
                   <div className="mt-6 border-t pt-4 space-y-3">
-                    <h3 className="text-lg font-semibold flex items-center">
-                        <Truck className="h-5 w-5 mr-2 text-blue-600" /> डिलीवरी बैचेस
+                    <h3 className="text-lg font-semibold flex items-center mb-2">
+                        <Truck className="h-5 w-5 mr-2 text-blue-600" /> डिलीवरी बैचेस ({order.deliveryBatches.length})
                     </h3>
                     
                     {order.deliveryBatches.map((batch: DeliveryBatch) => (
                       <Card key={batch.id} className="p-3 bg-blue-50/50 border-blue-200 shadow-sm">
-                        <CardTitle className="text-md font-semibold flex justify-between items-center">
-                            <span>Batch #{batch.id}</span>
-                            <Badge variant={getStatusBadgeVariant(batch.status)} className="text-xs">
-                              {getStatusText(batch.status)}
-                            </Badge>
-                        </CardTitle>
-                        <p className="text-sm text-gray-600 mt-1">
-                            डिलीवरी बॉय: {batch.deliveryBoy?.name || "जल्द ही असाइन किया जाएगा"}
-                        </p>
+                        <div className="flex justify-between items-start">
+                            {/* Batch Info */}
+                            <div>
+                                <CardTitle className="text-md font-semibold flex items-center">
+                                    <span>Batch #{batch.id}</span>
+                                    <Badge variant={getStatusBadgeVariant(batch.status)} className="text-xs ml-2">
+                                      {getStatusText(batch.status)}
+                                    </Badge>
+                                </CardTitle>
+                                <p className="text-sm text-gray-600 mt-1">
+                                    डिलीवरी बॉय: {batch.deliveryBoy?.name || "जल्द ही असाइन किया जाएगा"}
+                                </p>
+                            </div>
+                            
+                            {/* 🟢 FIX 3.1: Batch-wise Details Button */}
+                            <Button asChild variant="ghost" size="sm" className="h-8">
+                                <Link to={`/order-details/${order.id}?batchId=${batch.id}`} className="flex items-center text-xs text-blue-600 hover:text-blue-800">
+                                    <Search className="h-3 w-3 mr-1" /> बैच विवरण
+                                </Link>
+                            </Button>
+                        </div>
                       </Card>
                     ))}
                   </div>
@@ -193,15 +254,14 @@ export default function CustomerOrdersPage() {
                 
                 <div className="mt-4 flex space-x-3">
                   <Button asChild variant="outline">
-                    <Link to={`/order-details/${order.id}`}>
+                    <Link to={`/order-details/${order.id}`} className="text-sm">
                       विवरण देखें (सभी सब-ऑर्डर)
                     </Link>
                   </Button>
 
                   {/* 🟢 FIX 4: ट्रैकिंग बटन अब मास्टर ऑर्डर ID का उपयोग करेगा */}
                   {isTrackable && (
-                      <Button asChild variant="default" className="bg-purple-600 hover:bg-purple-700">
-                          {/* हम ट्रैकिंग पेज पर पूरा बैच समरी भेज रहे हैं, इसलिए केवल Master Order ID ही काफी है */}
+                      <Button asChild variant="default" className="bg-purple-600 hover:bg-purple-700 text-sm">
                           <Link to={`/track-order/${order.id}`}> 
                               Live Tracking
                           </Link>
