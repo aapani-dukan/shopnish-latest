@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
-import { useParams, useLocation } from "react-router-dom";
+import React, { useState, useEffect } from "react";
+import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card";
@@ -7,7 +7,7 @@ import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { useAuth } from "../hooks/useAuth";
 import { useSocket } from "../hooks/useSocket";
-import GoogleMapTracker from "../components/GoogleMapTracker";
+import GoogleMapTracker from "../components/GoogleMapTracker"; // Ensure this component is updated to handle multiple inputs
 import {
   Package,
   Truck,
@@ -19,7 +19,7 @@ import {
   Store,
 } from "lucide-react";
 
-// -------------------- Interfaces --------------------
+// -------------------- Interfaces (Multi-Batch Tracking) --------------------
 
 interface Location {
   lat: number;
@@ -27,156 +27,155 @@ interface Location {
   timestamp: string;
 }
 
-interface DeliveryAddress {
-  fullName: string;
+interface CustomerDeliveryAddress {
+  lat: number;
+  lng: number;
   address: string;
   city: string;
   pincode: string;
-  phone: string;
+  fullName: string;
+  phoneNumber: string;
 }
 
-export interface OrderTracking {
-  id: number;
-  orderId: number;
-  status: string;
-  location: string;
-  timestamp: string;
-  notes: string;
+interface StoreLocationSummary {
+  lat: number;
+  lng: number;
+  name: string;
 }
 
-interface DeliveryBoy {
-  id: number;
-  firstName: string;
-  lastName: string;
-  phone: string;
-}
-
-export interface StoreType {
-  id: number;
-  storeName: string;
-  address: string;
-  phone: string;
-  latitude?: number;
-  longitude?: number;
-}
-
-export interface Product {
+interface DeliveryBoySummary {
   id: number;
   name: string;
-  image?: string;
-  unit?: string;
-  storeId?: number;
-  store?: StoreType;
+  phone: string;
+  currentLocation?: { lat: number; lng: number }; // Optional in summary, required for live
 }
 
-export interface OrderItem {
-  id: number;
-  quantity: number;
-  product: Product;
+interface BatchSubOrderSummary {
+  subOrderId: number;
+  sellerName: string;
+  subOrderStatus: string;
+  isSelfDelivery: boolean;
 }
 
-export interface SubOrder {
-  id: number;
-  sellerId: number;
-  sellerName?: string;
-  sellerBusinessName?: string;
-  status: string;
-  deliveryStatus: string;
-  total: string | number;
-  items: OrderItem[];
-  deliveryBoyId?: number;
-  deliveryBoy?: DeliveryBoy;
-  store?: StoreType;
+export interface DeliveryBatchSummary {
+  batchId: number | string; // 0 या 'unassigned' हो सकता है
+  batchStatus: string;
+  deliveryBoy: DeliveryBoySummary | null;
+  subOrders: BatchSubOrderSummary[];
+  storeLocations: StoreLocationSummary[]; // इस बैच में शामिल सभी स्टोर
+  estimatedDeliveryTime?: string;
 }
 
-export interface MainOrder {
-  id: number;
-  orderNumber: string;
-  status: string;
+export interface TrackingResponse {
+  masterOrderId: number;
+  masterOrderNumber: string;
+  status: string; // Master order status (e.g., 'confirmed')
   paymentMethod: string;
   paymentStatus: string;
   total: string | number;
-  deliveryAddress: DeliveryAddress;
   estimatedDeliveryTime: string;
   createdAt: string;
-  subOrders?: SubOrder[];
+  customerDeliveryAddress: CustomerDeliveryAddress;
+  deliveryBatchesSummary: DeliveryBatchSummary[]; // 👈 FIX: यह मुख्य डेटा है
+  masterOrderTrackingHistory: any[]; // OrderTracking[]
 }
+
+// -------------------- Helpers --------------------
+
+const getStatusColor = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'placed':
+    case 'confirmed':
+    case 'accepted':
+      return 'bg-blue-500';
+    case 'preparing':
+      return 'bg-yellow-500';
+    case 'ready_for_pickup':
+      return 'bg-orange-500';
+    case 'picked_up':
+    case 'out_for_delivery':
+    case 'in transit':
+      return 'bg-purple-600';
+    case 'delivered':
+      return 'bg-green-500';
+    case 'cancelled':
+    case 'rejected':
+      return 'bg-red-500';
+    default:
+      return 'bg-gray-500';
+  }
+};
+
+const getStatusText = (status: string) => {
+  switch (status.toLowerCase()) {
+    case 'placed': return 'Order Placed';
+    case 'confirmed': return 'Order Confirmed';
+    case 'accepted': return 'Order Accepted';
+    case 'preparing': return 'Preparing Order';
+    case 'ready_for_pickup': return 'Ready for Pickup';
+    case 'picked_up': return 'Picked Up';
+    case 'out_for_delivery': return 'Out For Delivery';
+    case 'in transit': return 'Delivery In Progress';
+    case 'delivered': return 'Delivered';
+    case 'cancelled': return 'Cancelled';
+    case 'rejected': return 'Rejected';
+    default: return status;
+  }
+};
 
 // -------------------- Component --------------------
 
 export default function TrackOrder() {
   const { orderId } = useParams<{ orderId: string }>();
-  const location = useLocation();
+  
+  // ❌ sellerId-based logic हटा दिया गया है
   const numericOrderId = orderId ? Number(orderId) : null;
-
-  const queryParams = new URLSearchParams(location.search);
-  const sellerId = queryParams.get("sellerId") ? Number(queryParams.get("sellerId")) : null;
 
   const { socket } = useSocket();
   const { user } = useAuth();
 
-  const [deliveryBoyLocation, setDeliveryBoyLocation] = useState<Location | null>(null);
+  // 🟢 FIX 1: एकाधिक डिलीवरी बॉय के स्थानों को मैप करने के लिए state
+  // Key: batchId (number), Value: Location
+  const [liveLocations, setLiveLocations] = useState<Map<number, Location>>(new Map());
 
-  const { data: mainOrder, isLoading: isMainOrderLoading } = useQuery<MainOrder>({
-    queryKey: [`/api/orders/${numericOrderId}`],
+  // 🟢 FIX 2: नए Tracking API को Fetch करें
+  const { data: trackingResponse, isLoading: isTrackingLoading } = useQuery<TrackingResponse>({
+    queryKey: [`/api/orders/${numericOrderId}/tracking`], 
     queryFn: async () => {
-      const url = sellerId ? `/api/orders/${numericOrderId}?sellerId=${sellerId}` : `/api/orders/${numericOrderId}`;
-      const response = await apiRequest("get", url);
-      return response;
+      // Backend में /api/orders/:orderId/tracking ही अब बैच समरी लौटाता है
+      const response = await apiRequest("get", `/api/orders/${numericOrderId}/tracking`);
+      return response as TrackingResponse;
     },
     enabled: !!numericOrderId,
   });
 
-  const order = useMemo(() => {
-    if (!mainOrder) return null;
-    if (sellerId && mainOrder.subOrders) {
-      return mainOrder.subOrders.find((so) => so.sellerId === sellerId) || null;
-    }
-    // If no sellerId or no subOrders, treat mainOrder as the primary order
-    return mainOrder;
-  }, [mainOrder, sellerId]);
-
-  const { data: trackingData, isLoading: isTrackingLoading } = useQuery<OrderTracking[]>({
-    queryKey: [`/api/orders/${numericOrderId}/tracking`, { sellerId }],
-    queryFn: async () => {
-      const url = sellerId ? `/api/orders/${numericOrderId}/tracking?sellerId=${sellerId}` : `/api/orders/${numericOrderId}/tracking`;
-      const response = await apiRequest("get", url);
-      return response;
-    },
-    enabled: !!numericOrderId,
-  });
-
-  const tracking: OrderTracking[] = Array.isArray(trackingData) ? trackingData : [];
-
-  const effectiveDeliveryBoy = order?.deliveryBoy;
-  const effectiveStore = order?.store;
-  const effectiveOrderId = order?.id || numericOrderId;
-
+  // 🟢 FIX 3: Live Location Update Logic
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
-    if (!socket || !effectiveOrderId || isMainOrderLoading || !userIdToUse) return;
+    if (!socket || !numericOrderId || isTrackingLoading || !userIdToUse) return;
 
-    const handleLocationUpdate = (data: Location & { orderId: number }) => {
-      if (data.orderId === effectiveOrderId) {
-        setDeliveryBoyLocation({
-          lat: data.lat,
-          lng: data.lng,
-          timestamp: data.timestamp,
+    // डेटा में batchId शामिल होना चाहिए
+    const handleLocationUpdate = (data: Location & { batchId: number; orderId: number }) => {
+      if (data.orderId === numericOrderId) {
+        setLiveLocations(prev => {
+          const newMap = new Map(prev);
+          newMap.set(data.batchId, { lat: data.lat, lng: data.lng, timestamp: data.timestamp });
+          return newMap;
         });
-        console.log("🛵 New location received:", data.lat, data.lng);
+        // Console log removed for cleaner output
       }
     };
 
     socket.emit("register-client", { role: "user", userId: userIdToUse });
-    socket.emit("join-order-room", { orderId: effectiveOrderId });
+    socket.emit("join-order-room", { orderId: numericOrderId }); // Master order room
     socket.on("order:delivery_location", handleLocationUpdate);
 
     return () => {
       socket.off("order:delivery_location", handleLocationUpdate);
     };
-  }, [socket, effectiveOrderId, isMainOrderLoading, user]);
+  }, [socket, numericOrderId, isTrackingLoading, user]);
 
-  if (isMainOrderLoading || isTrackingLoading) {
+  if (isTrackingLoading || !trackingResponse) {
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -184,69 +183,35 @@ export default function TrackOrder() {
     );
   }
 
-  if (!order || !mainOrder) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-6 text-center">
-            <Package className="mx-auto h-12 w-12 text-gray-400 mb-4" />
-            <h3 className="text-lg font-medium mb-2">Order Not Found</h3>
-            <p className="text-gray-600">Unable to track this order or sub-order.</p>
-          </CardContent>
-        </Card>
-      </div>
-    );
-  }
+  const { 
+    deliveryBatchesSummary, 
+    customerDeliveryAddress, 
+    masterOrderTrackingHistory, 
+    masterOrderNumber, 
+    status: masterStatus,
+    ...masterOrderDetails 
+  } = trackingResponse;
 
-  const getStatusColor = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'placed':
-      case 'confirmed':
-        return 'bg-blue-500';
-      case 'preparing':
-        return 'bg-yellow-500';
-      case 'ready_for_pickup':
-      case 'picked_up':
-        return 'bg-orange-500';
-      case 'out_for_delivery':
-        return 'bg-purple-500';
-      case 'delivered':
-        return 'bg-green-500';
-      case 'cancelled':
-      case 'rejected':
-        return 'bg-red-500';
-      default:
-        return 'bg-gray-500';
-    }
-  };
+  // 🟢 FIX 4: MapComponent के लिए डेटा तैयार करें
+  const activeBatchesForMap = deliveryBatchesSummary.filter(b => 
+    (b.batchStatus === 'picked_up' || b.batchStatus === 'out_for_delivery' || b.batchStatus === 'in transit') && b.deliveryBoy
+  );
 
-  const getStatusText = (status: string) => {
-    switch (status.toLowerCase()) {
-      case 'placed': return 'Order Placed';
-      case 'confirmed': return 'Order Confirmed';
-      case 'preparing': return 'Preparing Order';
-      case 'ready_for_pickup': return 'Ready for Pickup';
-      case 'picked_up': return 'Picked Up';
-      case 'on_the_way': return 'On The Way'; // Changed from 'out_for_delivery' to 'on_the_way'
-      case 'delivered': return 'Delivered';
-      case 'cancelled': return 'Cancelled';
-      case 'rejected': return 'Rejected';
-      default: return status;
-    }
-  };
+  const mapDeliveryBoys = activeBatchesForMap.map(batch => ({
+    ...batch.deliveryBoy,
+    batchId: batch.batchId as number,
+    // लाइव लोकेशन को प्राथमिकता दें
+    currentLocation: liveLocations.get(batch.batchId as number) || batch.deliveryBoy?.currentLocation || { lat: 0, lng: 0 }, 
+  })).filter(db => db.currentLocation.lat !== 0 || db.currentLocation.lng !== 0); // Invalid locations filter
 
-  const estimatedTime = new Date(mainOrder.estimatedDeliveryTime).toLocaleTimeString('en-IN', {
-    hour: '2-digit',
-    minute: '2-digit'
+  // सभी बैचों से स्टोर स्थानों को इकट्ठा करें
+  const mapStores = Array.from(new Set(
+    deliveryBatchesSummary.flatMap(b => b.storeLocations.map(s => JSON.stringify(s)))
+  )).map(s => JSON.parse(s));
+
+  const estimatedTime = new Date(masterOrderDetails.estimatedDeliveryTime).toLocaleTimeString('en-IN', {
+    hour: '2-digit', minute: '2-digit'
   });
-
-  const orderTime = new Date(mainOrder.createdAt).toLocaleString('en-IN');
-
-  const store = effectiveStore;
-  const deliveryBoy = effectiveDeliveryBoy;
-
-  const currentOrderStatus = order.status;
-  const lastCompletedIndex = tracking.length > 0 ? tracking.findIndex(t => t.status.toLowerCase() === currentOrderStatus.toLowerCase()) : -1;
 
   return (
     <div className="min-h-screen bg-gray-50 py-8">
@@ -254,81 +219,61 @@ export default function TrackOrder() {
         {/* Header */}
         <div className="mb-8 text-center">
           <h1 className="text-3xl font-bold text-gray-900 mb-2">Track Your Order</h1>
-          <p className="text-lg text-gray-600">Order #{mainOrder.orderNumber}{sellerId ? ` (Seller: ${sellerId})` : ''}</p>
+          <p className="text-lg text-gray-600">Order #{masterOrderNumber}</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-          {/* Main Tracking */}
+          {/* Main Tracking & Map */}
           <div className="lg:col-span-2 space-y-6">
-            {(currentOrderStatus === 'picked_up' || currentOrderStatus === 'on_the_way') && deliveryBoy && (
+            
+            {/* Real-time Tracking Map */}
+            {activeBatchesForMap.length > 0 && (
               <Card>
                 <CardHeader>
                   <CardTitle className="flex items-center space-x-2">
                     <MapPin className="w-5 h-5 text-purple-600" />
-                    <span>Real-time Tracking</span>
+                    <span>Real-time Tracking ({activeBatchesForMap.length} Deliveries)</span>
                   </CardTitle>
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="w-full h-80">
-                    {deliveryBoyLocation && mainOrder.deliveryAddress ? (
-                      <GoogleMapTracker
-                        deliveryBoyLocation={deliveryBoyLocation}
-                        customerAddress={mainOrder.deliveryAddress}
-                        storeLocation={store ? {lat: store.latitude || 0, lng: store.longitude || 0} : undefined}
-                      />
-                    ) : (
-                      <div className="w-full h-full bg-gray-200 flex items-center justify-center text-gray-500">
-                        <p>Waiting for delivery partner's location...</p>
-                      </div>
-                    )}
+                    {/* GoogleMapTracker को एकाधिक DBs और Stores पास करें */}
+                    <GoogleMapTracker
+                      customerAddress={{ lat: customerDeliveryAddress.lat, lng: customerDeliveryAddress.lng }}
+                      deliveryBoys={mapDeliveryBoys} 
+                      stores={mapStores} 
+                    />
                   </div>
-
-                  {deliveryBoyLocation && (
-                    <div className="p-4 border-t">
-                      <p className="text-sm font-medium">Delivery Partner Location Updated:</p>
-                      <p className="text-xs text-gray-600">
-                        Lat: {deliveryBoyLocation.lat.toFixed(4)}, Lng: {deliveryBoyLocation.lng.toFixed(4)}
-                      </p>
-                      <p className="text-xs text-gray-600">
-                        Last Update: {new Date(deliveryBoyLocation.timestamp).toLocaleTimeString()}
-                      </p>
-                    </div>
-                  )}
+                  <div className="p-4 border-t">
+                    <p className="text-sm font-medium">Tracking {mapDeliveryBoys.length} active delivery partners.</p>
+                  </div>
                 </CardContent>
               </Card>
             )}
 
-            {/* Current Status */}
+            {/* Current Status (Master Status) */}
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center justify-between">
-                  <span>Current Status</span>
-                  <Badge className={`${getStatusColor(currentOrderStatus)} text-white`}>
-                    {getStatusText(currentOrderStatus)}
+                  <span>Overall Order Status</span>
+                  <Badge className={`${getStatusColor(masterStatus)} text-white`}>
+                    {getStatusText(masterStatus)}
                   </Badge>
                 </CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="flex items-center space-x-4">
-                  <div className={`w-12 h-12 rounded-full ${getStatusColor(currentOrderStatus)} flex items-center justify-center`}>
-                    {currentOrderStatus === 'delivered' ? (
-                      <CheckCircle className="w-6 h-6 text-white" />
-                    ) : currentOrderStatus === 'on_the_way' ? (
-                      <Truck className="w-6 h-6 text-white" />
-                    ) : (
-                      <Package className="w-6 h-6 text-white" />
-                    )}
+                  <div className={`w-12 h-12 rounded-full ${getStatusColor(masterStatus)} flex items-center justify-center`}>
+                    <Package className="w-6 h-6 text-white" />
                   </div>
                   <div>
-                    <p className="font-medium text-lg">{getStatusText(currentOrderStatus)}</p>
+                    <p className="font-medium text-lg">{getStatusText(masterStatus)}</p>
                     <p className="text-gray-600">
-                      {currentOrderStatus === 'delivered'
-                        ? 'Your order has been delivered successfully.'
-                        : currentOrderStatus === 'on_the_way'
-                        ? `Arriving by ${estimatedTime}.`
-                        : currentOrderStatus === 'preparing'
-                        ? 'Your order is being prepared.'
-                        : 'Order confirmed and being processed.'
+                      {masterStatus === 'delivered'
+                        ? 'Your entire order has been delivered successfully.'
+                        : activeBatchesForMap.length > 0
+                        ? `${activeBatchesForMap.length} deliveries are currently in transit.`
+                        : 'Order confirmed and being processed by sellers.'
                       }
                     </p>
                   </div>
@@ -336,27 +281,64 @@ export default function TrackOrder() {
               </CardContent>
             </Card>
 
-            {/* Progress Timeline */}
+            {/* Delivery Batch Progress (प्रत्येक बैच की स्थिति) */}
             <Card>
               <CardHeader>
-                <CardTitle>Order Timeline</CardTitle>
+                <CardTitle>Delivery Batch Progress</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-4">
+                  {deliveryBatchesSummary.map((batch) => (
+                    <div key={batch.batchId} className="border p-3 rounded-lg">
+                      <div className="flex justify-between items-center">
+                        <h4 className="font-semibold">Batch #{batch.batchId === 0 ? "Unassigned Items" : batch.batchId}</h4>
+                        <Badge className={`${getStatusColor(batch.batchStatus)} text-white`}>
+                          {getStatusText(batch.batchStatus)}
+                        </Badge>
+                      </div>
+                      
+                      {batch.deliveryBoy && (
+                          <div className="mt-2 text-sm flex items-center justify-between">
+                              <p><User className="w-4 h-4 mr-1 inline"/> DB: {batch.deliveryBoy.name}</p>
+                              <Button variant="outline" size="xs" onClick={() => window.location.href = `tel:${batch.deliveryBoy?.phone}`}>
+                                  <Phone className="w-3 h-3 mr-1" />
+                                  Call
+                              </Button>
+                          </div>
+                      )}
+
+                      <details className="mt-2 text-xs text-gray-600">
+                          <summary className="cursor-pointer text-blue-600">
+                              View {batch.subOrders.length} Sub-Orders ({batch.storeLocations.length} Stores)
+                          </summary>
+                          <ul className="list-disc ml-4 mt-1">
+                              {batch.subOrders.map(so => (
+                                  <li key={so.subOrderId}>{so.sellerName} - {getStatusText(so.subOrderStatus)}</li>
+                              ))}
+                          </ul>
+                      </details>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Master Order Timeline */}
+            <Card>
+              <CardHeader>
+                <CardTitle>Order Timeline (Master)</CardTitle>
               </CardHeader>
               <CardContent>
                 <div className="space-y-6">
-                  {tracking.map((step, index) => {
-                    const isCompleted = index <= lastCompletedIndex;
+                  {masterOrderTrackingHistory.map((step: any, index: number) => {
+                    // Simpler rendering as we don't have a direct lastCompletedIndex for master status
                     return (
-                      <div key={step.id} className="flex items-center space-x-4">
+                      <div key={index} className="flex items-center space-x-4">
                         <div className="relative">
-                          <div className={`w-4 h-4 rounded-full ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`}>
-                            {isCompleted && <CheckCircle className="w-4 h-4 text-white" />}
-                          </div>
-                          {index < tracking.length - 1 && (
-                            <div className={`absolute top-4 left-2 w-0.5 h-6 ${isCompleted ? 'bg-green-500' : 'bg-gray-300'}`} />
-                          )}
+                          <div className={`w-4 h-4 rounded-full bg-blue-500`} />
                         </div>
                         <div className="flex-1">
-                          <p className={`font-medium ${isCompleted ? 'text-gray-900' : 'text-gray-500'}`}>
+                          <p className={`font-medium text-gray-900`}>
                             {getStatusText(step.status)}
                           </p>
                           {step.timestamp && (
@@ -371,32 +353,9 @@ export default function TrackOrder() {
                 </div>
               </CardContent>
             </Card>
-
-            {/* Delivery Details */}
-            {deliveryBoy && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <User className="w-5 h-5" />
-                    <span>Delivery Partner</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="font-medium">{deliveryBoy.firstName} {deliveryBoy.lastName}</p>
-                      <p className="text-sm text-gray-600">Delivery Partner</p>
-                    </div>
-                    <Button variant="outline" size="sm">
-                      <Phone className="w-4 h-4 mr-2" />
-                      Call
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+            
           </div>
-
+          
           {/* Sidebar */}
           <div className="space-y-6">
             {/* Order Summary */}
@@ -408,12 +367,12 @@ export default function TrackOrder() {
                 <div className="space-y-3">
                   <div className="flex justify-between">
                     <span>Order Total</span>
-                    <span className="font-medium">₹{Number(mainOrder.total).toLocaleString('en-IN')}</span>
+                    <span className="font-medium">₹{Number(masterOrderDetails.total).toLocaleString('en-IN')}</span>
                   </div>
                   <div className="flex justify-between">
                     <span>Payment</span>
-                    <Badge variant={mainOrder.paymentStatus === 'paid' ? 'default' : 'secondary'}>
-                      {mainOrder.paymentMethod === 'cod' ? 'Cash On Delivery' : 'Paid Online'}
+                    <Badge variant={masterOrderDetails.paymentStatus === 'paid' ? 'default' : 'secondary'}>
+                      {masterOrderDetails.paymentMethod === 'cod' ? 'Cash On Delivery' : 'Paid Online'}
                     </Badge>
                   </div>
                   <hr />
@@ -427,31 +386,6 @@ export default function TrackOrder() {
               </CardContent>
             </Card>
 
-            {/* Store Info */}
-            {store && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="flex items-center space-x-2">
-                    <Store className="w-5 h-5" />
-                    <span>Store Details</span>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-2">
-                    <p className="font-medium">{store.storeName}</p>
-                    <p className="text-sm text-gray-600">{store.address}</p>
-                    <div className="flex items-center justify-between pt-2">
-                      <span className="text-sm text-gray-600">Contact Store</span>
-                      <Button variant="outline" size="sm">
-                        <Phone className="w-4 h-4 mr-2" />
-                        Call
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
             {/* Delivery Address */}
             <Card>
               <CardHeader>
@@ -462,14 +396,14 @@ export default function TrackOrder() {
               </CardHeader>
               <CardContent>
                 <div className="space-y-2">
-                  <p className="font-medium">{mainOrder.deliveryAddress.fullName}</p>
-                  <p className="text-sm text-gray-600">{mainOrder.deliveryAddress.address}</p>
+                  <p className="font-medium">{customerDeliveryAddress.fullName}</p>
+                  <p className="text-sm text-gray-600">{customerDeliveryAddress.address}</p>
                   <p className="text-sm text-gray-600">
-                    {mainOrder.deliveryAddress.city}, {mainOrder.deliveryAddress.pincode}
+                    {customerDeliveryAddress.city}, {customerDeliveryAddress.pincode}
                   </p>
                   <div className="flex items-center space-x-2 text-sm text-gray-600">
                     <Phone className="w-4 h-4" />
-                    <span>{mainOrder.deliveryAddress.phone}</span>
+                    <span>{customerDeliveryAddress.phoneNumber}</span>
                   </div>
                 </div>
               </CardContent>
@@ -498,4 +432,4 @@ export default function TrackOrder() {
       </div>
     </div>
   );
-}
+      }
