@@ -4,7 +4,7 @@ import {
   MarkerF,
   useJsApiLoader,
 } from '@react-google-maps/api';
-import { Truck, MapPin, Store } from 'lucide-react'; // Lucide icons are placeholders
+import { Truck, MapPin, Store } from 'lucide-react'; 
 
 // ----------------------------
 // Interfaces (Multi-Batch Tracking)
@@ -34,13 +34,13 @@ interface StoreTracker {
 
 interface GoogleMapTrackerProps {
   customerAddress: CustomerLocation; 
-  deliveryBoys: DeliveryBoyTracker[]; // 👈 FIX: एकाधिक डिलीवरी बॉय
-  stores: StoreTracker[]; // 👈 FIX: एकाधिक स्टोर
+  deliveryBoys: DeliveryBoyTracker[]; // 👈 एकाधिक डिलीवरी बॉय
+  stores: StoreTracker[]; // 👈 एकाधिक स्टोर
 }
 
 const containerStyle = { width: '100%', height: '100%' };
 const LIBRARIES: ('places' | 'geometry' | 'drawing' | 'localContext' | 'visualization' | 'marker')[] = [
-    'marker'
+    'marker' // 'marker' लाइब्रेरी को सही ढंग से टाइप किया गया
 ];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -60,15 +60,15 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     libraries: LIBRARIES,
   });
 
-  // 2. Marker Icons (useMemo) - कस्टम SVG या PNG URL का उपयोग करें
+  // 2. Marker Icons (useMemo)
   const { bikeIcon, homeIcon, storeIcon } = useMemo(() => {
     if (!isLoaded || !window.google?.maps) {
         return { bikeIcon: undefined, homeIcon: undefined, storeIcon: undefined }; 
     }
     
-    // 🏍️ डिलीवरी बॉय आइकॉन (बैच-वाइज मार्कर)
+    // 🏍️ डिलीवरी बॉय आइकॉन 
     const BIKE_ICON: google.maps.Icon = {
-      url: 'https://cdn-icons-png.freepik.com/512/3233/3233076.png', // या आपका कस्टम URL
+      url: 'https://cdn-icons-png.freepik.com/512/3233/3233076.png', 
       scaledSize: new window.google.maps.Size(35, 35),
       anchor: new window.google.maps.Point(18, 35), 
     };
@@ -91,8 +91,17 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
 
   // 3. Map Options and Center
   const center = useMemo(() => {
-    // मैप को ग्राहक के पते पर केंद्रित करें
-    return { lat: customerAddress.lat, lng: customerAddress.lng };
+    // 🛑 FIX 1: सुनिश्चित करें कि lat/lng नंबर हैं, नहीं तो डिफॉल्ट पर फॉलबैक करें
+    const defaultCenter = { lat: 20.5937, lng: 78.9629 }; // Example: Center of India (fallback)
+
+    if (
+        typeof customerAddress.lat === 'number' && isFinite(customerAddress.lat) &&
+        typeof customerAddress.lng === 'number' && isFinite(customerAddress.lng)
+    ) {
+        return { lat: customerAddress.lat, lng: customerAddress.lng };
+    }
+    return defaultCenter;
+
   }, [customerAddress]);
   
   const mapOptions = useMemo(() => ({
@@ -113,14 +122,16 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
-        zoom={14}
+        // आप mapOptions में zoom को परिभाषित कर रहे हैं, इसलिए इसे यहाँ हटा सकते हैं या इसे 14 पर लॉक कर सकते हैं
+        zoom={14} 
         options={mapOptions}
       >
         
         {/* 🏠 Customer Marker */}
-        {homeIcon && customerAddress.lat && customerAddress.lng && (
+        {/* 🛑 FIX 2: center object का उपयोग करें जो पहले ही चेक किया जा चुका है */}
+        {homeIcon && (
           <MarkerF
-            position={{ lat: customerAddress.lat, lng: customerAddress.lng }}
+            position={center} 
             icon={homeIcon}
             title="आपका डिलीवरी एड्रेस"
           />
@@ -128,30 +139,36 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
 
         {/* 🏪 Store Markers (Loop) */}
         {storeIcon && stores.map((store, index) => (
-            <MarkerF
-                key={`store-${index}`}
-                position={{ lat: store.lat, lng: store.lng }}
-                icon={storeIcon}
-                title={`Store: ${store.name}`}
-            />
+            // 🛑 FIX 3: सुनिश्चित करें कि store location भी valid है
+            (typeof store.lat === 'number' && typeof store.lng === 'number' && isFinite(store.lat) && isFinite(store.lng)) && (
+                <MarkerF
+                    key={`store-${index}`}
+                    position={{ lat: store.lat, lng: store.lng }}
+                    icon={storeIcon}
+                    title={`Store: ${store.name}`}
+                />
+            )
         ))}
 
         {/* 🏍️ Delivery Boy Markers (Loop) */}
         {bikeIcon && deliveryBoys.map((db) => (
-          <MarkerF 
-            key={db.id} 
-            position={db.currentLocation} 
-            icon={bikeIcon} 
-            title={`डिलीवरी पार्टनर: ${db.name} (Batch #${db.batchId})`} 
-            // Delivery Boy पर क्लिक करने पर एक Info Window दिखा सकते हैं (अतिरिक्त सुविधा)
-          />
+            // 🛑 FIX 4: सुनिश्चित करें कि DB location भी valid है
+            (typeof db.currentLocation.lat === 'number' && typeof db.currentLocation.lng === 'number' && isFinite(db.currentLocation.lat) && isFinite(db.currentLocation.lng)) && (
+                <MarkerF 
+                    key={db.id} 
+                    position={db.currentLocation} 
+                    icon={bikeIcon} 
+                    title={`डिलीवरी पार्टनर: ${db.name} (Batch #${db.batchId})`} 
+                />
+            )
         ))}
       </GoogleMap>
 
       {/* Summary Info */}
       <div className="absolute top-2 left-2 bg-white shadow-md rounded-lg p-2 text-sm font-medium text-gray-700">
-        <p><MapPin className="w-4 h-4 inline mr-1 text-blue-600"/> Locations: {mapStores.length} Stores, 1 Customer</p>
-        <p><Truck className="w-4 h-4 inline mr-1 text-purple-600"/> Live Deliveries: {deliveryBoys.length}</p>
+        {/* 🛑 FIX 5: mapStores के बजाय stores का उपयोग करें */}
+        <p><MapPin className="w-4 h-4 inline mr-1 text-blue-600"/> लोकेशन्स: {stores.length} स्टोर, 1 ग्राहक</p> 
+        <p><Truck className="w-4 h-4 inline mr-1 text-purple-600"/> लाइव डिलीवरी: {deliveryBoys.length}</p>
       </div>
     </div>
   );
