@@ -126,7 +126,7 @@ export default function CustomerOrdersPage() {
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">आपके ऑर्डर्स</h1>
       <div className="space-y-4">
-        {orders.map((order: CustomerOrder) => {
+        {(orders || []).map((order: CustomerOrder) => {
           
           // 🟢 समग्र स्टेटस का उपयोग करें
           const currentDisplayStatus = order.overallDeliveryStatus || order.status;
