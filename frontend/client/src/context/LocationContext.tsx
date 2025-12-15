@@ -24,7 +24,7 @@ export interface ProcessedLocation extends LatLng {
   deliveryCharges?: number | null;
   
   // Drizzle/Address Schema fields:
-  id?: number; // Drizzle ID
+  id?: number; 
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
@@ -43,7 +43,6 @@ interface LocationContextType {
   setLoadingLocation: React.Dispatch<React.SetStateAction<boolean>>;
   error: string | null;
   fetchCurrentGeolocation: () => Promise<void>;
-  // 🛑 FIX 1: Promise रिटर्न टाइप में बदलाव किया गया
   processLocation: (lat: number, lng: number) => Promise<ProcessedLocation | undefined>; 
   savedAddresses: ProcessedLocation[];
   loadSavedAddresses: () => Promise<void>;
@@ -70,7 +69,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     return localStorage.getItem("authToken");
   }, []);
 
-  // --- Fetch and process user location from backend ---
+  // --- 1. Backend Location Processing ---
   const processLocation = useCallback(
     async (lat: number, lng: number): Promise<ProcessedLocation | undefined> => {
       setLoadingLocation(true);
@@ -82,12 +81,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
           { latitude: lat, longitude: lng }
         );
 
-        // 🛑 FIX 2: lat/lng को इनपुट से असाइन करें, Backend रिस्पांस से नहीं
         const locationData: ProcessedLocation = {
           ...response.data,
-          lat: lat, 
+          lat: lat, // इनपुट से lat/lng असाइन करें
           lng: lng,
-          // सुनिश्चित करें कि Backend रिस्पांस में address/pincode हो
           address: response.data.address || "पता उपलब्ध नहीं", 
           pincode: response.data.pincode || "000000",
         };
@@ -105,7 +102,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       } catch (err) {
         console.error("Error processing location:", err);
         setError("लोकेशन प्रोसेस करने में असमर्थ। कृपया बाद में प्रयास करें।");
-        return undefined; // त्रुटि पर undefined लौटाएं
+        return undefined;
       } finally {
         setLoadingLocation(false);
       }
@@ -113,7 +110,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     [API_BASE_URL]
   );
 
-  // --- Fetch location from browser ---
+  // --- 2. Geolocation Fetching (Browser) ---
   const fetchCurrentGeolocation = useCallback(async () => {
     setLoadingLocation(true);
     setError(null);
@@ -122,15 +119,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       navigator.geolocation.getCurrentPosition(
         async (position) => {
           const { latitude, longitude } = position.coords;
-
           try {
-            // processLocation को कॉल करें
             await processLocation(latitude, longitude);
-
           } catch {
             setError("लोकेशन प्रोसेस करने में असमर्थ।");
-          } finally {
-            // setLoadingLocation अब processLocation के finally ब्लॉक में सेट होता है
           }
         },
         (geoError) => {
@@ -146,40 +138,10 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     }
   }, [processLocation]);
 
-  // --- Load saved addresses ---
-  const loadSavedAddresses = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) {
-      setSavedAddresses([]);
-      // setError("पते लोड करने के लिए कृपया लॉग इन करें।"); // वैकल्पिक
-      return;
-    }
 
-    try {
-      const response = await axios.get<ProcessedLocation[]>(
-        `${API_BASE_URL}/api/addresses/user`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setSavedAddresses(response.data);
-      
-      // ✅ FIX 3: यदि current location सेट नहीं है, तो default address को सेट करें
-      if (currentLocation === null || currentLocation.lat === 0) {
-        const defaultAddress = response.data.find(addr => addr.isDefault);
-        if (defaultAddress) {
-            setSelectedAddress(defaultAddress); 
-        }
-      }
-
-    } catch (err) {
-      console.error("Error loading saved addresses:", err);
-      setError("सहेजे गए पते लोड करने में असमर्थ।");
-    }
-  }, [API_BASE_URL, getAuthToken, currentLocation, setSelectedAddress]);
-
-
-  // --- Select a saved address ---
+  // --- 3. Select Saved Address (Must be defined BEFORE loadSavedAddresses) ---
   const setSelectedAddress = useCallback((address: ProcessedLocation) => {
-    // 🛑 FIX 4: सुनिश्चित करें कि lat/lng नंबर हैं
+    // Lat/Lng संख्याएँ होनी चाहिए
     if (typeof address.lat !== 'number' || typeof address.lng !== 'number') return;
     
     // addressLine1 और city का उपयोग करके बेहतर पता स्ट्रिंग बनाएं
@@ -202,9 +164,40 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     localStorage.setItem("userPincode", updatedAddress.pincode);
     localStorage.setItem("userServiceArea", String(true)); 
 
-  }, []);
+  }, []); // ⚠️ यह अब loadSavedAddresses से पहले परिभाषित है
 
-  // --- Load cached or current location ---
+
+  // --- 4. Load Saved Addresses ---
+  const loadSavedAddresses = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setSavedAddresses([]);
+      return;
+    }
+
+    try {
+      const response = await axios.get<ProcessedLocation[]>(
+        `${API_BASE_URL}/api/addresses/user`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSavedAddresses(response.data);
+      
+      // यदि current location सेट नहीं है (या केवल डिफॉल्ट 0,0 है), तो default address को सेट करें
+      if (currentLocation === null || (currentLocation.lat === 0 && currentLocation.lng === 0)) {
+        const defaultAddress = response.data.find(addr => addr.isDefault);
+        if (defaultAddress) {
+            setSelectedAddress(defaultAddress); 
+        }
+      }
+
+    } catch (err) {
+      console.error("Error loading saved addresses:", err);
+      setError("सहेजे गए पते लोड करने में असमर्थ।");
+    }
+  }, [API_BASE_URL, getAuthToken, currentLocation, setSelectedAddress]); // 👈 यह अब सुरक्षित है
+
+
+  // --- 5. Initial Load (from Cache or Geolocation) ---
   useEffect(() => {
     const loadInitialLocation = async () => {
       setLoadingLocation(true);
@@ -223,7 +216,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
           lat: parseFloat(storedLat),
           lng: parseFloat(storedLng),
           inServiceArea: storedServiceArea === "true",
-          // अन्य आवश्यक फ़ील्ड्स को यहाँ न जोड़ें, वे तब तक undefined रहेंगे
         });
         setLoadingLocation(false);
       } else {
@@ -233,8 +225,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     };
 
     loadInitialLocation();
-    // लोड होने के बाद, सहेजे गए पते भी लोड करें (ताकि वे Modal में दिखाई दें)
-    // loadSavedAddresses(); // इसे useEffect के बाहर कॉल करने पर अनंत लूप हो सकता है, इसलिए इसे केवल Modal में ही कॉल करें
 
   }, [fetchCurrentGeolocation]);
 
@@ -250,7 +240,6 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       savedAddresses,
       loadSavedAddresses,
       setSelectedAddress,
-      // 🛑 FIX 5: अनावश्यक fields हटा दिए गए
     }),
     [
       currentLocation,
