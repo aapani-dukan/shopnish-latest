@@ -94,7 +94,7 @@ const getStatusText = (status: string) => {
 
 export default function CustomerOrdersPage() {
   const queryClient = useQueryClient();
-  const { socket } = useUseSocket();
+  const { socket } = useSocket();
 
   const { data: orders, isLoading, isError, error } = useQuery<CustomerOrder[]>({
     queryKey: ["customerOrders"],
