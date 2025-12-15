@@ -1027,7 +1027,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
         if (!batchesMap.has(batchKey)) {
             batchesMap.set(batchKey, {
                 batchId: batchId,
-                batchStatus: subOrder.deliveryBatch?.status || 'Ready for Pickup', // Unassigned sub-orders will show seller status
+                batchStatus: subOrder.deliveryBatch?.status || subOrder.status,  // Unassigned sub-orders will show seller status
                 deliveryBoy: subOrder.deliveryBatch?.deliveryBoy ? {
                     id: subOrder.deliveryBatch.deliveryBoy.id,
                     name: subOrder.deliveryBatch.deliveryBoy.name,
