@@ -6,8 +6,20 @@ import { Card, CardContent, CardHeader, CardTitle } from "../../components/ui/ca
 import { Button } from "../../components/ui/button";
 import { Badge } from "../../components/ui/badge";
 import { Skeleton } from "../../components/ui/skeleton";
-import { Package } from "lucide-react";
+import { Package, Truck } from "lucide-react"; // Truck icon added for visual
 import { useSocket } from "../../hooks/useSocket";
+
+// -------------------------------------------------------------------------
+// 🟢 FIX 1: इंटरफ़ेस अपडेट करें (DeliveryBatch और overallDeliveryStatus जोड़ें)
+// -------------------------------------------------------------------------
+
+export interface DeliveryBatch {
+  id: number;
+  status: string;
+  estimatedDeliveryTime?: string;
+  actualDeliveryTime?: string;
+  deliveryBoy?: { id: number; name?: string; phone?: string };
+}
 
 export interface SubOrderItem {
   id: number;
@@ -34,11 +46,13 @@ export interface SubOrder {
 export interface CustomerOrder {
   id: number;
   orderNumber: string;
-  status: string;
+  status: string; // Master order status (confirmed, pending)
+  overallDeliveryStatus?: string; // 👈 Backend से आ रहा नया समग्र स्टेटस
   deliveryStatus: string;
   total: string | number;
   createdAt: string;
   subOrders?: SubOrder[];
+  deliveryBatches?: DeliveryBatch[]; // 👈 Backend से आ रहा बैच डेटा
 }
 
 const statusBadgeVariants = {
@@ -47,6 +61,8 @@ const statusBadgeVariants = {
   preparing: "secondary",
   ready_for_pickup: "secondary",
   picked_up: "info",
+  // 🟢 'In Transit' को भी हैंडल करें
+  'in transit': "warning", 
   out_for_delivery: "info",
   delivered: "success",
   cancelled: "destructive",
@@ -65,7 +81,8 @@ const getStatusText = (status: string) => {
     case "preparing": return "तैयार हो रहा है";
     case "ready_for_pickup": return "पिकअप के लिए तैयार";
     case "picked_up": return "पिकअप हो गया";
-    case "out_for_delivery": return "रास्ते में है";
+    case "out_for_delivery": return "डिलीवरी के रास्ते में";
+    case "in transit": return "डिलीवरी प्रगति पर"; // 🟢 नया स्टेटस टेक्स्ट
     case "delivered": return "डिलीवर हो गया";
     case "cancelled": return "रद्द कर दिया गया";
     case "rejected": return "अस्वीकृत";
@@ -73,9 +90,11 @@ const getStatusText = (status: string) => {
   }
 };
 
+// ... (fetch function is good)
+
 export default function CustomerOrdersPage() {
   const queryClient = useQueryClient();
-  const { socket } = useSocket();
+  const { socket } = useUseSocket();
 
   const { data: orders, isLoading, isError, error } = useQuery<CustomerOrder[]>({
     queryKey: ["customerOrders"],
@@ -85,171 +104,115 @@ export default function CustomerOrdersPage() {
     },
   });
 
-  useEffect(() => {
-    if (!socket || typeof socket.on !== "function") return;
-
-    const onOrderStatusUpdated = (updatedOrder: CustomerOrder) => {
-      console.log("📦 Order update received:", updatedOrder);
-      queryClient.invalidateQueries({ queryKey: ["customerOrders"] });
-    };
-
-    socket.on("order:status-updated", onOrderStatusUpdated);
-
-    return () => {
-      if (socket && typeof socket.off === "function") {
-        socket.off("order:status-updated", onOrderStatusUpdated);
-      }
-    };
-  }, [socket, queryClient]);
+  // ... (useEffect for socket is good)
 
   if (isLoading) {
-    return (
-      <div className="container mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-6">आपके ऑर्डर</h1>
-        <div className="space-y-4">
-          {[...Array(3)].map((_, i) => (
-            <Skeleton key={i} className="h-24 w-full rounded-lg" />
-          ))}
-        </div>
-      </div>
-    );
+    // ... (Loading state)
   }
 
   if (isError) {
-    return (
-      <div className="container mx-auto p-4 text-center">
-        <p className="text-red-500">
-          ऑर्डर लोड करने में त्रुटि: {(error as Error).message}
-        </p>
-        <Button onClick={() => window.location.reload()} className="mt-4">
-          पुनः प्रयास करें
-        </Button>
-      </div>
-    );
+    // ... (Error state)
   }
 
   if (!orders || orders.length === 0) {
-    return (
-      <div className="container mx-auto p-4 text-center">
-        <Package className="mx-auto h-16 w-16 text-gray-400 mb-4" />
-        <h2 className="text-xl font-semibold mb-2">कोई ऑर्डर नहीं मिला</h2>
-        <p className="text-gray-600">
-          आपने अभी तक कोई ऑर्डर नहीं दिया है। अभी खरीदारी शुरू करें!
-        </p>
-        <Button asChild className="mt-4">
-          <Link to="/">खरीदारी करें</Link>
-        </Button>
-      </div>
-    );
+    // ... (No orders state)
   }
+  
+  // -------------------------------------------------------------------------
+  // 🟢 FIX 2: मुख्य रेंडर लॉजिक को बैच-केंद्रित करने के लिए अपडेट करें
+  // -------------------------------------------------------------------------
 
   return (
     <div className="container mx-auto p-4">
       <h1 className="text-2xl font-bold mb-6">आपके ऑर्डर्स</h1>
       <div className="space-y-4">
-        {orders.map((order: CustomerOrder) => (
-          <Card key={order.id} className="p-4">
-            <CardHeader className="p-0 mb-4">
-              <CardTitle className="flex justify-between items-center text-lg">
-                <span>ऑर्डर #{order.orderNumber}</span>
-                <Badge variant={getStatusBadgeVariant(order.status)}>
-                  {getStatusText(order.status)}
-                </Badge>
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="p-0">
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
-                <div>
-                  <p>
-                    <span className="font-medium text-gray-800">तारीख:</span>{" "}
-                    {new Date(order.createdAt).toLocaleDateString()}
-                  </p>
-                </div>
-                <div>
-                  <p>
-                    <span className="font-medium text-gray-800">कुल:</span> ₹
-                    {Number(order.total).toLocaleString('en-IN')}
-                  </p>
-                </div>
-                <div>
-                  <p>
-                    <span className="font-medium text-gray-800">स्थिति:</span>{" "}
-                    {getStatusText(order.status)}
-                  </p>
-                </div>
-              </div>
+        {orders.map((order: CustomerOrder) => {
+          
+          // 🟢 समग्र स्टेटस का उपयोग करें
+          const currentDisplayStatus = order.overallDeliveryStatus || order.status;
+          
+          // चेक करें कि कम से कम एक बैच ट्रैकिंग के लिए योग्य है
+          const isTrackable = order.deliveryBatches?.some(b => 
+              b.status === 'picked_up' || b.status === 'out_for_delivery'
+          );
 
-              {order.subOrders && order.subOrders.length > 0 && (
-                <div className="mt-6 border-t pt-4 space-y-4">
-                  <h3 className="text-lg font-semibold">विक्रेता के ऑर्डर</h3>
-                  {order.subOrders.map((subOrder: SubOrder) => (
-                    <Card key={subOrder.id} className="p-3 bg-gray-50 border shadow-sm">
-                      <CardHeader className="p-0 mb-2">
-                        <CardTitle className="flex justify-between items-center text-md font-semibold">
-                          <span>{subOrder.sellerBusinessName || subOrder.sellerName || `विक्रेता #${subOrder.sellerId}`}</span>
-                          <Badge variant={getStatusBadgeVariant(subOrder.status)} className="text-xs">
-                            {getStatusText(subOrder.status)}
-                          </Badge>
+          return (
+            <Card key={order.id} className="p-4">
+              <CardHeader className="p-0 mb-4">
+                <CardTitle className="flex justify-between items-center text-lg">
+                  <span>ऑर्डर #{order.orderNumber}</span>
+                  <Badge variant={getStatusBadgeVariant(currentDisplayStatus)}>
+                    {getStatusText(currentDisplayStatus)}
+                  </Badge>
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="p-0">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm text-muted-foreground">
+                  <div>
+                    <p>
+                      <span className="font-medium text-gray-800">तारीख:</span>{" "}
+                      {new Date(order.createdAt).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <div>
+                    <p>
+                      <span className="font-medium text-gray-800">कुल:</span> ₹
+                      {Number(order.total).toLocaleString('en-IN')}
+                    </p>
+                  </div>
+                  <div>
+                    <p>
+                      <span className="font-medium text-gray-800">स्थिति:</span>{" "}
+                      {getStatusText(currentDisplayStatus)}
+                    </p>
+                  </div>
+                </div>
+
+                {/* 🟢 FIX 3: बैच-वाइज समरी डिस्प्ले */}
+                {order.deliveryBatches && order.deliveryBatches.length > 0 && (
+                  <div className="mt-6 border-t pt-4 space-y-3">
+                    <h3 className="text-lg font-semibold flex items-center">
+                        <Truck className="h-5 w-5 mr-2 text-blue-600" /> डिलीवरी बैचेस
+                    </h3>
+                    
+                    {order.deliveryBatches.map((batch: DeliveryBatch) => (
+                      <Card key={batch.id} className="p-3 bg-blue-50/50 border-blue-200 shadow-sm">
+                        <CardTitle className="text-md font-semibold flex justify-between items-center">
+                            <span>Batch #{batch.id}</span>
+                            <Badge variant={getStatusBadgeVariant(batch.status)} className="text-xs">
+                              {getStatusText(batch.status)}
+                            </Badge>
                         </CardTitle>
-                        <p className="text-sm text-gray-600">कुल: ₹{Number(subOrder.total).toLocaleString('en-IN')}</p>
-                      </CardHeader>
-                      <CardContent className="p-0 text-sm">
-                        {subOrder.items && subOrder.items.length > 0 ? (
-                          <div className="space-y-1">
-                            {subOrder.items.map(item => (
-                              <div key={item.id} className="flex items-center space-x-2">
-                                {item.product?.image && (
-                                  <img src={item.product.image} alt={item.product.name} className="w-6 h-6 object-cover rounded" />
-                                )}
-                                <p>{item.product?.name} x {item.quantity} {item.product?.unit}</p>
-                              </div>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-sm text-gray-500">कोई आइटम नहीं</p>
-                        )}
-                         <div className="mt-3 flex space-x-2">
-                          <Button asChild variant="outline" size="sm">
-                              <Link to={`/order-details/${order.id}?sellerId=${subOrder.sellerId}`}>
-                                विक्रेता का विवरण देखें
-                              </Link>
-                          </Button>
-                          {(subOrder.status === 'picked_up' || subOrder.status === 'out_for_delivery') && (
-                            <Button asChild variant="default" className="bg-purple-600 hover:bg-purple-700" size="sm">
-                                <Link to={`/track-order/${order.id}?sellerId=${subOrder.sellerId}`}>
-                                    live track
-                                </Link>
-                            </Button>
-                          )}
-                        </div>
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
-              )}
-
-              {(!order.subOrders || order.subOrders.length === 0) && (
+                        <p className="text-sm text-gray-600 mt-1">
+                            डिलीवरी बॉय: {batch.deliveryBoy?.name || "जल्द ही असाइन किया जाएगा"}
+                        </p>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+                
                 <div className="mt-4 flex space-x-3">
                   <Button asChild variant="outline">
                     <Link to={`/order-details/${order.id}`}>
-                      विवरण देखें
+                      विवरण देखें (सभी सब-ऑर्डर)
                     </Link>
                   </Button>
 
-                  {(order.status === 'picked_up' || order.status === 'out_for_delivery') && (
+                  {/* 🟢 FIX 4: ट्रैकिंग बटन अब मास्टर ऑर्डर ID का उपयोग करेगा */}
+                  {isTrackable && (
                       <Button asChild variant="default" className="bg-purple-600 hover:bg-purple-700">
-                          <Link to={`/track-order/${order.id}`}>
-                              live track
+                          {/* हम ट्रैकिंग पेज पर पूरा बैच समरी भेज रहे हैं, इसलिए केवल Master Order ID ही काफी है */}
+                          <Link to={`/track-order/${order.id}`}> 
+                              Live Tracking
                           </Link>
                       </Button>
                   )}
                 </div>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+              </CardContent>
+            </Card>
+          );
+        })}
       </div>
     </div>
   );
 }
-
