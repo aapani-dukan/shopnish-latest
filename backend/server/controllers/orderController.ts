@@ -1072,11 +1072,12 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
       status: masterOrder.status, 
-      paymentMethod: masterOrder.paymentMethod,
-      paymentStatus: masterOrder.paymentStatus,
-      total: masterOrder.total,
-      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
-      createdAt: masterOrder.createdAt,
+      paymentMethod: masterOrder.paymentMethod || 'N/A', 
+      paymentStatus: masterOrder.paymentStatus || 'pending', 
+      total: masterOrder.total || '0.00',
+      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime || new Date().toISOString(),
+      createdAt: masterOrder.createdAt || new Date().toISOString(),
+  
       
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
