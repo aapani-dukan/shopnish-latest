@@ -1,43 +1,46 @@
-// frontend/client/src/components/GoogleMapTracker.tsx
-
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useMemo } from 'react';
 import {
   GoogleMap,
   MarkerF,
-  DirectionsService,
-  DirectionsRenderer,
   useJsApiLoader,
 } from '@react-google-maps/api';
+import { Truck, MapPin, Store } from 'lucide-react'; // Lucide icons are placeholders
 
 // ----------------------------
-// Interfaces and Constants (TypeScript Standards)
+// Interfaces (Multi-Batch Tracking)
 // ----------------------------
 
-interface CustomerAddress {
-  address: string;
-  city: string;
-  pincode: string;
-  lat?: number; // Optional Lat/Lng for pre-geocoded addresses
-  lng?: number; 
-}
-
-interface Location {
+// ग्राहक का अंतिम गंतव्य (lat/lng अनिवार्य है)
+interface CustomerLocation {
   lat: number;
   lng: number;
-  timestamp?: string; // Delivery Boy Location
+  address?: string;
+}
+
+// डिलीवरी बॉय की लाइव/अंतिम लोकेशन
+interface DeliveryBoyTracker {
+  id: number;
+  batchId: number | string;
+  currentLocation: { lat: number; lng: number };
+  name: string;
+}
+
+// स्टोर लोकेशन
+interface StoreTracker {
+  lat: number;
+  lng: number;
+  name: string;
 }
 
 interface GoogleMapTrackerProps {
-  // deliveryBoyLocation को Location interface का उपयोग करना चाहिए
-  deliveryBoyLocation: Location | null; 
-  customerAddress: CustomerAddress; 
+  customerAddress: CustomerLocation; 
+  deliveryBoys: DeliveryBoyTracker[]; // 👈 FIX: एकाधिक डिलीवरी बॉय
+  stores: StoreTracker[]; // 👈 FIX: एकाधिक स्टोर
 }
 
-const containerStyle = { width: '100%', height: '300px' };
+const containerStyle = { width: '100%', height: '100%' };
 const LIBRARIES: ('places' | 'geometry' | 'drawing' | 'localContext' | 'visualization' | 'marker')[] = [
-    'places', 
-    'geometry', 
-    'marker' // Marker लाइब्रेरी को सुनिश्चित करें यदि कस्टम मार्कर का उपयोग कर रहे हैं
+    'marker'
 ];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
@@ -47,86 +50,27 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({ 
     customerAddress, 
-    deliveryBoyLocation // Prop का उपयोग करें
+    deliveryBoys, 
+    stores 
 }) => {
-  // 'currentLocation' डिलीवरी बॉय की लोकेशन को स्टोर करेगा
-  const [currentLocation, setCurrentLocation] = useState<Location | null>(null);
-  const [directionsResponse, setDirectionsResponse] = useState<google.maps.DirectionsResult | null>(null);
-  const [distance, setDistance] = useState<string | null>(null);
-
+  
   // 1. Google Maps Loader
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
     libraries: LIBRARIES,
   });
 
-  // 2. Real-time GPS Tracking (useEffect)
-  useEffect(() => {
-    // अगर deliveryBoyLocation prop मौजूद है, तो उसका उपयोग करें और GPS Tracking न चलाएं
-    if (deliveryBoyLocation) {
-      setCurrentLocation(deliveryBoyLocation);
-      return;
-    }
-
-    // अगर prop मौजूद नहीं है, तो (शायद) डिलीवरी बॉय खुद अपनी लोकेशन ट्रैक कर रहा है
-    if (!navigator.geolocation) return;
-    
-    // प्रारंभिक स्थान
-    navigator.geolocation.getCurrentPosition((pos) => {
-        setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-    }, (err) => console.error('Initial Geolocation error:', err), { enableHighAccuracy: true });
-
-    // लगातार स्थान ट्रैक करें (वॉचर)
-    const watcher = navigator.geolocation.watchPosition(
-      (pos) => {
-        setCurrentLocation({ lat: pos.coords.latitude, lng: pos.coords.longitude });
-      },
-      (err) => console.error('Geolocation error:', err),
-      { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-    );
-
-    // क्लीनअप फ़ंक्शन
-    return () => navigator.geolocation.clearWatch(watcher);
-  }, [deliveryBoyLocation]);
-
-
-  // 3. Destination (useMemo) - ग्राहक का पता LatLng या String में
-  const destination = useMemo(() => {
-    if (customerAddress.lat && customerAddress.lng) {
-        return { lat: customerAddress.lat, lng: customerAddress.lng }; 
-    }
-    // यदि Lat/Lng उपलब्ध नहीं है, तो स्ट्रिंग पते का उपयोग करें (Google Geocodes it)
-    return `${customerAddress.address}, ${customerAddress.city}, ${customerAddress.pincode}`;
-  }, [customerAddress]);
-  
-  // 4. Directions Callback (useCallback)
-  const directionsCallback = useCallback(
-    (response: google.maps.DirectionsResult | null) => {
-      if (response && response.status === 'OK') {
-        setDirectionsResponse(response);
-        const leg = response.routes[0].legs[0];
-        if (leg?.distance?.text) {
-          setDistance(leg.distance.text);
-        }
-      } else if (response) {
-        console.error('Directions failed:', response.status);
-        setDirectionsResponse(null);
-      }
-    },
-    []
-  );
-
-  // 5. Marker Icons (useMemo) - केवल एक बार लोड होने पर परिभाषित करें
-  const { bikeIcon, homeIcon } = useMemo(() => {
+  // 2. Marker Icons (useMemo) - कस्टम SVG या PNG URL का उपयोग करें
+  const { bikeIcon, homeIcon, storeIcon } = useMemo(() => {
     if (!isLoaded || !window.google?.maps) {
-        return { bikeIcon: undefined, homeIcon: undefined }; 
+        return { bikeIcon: undefined, homeIcon: undefined, storeIcon: undefined }; 
     }
     
-    // 🏍️ डिलीवरी बॉय आइकॉन
+    // 🏍️ डिलीवरी बॉय आइकॉन (बैच-वाइज मार्कर)
     const BIKE_ICON: google.maps.Icon = {
-      url: 'https://raw.githubusercontent.com/aapani-dukan/shopnish-xyz/main/dist/public/assets/pngtree-delivery-bike-black-icon-vector-png-image_12551154.png', 
-      scaledSize: new window.google.maps.Size(40, 40),
-      anchor: new window.google.maps.Point(20, 40), 
+      url: 'https://cdn-icons-png.freepik.com/512/3233/3233076.png', // या आपका कस्टम URL
+      scaledSize: new window.google.maps.Size(35, 35),
+      anchor: new window.google.maps.Point(18, 35), 
     };
     
     // 🏠 ग्राहक आइकॉन 
@@ -134,87 +78,81 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
       url: 'https://maps.gstatic.com/mapfiles/ms/micons/blue-dot.png',
       scaledSize: new window.google.maps.Size(32, 32),
     };
+
+    // 🏪 स्टोर आइकॉन
+    const STORE_ICON: google.maps.Icon = {
+        url: 'https://maps.gstatic.com/mapfiles/ms/micons/store.png',
+        scaledSize: new window.google.maps.Size(32, 32),
+    };
     
-    return { bikeIcon: BIKE_ICON, homeIcon: HOME_ICON };
+    return { bikeIcon: BIKE_ICON, homeIcon: HOME_ICON, storeIcon: STORE_ICON };
   }, [isLoaded]);
 
 
-  // 6. Guards and Options
+  // 3. Map Options and Center
+  const center = useMemo(() => {
+    // मैप को ग्राहक के पते पर केंद्रित करें
+    return { lat: customerAddress.lat, lng: customerAddress.lng };
+  }, [customerAddress]);
+  
+  const mapOptions = useMemo(() => ({
+    mapId: 'SHOPNISH_MULTI_TRACKER_MAP',
+    disableDefaultUI: false,
+    zoom: 14,
+    center: center,
+  }), [center]);
+
+
+  // 4. Guards
   if (loadError) return <div>नक्शा लोड नहीं हो पाया: {String(loadError)}</div>;
   if (!isLoaded) return <div>लोकेशन लोडिंग...</div>;
-  // यदि currentLocation अभी भी null है (यानी, GPS से भी प्राप्त नहीं हो सका)
-  if (!currentLocation) return <div>आपकी लोकेशन प्राप्त हो रही है...</div>; 
-
-  const mapOptions = useMemo(() => ({
-    mapId: 'SHOPNISH_TRACKER_MAP',
-    disableDefaultUI: false,
-    zoom: 14, // Zoom level को स्थिर करें
-    center: currentLocation, // Map का केंद्र
-  }), [currentLocation]);
   
-  // ग्राहक का अंतिम स्थान (DirectionsRenderer से)
-  const customerLatLngFromDirections = directionsResponse?.routes[0]?.legs[0]?.end_location;
-
-  // 7. Render
+  // 5. Render
   return (
-    <div className="relative w-full h-[300px]">
+    <div className="relative w-full h-full">
       <GoogleMap
         mapContainerStyle={containerStyle}
-        center={currentLocation} // यह currentLocation useMemo से आ रहा है
+        center={center}
         zoom={14}
         options={mapOptions}
       >
-        {/* Directions Service - जब दोनों लोकेशन मौजूद हों */}
-        {currentLocation && destination && bikeIcon && homeIcon && (
-          <DirectionsService
-            options={{
-              origin: currentLocation,
-              destination: destination,
-              travelMode: window.google.maps.TravelMode.DRIVING, 
-            }}
-            callback={directionsCallback}
+        
+        {/* 🏠 Customer Marker */}
+        {homeIcon && customerAddress.lat && customerAddress.lng && (
+          <MarkerF
+            position={{ lat: customerAddress.lat, lng: customerAddress.lng }}
+            icon={homeIcon}
+            title="आपका डिलीवरी एड्रेस"
           />
         )}
 
-        {/* Directions Renderer */}
-        {directionsResponse && (
-          <DirectionsRenderer
-            options={{
-              directions: directionsResponse,
-              suppressMarkers: true, // कस्टम मार्कर का उपयोग करने के लिए true
-              polylineOptions: {
-                strokeColor: '#2563eb',
-                strokeWeight: 5,
-              },
-            }}
-          />
-        )}
-        
-        {/* Delivery Boy Marker */}
-        {bikeIcon && (
+        {/* 🏪 Store Markers (Loop) */}
+        {storeIcon && stores.map((store, index) => (
+            <MarkerF
+                key={`store-${index}`}
+                position={{ lat: store.lat, lng: store.lng }}
+                icon={storeIcon}
+                title={`Store: ${store.name}`}
+            />
+        ))}
+
+        {/* 🏍️ Delivery Boy Markers (Loop) */}
+        {bikeIcon && deliveryBoys.map((db) => (
           <MarkerF 
-            position={currentLocation} 
+            key={db.id} 
+            position={db.currentLocation} 
             icon={bikeIcon} 
-            title="डिलीवरी पार्टनर" 
+            title={`डिलीवरी पार्टनर: ${db.name} (Batch #${db.batchId})`} 
+            // Delivery Boy पर क्लिक करने पर एक Info Window दिखा सकते हैं (अतिरिक्त सुविधा)
           />
-        )}
-        
-        {/* Customer Marker - DirectionsRenderer के end_location का उपयोग करें यदि उपलब्ध हो, या prop का*/}
-        {homeIcon && (customerLatLngFromDirections || (customerAddress.lat && customerAddress.lng)) && (
-          <MarkerF
-            position={customerLatLngFromDirections || {lat: customerAddress.lat!, lng: customerAddress.lng!}}
-            icon={homeIcon}
-            title="ग्राहक लोकेशन"
-          />
-        )}
+        ))}
       </GoogleMap>
 
-      {/* Distance Info */}
-      {distance && (
-        <div className="absolute bottom-2 right-2 bg-white shadow-md rounded-lg px-3 py-1 text-sm font-medium text-gray-700">
-          दूरी: {distance}
-        </div>
-      )}
+      {/* Summary Info */}
+      <div className="absolute top-2 left-2 bg-white shadow-md rounded-lg p-2 text-sm font-medium text-gray-700">
+        <p><MapPin className="w-4 h-4 inline mr-1 text-blue-600"/> Locations: {mapStores.length} Stores, 1 Customer</p>
+        <p><Truck className="w-4 h-4 inline mr-1 text-purple-600"/> Live Deliveries: {deliveryBoys.length}</p>
+      </div>
     </div>
   );
 };
