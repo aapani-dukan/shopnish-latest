@@ -16,12 +16,15 @@ interface LatLng {
   lng: number;
 }
 
+// Backend से लौटाई गई संरचना से मेल खाने के लिए प्रोसेस किया गया स्थान
 export interface ProcessedLocation extends LatLng {
   address: string;
   pincode: string;
   inServiceArea: boolean;
   deliveryCharges?: number | null;
-  id?: number;
+  
+  // Drizzle/Address Schema fields:
+  id?: number; // Drizzle ID
   addressLine1?: string;
   addressLine2?: string;
   city?: string;
@@ -40,7 +43,8 @@ interface LocationContextType {
   setLoadingLocation: React.Dispatch<React.SetStateAction<boolean>>;
   error: string | null;
   fetchCurrentGeolocation: () => Promise<void>;
-  processLocation: (lat: number, lng: number) => Promise<ProcessedLocation>;
+  // 🛑 FIX 1: Promise रिटर्न टाइप में बदलाव किया गया
+  processLocation: (lat: number, lng: number) => Promise<ProcessedLocation | undefined>; 
   savedAddresses: ProcessedLocation[];
   loadSavedAddresses: () => Promise<void>;
   setSelectedAddress: (address: ProcessedLocation) => void;
@@ -68,7 +72,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   // --- Fetch and process user location from backend ---
   const processLocation = useCallback(
-    async (lat: number, lng: number): Promise<ProcessedLocation> => {
+    async (lat: number, lng: number): Promise<ProcessedLocation | undefined> => {
       setLoadingLocation(true);
       setError(null);
 
@@ -78,13 +82,19 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
           { latitude: lat, longitude: lng }
         );
 
+        // 🛑 FIX 2: lat/lng को इनपुट से असाइन करें, Backend रिस्पांस से नहीं
         const locationData: ProcessedLocation = {
           ...response.data,
-          lat: response.data.lat ?? lat,
-          lng: response.data.lng ?? lng,
+          lat: lat, 
+          lng: lng,
+          // सुनिश्चित करें कि Backend रिस्पांस में address/pincode हो
+          address: response.data.address || "पता उपलब्ध नहीं", 
+          pincode: response.data.pincode || "000000",
         };
 
         setCurrentLocation(locationData);
+        
+        // localStorage अपडेट करें
         localStorage.setItem("userLat", String(locationData.lat));
         localStorage.setItem("userLng", String(locationData.lng));
         localStorage.setItem("userAddress", locationData.address);
@@ -94,8 +104,8 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
         return locationData;
       } catch (err) {
         console.error("Error processing location:", err);
-        setError("लोकेशन प्रोसेस करने में असमर्थ।");
-        throw err;
+        setError("लोकेशन प्रोसेस करने में असमर्थ। कृपया बाद में प्रयास करें।");
+        return undefined; // त्रुटि पर undefined लौटाएं
       } finally {
         setLoadingLocation(false);
       }
@@ -114,16 +124,13 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
           const { latitude, longitude } = position.coords;
 
           try {
-            const locationData = await processLocation(latitude, longitude);
+            // processLocation को कॉल करें
+            await processLocation(latitude, longitude);
 
-            if (locationData?.address)
-              localStorage.setItem("userAddress", locationData.address);
-            if (locationData?.pincode)
-              localStorage.setItem("userPincode", locationData.pincode);
           } catch {
             setError("लोकेशन प्रोसेस करने में असमर्थ।");
           } finally {
-            setLoadingLocation(false);
+            // setLoadingLocation अब processLocation के finally ब्लॉक में सेट होता है
           }
         },
         (geoError) => {
@@ -138,6 +145,64 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       setLoadingLocation(false);
     }
   }, [processLocation]);
+
+  // --- Load saved addresses ---
+  const loadSavedAddresses = useCallback(async () => {
+    const token = getAuthToken();
+    if (!token) {
+      setSavedAddresses([]);
+      // setError("पते लोड करने के लिए कृपया लॉग इन करें।"); // वैकल्पिक
+      return;
+    }
+
+    try {
+      const response = await axios.get<ProcessedLocation[]>(
+        `${API_BASE_URL}/api/addresses/user`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+      setSavedAddresses(response.data);
+      
+      // ✅ FIX 3: यदि current location सेट नहीं है, तो default address को सेट करें
+      if (currentLocation === null || currentLocation.lat === 0) {
+        const defaultAddress = response.data.find(addr => addr.isDefault);
+        if (defaultAddress) {
+            setSelectedAddress(defaultAddress); 
+        }
+      }
+
+    } catch (err) {
+      console.error("Error loading saved addresses:", err);
+      setError("सहेजे गए पते लोड करने में असमर्थ।");
+    }
+  }, [API_BASE_URL, getAuthToken, currentLocation, setSelectedAddress]);
+
+
+  // --- Select a saved address ---
+  const setSelectedAddress = useCallback((address: ProcessedLocation) => {
+    // 🛑 FIX 4: सुनिश्चित करें कि lat/lng नंबर हैं
+    if (typeof address.lat !== 'number' || typeof address.lng !== 'number') return;
+    
+    // addressLine1 और city का उपयोग करके बेहतर पता स्ट्रिंग बनाएं
+    const addressString = address.addressLine1 && address.city 
+        ? `${address.addressLine1}, ${address.city} - ${address.pincode ?? ""}`
+        : address.address; // Fallback to full address
+
+    const updatedAddress: ProcessedLocation = {
+      ...address,
+      address: addressString, // अपडेटेड स्ट्रिंग को address में स्टोर करें
+      inServiceArea: true, // सेव किया गया पता सर्विस एरिया में माना जाता है
+    };
+
+    setCurrentLocation(updatedAddress);
+    
+    // localStorage अपडेट करें
+    localStorage.setItem("userLat", String(updatedAddress.lat));
+    localStorage.setItem("userLng", String(updatedAddress.lng));
+    localStorage.setItem("userAddress", addressString);
+    localStorage.setItem("userPincode", updatedAddress.pincode);
+    localStorage.setItem("userServiceArea", String(true)); 
+
+  }, []);
 
   // --- Load cached or current location ---
   useEffect(() => {
@@ -158,50 +223,20 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
           lat: parseFloat(storedLat),
           lng: parseFloat(storedLng),
           inServiceArea: storedServiceArea === "true",
+          // अन्य आवश्यक फ़ील्ड्स को यहाँ न जोड़ें, वे तब तक undefined रहेंगे
         });
         setLoadingLocation(false);
       } else {
+        // यदि कोई संग्रहीत (stored) स्थान नहीं है, तो जियोलोकेशन से प्राप्त करें
         await fetchCurrentGeolocation();
       }
     };
 
     loadInitialLocation();
+    // लोड होने के बाद, सहेजे गए पते भी लोड करें (ताकि वे Modal में दिखाई दें)
+    // loadSavedAddresses(); // इसे useEffect के बाहर कॉल करने पर अनंत लूप हो सकता है, इसलिए इसे केवल Modal में ही कॉल करें
+
   }, [fetchCurrentGeolocation]);
-
-  // --- Load saved addresses ---
-  const loadSavedAddresses = useCallback(async () => {
-    const token = getAuthToken();
-    if (!token) {
-      setSavedAddresses([]);
-      return;
-    }
-
-    try {
-      const response = await axios.get<ProcessedLocation[]>(
-        `${API_BASE_URL}/api/addresses/user`,
-        { headers: { Authorization: `Bearer ${token}` } }
-      );
-      setSavedAddresses(response.data);
-    } catch (err) {
-      console.error("Error loading saved addresses:", err);
-      setError("सहेजे गए पते लोड करने में असमर्थ।");
-    }
-  }, [API_BASE_URL, getAuthToken]);
-
-  // --- Select a saved address ---
-  const setSelectedAddress = useCallback((address: ProcessedLocation) => {
-    setCurrentLocation(address);
-    localStorage.setItem("userLat", String(address.lat));
-    localStorage.setItem("userLng", String(address.lng));
-    localStorage.setItem(
-      "userAddress",
-      address.addressLine1
-        ? `${address.addressLine1}, ${address.city ?? ""} - ${address.pincode ?? ""}`
-        : address.address
-    );
-    localStorage.setItem("userPincode", address.pincode);
-    localStorage.setItem("userServiceArea", String(true));
-  }, []);
 
   const contextValue = useMemo(
     () => ({
@@ -215,10 +250,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       savedAddresses,
       loadSavedAddresses,
       setSelectedAddress,
-             // 👇 ADD THESE 3 FIELDS
-    address: currentLocation?.address || "",
-    city: currentLocation?.city || "",
-    pincode: currentLocation?.pincode || "",
+      // 🛑 FIX 5: अनावश्यक fields हटा दिए गए
     }),
     [
       currentLocation,
@@ -229,12 +261,11 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       savedAddresses,
       loadSavedAddresses,
       setSelectedAddress,
-
     ]
   );
 
   return (
-    <LocationContext.Provider value={contextValue}>
+    <LocationContext.Provider value={contextValue as LocationContextType}>
       {children}
     </LocationContext.Provider>
   );
