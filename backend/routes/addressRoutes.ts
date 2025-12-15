@@ -32,7 +32,7 @@ const CreateAddressSchema = z.object({
   longitude: z.number().min(-180).max(180),
   label: z.string().optional(),
   isDefault: z.boolean().default(false).optional(),
-  userId: z.number().optional(), // 🛑 FIX: Frontend से userId नहीं आना चाहिए, इसे हटा दें
+ // userId: z.number().optional(), 
 });
 
 const UpdateAddressSchema = CreateAddressSchema.partial().extend({
