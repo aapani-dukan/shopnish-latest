@@ -125,34 +125,39 @@ const getStatusText = (status: string) => {
 
 // -------------------- Component --------------------
 
-export default function TrackOrder() {
+
+  export default function TrackOrder() {
   const { orderId } = useParams<{ orderId: string }>();
   
-  // ❌ sellerId-based logic हटा दिया गया है
+  // orderId को संख्या में बदलें, यदि यह मान्य नहीं है तो null
   const numericOrderId = orderId ? Number(orderId) : null;
 
   const { socket } = useSocket();
   const { user } = useAuth();
 
   // 🟢 FIX 1: एकाधिक डिलीवरी बॉय के स्थानों को मैप करने के लिए state
-  // Key: batchId (number), Value: Location
   const [liveLocations, setLiveLocations] = useState<Map<number, Location>>(new Map());
 
   // 🟢 FIX 2: नए Tracking API को Fetch करें
-  const { data: trackingResponse, isLoading: isTrackingLoading } = useQuery<TrackingResponse>({
+  const { 
+    data: trackingResponse, 
+    isLoading: isTrackingLoading,
+    isError // Error State को भी कैप्चर करें
+  } = useQuery<TrackingResponse>({
     queryKey: [`/api/orders/${numericOrderId}/tracking`], 
     queryFn: async () => {
-      // Backend में /api/orders/:orderId/tracking ही अब बैच समरी लौटाता है
       const response = await apiRequest("get", `/api/orders/${numericOrderId}/tracking`);
       return response as TrackingResponse;
     },
-    enabled: !!numericOrderId,
+    enabled: !!numericOrderId, // केवल तभी Fetch करें जब numericOrderId मौजूद हो
   });
 
   // 🟢 FIX 3: Live Location Update Logic
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
-    if (!socket || !numericOrderId || isTrackingLoading || !userIdToUse) return;
+    // लॉजिक को केवल तभी शुरू करें जब ऑर्डर ID मौजूद हो, लोडिंग खत्म हो गई हो, और Socket तैयार हो
+    // isTrackingLoading को निर्भरता से हटा सकते हैं, लेकिन यहाँ रखते हैं ताकि लोडिंग खत्म होने पर यह रजिस्टर हो
+    if (!socket || !numericOrderId || !userIdToUse) return; 
 
     // डेटा में batchId शामिल होना चाहिए
     const handleLocationUpdate = (data: Location & { batchId: number; orderId: number }) => {
@@ -162,7 +167,6 @@ export default function TrackOrder() {
           newMap.set(data.batchId, { lat: data.lat, lng: data.lng, timestamp: data.timestamp });
           return newMap;
         });
-        // Console log removed for cleaner output
       }
     };
 
@@ -173,9 +177,22 @@ export default function TrackOrder() {
     return () => {
       socket.off("order:delivery_location", handleLocationUpdate);
     };
-  }, [socket, numericOrderId, isTrackingLoading, user]);
+  }, [socket, numericOrderId, user]); // isTrackingLoading को useEffect dependencies से हटाया गया
 
-  if (isTrackingLoading || !trackingResponse) {
+  
+  // -------------------- 🛑 FIX: लोडिंग और डेटा/एरर हैंडलिंग --------------------
+  
+  // 1. लोडिंग या अमान्य इनपुट
+  if (isTrackingLoading || !numericOrderId) {
+    // यदि orderId URL में मौजूद नहीं है
+    if (!numericOrderId) {
+         return (
+             <div className="min-h-screen flex items-center justify-center">
+                 <h3 className="text-xl font-bold text-red-500">❌ Error: Invalid or Missing Order ID.</h3>
+             </div>
+         );
+    }
+    // यदि orderId मौजूद है लेकिन डेटा Fetch हो रहा है
     return (
       <div className="min-h-screen flex items-center justify-center">
         <div className="animate-spin w-8 h-8 border-4 border-primary border-t-transparent rounded-full"></div>
@@ -183,15 +200,36 @@ export default function TrackOrder() {
     );
   }
 
+  // 2. 🟢 FIX: डेटा अनुपलब्धता/त्रुटि चेक (लोडिंग खत्म होने के बाद)
+  // यदि fetching खत्म हो गई है, लेकिन कोई डेटा नहीं है या fetching में एरर आई है
+  if (isError || !trackingResponse || !trackingResponse.masterOrderId) {
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <Card className="w-full max-w-md">
+          <CardContent className="pt-6 text-center">
+            <Package className="mx-auto h-12 w-12 text-red-500 mb-4" />
+            <h3 className="text-lg font-medium mb-2">Order Tracking Not Available</h3>
+            <p className="text-gray-600">
+              We could not find the tracking details for Order #{numericOrderId}. It may have been cancelled, or there is a server issue.
+            </p>
+            {isError && <p className="mt-2 text-xs text-red-400">Server communication failed (Check Console).</p>}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+  
+  // -------------------- सुरक्षित Destructuring --------------------
+
   const { 
-    deliveryBatchesSummary, 
+    deliveryBatchesSummary = [], // 👈 Destructuring को सुरक्षित करने के लिए डिफॉल्ट ऐरे
     customerDeliveryAddress, 
-    masterOrderTrackingHistory, 
+    masterOrderTrackingHistory = [], // 👈 Destructuring को सुरक्षित करने के लिए डिफॉल्ट ऐरे
     masterOrderNumber, 
     status: masterStatus,
     ...masterOrderDetails 
-  } = trackingResponse;
-
+  } = trackingResponse; // अब यह सुनिश्चित है कि trackingResponse एक मान्य ऑब्जेक्ट है
+  
   // 🟢 FIX 4: MapComponent के लिए डेटा तैयार करें
   const activeBatchesForMap = deliveryBatchesSummary.filter(b => 
     (b.batchStatus === 'picked_up' || b.batchStatus === 'out_for_delivery' || b.batchStatus === 'in transit') && b.deliveryBoy
@@ -205,14 +243,16 @@ export default function TrackOrder() {
   })).filter(db => db.currentLocation.lat !== 0 || db.currentLocation.lng !== 0); // Invalid locations filter
 
   // सभी बैचों से स्टोर स्थानों को इकट्ठा करें
+  // (deliveryBatchesSummary || []) का उपयोग करने की आवश्यकता नहीं है क्योंकि हमने ऊपर इसे default [] कर दिया है
   const mapStores = Array.from(new Set(
-    deliveryBatchesSummary.flatMap(b => b.storeLocations.map(s => JSON.stringify(s)))
+    deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s))) // storeLocations को भी सुरक्षित करें
   )).map(s => JSON.parse(s));
 
   const estimatedTime = new Date(masterOrderDetails.estimatedDeliveryTime).toLocaleTimeString('en-IN', {
     hour: '2-digit', minute: '2-digit'
   });
 
+  
   return (
     <div className="min-h-screen bg-gray-50 py-8">
       <div className="max-w-4xl mx-auto px-4">
