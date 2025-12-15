@@ -999,7 +999,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
                 },
             },
         },
-        orderTracking: { // मास्टर ऑर्डर ट्रैकिंग भी हो सकती है
+        orderTracking: { 
             orderBy: [desc(orderTracking.createdAt)],
             limit: 5, 
         },
@@ -1011,28 +1011,35 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     }
     
     // JSON पार्सिंग
-    let parsedDeliveryAddress = {};
+    let parsedDeliveryAddress: any = {};
     try {
-      parsedDeliveryAddress = JSON.parse(masterOrder.deliveryAddress as string);
+      // Drizzle/Postgres में JSONB फील्ड को parse करना पड़ सकता है
+      parsedDeliveryAddress = typeof masterOrder.deliveryAddress === 'string' 
+                              ? JSON.parse(masterOrder.deliveryAddress) 
+                              : masterOrder.deliveryAddress; // यदि यह पहले से ही ऑब्जेक्ट है
     } catch (e) {
       console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
     }
 
-    // 🟢 FIX 3: डिलीवरी जानकारी को सब-ऑर्डर के बजाय बैच ID द्वारा समूहित करें
+    // 🟢 FIX: डिलीवरी जानकारी को बैच ID द्वारा समूहित करें
     const batchesMap = new Map();
     (masterOrder.subOrders || []).forEach(subOrder => {
-        const batchId = subOrder.deliveryBatch?.id || 0; // 0 = unassigned
+        const batchId = subOrder.deliveryBatch?.id || 0; 
         const batchKey = batchId === 0 ? 'unassigned' : batchId;
         
         if (!batchesMap.has(batchKey)) {
             batchesMap.set(batchKey, {
                 batchId: batchId,
-                batchStatus: subOrder.deliveryBatch?.status || subOrder.status,  // Unassigned sub-orders will show seller status
+                // असाइन न किए गए बैच के लिए, सब-ऑर्डर का स्टेटस या मास्टर ऑर्डर का स्टेटस दिखाएँ
+                batchStatus: subOrder.deliveryBatch?.status || subOrder.status || masterOrder.status, 
                 deliveryBoy: subOrder.deliveryBatch?.deliveryBoy ? {
                     id: subOrder.deliveryBatch.deliveryBoy.id,
                     name: subOrder.deliveryBatch.deliveryBoy.name,
                     phone: subOrder.deliveryBatch.deliveryBoy.phone,
-                    currentLocation: { lat: subOrder.deliveryBatch.deliveryBoy.currentLat, lng: subOrder.deliveryBatch.deliveryBoy.currentLng },
+                    currentLocation: { 
+                      lat: subOrder.deliveryBatch.deliveryBoy.currentLat, 
+                      lng: subOrder.deliveryBatch.deliveryBoy.currentLng 
+                    },
                 } : null,
                 subOrders: [],
                 storeLocations: new Set(),
@@ -1060,24 +1067,30 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
         }
     });
 
+    // 🟢 FIX: रिस्पॉन्स भेजना
     res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
-      status: masterOrder.status, // Master order status (for overall summary)
+      status: masterOrder.status, 
+      paymentMethod: masterOrder.paymentMethod,
+      paymentStatus: masterOrder.paymentStatus,
+      total: masterOrder.total,
+      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
+      createdAt: masterOrder.createdAt,
+      
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
         lng: masterOrder.deliveryLng || 0,
-        address: (parsedDeliveryAddress as any).addressLine1 || '', 
-        city: (parsedDeliveryAddress as any).city || '',
-        pincode: (parsedDeliveryAddress as any).pincode || '',
-        fullName: (parsedDeliveryAddress as any).fullName || '',
-        phoneNumber: (parsedDeliveryAddress as any).phoneNumber || '',
+        address: parsedDeliveryAddress.addressLine1 || '', 
+        city: parsedDeliveryAddress.city || '',
+        pincode: parsedDeliveryAddress.pincode || '',
+        fullName: parsedDeliveryAddress.fullName || '',
+        phoneNumber: parsedDeliveryAddress.phoneNumber || '',
       },
-      // 🟢 FIX 4: बैच-वाइज समरी भेजें
-      deliveryBatchesSummary: Array.from(batchesMap.values()).map(batch => ({
+      // बैच समरी
+      deliveryBatchesSummary: Array.from(batchesMap.values()).map((batch: any) => ({
           ...batch,
           storeLocations: Array.from(batch.storeLocations).map(JSON.parse), 
-          // 'unassigned' बैच के लिए डिलीवरी बॉय null रहेगा
       })),
       masterOrderTrackingHistory: masterOrder.orderTracking,
     });
@@ -1087,6 +1100,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     res.status(500).json({ message: "Failed to fetch tracking details." });
   }
 };
+
 
 
 // ---------------------------------------------------------------------------------
