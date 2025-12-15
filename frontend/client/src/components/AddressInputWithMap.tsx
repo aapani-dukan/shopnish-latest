@@ -222,7 +222,7 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
 
       {currentLocation && (
         <p style={{ fontSize: "12px", color: "#555" }}>
-          Lat: {currentLocation.lat.toFixed(5)}, Lng: {currentLocation.lng.toFixed(5)}
+          Lat: {currentLocation.lat?.toFixed(5)}, Lng: {currentLocation.lng?.toFixed(5)}
         </p>
       )}
     </div>
