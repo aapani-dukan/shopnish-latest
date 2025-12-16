@@ -122,11 +122,13 @@ addressRouter.get(
         .where(eq(users.firebaseUid, firebaseUid)) 
         .limit(1);
 
-      const userIdNum = userResult[0]?.id; // यह अब Postgres Integer ID है
+      const userIdNum = req.user?.id; 
 
-      if (!userIdNum) {
-          return res.status(404).json({ message: 'User profile not found in database.' });
-      }
+          if (!userIdNum || typeof userIdNum !== 'number') {
+        // यदि Firebase UID स्ट्रिंग के बजाय Drizzle ID संख्या नहीं है, तो 401 दें
+        console.error("GET Address: Missing or Invalid Numeric User ID in req.user.");
+        return res.status(401).json({ message: 'Unauthorized: Invalid User ID format.' });
+          }
 
       const userAddresses = await db.select()
         .from(deliveryAddresses)
