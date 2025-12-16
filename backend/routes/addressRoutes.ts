@@ -128,12 +128,13 @@ addressRouter.get(
   }
 );
 
+
+
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // 🛑 FIX 4: Drizzle ID का उपयोग करें
       const userId = req.user?.id; 
       if (!userId) {
         return res.status(401).json({ message: 'Unauthorized' });
@@ -143,13 +144,15 @@ addressRouter.post(
       // Zod validation
       const validation = CreateAddressSchema.safeParse(req.body);
       if (!validation.success) {
+        console.error("Zod Error:", validation.error.issues);
         return res.status(400).json({ errors: validation.error.issues });
       }
 
-      const newAddressData = validation.data;
+      // 🛑 FIX 1: pincode को extract करें, और बाकी fields को addressDetails में रखें
+      const { pincode, ...addressDetails } = validation.data; 
 
-      // अगर नया address default है तो पहले सारे default हटाएं
-      if (newAddressData.isDefault) {
+      // 🛑 FIX 2: isDefault = true होने पर पुराने डिफ़ॉल्ट पते हटा दें
+      if (addressDetails.isDefault) {
         await db.update(deliveryAddresses)
           .set({ isDefault: false })
           .where(eq(deliveryAddresses.userId, userIdNum));
@@ -157,19 +160,23 @@ addressRouter.post(
 
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
-          ...newAddressData,
-          // 🛑 FIX 5: userId को सीधे Number में पास करें
+          ...addressDetails,
+          // ✅ Mapping: 'pincode' को 'postalCode' कॉलम में डालें
+          postalCode: pincode, 
           userId: userIdNum, 
         })
         .returning();
 
       return res.status(201).json(newAddress);
     } catch (error) {
+      // ⚠️ Drizzle की त्रुटि अब नहीं आनी चाहिए
       console.error('Error creating address:', error);
+      // यदि error.message में DB-specific जानकारी है, तो उसे Render logs में देखें।
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
 );
+
 
 // 4. PUT /api/addresses/:id
 addressRouter.put(
