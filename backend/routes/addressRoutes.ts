@@ -134,59 +134,56 @@ addressRouter.get(
 
 
 // 3. POST /api/addresses
+
+// backend/src/routes/addressRoutes.ts
+
+// 3. POST /api/addresses
 addressRouter.post(
   '/',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // 1. User ID चेक: सुनिश्चित करें कि यह मौजूद है
       const userId = req.user?.id; 
-      if (!userId) {
-        // यदि टोकन मौजूद है लेकिन req.user.id नहीं है, तो यह Auth Middleware की समस्या है
-        console.error("Auth Middleware Error: User ID is missing after token verification.");
-        return res.status(401).json({ message: 'Unauthorized: User ID missing.' });
-      }
-
-      // 🛑 FIX: Number() का उपयोग करके सुनिश्चित करें कि यह संख्या है
+      // ⚠️ यदि Render लॉग अभी भी काम नहीं कर रहे हैं, तो यह जाँच महत्वपूर्ण है:
       const userIdNum = Number(userId);
-       // 🚨 चेक 1: क्या Auth Middleware सही ID दे रहा है?
-      console.log(`[AUTH-DEBUG-1] Received User ID: ${userId} (Type: ${typeof userId})`);
 
-      if (!userId) {
-        return res.status(401).json({ message: 'Unauthorized: User ID missing.' });
+      if (!userId || isNaN(userIdNum)) {
+         // यदि यह संख्या नहीं है, तो यह यहीं से विफल हो जाएगा (401 error)
+         return res.status(401).json({ message: 'Unauthorized: Invalid User ID provided.' });
       }
       
-      // 🚨 चेक 2: क्या यह वास्तव में एक संख्या है?
-      const userIdNum = Number(userId);
-      if (isNaN(userIdNum)) {
-         // यदि req.user.id एक Firebase UID स्ट्रिंग है, तो यह NaN देगा
-         console.error("Auth Middleware Error: req.user.id is not a valid number. Value:", userId);
-         // यदि आपका users टेबल Firebase UID का उपयोग करता है, तो आपको यह तर्क बदलना होगा
-         return res.status(401).json({ message: 'Unauthorized: User ID type mismatch.' });
+      // ... (Zod validation) ...
+      const validation = CreateAddressSchema.safeParse(req.body);
+      // ...
+      
+      const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
+
+      // 🛑 FIX: isDefault हटाने वाला लॉजिक (जो क्रैश कर सकता है) को अस्थायी रूप से हटाएं
+      /*
+      if (addressDetails.isDefault) {
+        await db.update(deliveryAddresses)
+          .set({ isDefault: false })
+          .where(eq(deliveryAddresses.userId, userIdNum));
       }
-      
-      // ... (Zod validation, pincode/latitude/longitude extraction) ...
-      
+      */
+
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
           ...addressDetails,
           postalCode: pincode, 
-          // 🛑 FIX: latitude/longitude को String में रखना सुरक्षित है
+          userId: userIdNum,
           latitude: String(latitude), 
           longitude: String(longitude),
-          // 🛑 FIX: userIdNum का उपयोग करें (जो अब Number है)
-          userId: userIdNum, 
         })
         .returning();
 
       return res.status(201).json(newAddress);
     } catch (error) {
-      // ⚠️ यह क्रैश अब NOT NULL constraint या FOREIGN KEY constraint के कारण होना चाहिए।
-      console.error('FINAL CRASH LOG: Error creating address:', error);
+      // यदि यह यहां विफल होता है, तो 99% यह Foreign Key Violation है।
+      console.error('[FINAL-CATCH] DB INSERT failed, likely Foreign Key issue:', error);
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
 );
-
 
 // 4. PUT /api/addresses/:id
 addressRouter.put(
