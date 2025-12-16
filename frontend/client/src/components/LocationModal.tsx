@@ -62,7 +62,7 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
     const handleMapLocationUpdate = (addressString: string, locationData: MapLocationData) => {
         setTempNewAddress({
             address: addressString,
-            addressLine1: locationData.city, 
+            addressLine1: addressString,
             city: locationData.city,
             pincode: locationData.pincode,
             latitude: locationData.lat,
