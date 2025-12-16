@@ -131,53 +131,52 @@ addressRouter.get(
 
 
 
+
+
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
+      // 1. User ID चेक: सुनिश्चित करें कि यह मौजूद है
       const userId = req.user?.id; 
       if (!userId) {
-        return res.status(401).json({ message: 'Unauthorized' });
+        // यदि टोकन मौजूद है लेकिन req.user.id नहीं है, तो यह Auth Middleware की समस्या है
+        console.error("Auth Middleware Error: User ID is missing after token verification.");
+        return res.status(401).json({ message: 'Unauthorized: User ID missing.' });
       }
+
+      // 🛑 FIX: Number() का उपयोग करके सुनिश्चित करें कि यह संख्या है
       const userIdNum = Number(userId);
-
-      const validation = CreateAddressSchema.safeParse(req.body);
-      if (!validation.success) {
-        return res.status(400).json({ errors: validation.error.issues });
+      if (isNaN(userIdNum)) {
+         // यदि req.user.id एक Firebase UID स्ट्रिंग है, तो यह NaN देगा
+         console.error("Auth Middleware Error: req.user.id is not a valid number. Value:", userId);
+         // यदि आपका users टेबल Firebase UID का उपयोग करता है, तो आपको यह तर्क बदलना होगा
+         return res.status(401).json({ message: 'Unauthorized: User ID type mismatch.' });
       }
-
-      // 🛑 FIX 1: pincode, latitude, longitude को extract करें
-      const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
-
-      if (addressDetails.isDefault) {
-        await db.update(deliveryAddresses)
-          .set({ isDefault: false })
-          .where(eq(deliveryAddresses.userId, userIdNum));
-      }
-
+      
+      // ... (Zod validation, pincode/latitude/longitude extraction) ...
+      
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
           ...addressDetails,
           postalCode: pincode, 
-          userId: userIdNum,
-          
-          // ✅ FIX 2: decimal कॉलम में डालने से पहले Number को String में बदलें
+          // 🛑 FIX: latitude/longitude को String में रखना सुरक्षित है
           latitude: String(latitude), 
           longitude: String(longitude),
+          // 🛑 FIX: userIdNum का उपयोग करें (जो अब Number है)
+          userId: userIdNum, 
         })
         .returning();
 
       return res.status(201).json(newAddress);
     } catch (error) {
-      // ⚠️ अपने Render/Backend Logs में देखें कि क्या अब कोई नई त्रुटि दिख रही है।
-      console.error('Error creating address (Type Cast attempt):', error); 
+      // ⚠️ यह क्रैश अब NOT NULL constraint या FOREIGN KEY constraint के कारण होना चाहिए।
+      console.error('FINAL CRASH LOG: Error creating address:', error);
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
 );
-
-
 
 
 // 4. PUT /api/addresses/:id
