@@ -148,6 +148,15 @@ addressRouter.post(
 
       // 🛑 FIX: Number() का उपयोग करके सुनिश्चित करें कि यह संख्या है
       const userIdNum = Number(userId);
+       // 🚨 चेक 1: क्या Auth Middleware सही ID दे रहा है?
+      console.log(`[AUTH-DEBUG-1] Received User ID: ${userId} (Type: ${typeof userId})`);
+
+      if (!userId) {
+        return res.status(401).json({ message: 'Unauthorized: User ID missing.' });
+      }
+      
+      // 🚨 चेक 2: क्या यह वास्तव में एक संख्या है?
+      const userIdNum = Number(userId);
       if (isNaN(userIdNum)) {
          // यदि req.user.id एक Firebase UID स्ट्रिंग है, तो यह NaN देगा
          console.error("Auth Middleware Error: req.user.id is not a valid number. Value:", userId);
@@ -197,6 +206,15 @@ addressRouter.put(
         return res.status(400).json({ errors: validation.error.issues });
       }
       const updateData = validation.data;
+        if (!state || state.length === 0) {
+          // स्कीमा कहती है कि state notNull है, लेकिन यदि यह undefined/खाली स्ट्रिंग है, तो यह क्रैश होगा।
+          console.error(`[FATAL-DEBUG-3] State is missing or empty. Value: ${state}`);
+          return res.status(500).json({ message: 'Internal server error: State field is mandatory.' });
+        }
+       if (!addressDetails.city || addressDetails.city.length === 0) {
+          console.error(`[FATAL-DEBUG-4] City is missing or empty. Value: ${addressDetails.city}`);
+          return res.status(500).json({ message: 'Internal server error: City field is mandatory.' });
+       }
 
       // 🛑 FIX 7: existingAddress query को पूरा करें और इसे update से पहले चलाएं
       const existingAddresses = await db.select()
