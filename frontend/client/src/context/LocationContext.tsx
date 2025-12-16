@@ -9,7 +9,7 @@ import React, {
   useMemo,
 } from "react";
 import axios from "axios";
-
+import { useAuth } from '@/hooks/useAuth';
 // --- Interfaces for Location Data ---
 interface LatLng {
   lat: number;
@@ -65,9 +65,9 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
 
   // 🔐 Get token
-  const getAuthToken = useCallback((): string | null => {
-    return localStorage.getItem("authToken");
-  }, []);
+ // const getAuthToken = useCallback((): string | null => {
+  //  return localStorage.getItem("authToken");
+ // }, []);
 
   // --- 1. Backend Location Processing ---
   const processLocation = useCallback(
@@ -169,7 +169,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
   // --- 4. Load Saved Addresses ---
   const loadSavedAddresses = useCallback(async () => {
-    const token = getAuthToken();
+    const token = user?.idToken;
     if (!token) {
       setSavedAddresses([]);
       return;
@@ -194,7 +194,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       console.error("Error loading saved addresses:", err);
       setError("सहेजे गए पते लोड करने में असमर्थ।");
     }
-  }, [API_BASE_URL, getAuthToken, currentLocation, setSelectedAddress]); // 👈 यह अब सुरक्षित है
+  }, [API_BASE_URL, user?.idToken, currentLocation, setSelectedAddress]);
 
 
   // --- 5. Initial Load (from Cache or Geolocation) ---
