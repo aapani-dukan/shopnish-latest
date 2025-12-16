@@ -5,7 +5,7 @@ import { useLocation, ProcessedLocation } from '@/context/LocationContext';
 import AddressInputWithMap from './AddressInputWithMap';
 import axios from 'axios';
 // 🛑 FIX 1: Firebase Auth Context इम्पोर्ट करें
-import { useAuth } from '@/context/AuthContext'; 
+import { useAuth } from '@/hooks/useAuth'; 
 
 // Interfaces for LatLng data received from Map component
 interface MapLocationData { 
