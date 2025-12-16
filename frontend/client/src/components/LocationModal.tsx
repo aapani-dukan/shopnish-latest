@@ -88,7 +88,7 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
 
         
         try {
-            const API_URL = import.meta.env.VITE_BACKEND_API_URL;
+            const API_URL = import.meta.env.VITE_API_BASE_URL;
             
             // 🛑 FIX 1: URL में '/api' जोड़कर fullApiUrl को परिभाषित करें
             const fullApiUrl = `${API_URL}/api/addresses`; 
