@@ -55,6 +55,8 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
 
     const handleSelectSavedAddress = (address: ProcessedLocation) => {
         setSelectedAddress(address);
+        console.log("Selected Address Set, New Location:", address.address); 
+    
         onClose(); 
     };
 
