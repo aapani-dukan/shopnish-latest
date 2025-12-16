@@ -2,7 +2,7 @@
 
 import { Router, Request, Response, NextFunction } from 'express'; // NextFunction जोड़ा गया
 import { db } from '../server/db'; 
-import { deliveryAddresses } from '../shared/backend/schema'; 
+import { deliveryAddresses, users } from '../shared/backend/schema'; 
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod'; 
 // Auth middleware से AuthenticatedRequest/requireAuth/verifyToken आयात करें
