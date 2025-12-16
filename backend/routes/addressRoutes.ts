@@ -130,6 +130,7 @@ addressRouter.get(
 
 
 
+
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
@@ -141,17 +142,14 @@ addressRouter.post(
       }
       const userIdNum = Number(userId);
 
-      // Zod validation
       const validation = CreateAddressSchema.safeParse(req.body);
       if (!validation.success) {
-        console.error("Zod Error:", validation.error.issues);
         return res.status(400).json({ errors: validation.error.issues });
       }
 
-      // 🛑 FIX 1: pincode को extract करें, और बाकी fields को addressDetails में रखें
-      const { pincode, ...addressDetails } = validation.data; 
+      // 🛑 FIX 1: pincode, latitude, longitude को extract करें
+      const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
 
-      // 🛑 FIX 2: isDefault = true होने पर पुराने डिफ़ॉल्ट पते हटा दें
       if (addressDetails.isDefault) {
         await db.update(deliveryAddresses)
           .set({ isDefault: false })
@@ -161,21 +159,25 @@ addressRouter.post(
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
           ...addressDetails,
-          // ✅ Mapping: 'pincode' को 'postalCode' कॉलम में डालें
           postalCode: pincode, 
-          userId: userIdNum, 
+          userId: userIdNum,
+          
+          // ✅ FIX 2: decimal कॉलम में डालने से पहले Number को String में बदलें
+          latitude: String(latitude), 
+          longitude: String(longitude),
         })
         .returning();
 
       return res.status(201).json(newAddress);
     } catch (error) {
-      // ⚠️ Drizzle की त्रुटि अब नहीं आनी चाहिए
-      console.error('Error creating address:', error);
-      // यदि error.message में DB-specific जानकारी है, तो उसे Render logs में देखें।
+      // ⚠️ अपने Render/Backend Logs में देखें कि क्या अब कोई नई त्रुटि दिख रही है।
+      console.error('Error creating address (Type Cast attempt):', error); 
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
 );
+
+
 
 
 // 4. PUT /api/addresses/:id
