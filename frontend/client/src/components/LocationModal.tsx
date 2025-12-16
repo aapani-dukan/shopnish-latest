@@ -86,10 +86,21 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
         setIsSaving(true);
         const token = user.idToken; // ✅ Firebase Auth Context से टोकन प्राप्त करें
 
+        
         try {
             const API_URL = import.meta.env.VITE_BACKEND_API_URL;
             
-            const response = await axios.post(`${API_URL}/addresses`, {
+            // 🛑 FIX 1: URL में '/api' जोड़कर fullApiUrl को परिभाषित करें
+            const fullApiUrl = `${API_URL}/api/addresses`; 
+
+            if (!API_URL || API_URL.includes('undefined')) {
+                console.error("API URL is misconfigured in environment variables:", API_URL);
+                alert("API कॉन्फ़िगरेशन त्रुटि। कृपया प्रशासक से संपर्क करें।");
+                return;
+            }
+            
+            // ✅ FIX 2: axios.post में 'fullApiUrl' का उपयोग करें!
+            const response = await axios.post(fullApiUrl, { 
                 // fullName और phoneNumber को User Profile से प्राप्त किया जाना चाहिए, या इनपुट किया जाना चाहिए
                 fullName: user.name || 'Guest User', 
                 phoneNumber: user.phoneNumber || '9999999999', 
