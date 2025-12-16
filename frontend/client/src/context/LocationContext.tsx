@@ -60,7 +60,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const [savedAddresses, setSavedAddresses] = useState<ProcessedLocation[]>([]);
   const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
-
+  const { user } = useAuth(); 
   const API_BASE_URL =
     import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
 
@@ -194,7 +194,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
       console.error("Error loading saved addresses:", err);
       setError("सहेजे गए पते लोड करने में असमर्थ।");
     }
-  }, [API_BASE_URL, user?.idToken, currentLocation, setSelectedAddress]);
+  }, [API_BASE_URL, user, currentLocation, setSelectedAddress]);
 
 
   // --- 5. Initial Load (from Cache or Geolocation) ---
