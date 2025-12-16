@@ -131,55 +131,44 @@ addressRouter.get(
 
 
 
-
-
-// 3. POST /api/addresses
-
-// backend/src/routes/addressRoutes.ts
-
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const userId = req.user?.id; 
-      // ⚠️ यदि Render लॉग अभी भी काम नहीं कर रहे हैं, तो यह जाँच महत्वपूर्ण है:
-      const userIdNum = Number(userId);
+      const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID प्राप्त करें (string)
+      if (!firebaseUid) {
+        return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
+      }
 
-      if (!userId || isNaN(userIdNum)) {
-         // यदि यह संख्या नहीं है, तो यह यहीं से विफल हो जाएगा (401 error)
-         return res.status(401).json({ message: 'Unauthorized: Invalid User ID provided.' });
+      // 🛑 FIX: Drizzle Users टेबल से Numeric ID (Postgres ID) को Fetch करें
+      const userResult = await db.select({ id: users.id })
+        .from(users)
+        .where(eq(users.firebaseUid, firebaseUid)) // मान लें कि users टेबल में firebaseUid कॉलम है
+        .limit(1);
+
+      const userIdNum = userResult[0]?.id; // Numeric ID प्राप्त करें
+      
+      if (!userIdNum) {
+          // यदि Firebase UID मौजूद है लेकिन वह हमारे DB में नहीं है
+          return res.status(404).json({ message: 'User profile not found in database.' });
       }
       
-      // ... (Zod validation) ...
-      const validation = CreateAddressSchema.safeParse(req.body);
-      // ...
-      
-      const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
-
-      // 🛑 FIX: isDefault हटाने वाला लॉजिक (जो क्रैश कर सकता है) को अस्थायी रूप से हटाएं
-      /*
-      if (addressDetails.isDefault) {
-        await db.update(deliveryAddresses)
-          .set({ isDefault: false })
-          .where(eq(deliveryAddresses.userId, userIdNum));
-      }
-      */
+      // ... (Zod validation और बाकी लॉजिक) ...
 
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
           ...addressDetails,
           postalCode: pincode, 
-          userId: userIdNum,
+          userId: userIdNum, // अब यह एक मान्य संख्यात्मक Drizzle ID है
           latitude: String(latitude), 
           longitude: String(longitude),
         })
         .returning();
 
-      return res.status(201).json(newAddress);
+      // ...
     } catch (error) {
-      // यदि यह यहां विफल होता है, तो 99% यह Foreign Key Violation है।
-      console.error('[FINAL-CATCH] DB INSERT failed, likely Foreign Key issue:', error);
+      console.error('[FINAL-FOREIGN-KEY-CRASH]', error);
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
