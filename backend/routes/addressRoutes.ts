@@ -112,13 +112,25 @@ addressRouter.get(
   '/user',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      // 🛑 FIX 3: Drizzle ID का उपयोग करें (firebaseUid नहीं) और उसे Number में बदलें
-      const userId = req.user?.id; 
-      if (!userId) return res.status(401).json({ message: 'Unauthorized' });
+      // 1. Firebase UID प्राप्त करें
+      const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID स्ट्रिंग
+      if (!firebaseUid) return res.status(401).json({ message: 'Unauthorized' });
+
+      // 🛑 FIX: Drizzle Users टेबल से Postgres User ID (संख्या) प्राप्त करें
+      const userResult = await db.select({ id: users.id }) // users स्कीमा को इम्पोर्ट करना याद रखें
+        .from(users)
+        .where(eq(users.firebaseUid, firebaseUid)) 
+        .limit(1);
+
+      const userIdNum = userResult[0]?.id; // यह अब Postgres Integer ID है
+
+      if (!userIdNum) {
+          return res.status(404).json({ message: 'User profile not found in database.' });
+      }
 
       const userAddresses = await db.select()
         .from(deliveryAddresses)
-        .where(eq(deliveryAddresses.userId, Number(userId))); // Number में बदलने की आवश्यकता हो सकती है
+        .where(eq(deliveryAddresses.userId, userIdNum)); // ✅ सही संख्यात्मक ID का उपयोग करें
 
       return res.status(200).json(userAddresses);
     } catch (error) {
@@ -129,9 +141,6 @@ addressRouter.get(
 );
 
 
-
-
-// 3. POST /api/addresses
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
