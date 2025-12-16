@@ -138,10 +138,13 @@ addressRouter.post(
   async (req: AuthenticatedRequest, res: Response) => {
     try {
       // 1. Firebase UID प्राप्त करें
-      const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID स्ट्रिंग
-      if (!firebaseUid) {
-        return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
-      }
+      const firebaseUid = req.user?.firebaseUid;
+         if (!firebaseUid || typeof firebaseUid !== 'string') {
+        console.error("Auth Error: req.user does not contain a valid Firebase UID string.");
+        // यदि 18 आ रहा है, तो आपका middleware गलत property का उपयोग कर रहा है।
+        return res.status(401).json({ message: 'Authentication Failed: Invalid UID type.' });
+         }
+      
 
       // 🛑 FIX 1: Firebase UID का उपयोग करके Postgres (Drizzle) User ID (संख्या) प्राप्त करें
       const userResult = await db.select({ id: users.id })
