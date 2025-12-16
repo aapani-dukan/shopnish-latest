@@ -161,6 +161,11 @@ addressRouter.post(
       }
       
       // ... (Zod validation, pincode, lat/lng extraction) ...
+      const validation = CreateAddressSchema.safeParse(req.body);
+      if (!validation.success) {
+        // यदि डेटा अमान्य है, तो 400 त्रुटि दें
+        return res.status(400).json({ errors: validation.error.issues });
+      }
       const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
 
       // 🛑 FIX 2: isDefault लॉजिक को वापस लाएँ (यह अब क्रैश नहीं होगा क्योंकि userIdNum एक संख्या है)
