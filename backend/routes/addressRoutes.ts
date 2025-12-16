@@ -132,48 +132,59 @@ addressRouter.get(
 
 
 // 3. POST /api/addresses
+// 3. POST /api/addresses
 addressRouter.post(
   '/',
   async (req: AuthenticatedRequest, res: Response) => {
     try {
-      const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID प्राप्त करें (string)
+      // 1. Firebase UID प्राप्त करें
+      const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID स्ट्रिंग
       if (!firebaseUid) {
         return res.status(401).json({ message: 'Unauthorized: Firebase UID missing.' });
       }
 
-      // 🛑 FIX: Drizzle Users टेबल से Numeric ID (Postgres ID) को Fetch करें
+      // 🛑 FIX 1: Firebase UID का उपयोग करके Postgres (Drizzle) User ID (संख्या) प्राप्त करें
       const userResult = await db.select({ id: users.id })
         .from(users)
-        .where(eq(users.firebaseUid, firebaseUid)) // मान लें कि users टेबल में firebaseUid कॉलम है
+        .where(eq(users.firebaseUid, firebaseUid)) // ⚠️ सुनिश्चित करें कि users टेबल में 'firebaseUid' कॉलम है (string)
         .limit(1);
 
-      const userIdNum = userResult[0]?.id; // Numeric ID प्राप्त करें
-      
+      const userIdNum = userResult[0]?.id; // यह अब Postgres Integer ID है
+
       if (!userIdNum) {
-          // यदि Firebase UID मौजूद है लेकिन वह हमारे DB में नहीं है
+          // यदि उपयोगकर्ता हमारे DB में नहीं है (केवल Firebase में है)
+          console.error(`User not found in DB for UID: ${firebaseUid}`);
           return res.status(404).json({ message: 'User profile not found in database.' });
       }
       
-      // ... (Zod validation और बाकी लॉजिक) ...
+      // ... (Zod validation, pincode, lat/lng extraction) ...
+      const { pincode, latitude, longitude, ...addressDetails } = validation.data; 
 
+      // 🛑 FIX 2: isDefault लॉजिक को वापस लाएँ (यह अब क्रैश नहीं होगा क्योंकि userIdNum एक संख्या है)
+      if (addressDetails.isDefault) {
+        await db.update(deliveryAddresses)
+          .set({ isDefault: false })
+          .where(eq(deliveryAddresses.userId, userIdNum));
+      }
+
+      // 🛑 FIX 3: Drizzle Insert
       const [newAddress] = await db.insert(deliveryAddresses)
         .values({
           ...addressDetails,
           postalCode: pincode, 
-          userId: userIdNum, // अब यह एक मान्य संख्यात्मक Drizzle ID है
+          userId: userIdNum, // ✅ यह अब संख्या (integer) है!
           latitude: String(latitude), 
           longitude: String(longitude),
         })
         .returning();
 
-      // ...
+      return res.status(201).json(newAddress);
     } catch (error) {
-      console.error('[FINAL-FOREIGN-KEY-CRASH]', error);
+      console.error('Error creating address (Final):', error);
       return res.status(500).json({ message: 'Internal server error.' });
     }
   }
 );
-
 // 4. PUT /api/addresses/:id
 addressRouter.put(
   '/:id',
