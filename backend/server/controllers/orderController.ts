@@ -1,3 +1,4 @@
+
 // backend/server/controllers/ordercontroller.ts
 import { Request, Response, NextFunction } from "express"; // ✅ express imports को सही करें
 import { v4 as uuidv4 } from "uuid";
@@ -1208,6 +1209,8 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
  * fetches details for a specific master order id.
  */
 
+ 
+
 export const getOrderDetail = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -1248,8 +1251,7 @@ export const getOrderDetail = async (
       .orderBy(desc(orderTracking.timestamp));
 
     /* =======================
-       3. SUB ORDERS (FLAT SELECT)
-       ⚠️ No undefined fields
+       3. SUB ORDERS (FLAT SELECT ONLY)
     ======================= */
     const subOrdersData = await db
       .select({
@@ -1258,7 +1260,6 @@ export const getOrderDetail = async (
         status: subOrders.status,
         total: subOrders.total,
         isSelfDeliveryBySeller: subOrders.isSelfDeliveryBySeller,
-        deliveryBatchId: subOrders.deliveryBatchId,
 
         sellerName: sellersPgTable.businessName,
         sellerPhone: sellersPgTable.businessPhone,
@@ -1284,59 +1285,70 @@ export const getOrderDetail = async (
       .where(eq(subOrders.masterOrderId, orderId));
 
     /* =======================
-       4. ITEMS PER SUB ORDER
+       4. ITEMS PER SUB ORDER (FLAT → MAP)
     ======================= */
     const detailedSubOrders = await Promise.all(
-      subOrdersData.map(async (item) => {
-        const items = await db
+      subOrdersData.map(async (sub) => {
+        const itemsRaw = await db
           .select({
             id: orderItems.id,
             quantity: orderItems.quantity,
             unitPrice: orderItems.unitPrice,
-            product: {
-              id: products.id,
-              name: products.name,
-              image: products.image,
-              unit: products.unit,
-            },
+
+            productId: products.id,
+            productName: products.name,
+            productImage: products.image,
+            productUnit: products.unit,
           })
           .from(orderItems)
           .leftJoin(products, eq(orderItems.productId, products.id))
-          .where(eq(orderItems.subOrderId, item.id));
+          .where(eq(orderItems.subOrderId, sub.id));
+
+        const items = itemsRaw.map((i) => ({
+          id: i.id,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          product: i.productId
+            ? {
+                id: i.productId,
+                name: i.productName,
+                image: i.productImage,
+                unit: i.productUnit,
+              }
+            : null,
+        }));
 
         return {
-          id: item.id,
-          subOrderNumber: item.subOrderNumber,
-          status: item.status,
-          total: item.total,
+          id: sub.id,
+          subOrderNumber: sub.subOrderNumber,
+          status: sub.status,
+          total: sub.total,
 
-          seller: item.sellerName
+          seller: sub.sellerName
             ? {
-                businessName: item.sellerName,
-                businessPhone: item.sellerPhone,
+                businessName: sub.sellerName,
+                businessPhone: sub.sellerPhone,
               }
             : null,
 
-          store: item.storeName
-            ? { storeName: item.storeName }
-            : null,
+          store: sub.storeName ? { storeName: sub.storeName } : null,
 
           orderItems: items,
 
-          deliveryBoy: item.deliveryBoyName
+          deliveryBoy: sub.deliveryBoyName
             ? {
-                name: item.deliveryBoyName,
-                phone: item.deliveryBoyPhone,
+                name: sub.deliveryBoyName,
+                phone: sub.deliveryBoyPhone,
               }
             : null,
 
-          deliveryStatus: item.batchStatus ?? item.status,
+          deliveryStatus: sub.batchStatus ?? sub.status,
         };
       })
     );
 
     /* =======================
-       5. ADDRESS PARSE SAFE
+       5. ADDRESS PARSE (SAFE)
     ======================= */
     let parsedAddress: any = {};
     try {
