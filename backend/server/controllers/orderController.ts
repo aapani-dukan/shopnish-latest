@@ -1222,37 +1222,40 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, n
     }
 
     // 2. Tracking Details लें
-    const tracking = await db.select()
-      .from(orderTracking)
-      .where(eq(orderTracking.masterOrderId, orderId))
-      .orderBy(desc(orderTracking.createdAt));
+    // ... ऊपर का कोड वैसा ही रहेगा ...
 
-    // 3. Sub-Orders, Sellers, Stores और Delivery Info एक साथ लें
-    const subOrdersData = await db.select({
-      subOrder: subOrders,
-      seller: {
-        id: sellersPgTable.id,
-        businessName: sellersPgTable.businessName,
-        businessPhone: sellersPgTable.businessPhone,
-      },
-      store: {
-        id: stores.id,
-        storeName: stores.storeName,
-      },
-      deliveryBoy: {
-        id: deliveryBoys.id,
-        name: deliveryBoys.name,
-        phone: deliveryBoys.phone,
-      },
-      batchStatus: deliveryBatches.status
-    })
-    .from(subOrders)
-    .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
-    .leftJoin(stores, eq(subOrders.storeId, stores.id))
-    .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
-    .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
-    .where(eq(subOrders.masterOrderId, orderId));
+// 2. Tracking Details लें (Fixed OrderBy)
+const tracking = await db.select()
+  .from(orderTracking)
+  .where(eq(orderTracking.masterOrderId, orderId))
+  .orderBy(desc(orderTracking.timestamp)); // 👈 यहाँ सुनिश्चित करें कि कॉलम 'timestamp' ही है
 
+// 3. Sub-Orders वाली क्वेरी में भी एक छोटा सुधार
+const subOrdersData = await db.select({
+  subOrder: subOrders,
+  seller: {
+    id: sellersPgTable.id,
+    businessName: sellersPgTable.businessName,
+    businessPhone: sellersPgTable.businessPhone,
+  },
+  store: {
+    id: stores.id,
+    storeName: stores.storeName,
+  },
+  deliveryBoy: {
+    id: deliveryBoys.id,
+    name: deliveryBoys.name,
+    phone: deliveryBoys.phone,
+  },
+  batchStatus: deliveryBatches.status
+})
+.from(subOrders)
+.leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
+.leftJoin(stores, eq(subOrders.storeId, stores.id))
+.leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
+.leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
+.where(eq(subOrders.masterOrderId, orderId));
+    
     // 4. हर Sub-Order के लिए Items निकालें
     const detailedSubOrders = await Promise.all(subOrdersData.map(async (item) => {
       const items = await db.select({
