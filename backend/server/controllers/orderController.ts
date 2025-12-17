@@ -1201,9 +1201,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
  * fetches details for a specific master order id.
  */
 
-
 export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log("🔍 [API] Fetching order details via Standard Joins...");
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -1211,57 +1209,48 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, n
     if (!customerId) return res.status(401).json({ message: "Unauthorized." });
     if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID." });
 
-    // 1. सबसे पहले Master Order और उसकी Basic Details लें
-    const masterOrder = await db.select()
-      .from(orders)
+    // 1. Master Order Fetch
+    const masterOrder = await db.select().from(orders)
       .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)))
       .limit(1);
 
-    if (masterOrder.length === 0) {
-      return res.status(404).json({ message: "Master order not found." });
-    }
+    if (masterOrder.length === 0) return res.status(404).json({ message: "Order not found." });
 
-    // 2. Tracking Details लें
-    // ... ऊपर का कोड वैसा ही रहेगा ...
+    // 2. Tracking Fetch
+    const tracking = await db.select().from(orderTracking)
+      .where(eq(orderTracking.masterOrderId, orderId))
+      .orderBy(desc(orderTracking.timestamp));
 
-// 2. Tracking Details लें (Fixed OrderBy)
-const tracking = await db.select()
-  .from(orderTracking)
-  .where(eq(orderTracking.masterOrderId, orderId))
-  .orderBy(desc(orderTracking.timestamp)); // 👈 यहाँ सुनिश्चित करें कि कॉलम 'timestamp' ही है
+    // 3. Sub-Orders Fetch (Flat Select)
+    const subOrdersData = await db.select({
+      id: subOrders.id,
+      subOrderNumber: subOrders.subOrderNumber,
+      status: subOrders.status,
+      total: subOrders.total,
+      sellerId: subOrders.sellerId,
+      isSelfDeliveryBySeller: subOrders.isSelfDeliveryBySeller,
+      deliveryBatchId: subOrders.deliveryBatchId,
+      sellerName: sellersPgTable.businessName,
+      sellerPhone: sellersPgTable.businessPhone,
+      storeName: stores.storeName,
+      deliveryBoyName: deliveryBoys.name,
+      deliveryBoyPhone: deliveryBoys.phone,
+      batchStatus: deliveryBatches.status
+    })
+    .from(subOrders)
+    .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
+    .leftJoin(stores, eq(subOrders.storeId, stores.id))
+    .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
+    .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
+    .where(eq(subOrders.masterOrderId, orderId));
 
-// 3. Sub-Orders वाली क्वेरी में भी एक छोटा सुधार
-// 3. Sub-Orders Query (इसे थोड़ा बदलें ताकि undefined ऑब्जेक्ट की एरर न आए)
-const subOrdersData = await db.select({
-  // यहाँ सीधे कॉलम का नाम लिखें, पूरा 'subOrders' ऑब्जेक्ट पास करने के बजाय
-  id: subOrders.id,
-  subOrderNumber: subOrders.subOrderNumber,
-  status: subOrders.status,
-  total: subOrders.total,
-  sellerId: subOrders.sellerId,
-  isSelfDeliveryBySeller: subOrders.isSelfDeliveryBySeller,
-  deliveryBatchId: subOrders.deliveryBatchId,
-  
-  // Joins के डेटा के लिए सावधानी से मैपिंग करें
-  sellerName: sellersPgTable.businessName,
-  sellerPhone: sellersPgTable.businessPhone,
-  storeName: stores.storeName,
-  deliveryBoyName: deliveryBoys.name,
-  deliveryBoyPhone: deliveryBoys.phone,
-  batchStatus: deliveryBatches.status
-})
-.from(subOrders)
-.leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
-.leftJoin(stores, eq(subOrders.storeId, stores.id))
-.leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
-.leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
-.where(eq(subOrders.masterOrderId, orderId));
-    // 4. हर Sub-Order के लिए Items निकालें
+    // 4. Items Mapping (Fixing the 'undefined' error)
     const detailedSubOrders = await Promise.all(subOrdersData.map(async (item) => {
+      // ✅ यहाँ 'item.id' यूज़ करें (item.subOrder.id नहीं)
       const items = await db.select({
         id: orderItems.id,
         quantity: orderItems.quantity,
-        price: orderItems.unitPrice,
+        unitPrice: orderItems.unitPrice,
         product: {
           id: products.id,
           name: products.name,
@@ -1271,32 +1260,28 @@ const subOrdersData = await db.select({
       })
       .from(orderItems)
       .leftJoin(products, eq(orderItems.productId, products.id))
-      .where(eq(orderItems.subOrderId, item.subOrder.id));
+      .where(eq(orderItems.subOrderId, item.id)); // Use item.id directly
 
       return {
-    id: item.id,
-    status: item.status,
-    total: item.total,
-    seller: { businessName: item.sellerName, businessPhone: item.sellerPhone },
-    store: { storeName: item.storeName },
-    deliveryBoy: item.deliveryBoyName ? { name: item.deliveryBoyName, phone: item.deliveryBoyPhone } : null,
-    deliveryStatus: item.batchStatus || item.status,
-    orderItems: items // जो आपने Promise.all में फेच किए
-  };
-}));
+        id: item.id,
+        subOrderNumber: item.subOrderNumber,
+        status: item.status,
+        total: item.total,
+        seller: { businessName: item.sellerName, businessPhone: item.sellerPhone },
+        store: { storeName: item.storeName },
+        orderItems: items,
+        deliveryBoy: item.deliveryBoyName ? { name: item.deliveryBoyName, phone: item.deliveryBoyPhone } : null,
+        deliveryStatus: item.batchStatus || item.status
+      };
+    }));
 
-    // JSON Parse Address
     let parsedAddress = {};
     try {
       parsedAddress = typeof masterOrder[0].deliveryAddress === 'string' 
         ? JSON.parse(masterOrder[0].deliveryAddress) 
         : masterOrder[0].deliveryAddress;
-    } catch (e) {
-      parsedAddress = masterOrder[0].deliveryAddress;
-    }
+    } catch (e) { parsedAddress = masterOrder[0].deliveryAddress; }
 
-    console.log(`✅ [API] Successfully fetched master order ${orderId}.`);
-    
     res.status(200).json({
       ...masterOrder[0],
       deliveryAddress: parsedAddress,
@@ -1309,4 +1294,3 @@ const subOrdersData = await db.select({
     res.status(500).json({ message: "Internal Server Error while fetching order details." });
   }
 };
-
