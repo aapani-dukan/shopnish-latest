@@ -221,7 +221,10 @@ export default function OrderManager({
     // For other statuses (picked_up, out_for_delivery, delivered, cancelled, rejected) no seller action
     return null;
   };
-
+const formatPrice = (value: any) => {
+  const num = Number(value);
+  return Number.isFinite(num) ? num.toFixed(2) : "0.00";
+};
   const renderContent = () => {
     if (isLoading) {
       return (
@@ -253,7 +256,9 @@ export default function OrderManager({
             )}
 
             <p className="text-sm text-muted-foreground">भुगतान: <strong>{order.paymentMethod || "N/A"}</strong> ({order.paymentStatus || "pending"})</p>
-            <p className="text-sm text-muted-foreground">कुल: <strong>₹{Number(order.total ?? 0).toFixed(2)}</strong></p>
+            <p className="text-sm text-muted-foreground">
+  कुल: <strong>₹{formatPrice(order.total)}</strong>
+</p>
             <p className="text-sm text-muted-foreground">ऑर्डर समय: {order.createdAt ? new Date(order.createdAt).toLocaleString() : "—"}</p>
 
             <div className="mt-4 space-y-3">
@@ -262,7 +267,9 @@ export default function OrderManager({
                   <img src={item.product?.image || item.productImage || "/placeholder.png"} alt={item.product?.name || item.productName || "product"} className="w-12 h-12 object-cover rounded" />
                   <div>
                     <p className="font-semibold">{item.product?.name || item.productName || "अनाम उत्पाद"}</p>
-                    <p className="text-sm text-gray-500">मात्रा: {item.quantity} × ₹{Number(item.productPrice ?? item.unitPrice ?? 0).toFixed(2)}</p>
+                    <p className="text-sm text-gray-500">
+  मात्रा: {item.quantity} × ₹{formatPrice(item.productPrice ?? item.unitPrice)}
+</p>
                   </div>
                 </div>
               ))}
