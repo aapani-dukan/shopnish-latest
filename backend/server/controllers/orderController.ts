@@ -1274,14 +1274,16 @@ const subOrdersData = await db.select({
       .where(eq(orderItems.subOrderId, item.subOrder.id));
 
       return {
-        ...item.subOrder,
-        seller: item.seller,
-        store: item.store,
-        orderItems: items,
-        deliveryBoy: item.deliveryBoy,
-        deliveryStatus: item.batchStatus || item.subOrder.status
-      };
-    }));
+    id: item.id,
+    status: item.status,
+    total: item.total,
+    seller: { businessName: item.sellerName, businessPhone: item.sellerPhone },
+    store: { storeName: item.storeName },
+    deliveryBoy: item.deliveryBoyName ? { name: item.deliveryBoyName, phone: item.deliveryBoyPhone } : null,
+    deliveryStatus: item.batchStatus || item.status,
+    orderItems: items // जो आपने Promise.all में फेच किए
+  };
+}));
 
     // JSON Parse Address
     let parsedAddress = {};
