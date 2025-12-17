@@ -142,19 +142,27 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   // --- 3. Select Saved Address (Must be defined BEFORE loadSavedAddresses) ---
   
 
-const setSelectedAddress = useCallback((address: ProcessedLocation) => {
+// client/src/context/LocationContext.tsx
+
+const setSelectedAddress = useCallback((address: any) => { // 'any' temporarily to debug
     try {
-        // 1. डेटा की जांच
         if (!address) return;
-        const lat = Number(address.lat);
-        const lng = Number(address.lng);
+
+        // 🛑 Backend 'latitude' भेज सकता है और Frontend 'lat' ढूंढ रहा है
+        // इसे मैप करें:
+        const lat = Number(address.lat || address.latitude);
+        const lng = Number(address.lng || address.longitude);
         
-        if (isNaN(lat) || isNaN(lng)) {
-            console.error("Invalid Lat/Lng received in setSelectedAddress");
-            return;
+        if (isNaN(lat) || isNaN(lng) || lat === 0) {
+            console.error("❌ Data Mismatch:", { 
+                receivedLat: address.lat, 
+                receivedLatitude: address.latitude,
+                addressObject: address 
+            });
+            // अगर Lat/Lng नहीं है, तो प्रोसेस को रोकें नहीं तो पुराना पता ही दिखता रहेगा
+            return; 
         }
 
-        // 2. एड्रेस स्ट्रिंग बनाना (जैसा आप चाहते हैं)
         const addressString = address.addressLine1 && address.city 
             ? `${address.addressLine1}, ${address.city} - ${address.pincode ?? ""}`
             : (address.address || "Unknown Address");
@@ -167,23 +175,24 @@ const setSelectedAddress = useCallback((address: ProcessedLocation) => {
             inServiceArea: true,
         };
 
-        // 3. सबसे पहले Context State अपडेट करें
+        // 1. Context Update
         setCurrentLocation(updatedLocation);
 
-        // 4. 🔥 LocalStorage अपडेट (Force Update)
-        // हम इसे पक्का करने के लिए अलग-अलग लाइनों में लिख रहे हैं
+        // 2. LocalStorage Force Update
         localStorage.setItem("userLat", String(lat));
         localStorage.setItem("userLng", String(lng));
         localStorage.setItem("userAddress", String(addressString));
         localStorage.setItem("userPincode", String(address.pincode || ""));
         localStorage.setItem("userServiceArea", "true");
+        localStorage.setItem("isManualLocation", "true");
 
-        console.log("✅ SUCCESS: LocalStorage updated to:", addressString);
+        console.log("✅ FIXED: UI should now show:", addressString);
 
     } catch (err) {
-        console.error("❌ CRITICAL ERROR in setSelectedAddress:", err);
+        console.error("❌ Error in setSelectedAddress:", err);
     }
 }, []);
+  
   
   // --- 4. Load Saved Addresses ---
   const loadSavedAddresses = useCallback(async () => {
