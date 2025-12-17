@@ -1200,8 +1200,10 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
 /**
  * fetches details for a specific master order id.
  */
+
+
 export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log("🔍 [API] Received request to get specific master order details.");
+  console.log("🔍 [API] Fetching order details via Standard Joins...");
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -1209,76 +1211,97 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, n
     if (!customerId) return res.status(401).json({ message: "Unauthorized." });
     if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID." });
 
-    const masterOrderDetail = await db.query.orders.findFirst({
-      where: and(
-        eq(orders.id, orderId),
-        eq(orders.customerId, customerId)
-      ),
-      with: {
-        deliveryAddress: true,
-        subOrders: {
-          with: {
-            seller: {
-              columns: { id: true, businessName: true, businessAddress: true, businessPhone: true },
-            },
-            store: {
-              columns: { id: true, storeName: true, address: true, phone: true },
-            },
-            orderItems: {
-              with: {
-                product: {
-                  columns: {
-                    id: true, name: true, image: true, unit: true, price: true, description: true,
-                  },
-                },
-              },
-            },
-            deliveryBatch: { // बैच जानकारी अभी भी आवश्यक है
-              with: {
-                deliveryBoy: {
-                  columns: { id: true, name: true, phone: true },
-                },
-              },
-            },
-          },
-        },
-        orderTracking: {
-            orderBy: [desc(orderTracking.createdAt)],
-        }
+    // 1. सबसे पहले Master Order और उसकी Basic Details लें
+    const masterOrder = await db.select()
+      .from(orders)
+      .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)))
+      .limit(1);
+
+    if (masterOrder.length === 0) {
+      return res.status(404).json({ message: "Master order not found." });
+    }
+
+    // 2. Tracking Details लें
+    const tracking = await db.select()
+      .from(orderTracking)
+      .where(eq(orderTracking.masterOrderId, orderId))
+      .orderBy(desc(orderTracking.createdAt));
+
+    // 3. Sub-Orders, Sellers, Stores और Delivery Info एक साथ लें
+    const subOrdersData = await db.select({
+      subOrder: subOrders,
+      seller: {
+        id: sellersPgTable.id,
+        businessName: sellersPgTable.businessName,
+        businessPhone: sellersPgTable.businessPhone,
       },
-    });
+      store: {
+        id: stores.id,
+        storeName: stores.storeName,
+      },
+      deliveryBoy: {
+        id: deliveryBoys.id,
+        name: deliveryBoys.name,
+        phone: deliveryBoys.phone,
+      },
+      batchStatus: deliveryBatches.status
+    })
+    .from(subOrders)
+    .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
+    .leftJoin(stores, eq(subOrders.storeId, stores.id))
+    .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
+    .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
+    .where(eq(subOrders.masterOrderId, orderId));
 
-    if (!masterOrderDetail) {
-      return res.status(404).json({ message: "Master order not found or access denied." });
-    }
+    // 4. हर Sub-Order के लिए Items निकालें
+    const detailedSubOrders = await Promise.all(subOrdersData.map(async (item) => {
+      const items = await db.select({
+        id: orderItems.id,
+        quantity: orderItems.quantity,
+        price: orderItems.unitPrice,
+        product: {
+          id: products.id,
+          name: products.name,
+          image: products.image,
+          unit: products.unit,
+        }
+      })
+      .from(orderItems)
+      .leftJoin(products, eq(orderItems.productId, products.id))
+      .where(eq(orderItems.subOrderId, item.subOrder.id));
 
-    let parsedDeliveryAddress = {};
+      return {
+        ...item.subOrder,
+        seller: item.seller,
+        store: item.store,
+        orderItems: items,
+        deliveryBoy: item.deliveryBoy,
+        deliveryStatus: item.batchStatus || item.subOrder.status
+      };
+    }));
+
+    // JSON Parse Address
+    let parsedAddress = {};
     try {
-      parsedDeliveryAddress = JSON.parse(masterOrderDetail.deliveryAddress as string);
+      parsedAddress = typeof masterOrder[0].deliveryAddress === 'string' 
+        ? JSON.parse(masterOrder[0].deliveryAddress) 
+        : masterOrder[0].deliveryAddress;
     } catch (e) {
-      console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrderDetail.id}:`, e);
+      parsedAddress = masterOrder[0].deliveryAddress;
     }
 
-    const detailedSubOrders = (masterOrderDetail.subOrders || []).map(subOrder => {
-        const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
-        // यहां deliveryStatus बैच स्टेटस या सब-ऑर्डर स्टेटस हो सकता है
-        const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : subOrder.status);
-        
-        return {
-            ...subOrder,
-            deliveryBoy: deliveryBoy,
-            deliveryStatus: deliveryStatus,
-        };
-    });
-
-    console.log(`✅ [API] Found master order ${orderId}.`);
+    console.log(`✅ [API] Successfully fetched master order ${orderId}.`);
+    
     res.status(200).json({
-      ...masterOrderDetail,
-      deliveryAddress: parsedDeliveryAddress,
+      ...masterOrder[0],
+      deliveryAddress: parsedAddress,
+      tracking: tracking,
       subOrders: detailedSubOrders,
     });
+
   } catch (error) {
-    console.error("❌ Error fetching specific master order:", error);
-    res.status(500).json({ message: "Failed to fetch order details." });
+    console.error("❌ Error fetching order details:", error);
+    res.status(500).json({ message: "Internal Server Error while fetching order details." });
   }
 };
+
