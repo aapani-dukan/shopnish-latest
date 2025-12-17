@@ -2,7 +2,13 @@
 
 import { relations } from 'drizzle-orm';
 // ✅ सभी स्कीमा ऑब्जेक्ट्स को एक साथ इम्पोर्ट करें
-import * as schema from './schema';
+import { 
+  users, sellersPgTable, orders, reviews, serviceProviders, 
+  serviceBookings, cartItems, stores, products, categories, 
+  deliveryBoys, couponsPgTable, deliveryAddresses, subOrders, 
+  deliveryBatches, orderItems, orderTracking, promoCodes, 
+  serviceCategories, services 
+} from './table';
 
 // --- Drizzle ORM Relations ---
 
