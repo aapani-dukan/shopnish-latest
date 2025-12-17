@@ -1206,97 +1206,153 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
 /**
  * fetches details for a specific master order id.
  */
-
-export const getOrderDetail = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const getOrderDetail = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
 
-    if (!customerId) return res.status(401).json({ message: "Unauthorized." });
-    if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID." });
+    if (!customerId) {
+      return res.status(401).json({ message: "Unauthorized." });
+    }
 
-    // 1. Master Order Fetch
-    const masterOrder = await db.select().from(orders)
+    if (isNaN(orderId)) {
+      return res.status(400).json({ message: "Invalid order ID." });
+    }
+
+    // 1️⃣ Master Order
+    const masterOrder = await db
+      .select()
+      .from(orders)
       .where(and(eq(orders.id, orderId), eq(orders.customerId, customerId)))
       .limit(1);
 
-    if (masterOrder.length === 0) return res.status(404).json({ message: "Order not found." });
+    if (masterOrder.length === 0) {
+      return res.status(404).json({ message: "Order not found." });
+    }
 
-    // 2. Tracking Fetch
-    const tracking = await db.select().from(orderTracking)
+    // 2️⃣ Tracking
+    const tracking = await db
+      .select()
+      .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
       .orderBy(desc(orderTracking.timestamp));
 
-    // 3. Sub-Orders Fetch (Flat Select)
-    const subOrdersData = await db.select({
-      id: subOrders.id,
-      subOrderNumber: subOrders.subOrderNumber,
-      status: subOrders.status,
-      total: subOrders.total,
-      sellerId: subOrders.sellerId,
-      isSelfDeliveryBySeller: subOrders.isSelfDeliveryBySeller,
-      deliveryBatchId: subOrders.deliveryBatchId,
-      sellerName: sellersPgTable.businessName,
-      sellerPhone: sellersPgTable.businessPhone,
-      storeName: stores.storeName,
-      deliveryBoyName: deliveryBoys.name,
-      deliveryBoyPhone: deliveryBoys.phone,
-      batchStatus: deliveryBatches.status
-    })
-    .from(subOrders)
-    .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
-    .leftJoin(stores, eq(subOrders.storeId, stores.id))
-    .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
-    .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
-    .where(eq(subOrders.masterOrderId, orderId));
+    // 3️⃣ Sub Orders (FLAT SELECT — VERY IMPORTANT)
+    const subOrdersData = await db
+      .select({
+        id: subOrders.id,
+        subOrderNumber: subOrders.subOrderNumber,
+        status: subOrders.status,
+        total: subOrders.total,
+        isSelfDeliveryBySeller: subOrders.isSelfDeliveryBySeller,
+        deliveryBatchId: subOrders.deliveryBatchId,
 
-    // 4. Items Mapping (Fixing the 'undefined' error)
-    const detailedSubOrders = await Promise.all(subOrdersData.map(async (item) => {
-      // ✅ यहाँ 'item.id' यूज़ करें (item.subOrder.id नहीं)
-      const items = await db.select({
-        id: orderItems.id,
-        quantity: orderItems.quantity,
-        unitPrice: orderItems.unitPrice,
-        product: {
-          id: products.id,
-          name: products.name,
-          image: products.image,
-          unit: products.unit,
-        }
+        sellerName: sellersPgTable.businessName,
+        sellerPhone: sellersPgTable.businessPhone,
+
+        storeName: stores.storeName,
+
+        deliveryBoyName: deliveryBoys.name,
+        deliveryBoyPhone: deliveryBoys.phone,
+
+        batchStatus: deliveryBatches.status,
       })
-      .from(orderItems)
-      .leftJoin(products, eq(orderItems.productId, products.id))
-      .where(eq(orderItems.subOrderId, item.id)); // Use item.id directly
+      .from(subOrders)
+      .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
+      .leftJoin(stores, eq(subOrders.storeId, stores.id))
+      .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
+      .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
+      .where(eq(subOrders.masterOrderId, orderId));
 
-      return {
-        id: item.id,
-        subOrderNumber: item.subOrderNumber,
-        status: item.status,
-        total: item.total,
-        seller: { businessName: item.sellerName, businessPhone: item.sellerPhone },
-        store: { storeName: item.storeName },
-        orderItems: items,
-        deliveryBoy: item.deliveryBoyName ? { name: item.deliveryBoyName, phone: item.deliveryBoyPhone } : null,
-        deliveryStatus: item.batchStatus || item.status
-      };
-    }));
+    // 4️⃣ Sub Order Items + SAFE MAPPING
+    const detailedSubOrders = await Promise.all(
+      subOrdersData.map(async (item) => {
+        // 🔹 FLAT SELECT for items
+        const itemsRaw = await db
+          .select({
+            id: orderItems.id,
+            quantity: orderItems.quantity,
+            unitPrice: orderItems.unitPrice,
 
-    let parsedAddress = {};
+            productId: products.id,
+            productName: products.name,
+            productImage: products.image,
+            productUnit: products.unit,
+          })
+          .from(orderItems)
+          .leftJoin(products, eq(orderItems.productId, products.id))
+          .where(eq(orderItems.subOrderId, item.id));
+
+        // 🔹 SAFE JS MAPPING
+        const items = itemsRaw.map((i) => ({
+          id: i.id,
+          quantity: i.quantity,
+          unitPrice: i.unitPrice,
+          product: i.productId
+            ? {
+                id: i.productId,
+                name: i.productName,
+                image: i.productImage,
+                unit: i.productUnit,
+              }
+            : null,
+        }));
+
+        return {
+          id: item.id,
+          subOrderNumber: item.subOrderNumber,
+          status: item.status,
+          total: item.total,
+
+          seller: item.sellerName
+            ? {
+                businessName: item.sellerName,
+                businessPhone: item.sellerPhone,
+              }
+            : null,
+
+          store: item.storeName ? { storeName: item.storeName } : null,
+
+          orderItems: items,
+
+          deliveryBoy: item.deliveryBoyName
+            ? {
+                name: item.deliveryBoyName,
+                phone: item.deliveryBoyPhone,
+              }
+            : null,
+
+          deliveryStatus: item.batchStatus ?? item.status,
+        };
+      })
+    );
+
+    // 5️⃣ Address Parse (SAFE)
+    let parsedAddress: any = {};
     try {
-      parsedAddress = typeof masterOrder[0].deliveryAddress === 'string' 
-        ? JSON.parse(masterOrder[0].deliveryAddress) 
-        : masterOrder[0].deliveryAddress;
-    } catch (e) { parsedAddress = masterOrder[0].deliveryAddress; }
+      parsedAddress =
+        typeof masterOrder[0].deliveryAddress === "string"
+          ? JSON.parse(masterOrder[0].deliveryAddress)
+          : masterOrder[0].deliveryAddress;
+    } catch {
+      parsedAddress = masterOrder[0].deliveryAddress;
+    }
 
-    res.status(200).json({
+    // ✅ FINAL RESPONSE
+    return res.status(200).json({
       ...masterOrder[0],
       deliveryAddress: parsedAddress,
-      tracking: tracking,
+      tracking,
       subOrders: detailedSubOrders,
     });
-
   } catch (error) {
     console.error("❌ Error fetching order details:", error);
-    res.status(500).json({ message: "Internal Server Error while fetching order details." });
+    return res
+      .status(500)
+      .json({ message: "Internal Server Error while fetching order details." });
   }
 };
