@@ -202,7 +202,12 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
     const loadInitialLocation = async () => {
       setLoadingLocation(true);
       setError(null);
-
+if (currentLocation) {
+          setLoadingLocation(false);
+          // Console log जोड़ें ताकि पता चले कि यह ओवरराइट नहीं हो रहा
+          console.log("Context: currentLocation already set, skipping localStorage load."); 
+          return; 
+}
       const storedLat = localStorage.getItem("userLat");
       const storedLng = localStorage.getItem("userLng");
       const storedAddress = localStorage.getItem("userAddress");
@@ -226,7 +231,7 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
     loadInitialLocation();
 
-  }, [fetchCurrentGeolocation]);
+  }, [fetchCurrentGeolocation,currentLocation]);
 
   const contextValue = useMemo(
     () => ({
