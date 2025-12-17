@@ -1206,6 +1206,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
 /**
  * fetches details for a specific master order id.
  */
+
 export const getOrderDetail = async (
   req: AuthenticatedRequest,
   res: Response,
@@ -1223,7 +1224,9 @@ export const getOrderDetail = async (
       return res.status(400).json({ message: "Invalid order ID." });
     }
 
-    // 1️⃣ Master Order
+    /* =======================
+       1. MASTER ORDER
+    ======================= */
     const masterOrder = await db
       .select()
       .from(orders)
@@ -1234,14 +1237,19 @@ export const getOrderDetail = async (
       return res.status(404).json({ message: "Order not found." });
     }
 
-    // 2️⃣ Tracking
+    /* =======================
+       2. TRACKING
+    ======================= */
     const tracking = await db
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
       .orderBy(desc(orderTracking.timestamp));
 
-    // 3️⃣ Sub Orders (FLAT SELECT — VERY IMPORTANT)
+    /* =======================
+       3. SUB ORDERS (FLAT SELECT)
+       ⚠️ No undefined fields
+    ======================= */
     const subOrdersData = await db
       .select({
         id: subOrders.id,
@@ -1264,43 +1272,36 @@ export const getOrderDetail = async (
       .from(subOrders)
       .leftJoin(sellersPgTable, eq(subOrders.sellerId, sellersPgTable.id))
       .leftJoin(stores, eq(subOrders.storeId, stores.id))
-      .leftJoin(deliveryBatches, eq(subOrders.deliveryBatchId, deliveryBatches.id))
-      .leftJoin(deliveryBoys, eq(deliveryBatches.deliveryBoyId, deliveryBoys.id))
+      .leftJoin(
+        deliveryBatches,
+        eq(subOrders.deliveryBatchId, deliveryBatches.id)
+      )
+      .leftJoin(
+        deliveryBoys,
+        eq(deliveryBatches.deliveryBoyId, deliveryBoys.id)
+      )
       .where(eq(subOrders.masterOrderId, orderId));
 
-    // 4️⃣ Sub Order Items + SAFE MAPPING
+    /* =======================
+       4. ITEMS PER SUB ORDER
+    ======================= */
     const detailedSubOrders = await Promise.all(
       subOrdersData.map(async (item) => {
-        // 🔹 FLAT SELECT for items
-        const itemsRaw = await db
+        const items = await db
           .select({
             id: orderItems.id,
             quantity: orderItems.quantity,
             unitPrice: orderItems.unitPrice,
-
-            productId: products.id,
-            productName: products.name,
-            productImage: products.image,
-            productUnit: products.unit,
+            product: {
+              id: products.id,
+              name: products.name,
+              image: products.image,
+              unit: products.unit,
+            },
           })
           .from(orderItems)
           .leftJoin(products, eq(orderItems.productId, products.id))
           .where(eq(orderItems.subOrderId, item.id));
-
-        // 🔹 SAFE JS MAPPING
-        const items = itemsRaw.map((i) => ({
-          id: i.id,
-          quantity: i.quantity,
-          unitPrice: i.unitPrice,
-          product: i.productId
-            ? {
-                id: i.productId,
-                name: i.productName,
-                image: i.productImage,
-                unit: i.productUnit,
-              }
-            : null,
-        }));
 
         return {
           id: item.id,
@@ -1315,7 +1316,9 @@ export const getOrderDetail = async (
               }
             : null,
 
-          store: item.storeName ? { storeName: item.storeName } : null,
+          store: item.storeName
+            ? { storeName: item.storeName }
+            : null,
 
           orderItems: items,
 
@@ -1331,7 +1334,9 @@ export const getOrderDetail = async (
       })
     );
 
-    // 5️⃣ Address Parse (SAFE)
+    /* =======================
+       5. ADDRESS PARSE SAFE
+    ======================= */
     let parsedAddress: any = {};
     try {
       parsedAddress =
@@ -1342,7 +1347,9 @@ export const getOrderDetail = async (
       parsedAddress = masterOrder[0].deliveryAddress;
     }
 
-    // ✅ FINAL RESPONSE
+    /* =======================
+       6. RESPONSE
+    ======================= */
     return res.status(200).json({
       ...masterOrder[0],
       deliveryAddress: parsedAddress,
