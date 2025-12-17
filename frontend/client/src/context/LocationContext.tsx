@@ -140,33 +140,51 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
 
 
   // --- 3. Select Saved Address (Must be defined BEFORE loadSavedAddresses) ---
-  const setSelectedAddress = useCallback((address: ProcessedLocation) => {
-    // Lat/Lng संख्याएँ होनी चाहिए
-    if (typeof address.lat !== 'number' || typeof address.lng !== 'number') return;
-    
-    // addressLine1 और city का उपयोग करके बेहतर पता स्ट्रिंग बनाएं
-    const addressString = address.addressLine1 && address.city 
-        ? `${address.addressLine1}, ${address.city} - ${address.pincode ?? ""}`
-        : address.address; // Fallback to full address
+  
 
-    const updatedAddress: ProcessedLocation = {
-      ...address,
-      address: addressString, // अपडेटेड स्ट्रिंग को address में स्टोर करें
-      inServiceArea: true, // सेव किया गया पता सर्विस एरिया में माना जाता है
-    };
+const setSelectedAddress = useCallback((address: ProcessedLocation) => {
+    try {
+        // 1. डेटा की जांच
+        if (!address) return;
+        const lat = Number(address.lat);
+        const lng = Number(address.lng);
+        
+        if (isNaN(lat) || isNaN(lng)) {
+            console.error("Invalid Lat/Lng received in setSelectedAddress");
+            return;
+        }
 
-    setCurrentLocation(updatedAddress);
-    
-    // localStorage अपडेट करें
-    localStorage.setItem("userLat", String(updatedAddress.lat));
-    localStorage.setItem("userLng", String(updatedAddress.lng));
-    localStorage.setItem("userAddress", addressString);
-    localStorage.setItem("userPincode", updatedAddress.pincode);
-    localStorage.setItem("userServiceArea", String(true)); 
+        // 2. एड्रेस स्ट्रिंग बनाना (जैसा आप चाहते हैं)
+        const addressString = address.addressLine1 && address.city 
+            ? `${address.addressLine1}, ${address.city} - ${address.pincode ?? ""}`
+            : (address.address || "Unknown Address");
 
-  }, []); // ⚠️ यह अब loadSavedAddresses से पहले परिभाषित है
+        const updatedLocation = {
+            ...address,
+            lat,
+            lng,
+            address: addressString,
+            inServiceArea: true,
+        };
 
+        // 3. सबसे पहले Context State अपडेट करें
+        setCurrentLocation(updatedLocation);
 
+        // 4. 🔥 LocalStorage अपडेट (Force Update)
+        // हम इसे पक्का करने के लिए अलग-अलग लाइनों में लिख रहे हैं
+        localStorage.setItem("userLat", String(lat));
+        localStorage.setItem("userLng", String(lng));
+        localStorage.setItem("userAddress", String(addressString));
+        localStorage.setItem("userPincode", String(address.pincode || ""));
+        localStorage.setItem("userServiceArea", "true");
+
+        console.log("✅ SUCCESS: LocalStorage updated to:", addressString);
+
+    } catch (err) {
+        console.error("❌ CRITICAL ERROR in setSelectedAddress:", err);
+    }
+}, []);
+  
   // --- 4. Load Saved Addresses ---
   const loadSavedAddresses = useCallback(async () => {
     const token = user?.idToken;
