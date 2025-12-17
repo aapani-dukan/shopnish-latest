@@ -12,236 +12,236 @@ import {
 
 // --- Drizzle ORM Relations ---
 
-export const usersRelations = relations(schema.users, ({ one, many }) => ({
-  sellerProfile: one(schema.sellersPgTable, {
-    fields: [schema.users.id],
-    references: [schema.sellersPgTable.userId],
+export const usersRelations = relations(users, ({ one, many }) => ({
+  sellerProfile: one(sellersPgTable, {
+    fields: [users.id],
+    references: [sellersPgTable.userId],
   }),
-  orders: many(schema.orders),
-  reviews: many(schema.reviews),
-  serviceProviders: many(schema.serviceProviders),
-  serviceBookings: many(schema.serviceBookings),
-  cartItems: many(schema.cartItems),
+  orders: many(orders),
+  reviews: many(reviews),
+  serviceProviders: many(serviceProviders),
+  serviceBookings: many(serviceBookings),
+  cartItems: many(cartItems),
 }));
 
-export const sellersRelations = relations(schema.sellersPgTable, ({ one, many }) => ({
-  user: one(schema.users, {
-    fields: [schema.sellersPgTable.userId],
-    references: [schema.users.id],
+export const sellersRelations = relations(sellersPgTable, ({ one, many }) => ({
+  user: one(users, {
+    fields: [sellersPgTable.userId],
+    references: [users.id],
   }),
-  products: many(schema.products),
-  stores: many(schema.stores),
-  subOrders: many(schema.subOrders),
+  products: many(products),
+  stores: many(stores),
+  subOrders: many(subOrders),
 }));
 
-export const storesRelations = relations(schema.stores, ({ one, many }) => ({
-  seller: one(schema.sellersPgTable, {
-    fields: [schema.stores.sellerId],
-    references: [schema.sellersPgTable.id],
+export const storesRelations = relations(stores, ({ one, many }) => ({
+  seller: one(sellersPgTable, {
+    fields: [stores.sellerId],
+    references: [sellersPgTable.id],
   }),
-  products: many(schema.products),
-  subOrders: many(schema.subOrders),
+  products: many(products),
+  subOrders: many(subOrders),
 }));
 
-export const categoriesRelations = relations(schema.categories, ({ many }) => ({
-  products: many(schema.products),
+export const categoriesRelations = relations(categories, ({ many }) => ({
+  products: many(products),
 }));
 
-export const productsRelations = relations(schema.products, ({ one, many }) => ({
-  seller: one(schema.sellersPgTable, {
-    fields: [schema.products.sellerId],
-    references: [schema.sellersPgTable.id],
+export const productsRelations = relations(products, ({ one, many }) => ({
+  seller: one(sellersPgTable, {
+    fields: [products.sellerId],
+    references: [sellersPgTable.id],
   }),
-  store: one(schema.stores, {
-    fields: [schema.products.storeId],
-    references: [schema.stores.id],
+  store: one(stores, {
+    fields: [products.storeId],
+    references: [stores.id],
   }),
-  category: one(schema.categories, {
-    fields: [schema.products.categoryId],
-    references: [schema.categories.id],
+  category: one(categories, {
+    fields: [products.categoryId],
+    references: [categories.id],
   }),
-  cartItems: many(schema.cartItems),
-  orderItems: many(schema.orderItems),
-  reviews: many(schema.reviews),
+  cartItems: many(cartItems),
+  orderItems: many(orderItems),
+  reviews: many(reviews),
 }));
 
-export const deliveryBoysRelations = relations(schema.deliveryBoys, ({ one, many }) => ({
-  user: one(schema.users, {
-    fields: [schema.deliveryBoys.userId],
-    references: [schema.users.id],
+export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => ({
+  user: one(users, {
+    fields: [deliveryBoys.userId],
+    references: [users.id],
   }),
-  deliveryBatches: many(schema.deliveryBatches),
+  deliveryBatches: many(deliveryBatches),
 }));
 
-export const couponRelations = relations(schema.couponsPgTable, ({ one }) => ({
-  seller: one(schema.sellersPgTable, { fields: [schema.couponsPgTable.sellerId], references: [schema.sellersPgTable.id] }),
-  product: one(schema.products, { fields: [schema.couponsPgTable.productId], references: [schema.products.id] }),
-  category: one(schema.categories, { fields: [schema.couponsPgTable.categoryId], references: [schema.categories.id] }),
+export const couponRelations = relations(couponsPgTable, ({ one }) => ({
+  seller: one(sellersPgTable, { fields: [couponsPgTable.sellerId], references: [sellersPgTable.id] }),
+  product: one(products, { fields: [couponsPgTable.productId], references: [products.id] }),
+  category: one(categories, { fields: [couponsPgTable.categoryId], references: [categories.id] }),
 }));
 
-export const cartItemsRelations = relations(schema.cartItems, ({ one }) => ({
-  user: one(schema.users, {
-   fields: [schema.cartItems.userId],
-   references: [schema.users.id],
+export const cartItemsRelations = relations(cartItems, ({ one }) => ({
+  user: one(users, {
+   fields: [cartItems.userId],
+   references: [users.id],
  }),
- product: one(schema.products, { // ✅ यहाँ भी schema.products का उपयोग करें
-   fields: [schema.cartItems.productId],
-    references: [schema.products.id],
+ product: one(products, { // ✅ यहाँ भी schema.products का उपयोग करें
+   fields: [cartItems.productId],
+    references: [products.id],
  }),
- seller: one(schema.sellersPgTable, {
-    fields: [schema.cartItems.sellerId],
-    references: [schema.sellersPgTable.id],
+ seller: one(sellersPgTable, {
+    fields: [cartItems.sellerId],
+    references: [sellersPgTable.id],
   }),
  }));
 
-export const deliveryAddressesRelations = relations(schema.deliveryAddresses, ({ one, many }) => ({
-  user: one(schema.users, {
-    fields: [schema.deliveryAddresses.userId],
-    references: [schema.users.id],
+export const deliveryAddressesRelations = relations(deliveryAddresses, ({ one, many }) => ({
+  user: one(users, {
+    fields: [deliveryAddresses.userId],
+    references: [users.id],
   }),
-  orders: many(schema.orders),
-  deliveryBatches: many(schema.deliveryBatches),
+  orders: many(orders),
+  deliveryBatches: many(deliveryBatches),
 }));
 
-export const ordersRelations = relations(schema.orders, ({ many, one }) => ({
-  customer: one(schema.users, {
-    fields: [schema.orders.customerId],
-    references: [schema.users.id],
+export const ordersRelations = relations(orders, ({ many, one }) => ({
+  customer: one(users, {
+    fields: [orders.customerId],
+    references: [users.id],
   }),
-  deliveryAddress: one(schema.deliveryAddresses, {
-    fields: [schema.orders.deliveryAddressId],
-    references: [schema.deliveryAddresses.id],
+  deliveryAddress: one(deliveryAddresses, {
+    fields: [orders.deliveryAddressId],
+    references: [deliveryAddresses.id],
   }),
-  subOrders: many(schema.subOrders),
-  deliveryBatches: many(schema.deliveryBatches),
-  tracking: many(schema.orderTracking),
-  reviews: many(schema.reviews),
- // orderItems: many(schema.orderItems),
+  subOrders: many(subOrders),
+  deliveryBatches: many(deliveryBatches),
+  tracking: many(orderTracking),
+  reviews: many(reviews),
+ // orderItems: many(orderItems),
 }));
 
-export const subOrdersRelations = relations(schema.subOrders, ({ one, many }) => ({
-  masterOrder: one(schema.orders, {
-    fields: [schema.subOrders.masterOrderId],
-    references: [schema.orders.id],
+export const subOrdersRelations = relations(subOrders, ({ one, many }) => ({
+  masterOrder: one(orders, {
+    fields: [subOrders.masterOrderId],
+    references: [orders.id],
   }),
-  seller: one(schema.sellersPgTable, {
-    fields: [schema.subOrders.sellerId],
-    references: [schema.sellersPgTable.id],
+  seller: one(sellersPgTable, {
+    fields: [subOrders.sellerId],
+    references: [sellersPgTable.id],
   }),
-  store: one(schema.stores, {
-    fields: [schema.subOrders.storeId],
-    references: [schema.stores.id],
+  store: one(stores, {
+    fields: [subOrders.storeId],
+    references: [stores.id],
   }),
 
-  orderItems: many(schema.orderItems),
-  deliveryBatch: one(schema.deliveryBatches, {
-    fields: [schema.subOrders.deliveryBatchId],
-   references: [schema.deliveryBatches.id],
+  orderItems: many(orderItems),
+  deliveryBatch: one(deliveryBatches, {
+    fields: [subOrders.deliveryBatchId],
+   references: [deliveryBatches.id],
     
   }),
   
  }));
 
-export const deliveryBatchesRelations = relations(schema.deliveryBatches, ({ one, many }) => ({
-    masterOrder: one(schema.orders, {
-        fields: [schema.deliveryBatches.masterOrderId],
-        references: [schema.orders.id],
+export const deliveryBatchesRelations = relations(deliveryBatches, ({ one, many }) => ({
+    masterOrder: one(orders, {
+        fields: [deliveryBatches.masterOrderId],
+        references: [orders.id],
     }),
-    deliveryBoy: one(schema.deliveryBoys, {
-        fields: [schema.deliveryBatches.deliveryBoyId],
-        references: [schema.deliveryBoys.id],
+    deliveryBoy: one(deliveryBoys, {
+        fields: [deliveryBatches.deliveryBoyId],
+        references: [deliveryBoys.id],
      //   optional: true,
     }),
-    customerDeliveryAddress: one(schema.deliveryAddresses, {
-        fields: [schema.deliveryBatches.customerDeliveryAddressId],
-        references: [schema.deliveryAddresses.id],
+    customerDeliveryAddress: one(deliveryAddresses, {
+        fields: [deliveryBatches.customerDeliveryAddressId],
+        references: [deliveryAddresses.id],
     }),
-    subOrders: many(schema.subOrders),
+    subOrders: many(subOrders),
 }));
 
-export const orderItemsRelations = relations(schema.orderItems, ({ one }) => ({
-  subOrder: one(schema.subOrders, {
-    fields: [schema.orderItems.subOrderId],
-    references: [schema.subOrders.id],
+export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+  subOrder: one(subOrders, {
+    fields: [orderItems.subOrderId],
+    references: [subOrders.id],
   }),
-  product: one(schema.products, {
-    fields: [schema.orderItems.productId],
-    references: [schema.products.id],
+  product: one(products, {
+    fields: [orderItems.productId],
+    references: [products.id],
   }),
 }));
 
-export const orderTrackingRelations = relations(schema.orderTracking, ({ one }) => ({
-  masterOrder: one(schema.orders, {
-    fields: [schema.orderTracking.masterOrderId],
-    references: [schema.orders.id],
+export const orderTrackingRelations = relations(orderTracking, ({ one }) => ({
+  masterOrder: one(orders, {
+    fields: [orderTracking.masterOrderId],
+    references: [orders.id],
    // optional: true,
   }),
-  deliveryBatch: one(schema.deliveryBatches, {
-    fields: [schema.orderTracking.deliveryBatchId],
-    references: [schema.deliveryBatches.id],
+  deliveryBatch: one(deliveryBatches, {
+    fields: [orderTracking.deliveryBatchId],
+    references: [deliveryBatches.id],
   //  optional: true,
   }),
-  updatedBy: one(schema.users, {
-    fields: [schema.orderTracking.updatedBy],
-    references: [schema.users.id],
+  updatedBy: one(users, {
+    fields: [orderTracking.updatedBy],
+    references: [users.id],
   }),
 }));
 
-export const promoCodesRelations = relations(schema.promoCodes, ({ many }) => ({
-  // orders: many(schema.orders),
+export const promoCodesRelations = relations(promoCodes, ({ many }) => ({
+  // orders: many(orders),
 }));
 
-export const serviceCategoriesRelations = relations(schema.serviceCategories, ({ many }) => ({
-  services: many(schema.services),
+export const serviceCategoriesRelations = relations(serviceCategories, ({ many }) => ({
+  services: many(services),
 }));
 
-export const servicesRelations = relations(schema.services, ({ one, many }) => ({
-  category: one(schema.serviceCategories, {
-    fields: [schema.services.categoryId],
-    references: [schema.serviceCategories.id],
+export const servicesRelations = relations(services, ({ one, many }) => ({
+  category: one(serviceCategories, {
+    fields: [services.categoryId],
+    references: [serviceCategories.id],
   }),
-  serviceProviders: many(schema.serviceProviders),
-  serviceBookings: many(schema.serviceBookings),
+  serviceProviders: many(serviceProviders),
+  serviceBookings: many(serviceBookings),
 }));
 
-export const serviceProvidersRelations = relations(schema.serviceProviders, ({ one, many }) => ({
-  user: one(schema.users, {
-    fields: [schema.serviceProviders.userId],
-    references: [schema.users.id],
+export const serviceProvidersRelations = relations(serviceProviders, ({ one, many }) => ({
+  user: one(users, {
+    fields: [serviceProviders.userId],
+    references: [users.id],
   }),
-  service: one(schema.services, {
-    fields: [schema.serviceProviders.serviceId],
-    references: [schema.services.id],
+  service: one(services, {
+    fields: [serviceProviders.serviceId],
+    references: [services.id],
   }),
-  serviceBookings: many(schema.serviceBookings),
+  serviceBookings: many(serviceBookings),
 }));
 
-export const serviceBookingsRelations = relations(schema.serviceBookings, ({ one }) => ({
-  customer: one(schema.users, {
-    fields: [schema.serviceBookings.customerId],
-    references: [schema.users.id],
+export const serviceBookingsRelations = relations(serviceBookings, ({ one }) => ({
+  customer: one(users, {
+    fields: [serviceBookings.customerId],
+    references: [users.id],
   }),
-  serviceProvider: one(schema.serviceProviders, {
-    fields: [schema.serviceBookings.serviceProviderId],
-    references: [schema.serviceProviders.id],
+  serviceProvider: one(serviceProviders, {
+    fields: [serviceBookings.serviceProviderId],
+    references: [serviceProviders.id],
   }),
-  service: one(schema.services, {
-    fields: [schema.serviceBookings.serviceId],
-    references: [schema.services.id],
+  service: one(services, {
+    fields: [serviceBookings.serviceId],
+    references: [services.id],
   }),
 }));
 
-export const reviewsRelations = relations(schema.reviews, ({ one }) => ({
-  customer: one(schema.users, {
-    fields: [schema.reviews.customerId],
-    references: [schema.users.id],
+export const reviewsRelations = relations(reviews, ({ one }) => ({
+  customer: one(users, {
+    fields: [reviews.customerId],
+    references: [users.id],
   }),
-  product: one(schema.products, {
-    fields: [schema.reviews.productId],
-    references: [schema.products.id],
+  product: one(products, {
+    fields: [reviews.productId],
+    references: [products.id],
   }),
-  order: one(schema.orders, {
-    fields: [schema.reviews.orderId],
-    references: [schema.orders.id],
+  order: one(orders, {
+    fields: [reviews.orderId],
+    references: [orders.id],
   }), 
 })); 
