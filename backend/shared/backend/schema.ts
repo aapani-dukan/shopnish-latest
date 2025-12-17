@@ -174,3 +174,18 @@ productCategoryEnum,deliveryStatusEnum,
 insertSubOrderSchema, insertDeliveryBatchesSchema, insertCouponsPgTableSchema,
   
 };
+// backend/src/shared/backend/schema.ts के बिल्कुल अंत में जोड़ें:
+
+export const schema = {
+  // Tables
+  users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
+  deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
+  services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,
+  
+  // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
+  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
+  deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
+  orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, 
+  couponRelations, subOrdersRelations, deliveryBatchesRelations
+};
