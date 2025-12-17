@@ -380,11 +380,11 @@ return (
           </Sheet>
         </div>
       </div>
-         <div className="bg-gray-100 py-2 border-t border-b">
+      {/*   <div className="bg-gray-100 py-2 border-t border-b">
         <div className="container mx-auto px-4 md:px-6">
           <LocationDisplay />
         </div>
-      </div> 
+      </div> */}
       {isAuthenticated && (
         <SellerOnboardingDialog
           isOpen={isSellerDialogOpen}
