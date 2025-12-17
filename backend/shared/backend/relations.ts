@@ -8,7 +8,7 @@ import {
   deliveryBoys, couponsPgTable, deliveryAddresses, subOrders, 
   deliveryBatches, orderItems, orderTracking, promoCodes, 
   serviceCategories, services 
-} from './table';
+} from ./tables;
 
 // --- Drizzle ORM Relations ---
 
