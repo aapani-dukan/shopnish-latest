@@ -25,6 +25,12 @@ import { eq, desc, and, inArray, sql } from "drizzle-orm";
 import { AuthenticatedRequest } from "../middleware/authMiddleware"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
 import { getIO } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
 import { json } from "drizzle-orm/pg-core"; // ✅ json को drizzle से इम्पोर्ट करें
+console.log("Check Tables:", { 
+  orders: !!orders, 
+  subOrders: !!subOrders, 
+  sellersPgTable: !!sellersPgTable, 
+  deliveryBoys: !!deliveryBoys 
+});
 
 // --- सहायक कार्य (Helper Functions) ---
 
