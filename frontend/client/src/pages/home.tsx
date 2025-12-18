@@ -103,64 +103,31 @@ export default function Home() {
 
   // --- Products fetching using Axios ---
   // ✅ Updated Products & Featured Products fetching with better location handling
-
-
+// 1. Location Availability Check (Strict for Backend Requirements)
 const isLocationReady =
   !loadingLocation &&
-  !!currentLocation &&
-  !!currentLocation.lat &&
-  !!currentLocation.lng &&
-  !!currentLocation.pincode && // पिनकोड होना ही चाहिए
-  currentLocation.pincode !== ""; // खाली नहीं होना चाहिए
-  
-  
+  !!currentLocation?.lat &&
+  !!currentLocation?.lng &&
+  !!currentLocation?.pincode; // Pincode is now Mandatory
 
-// ✅ Products fetching
-
-// 2. Main Products Query
-const { 
-  data: productsData, 
-  isLoading: productsLoading, 
-  error: productsError 
-} = useQuery({
-  queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
-  queryFn: async () => {
-    // एहतियात के तौर पर चेक
-    if (!currentLocation?.lat || !currentLocation?.lng) {
-      throw new Error("Location coordinates are missing.");
-    }
-
-    const params = new URLSearchParams({
-      pincode: currentLocation.pincode?.toString() || "",
-      lat: currentLocation.lat.toString(),
-      lng: currentLocation.lng.toString(),
-    });
-
-    if (selectedCategory) params.append('categoryId', selectedCategory.toString());
-    if (searchQuery) params.append('search', searchQuery);
-    if (sortBy) params.append('sortBy', sortBy);
-
-    const response = await axios.get(`/api/products?${params.toString()}`);
-    
-    // API response check: अगर Backend सीधा Array भेज रहा है तो उसे ऑब्जेक्ट में लपेटें
-    const data = response.data;
-    return Array.isArray(data) ? { products: data } : data;
-  },
-  enabled: isLocationReady,
-  retry: false, // बार-बार एरर दिखाने से बचने के लिए
-});
-
-// 3. Featured Products Query
+// 2. Featured Products Query (Updated with Pincode)
 const { 
   data: featuredProductsData, 
   isLoading: featuredProductsLoading, 
   error: featuredProductsError 
 } = useQuery({
-  queryKey: ['featuredProducts', currentLocation],
+  queryKey: ['featuredProducts', currentLocation?.pincode, currentLocation?.lat],
   queryFn: async () => {
+    const lat = currentLocation?.lat;
+    const lng = currentLocation?.lng;
+    const pincode = currentLocation?.pincode;
+
+    if (!lat || !lng || !pincode) throw new Error("Location data missing");
+
     const params = new URLSearchParams({
-      lat: currentLocation?.lat?.toString() || "25.4454",
-      lng: currentLocation?.lng?.toString() || "75.6655",
+      lat: lat.toString(),
+      lng: lng.toString(),
+      pincode: pincode.toString(), // ✅ Pincode added to stop 400 error
       featured: 'true',
     });
 
@@ -171,11 +138,11 @@ const {
   enabled: isLocationReady,
 });
 
-// Helper variables to extract arrays safely
-const products = productsData?.products || [];
+// 3. Extract Arrays safely
 const featuredProducts = featuredProductsData?.products || [];
+// Note: Ensure your main 'productsData' query also includes 'pincode' in params.
 
-// --- UI Rendering Logic (Order is Important!) ---
+// --- UI Rendering Logic ---
 
 // 1. Initial Loading (Skeletons)
 if (loadingLocation || categoriesLoading) {
@@ -193,7 +160,7 @@ if (loadingLocation || categoriesLoading) {
   );
 }
 
-// 2. Location Check (अगर लोडिंग नहीं है पर लोकेशन भी नहीं है)
+// 2. Location Check (User must select location first)
 if (!isLocationReady) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
@@ -201,28 +168,33 @@ if (!isLocationReady) {
         <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
           <Filter className="text-orange-600 h-8 w-8" />
         </div>
-        <h2 className="text-2xl font-bold mb-3 text-neutral-900">लोकेशन सेट नहीं है</h2>
-        <p className="text-gray-500 mb-8">अपने आस-पास के प्रोडक्ट्स देखने के लिए कृपया अपनी डिलीवरी लोकेशन चुनें।</p>
+        <h2 className="text-2xl font-bold mb-3 text-neutral-900">डिलीवरी लोकेशन सेट करें</h2>
+        <p className="text-gray-500 mb-8">आस-पास के स्टोर और प्रोडक्ट्स देखने के लिए पिनकोड वाला पता चुनें।</p>
         <LocationDisplay /> 
       </div>
     </div>
   );
 }
 
-// 3. Error State
+// 3. Error State (When API fails)
 if (productsError || featuredProductsError || locationError) {
   const errMsg = getErrorMessage(productsError || featuredProductsError || locationError);
+  console.error("Home Page Error Details:", { productsError, featuredProductsError });
+
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-red-600 p-6">
-      <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100">
+      <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100 max-w-lg">
         <p className="text-lg font-medium mb-4">कंटेंट लोड करने में त्रुटि हुई</p>
         <p className="text-sm text-gray-500 mb-6">{errMsg}</p>
-        <Button onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
+        <div className="flex gap-4 justify-center">
+            <Button variant="outline" onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
+            <LocationDisplay /> {/* Allow user to fix location if that's the error */}
+        </div>
       </div>
     </div>
   );
 }
-
+  
 
 // --- Price Filter ---
 const filteredProducts = Array.isArray(products)
