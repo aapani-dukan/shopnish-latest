@@ -152,13 +152,19 @@ const OrderDetailsPage = () => {
   }
 
   // 🟢 FIX 3: वैकल्पिक Batch फ़िल्टरिंग लागू करें
-  const subOrdersToDisplay = batchIdFilter
-      ? orderDetails.subOrders.filter(subOrder => 
-          subOrder.deliveryBatchId?.toString() === batchIdFilter
-        )
-      : orderDetails.subOrders; 
+  // 1. सबसे पहले चेक करें कि क्या डेटा 'subOrders' में है या 'orders' में (Fallback logic)
+const rawSubOrders = orderDetails?.subOrders || orderDetails?.orders || [];
 
-  const isFiltered = !!batchIdFilter;
+// 2. अब फिल्टर करें (Optional Chaining के साथ)
+const subOrdersToDisplay = batchIdFilter
+  ? rawSubOrders.filter(subOrder => 
+      // toString() से पहले ? लगायें ताकि अगर batchId गायब हो तो क्रैश न हो
+      subOrder.deliveryBatchId?.toString() === batchIdFilter.toString()
+    )
+  : rawSubOrders;
+
+const isFiltered = !!batchIdFilter;
+  
   
   // --- फाइनल रेंडरिंग ---
 
