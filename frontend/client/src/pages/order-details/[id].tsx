@@ -183,7 +183,10 @@ const OrderDetailsPage = () => {
                       <h2 className="text-xl font-semibold">Overall Status</h2>
                       <span className="text-lg font-bold text-green-700">{orderDetails.overallDeliveryStatus}</span>
                   </div>
-                  <p className="text-2xl font-extrabold text-right">Total Paid: ₹{orderDetails.masterTotal.toFixed(2)}</p>
+                  <p className="text-2xl font-extrabold text-right">
+  Total Paid: ₹{Number(orderDetails?.masterTotal || 0).toFixed(2)}
+</p>
+                
                   
                   {/* Delivery Address */}
                   {orderDetails.deliveryAddress && (
