@@ -208,58 +208,54 @@ const setSelectedAddress = useCallback((address: any) => { // 'any' temporarily 
         { headers: { Authorization: `Bearer ${token}` } }
       );
       setSavedAddresses(response.data);
+      const hasStoredLocation = localStorage.getItem("userAddress");
       
-      // यदि current location सेट नहीं है (या केवल डिफॉल्ट 0,0 है), तो default address को सेट करें
-      if (currentLocation === null || (currentLocation.lat === 0 && currentLocation.lng === 0)) {
-        const defaultAddress = response.data.find(addr => addr.isDefault);
-        if (defaultAddress) {
-            setSelectedAddress(defaultAddress); 
-        }
+          if (!currentLocation && !hasStoredLocation) {
+      const defaultAddress = response.data.find(addr => addr.isDefault);
+      if (defaultAddress) {
+          console.log("Setting default address from DB because nothing in storage.");
+          setSelectedAddress(defaultAddress); 
       }
-
-    } catch (err) {
-      console.error("Error loading saved addresses:", err);
-      setError("सहेजे गए पते लोड करने में असमर्थ।");
     }
+  } catch (err) {
+    console.error("Error loading saved addresses:", err);
+    }
+    
   }, [API_BASE_URL, user, currentLocation, setSelectedAddress]);
 
 
   // --- 5. Initial Load (from Cache or Geolocation) ---
   useEffect(() => {
-    const loadInitialLocation = async () => {
-      setLoadingLocation(true);
-      setError(null);
-if (currentLocation) {
-          setLoadingLocation(false);
-          // Console log जोड़ें ताकि पता चले कि यह ओवरराइट नहीं हो रहा
-          console.log("Context: currentLocation already set, skipping localStorage load."); 
-          return; 
-}
-      const storedLat = localStorage.getItem("userLat");
-      const storedLng = localStorage.getItem("userLng");
-      const storedAddress = localStorage.getItem("userAddress");
-      const storedPincode = localStorage.getItem("userPincode");
-      const storedServiceArea = localStorage.getItem("userServiceArea");
+  const loadInitialLocation = () => {
+    // अगर पहले से सेट है तो दोबारा न लोड करें
+    if (currentLocation) return;
 
-      if (storedLat && storedLng && storedAddress && storedPincode) {
-        setCurrentLocation({
-          address: storedAddress,
-          pincode: storedPincode,
-          lat: parseFloat(storedLat),
-          lng: parseFloat(storedLng),
-          inServiceArea: storedServiceArea === "true",
-        });
-        setLoadingLocation(false);
-      } else {
-        // यदि कोई संग्रहीत (stored) स्थान नहीं है, तो जियोलोकेशन से प्राप्त करें
-        await fetchCurrentGeolocation();
-      }
-    };
+    const storedLat = localStorage.getItem("userLat");
+    const storedLng = localStorage.getItem("userLng");
+    const storedAddress = localStorage.getItem("userAddress");
+    const storedPincode = localStorage.getItem("userPincode");
+    const storedServiceArea = localStorage.getItem("userServiceArea");
 
-    loadInitialLocation();
+    if (storedLat && storedLng && storedAddress) {
+      console.log("Context: Restoring location from LocalStorage:", storedAddress);
+      setCurrentLocation({
+        address: storedAddress,
+        pincode: storedPincode || "",
+        lat: parseFloat(storedLat),
+        lng: parseFloat(storedLng),
+        inServiceArea: storedServiceArea === "true",
+      });
+      setLoadingLocation(false);
+    } else {
+      // अगर कुछ नहीं मिला तभी जियोलोकेशन मांगें
+      fetchCurrentGeolocation();
+    }
+  };
 
-  }, [fetchCurrentGeolocation,currentLocation]);
-
+  loadInitialLocation();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+}, []); // 👈 इसे खाली रखें ताकि रिफ्रेश पर सिर्फ एक बार चले
+  
   const contextValue = useMemo(
     () => ({
       currentLocation,
