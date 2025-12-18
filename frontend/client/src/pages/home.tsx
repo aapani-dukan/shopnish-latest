@@ -112,15 +112,22 @@ const isLocationReady =
   
 
 // ✅ Products fetching
-const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery<{ products: Product[] }>({ // 🚨 रिटर्न टाइप अपडेट किया
+
+// 2. Main Products Query
+const { 
+  data: productsData, 
+  isLoading: productsLoading, 
+  error: productsError 
+} = useQuery({
   queryKey: ['products', selectedCategory, searchQuery, currentLocation, sortBy],
   queryFn: async () => {
-    if (!currentLocation?.pincode || !currentLocation?.lat || !currentLocation?.lng) {
-      throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
+    // एहतियात के तौर पर चेक
+    if (!currentLocation?.lat || !currentLocation?.lng) {
+      throw new Error("Location coordinates are missing.");
     }
 
     const params = new URLSearchParams({
-      pincode: currentLocation.pincode.toString(),
+      pincode: currentLocation.pincode?.toString() || "",
       lat: currentLocation.lat.toString(),
       lng: currentLocation.lng.toString(),
     });
@@ -130,64 +137,51 @@ const { data: productsData, isLoading: productsLoading, error: productsError } =
     if (sortBy) params.append('sortBy', sortBy);
 
     const response = await axios.get(`/api/products?${params.toString()}`);
-    return response.data; // 🚨 अब यह पूरा ऑब्जेक्ट वापस करेगा जिसमें `products` Array होगा
+    
+    // API response check: अगर Backend सीधा Array भेज रहा है तो उसे ऑब्जेक्ट में लपेटें
+    const data = response.data;
+    return Array.isArray(data) ? { products: data } : data;
   },
   enabled: isLocationReady,
-  retry: (failureCount, error: any) => {
-    // retry only if location was not ready
-    if (error?.message?.includes('location')) return failureCount < 3;
-    return false;
-  },
-  retryDelay: 1000,
+  retry: false, // बार-बार एरर दिखाने से बचने के लिए
 });
 
-// `products` Array को निकालने के लिए
+// 3. Featured Products Query
+const { 
+  data: featuredProductsData, 
+  isLoading: featuredProductsLoading, 
+  error: featuredProductsError 
+} = useQuery({
+  queryKey: ['featuredProducts', currentLocation],
+  queryFn: async () => {
+    const params = new URLSearchParams({
+      lat: currentLocation?.lat?.toString() || "25.4454",
+      lng: currentLocation?.lng?.toString() || "75.6655",
+      featured: 'true',
+    });
+
+    const response = await axios.get(`/api/products?${params.toString()}`);
+    const data = response.data;
+    return Array.isArray(data) ? { products: data } : data;
+  },
+  enabled: isLocationReady,
+});
+
+// Helper variables to extract arrays safely
 const products = productsData?.products || [];
-
-
-// ✅ Featured products fetching (similar handling)
-const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } =
-  useQuery<{ products: Product[] }>({ // 🚨 रिटर्न टाइप अपडेट किया
-    queryKey: ['featuredProducts', currentLocation],
-    queryFn: async () => {
-      // ✨ fallback default location अगर user location नहीं मिली
-      const safeLocation = currentLocation || { pincode: '323001', lat: 25.4454386, lng: 75.6655767 };
-
-      if (!safeLocation.pincode || !safeLocation.lat || !safeLocation.lng) {
-        throw new Error("Customer location (pincode, lat, lng) is required for filtering.");
-      }
-
-      const params = new URLSearchParams({
-        pincode: safeLocation.pincode.toString(),
-        lat: safeLocation.lat.toString(),
-        lng: safeLocation.lng.toString(),
-        featured: 'true',
-      });
-
-      const response = await axios.get(`/api/products?${params.toString()}`);
-      return response.data; // 🚨 अब यह पूरा ऑब्जेक्ट वापस करेगा जिसमें `products` Array होगा
-    },
-    enabled: isLocationReady,
-    retry: (failureCount, error: any) => {
-      if (error?.message?.includes('location')) return failureCount < 3;
-      return false;
-    },
-    retryDelay: 1000,
-  });
-
-// `featuredProducts` Array को निकालने के लिए
 const featuredProducts = featuredProductsData?.products || [];
 
+// --- UI Rendering Logic (Order is Important!) ---
 
-// ✅ Loading State
+// 1. Initial Loading (Skeletons)
 if (loadingLocation || categoriesLoading) {
   return (
-    <div className="min-h-screen bg-neutral-50">
-      <div className="max-w-7xl mx-auto px-4 py-8">
-        <Skeleton className="h-16 w-full mb-8" />
+    <div className="min-h-screen bg-neutral-50 p-8">
+      <div className="max-w-7xl mx-auto">
+        <Skeleton className="h-12 w-3/4 mb-8" />
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
           {[...Array(8)].map((_, i) => (
-            <Skeleton key={i} className="h-80 w-full" />
+            <Skeleton key={i} className="h-64 w-full rounded-xl" />
           ))}
         </div>
       </div>
@@ -195,42 +189,37 @@ if (loadingLocation || categoriesLoading) {
   );
 }
 
-// ✅ Error Handling
-if (locationError || categoriesError || productsError || featuredProductsError) {
-  return (
-    <div className="min-h-screen flex items-center justify-center text-red-600">
-      <p>
-        Error loading content:{' '}
-        {getErrorMessage(locationError) ||
-          getErrorMessage(categoriesError) ||
-          getErrorMessage(productsError) ||
-          getErrorMessage(featuredProductsError) ||
-          'Unknown error'}
-      </p>
-    </div>
-  );
-}
-
-
+// 2. Location Check (अगर लोडिंग नहीं है पर लोकेशन भी नहीं है)
 if (!isLocationReady) {
   return (
     <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
-      <div className="bg-white p-8 rounded-xl shadow-md max-w-md">
-        <p className="text-xl font-semibold mb-4">Delivery location not set</p>
-        <p className="text-gray-500 mb-6">Please select your delivery location to see products available in your area.</p>
-        <LocationDisplay /> {/* यहाँ अपना लोकेशन पिकर कंपोनेंट दिखाएं */}
+      <div className="bg-white p-10 rounded-2xl shadow-lg max-w-md border border-gray-100">
+        <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+          <Filter className="text-orange-600 h-8 w-8" />
+        </div>
+        <h2 className="text-2xl font-bold mb-3 text-neutral-900">लोकेशन सेट नहीं है</h2>
+        <p className="text-gray-500 mb-8">अपने आस-पास के प्रोडक्ट्स देखने के लिए कृपया अपनी डिलीवरी लोकेशन चुनें।</p>
+        <LocationDisplay /> 
       </div>
     </div>
   );
 }
-  if (productsLoading || featuredProductsLoading) {
-    // यहाँ सिर्फ प्रोडक्ट्स की जगह Skeleton दिखाएं, पूरा पेज नहीं
+
+// 3. Error State
+if (productsError || featuredProductsError || locationError) {
+  const errMsg = getErrorMessage(productsError || featuredProductsError || locationError);
+  return (
+    <div className="min-h-screen flex flex-col items-center justify-center text-red-600 p-6">
+      <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100">
+        <p className="text-lg font-medium mb-4">कंटेंट लोड करने में त्रुटि हुई</p>
+        <p className="text-sm text-gray-500 mb-6">{errMsg}</p>
+        <Button onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
+      </div>
+    </div>
+  );
 }
 
-// 4. एरर हैंडलिंग (सबसे अंत में)
-if (locationError || productsError) {
-   // Error UI...
-}
+
 // --- Price Filter ---
 const filteredProducts = Array.isArray(products)
   ? products.filter(product => {
