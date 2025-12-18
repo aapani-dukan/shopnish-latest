@@ -142,29 +142,35 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   // --- 3. Select Saved Address (Must be defined BEFORE loadSavedAddresses) ---
   
 
-// client/src/context/LocationContext.tsx
-
-const setSelectedAddress = useCallback((address: any) => { // 'any' temporarily to debug
+const setSelectedAddress = useCallback((address: any) => {
     try {
         if (!address) return;
 
-        // 🛑 Backend 'latitude' भेज सकता है और Frontend 'lat' ढूंढ रहा है
-        // इसे मैप करें:
+        // 1. Coordinates Mapping (lat/latitude, lng/longitude)
         const lat = Number(address.lat || address.latitude);
         const lng = Number(address.lng || address.longitude);
         
         if (isNaN(lat) || isNaN(lng) || lat === 0) {
-            console.error("❌ Data Mismatch:", { 
-                receivedLat: address.lat, 
-                receivedLatitude: address.latitude,
-                addressObject: address 
-            });
-            // अगर Lat/Lng नहीं है, तो प्रोसेस को रोकें नहीं तो पुराना पता ही दिखता रहेगा
+            console.error("❌ Location Data Missing:", address);
             return; 
         }
 
+        // 2. Dynamic Pincode Extraction (No more hardcoding!)
+        // यह सबसे पहले 'pincode' ढूंढेगा, फिर 'postalCode', फिर एड्रेस स्ट्रिंग के अंदर से 6 डिजिट का नंबर
+        const extractedPincode = 
+            address.pincode || 
+            address.postalCode || 
+            address.postal_code || 
+            (typeof address.address === 'string' ? address.address.match(/\b\d{6}\b/)?.[0] : null) ||
+            (typeof address.addressLine1 === 'string' ? address.addressLine1.match(/\b\d{6}\b/)?.[0] : null);
+
+        if (!extractedPincode) {
+            console.warn("⚠️ No pincode found for this address. Backend might reject this.");
+        }
+
+        // 3. Construct Address String
         const addressString = address.addressLine1 && address.city 
-            ? `${address.addressLine1}, ${address.city} - ${address.pincode ?? ""}`
+            ? `${address.addressLine1}, ${address.city}${extractedPincode ? ` - ${extractedPincode}` : ""}`
             : (address.address || "Unknown Address");
 
         const updatedLocation = {
@@ -172,24 +178,30 @@ const setSelectedAddress = useCallback((address: any) => { // 'any' temporarily 
             lat,
             lng,
             address: addressString,
+            pincode: extractedPincode || "", // Dynamic value
             inServiceArea: true,
         };
 
-        // 1. Context Update
+        // 4. Update Context State
         setCurrentLocation(updatedLocation);
         setLoadingLocation(false); 
-        // 2. LocalStorage Force Update
+
+        // 5. Sync with LocalStorage
         localStorage.setItem("userLat", String(lat));
         localStorage.setItem("userLng", String(lng));
         localStorage.setItem("userAddress", String(addressString));
-        localStorage.setItem("userPincode", String(address.pincode || ""));
+        localStorage.setItem("userPincode", String(extractedPincode || ""));
         localStorage.setItem("userServiceArea", "true");
         localStorage.setItem("isManualLocation", "true");
 
-        console.log("✅ FIXED: UI should now show:", addressString);
+        console.log("✅ Location Updated Successfully:", { 
+            address: addressString, 
+            pincode: extractedPincode 
+        });
 
     } catch (err) {
         console.error("❌ Error in setSelectedAddress:", err);
+        setLoadingLocation(false);
     }
 }, []);
   
