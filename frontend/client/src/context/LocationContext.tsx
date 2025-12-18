@@ -177,7 +177,7 @@ const setSelectedAddress = useCallback((address: any) => { // 'any' temporarily 
 
         // 1. Context Update
         setCurrentLocation(updatedLocation);
-
+        setLoadingLocation(false); 
         // 2. LocalStorage Force Update
         localStorage.setItem("userLat", String(lat));
         localStorage.setItem("userLng", String(lng));
