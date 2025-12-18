@@ -104,11 +104,12 @@ export default function Home() {
   // --- Products fetching using Axios ---
   // ✅ Updated Products & Featured Products fetching with better location handling
 
-// ✅ इसे बदलें (लाइन 111 के आसपास)
 const isLocationReady =
-  !loadingLocation && 
-  !!currentLocation && 
-  (!!currentLocation.pincode || (!!currentLocation.lat && !!currentLocation.lng));
+  !loadingLocation &&
+  !!currentLocation &&
+  !!currentLocation.lat &&
+  !!currentLocation.lng &&
+  !!currentLocation.pincode; // ✅ पिनकोड होना अनिवार्य करें
   
 
 // ✅ Products fetching
