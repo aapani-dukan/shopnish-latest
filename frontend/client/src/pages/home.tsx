@@ -18,6 +18,7 @@ import LocationDisplay from '@/components/LocationDisplay';
 function getErrorMessage(error: unknown): string {
   if (error instanceof Error) return error.message;
   if (typeof error === 'string') return error;
+  if (axios.isAxiosError(error)) return error.response?.data?.message || error.message;
   return "An unexpected error occurred.";
 }
 
@@ -74,8 +75,7 @@ export default function Home() {
   const { 
     currentLocation, 
     loadingLocation, 
-    error: locationError,
-    fetchCurrentGeolocation
+    error: locationError
   } = useLocation();
 
   const [selectedCategory, setSelectedCategory] = useState<number | null>(
@@ -95,130 +95,138 @@ export default function Home() {
     setSearchQuery(newSearchParam || "");
   }, [routerLocation.search]);
 
-  // --- Categories data fetching ---
+  // 1. Categories data fetching
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
     queryKey: ['categories'], 
     queryFn: fetchCategories,
   });
 
-  // --- Products fetching using Axios ---
-  // ✅ Updated Products & Featured Products fetching with better location handling
-// 1. Location Availability Check (Strict for Backend Requirements)
-const isLocationReady =
-  !loadingLocation &&
-  !!currentLocation?.lat &&
-  !!currentLocation?.lng &&
-  !!currentLocation?.pincode; // Pincode is now Mandatory
+  // 2. Location Ready Check
+  const isLocationReady =
+    !loadingLocation &&
+    !!currentLocation?.lat &&
+    !!currentLocation?.lng &&
+    !!currentLocation?.pincode;
 
-// 2. Featured Products Query (Updated with Pincode)
-const { 
-  data: featuredProductsData, 
-  isLoading: featuredProductsLoading, 
-  error: featuredProductsError 
-} = useQuery({
-  queryKey: ['featuredProducts', currentLocation?.pincode, currentLocation?.lat],
-  queryFn: async () => {
-    const lat = currentLocation?.lat;
-    const lng = currentLocation?.lng;
-    const pincode = currentLocation?.pincode;
-
-    if (!lat || !lng || !pincode) throw new Error("Location data missing");
-
-    const params = new URLSearchParams({
-      lat: lat.toString(),
-      lng: lng.toString(),
-      pincode: pincode.toString(), // ✅ Pincode added to stop 400 error
-      featured: 'true',
-    });
-
-    const response = await axios.get(`/api/products?${params.toString()}`);
-    const data = response.data;
-    return Array.isArray(data) ? { products: data } : data;
-  },
-  enabled: isLocationReady,
-});
-
-// 3. Extract Arrays safely
-const featuredProducts = featuredProductsData?.products || [];
-// Note: Ensure your main 'productsData' query also includes 'pincode' in params.
-
-// --- UI Rendering Logic ---
-
-// 1. Initial Loading (Skeletons)
-if (loadingLocation || categoriesLoading) {
-  return (
-    <div className="min-h-screen bg-neutral-50 p-8">
-      <div className="max-w-7xl mx-auto">
-        <Skeleton className="h-12 w-3/4 mb-8" />
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-          {[...Array(8)].map((_, i) => (
-            <Skeleton key={i} className="h-64 w-full rounded-xl" />
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// 2. Location Check (User must select location first)
-if (!isLocationReady) {
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
-      <div className="bg-white p-10 rounded-2xl shadow-lg max-w-md border border-gray-100">
-        <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-          <Filter className="text-orange-600 h-8 w-8" />
-        </div>
-        <h2 className="text-2xl font-bold mb-3 text-neutral-900">डिलीवरी लोकेशन सेट करें</h2>
-        <p className="text-gray-500 mb-8">आस-पास के स्टोर और प्रोडक्ट्स देखने के लिए पिनकोड वाला पता चुनें।</p>
-        <LocationDisplay /> 
-      </div>
-    </div>
-  );
-}
-
-// 3. Error State (When API fails)
-if (productsError || featuredProductsError || locationError) {
-  const errMsg = getErrorMessage(productsError || featuredProductsError || locationError);
-  console.error("Home Page Error Details:", { productsError, featuredProductsError });
-
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center text-red-600 p-6">
-      <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100 max-w-lg">
-        <p className="text-lg font-medium mb-4">कंटेंट लोड करने में त्रुटि हुई</p>
-        <p className="text-sm text-gray-500 mb-6">{errMsg}</p>
-        <div className="flex gap-4 justify-center">
-            <Button variant="outline" onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
-            <LocationDisplay /> {/* Allow user to fix location if that's the error */}
-        </div>
-      </div>
-    </div>
-  );
-}
-  
-
-// --- Price Filter ---
-const filteredProducts = Array.isArray(products)
-  ? products.filter(product => {
-      if (priceFilter.length === 0) return true;
-      const price = parseFloat(product.price);
-      return priceFilter.some(range => {
-        switch (range) {
-          case "under-250":
-            return price < 250;
-          case "250-500":
-            return price >= 250 && price < 500;
-          case "500-1000":
-            return price >= 500 && price < 1000;
-          case "1000-5000":
-            return price >= 1000 && price < 5000;
-          case "over-5000":
-            return price >= 5000;
-          default:
-            return true;
-        }
+  // 3. Main Products fetching
+  const { 
+    data: productsData, 
+    isLoading: productsLoading, 
+    error: productsError 
+  } = useQuery({
+    queryKey: ['products', selectedCategory, searchQuery, currentLocation?.pincode, sortBy],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        pincode: currentLocation?.pincode?.toString() || "",
+        lat: currentLocation?.lat?.toString() || "",
+        lng: currentLocation?.lng?.toString() || "",
       });
-    })
-  : [];
+
+      if (selectedCategory) params.append('categoryId', selectedCategory.toString());
+      if (searchQuery) params.append('search', searchQuery);
+      if (sortBy) params.append('sortBy', sortBy);
+
+      const response = await axios.get(`/api/products?${params.toString()}`);
+      const data = response.data;
+      return Array.isArray(data) ? { products: data } : data;
+    },
+    enabled: isLocationReady,
+  });
+
+  // 4. Featured products fetching
+  const { 
+    data: featuredProductsData, 
+    isLoading: featuredProductsLoading, 
+    error: featuredProductsError 
+  } = useQuery({
+    queryKey: ['featuredProducts', currentLocation?.pincode],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        pincode: currentLocation?.pincode?.toString() || "",
+        lat: currentLocation?.lat?.toString() || "",
+        lng: currentLocation?.lng?.toString() || "",
+        featured: 'true',
+      });
+
+      const response = await axios.get(`/api/products?${params.toString()}`);
+      const data = response.data;
+      return Array.isArray(data) ? { products: data } : data;
+    },
+    enabled: isLocationReady,
+  });
+
+  // Safely extract products arrays
+  const products = productsData?.products || [];
+  const featuredProducts = featuredProductsData?.products || [];
+
+  // --- UI Rendering Logic (Important Order) ---
+
+  // A. Loading State
+  if (loadingLocation || categoriesLoading) {
+    return (
+      <div className="min-h-screen bg-neutral-50 p-8">
+        <div className="max-w-7xl mx-auto">
+          <Skeleton className="h-12 w-3/4 mb-8" />
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+            {[...Array(8)].map((_, i) => (
+              <Skeleton key={i} className="h-64 w-full rounded-xl" />
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // B. Location Not Set State
+  if (!isLocationReady) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
+        <div className="bg-white p-10 rounded-2xl shadow-lg max-w-md border border-gray-100">
+          <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
+            <Filter className="text-orange-600 h-8 w-8" />
+          </div>
+          <h2 className="text-2xl font-bold mb-3 text-neutral-900">डिलीवरी लोकेशन सेट करें</h2>
+          <p className="text-gray-500 mb-8">आस-पास के स्टोर और प्रोडक्ट्स देखने के लिए पिनकोड वाला पता चुनें।</p>
+          <LocationDisplay /> 
+        </div>
+      </div>
+    );
+  }
+
+  // C. Error State
+  if (productsError || featuredProductsError || locationError || categoriesError) {
+    const errMsg = getErrorMessage(productsError || featuredProductsError || locationError || categoriesError);
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center text-red-600 p-6">
+        <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100 max-w-lg">
+          <p className="text-lg font-medium mb-4">कंटेंट लोड करने में त्रुटि हुई</p>
+          <p className="text-sm text-gray-500 mb-6">{errMsg}</p>
+          <div className="flex gap-4 justify-center">
+            <Button variant="outline" onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
+            <LocationDisplay />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // --- Logic for Displaying Products ---
+  const displayProducts = searchQuery || selectedCategory ? products : featuredProducts;
+
+  const filteredProducts = displayProducts.filter(product => {
+    if (priceFilter.length === 0) return true;
+    const price = parseFloat(product.price);
+    return priceFilter.some(range => {
+      switch (range) {
+        case "under-250": return price < 250;
+        case "250-500": return price >= 250 && price < 500;
+        case "500-1000": return price >= 500 && price < 1000;
+        case "1000-5000": return price >= 1000 && price < 5000;
+        case "over-5000": return price >= 5000;
+        default: return true;
+      }
+    });
+  });
 
   const handlePriceFilterChange = (range: string, checked: boolean) => {
     if (checked) setPriceFilter(prev => [...prev, range]);
@@ -245,7 +253,6 @@ const filteredProducts = Array.isArray(products)
     return null;
   };
 
-  // --- UI ---
   return (
     <div className="min-h-screen bg-neutral-50">
       {renderAdminButton()}
@@ -254,22 +261,14 @@ const filteredProducts = Array.isArray(products)
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
-                <h2 className="text-4xl lg:text-6xl font-bold mb-6">
-                  Shop everything you need
-                </h2>
-                <p className="text-xl mb-8 text-orange-100">
-                  Discover millions of products from trusted sellers with fast delivery and great prices.
-                </p>
+                <h2 className="text-4xl lg:text-6xl font-bold mb-6">Shop everything you need</h2>
+                <p className="text-xl mb-8 text-orange-100">Millions of products from trusted sellers with fast delivery.</p>
                 <Button onClick={scrollToProducts} size="lg" className="bg-white text-primary hover:bg-gray-100 font-semibold">
                   Start shopping <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </div>
               <div className="relative">
-                <img
-                  src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d"
-                  alt="online shopping experience"
-                  className="rounded-xl shadow-2xl w-full h-auto"
-                />
+                <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d" alt="shopping" className="rounded-xl shadow-2xl w-full" />
               </div>
             </div>
           </div>
@@ -278,25 +277,13 @@ const filteredProducts = Array.isArray(products)
 
       {!selectedCategory && !searchQuery && (
         <section className="py-16 bg-white">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h3 className="text-3xl font-bold text-neutral-900 mb-12 text-center">
-              Shop by category
-            </h3>
+          <div className="max-w-7xl mx-auto px-4">
+            <h3 className="text-3xl font-bold text-center mb-12">Shop by category</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {categories.slice(0, 4).map((category) => (
-                <div 
-                  key={category.id} 
-                  className="text-center group cursor-pointer"
-                  onClick={() => setSelectedCategory(category.id)}
-                >
-                  <img
-                    src={category.image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8'}
-                    alt={category.name}
-                    className="w-full h-48 object-cover rounded-lg group-hover:shadow-lg transition-shadow"
-                  />
-                  <h4 className="text-lg font-semibold mt-4">
-                    {category.name}
-                  </h4>
+              {categories.slice(0, 4).map((cat) => (
+                <div key={cat.id} className="text-center group cursor-pointer" onClick={() => setSelectedCategory(cat.id)}>
+                  <img src={cat.image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8'} alt={cat.name} className="w-full h-48 object-cover rounded-lg group-hover:shadow-lg transition-shadow" />
+                  <h4 className="text-lg font-semibold mt-4">{cat.name}</h4>
                 </div>
               ))}
             </div>
@@ -305,134 +292,55 @@ const filteredProducts = Array.isArray(products)
       )}
 
       <main id="products-section" className="py-16">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filters Sidebar */}
-            <aside className="lg:w-64 flex-shrink-0">
-              <Card className="sticky top-24">
-                <CardContent className="p-6">
-                  <h4 className="text-lg font-semibold mb-4 flex items-center">
-                    <Filter className="mr-2 h-5 w-5" />
-                    Filters
-                  </h4>
-                  
-                  {/* Price Range */}
-                  <div className="mb-6">
-                    <h5 className="font-medium mb-3">Price Range</h5>
-                    <div className="space-y-2">
-                      {[
-                        { id: 'under-250', label: 'Under ₹250' },
-                        { id: '250-500', label: '₹250 - ₹500' },
-                        { id: '500-1000', label: '₹500 - ₹1000' },
-                        { id: '1000-5000', label: '₹1000 - ₹5000' },
-                        { id: 'over-5000', label: 'Over ₹5000' },
-                      ].map((range) => (
-                        <div key={range.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={range.id}
-                            checked={priceFilter.includes(range.id)}
-                            onCheckedChange={(checked) => handlePriceFilterChange(range.id, checked as boolean)}
-                          />
-                          <label htmlFor={range.id} className="text-sm cursor-pointer">
-                            {range.label}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
+        <div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-8">
+          <aside className="lg:w-64 flex-shrink-0">
+            <Card className="sticky top-24 p-6">
+              <h4 className="text-lg font-semibold mb-4 flex items-center"><Filter className="mr-2 h-5 w-5" /> Filters</h4>
+              <div className="mb-6">
+                <h5 className="font-medium mb-3">Price Range</h5>
+                {['under-250', '250-500', '500-1000', '1000-5000', 'over-5000'].map(r => (
+                  <div key={r} className="flex items-center space-x-2 mb-2">
+                    <Checkbox id={r} checked={priceFilter.includes(r)} onCheckedChange={(c) => handlePriceFilterChange(r, c as boolean)} />
+                    <label htmlFor={r} className="text-sm cursor-pointer capitalize">{r.replace('-', ' ')}</label>
                   </div>
-
-                  {/* Categories */}
-                  <div className="mb-6">
-                    <h5 className="font-medium mb-3">Categories</h5>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-2">
-                        <Checkbox
-                          id="all-categories"
-                          checked={!selectedCategory}
-                          onCheckedChange={() => setSelectedCategory(null)}
-                        />
-                        <label htmlFor="all-categories" className="text-sm cursor-pointer">
-                          All Categories
-                        </label>
-                      </div>
-                      {categories.map((category) => (
-                        <div key={category.id} className="flex items-center space-x-2">
-                          <Checkbox
-                            id={`category-${category.id}`}
-                            checked={selectedCategory === category.id}
-                            onCheckedChange={() =>
-                              setSelectedCategory(selectedCategory === category.id ? null : category.id)
-                            }
-                          />
-                          <label htmlFor={`category-${category.id}`} className="text-sm cursor-pointer">
-                            {category.name}
-                          </label>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            </aside>
-
-            {/* Product Grid */}
-            <div className="flex-1">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-2xl font-bold text-neutral-900">
-                  {searchQuery ? `Search results for "${searchQuery}"` : 
-                   selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : 
-                   'Featured Products'}
-                </h3>
-                <div className="flex items-center space-x-4">
-                  <Select value={sortBy} onValueChange={setSortBy}>
-                    <SelectTrigger className="w-48">
-                      <SelectValue placeholder="Sort by" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="best-match">Best Match</SelectItem>
-                      <SelectItem value="price-low">Price: Low to High</SelectItem>
-                      <SelectItem value="price-high">Price: High to Low</SelectItem>
-                      <SelectItem value="rating">Customer Rating</SelectItem>
-                      <SelectItem value="newest">Newest First</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+                ))}
               </div>
+            </Card>
+          </aside>
 
-              {productsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {[...Array(8)].map((_, i) => (
-                    <Skeleton key={i} className="h-80 w-full" />
-                  ))}
-                </div>
-              ) : filteredProducts.length === 0 ? (
-                <div className="text-center py-12">
-                  <p className="text-gray-500 text-lg">No products found matching your criteria.</p>
-                  <Button
-                    onClick={() => {
-                      setSelectedCategory(null);
-                      setSearchQuery("");
-                      setPriceFilter([]);
-                    }}
-                    className="mt-4"
-                    variant="outline"
-                  >
-                    Clear Filters
-                  </Button>
-                </div>
-              ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                  {filteredProducts.map((product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
-                </div>
-              )}
+          <div className="flex-1">
+            <div className="flex justify-between items-center mb-6">
+              <h3 className="text-2xl font-bold">
+                {searchQuery ? `Results for "${searchQuery}"` : selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : 'Featured Products'}
+              </h3>
+              <Select value={sortBy} onValueChange={setSortBy}>
+                <SelectTrigger className="w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="best-match">Best Match</SelectItem>
+                  <SelectItem value="price-low">Price: Low to High</SelectItem>
+                  <SelectItem value="price-high">Price: High to Low</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
+
+            {(productsLoading || featuredProductsLoading) ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-80 w-full" />)}
+              </div>
+            ) : filteredProducts.length === 0 ? (
+              <div className="text-center py-12">
+                <p className="text-gray-500">No products found.</p>
+                <Button onClick={() => { setSelectedCategory(null); setSearchQuery(""); setPriceFilter([]); }} className="mt-4" variant="outline">Clear Filters</Button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                {filteredProducts.map((p) => <ProductCard key={p.id} product={p} />)}
+              </div>
+            )}
           </div>
         </div>
       </main>
-
       <Footer />
     </div>
   );
-                        }
+      }
