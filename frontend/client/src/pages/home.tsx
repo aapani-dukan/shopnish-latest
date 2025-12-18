@@ -104,11 +104,12 @@ export default function Home() {
   // --- Products fetching using Axios ---
   // ✅ Updated Products & Featured Products fetching with better location handling
 
+// ✅ इसे बदलें (लाइन 111 के आसपास)
 const isLocationReady =
-  !!currentLocation?.pincode &&
-  !!currentLocation?.lat &&
-  !!currentLocation?.lng &&
-  !loadingLocation;
+  !loadingLocation && 
+  !!currentLocation && 
+  (!!currentLocation.pincode || (!!currentLocation.lat && !!currentLocation.lng));
+  
 
 // ✅ Products fetching
 const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery<{ products: Product[] }>({ // 🚨 रिटर्न टाइप अपडेट किया
@@ -179,7 +180,7 @@ const featuredProducts = featuredProductsData?.products || [];
 
 
 // ✅ Loading State
-if (loadingLocation || categoriesLoading || productsLoading || featuredProductsLoading) {
+if (loadingLocation || categoriesLoading) {
   return (
     <div className="min-h-screen bg-neutral-50">
       <div className="max-w-7xl mx-auto px-4 py-8">
@@ -210,15 +211,26 @@ if (locationError || categoriesError || productsError || featuredProductsError) 
   );
 }
 
-// ✅ No Location Set
-if (!isLocationReady && !loadingLocation) {
+
+if (!isLocationReady) {
   return (
-    <div className="min-h-screen flex items-center justify-center text-gray-700">
-      <p className="text-lg">Please select your delivery location to see products.</p>
+    <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
+      <div className="bg-white p-8 rounded-xl shadow-md max-w-md">
+        <p className="text-xl font-semibold mb-4">Delivery location not set</p>
+        <p className="text-gray-500 mb-6">Please select your delivery location to see products available in your area.</p>
+        <LocationDisplay /> {/* यहाँ अपना लोकेशन पिकर कंपोनेंट दिखाएं */}
+      </div>
     </div>
   );
 }
+  if (productsLoading || featuredProductsLoading) {
+    // यहाँ सिर्फ प्रोडक्ट्स की जगह Skeleton दिखाएं, पूरा पेज नहीं
+}
 
+// 4. एरर हैंडलिंग (सबसे अंत में)
+if (locationError || productsError) {
+   // Error UI...
+}
 // --- Price Filter ---
 const filteredProducts = Array.isArray(products)
   ? products.filter(product => {
