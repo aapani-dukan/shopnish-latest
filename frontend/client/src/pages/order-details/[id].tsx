@@ -205,14 +205,14 @@ const OrderDetailsPage = () => {
 
               </h2>
               
-              {subOrdersToDisplay.length === 0 && isFiltered && (
+              {subOrdersToDisplay?.length === 0 && isFiltered && (
                    <p className="text-gray-600 p-4 bg-yellow-50 rounded-lg">
                        This batch has no active sub-orders to display.
                    </p>
               )}
 
               <div className="space-y-6">
-                  {subOrdersToDisplay.map((subOrder) => (
+                  {subOrdersToDisplay?.map((subOrder) => (
                       <div key={subOrder.subOrderId} className="bg-white p-5 rounded-xl border border-gray-200">
                           <h3 className="text-xl font-bold mb-3 text-indigo-700 flex justify-between items-center">
                               Sub-Order from {subOrder.sellerName}
