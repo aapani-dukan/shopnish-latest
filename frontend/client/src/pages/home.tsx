@@ -46,7 +46,7 @@ interface Product {
   originalPrice: string | null;
   image: string;
   brand: string | null;
-  busnessName: string;
+  busnessName: string; // 👈 Important: Your specific naming
   rating: string | null;
   rejectionReason?: string;
   reviewCount: number | null;
@@ -95,20 +95,20 @@ export default function Home() {
     setSearchQuery(newSearchParam || "");
   }, [routerLocation.search]);
 
-  // 1. Categories data fetching
+  // --- 1. Categories fetching ---
   const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
     queryKey: ['categories'], 
     queryFn: fetchCategories,
   });
 
-  // 2. Location Ready Check
+  // --- 2. Location Availability Check ---
   const isLocationReady =
     !loadingLocation &&
     !!currentLocation?.lat &&
     !!currentLocation?.lng &&
     !!currentLocation?.pincode;
 
-  // 3. Main Products fetching
+  // --- 3. Main Products Query ---
   const { 
     data: productsData, 
     isLoading: productsLoading, 
@@ -133,7 +133,7 @@ export default function Home() {
     enabled: isLocationReady,
   });
 
-  // 4. Featured products fetching
+  // --- 4. Featured Products Query ---
   const { 
     data: featuredProductsData, 
     isLoading: featuredProductsLoading, 
@@ -155,29 +155,25 @@ export default function Home() {
     enabled: isLocationReady,
   });
 
-  // Safely extract products arrays
+  // Safe Extraction
   const products = productsData?.products || [];
   const featuredProducts = featuredProductsData?.products || [];
 
-  // --- UI Rendering Logic (Important Order) ---
-
-  // A. Loading State
+  // --- UI Logic Skeletons ---
   if (loadingLocation || categoriesLoading) {
     return (
       <div className="min-h-screen bg-neutral-50 p-8">
         <div className="max-w-7xl mx-auto">
-          <Skeleton className="h-12 w-3/4 mb-8" />
+          <Skeleton className="h-16 w-full mb-8" />
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(8)].map((_, i) => (
-              <Skeleton key={i} className="h-64 w-full rounded-xl" />
-            ))}
+            {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-80 w-full" />)}
           </div>
         </div>
       </div>
     );
   }
 
-  // B. Location Not Set State
+  // --- Location Barrier ---
   if (!isLocationReady) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
@@ -193,7 +189,7 @@ export default function Home() {
     );
   }
 
-  // C. Error State
+  // --- Error Handling ---
   if (productsError || featuredProductsError || locationError || categoriesError) {
     const errMsg = getErrorMessage(productsError || featuredProductsError || locationError || categoriesError);
     return (
@@ -210,10 +206,10 @@ export default function Home() {
     );
   }
 
-  // --- Logic for Displaying Products ---
-  const displayProducts = searchQuery || selectedCategory ? products : featuredProducts;
+  // --- Main Product Filtering Logic ---
+  const currentProductPool = searchQuery || selectedCategory ? products : featuredProducts;
 
-  const filteredProducts = displayProducts.filter(product => {
+  const filteredProducts = currentProductPool.filter(product => {
     if (priceFilter.length === 0) return true;
     const price = parseFloat(product.price);
     return priceFilter.some(range => {
@@ -240,12 +236,9 @@ export default function Home() {
   const renderAdminButton = () => {
     if (user?.isAdmin) {
       return (
-        <div className="absolute top-4 right-4">
+        <div className="absolute top-4 right-4 z-50">
           <Button asChild>
-            <Link to="/admin-login">
-              <ShieldIcon className="mr-2 h-4 w-4" />
-              एडमिन लॉगिन
-            </Link>
+            <Link to="/admin-login"><ShieldIcon className="mr-2 h-4 w-4" /> एडमिन लॉगिन</Link>
           </Button>
         </div>
       );
@@ -256,34 +249,43 @@ export default function Home() {
   return (
     <div className="min-h-screen bg-neutral-50">
       {renderAdminButton()}
+      
+      {/* Hero Section */}
       {!selectedCategory && !searchQuery && (
         <section className="bg-gradient-to-r from-primary to-orange-500 text-white py-16">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="grid lg:grid-cols-2 gap-12 items-center">
               <div>
                 <h2 className="text-4xl lg:text-6xl font-bold mb-6">Shop everything you need</h2>
-                <p className="text-xl mb-8 text-orange-100">Millions of products from trusted sellers with fast delivery.</p>
-                <Button onClick={scrollToProducts} size="lg" className="bg-white text-primary hover:bg-gray-100 font-semibold">
+                <p className="text-xl mb-8 text-orange-100">Discover millions of products from trusted sellers with fast delivery and great prices.</p>
+                <Button onClick={scrollToProducts} size="lg" className="bg-white text-primary hover:bg-gray-100 font-semibold shadow-lg">
                   Start shopping <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </div>
               <div className="relative">
-                <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d" alt="shopping" className="rounded-xl shadow-2xl w-full" />
+                <img src="https://images.unsplash.com/photo-1556742049-0cfed4f6a45d" alt="shopping" className="rounded-xl shadow-2xl w-full h-auto" />
               </div>
             </div>
           </div>
         </section>
       )}
 
+      {/* Category Icons Section */}
       {!selectedCategory && !searchQuery && (
         <section className="py-16 bg-white">
-          <div className="max-w-7xl mx-auto px-4">
-            <h3 className="text-3xl font-bold text-center mb-12">Shop by category</h3>
+          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <h3 className="text-3xl font-bold text-neutral-900 mb-12 text-center">Shop by category</h3>
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-              {categories.slice(0, 4).map((cat) => (
-                <div key={cat.id} className="text-center group cursor-pointer" onClick={() => setSelectedCategory(cat.id)}>
-                  <img src={cat.image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8'} alt={cat.name} className="w-full h-48 object-cover rounded-lg group-hover:shadow-lg transition-shadow" />
-                  <h4 className="text-lg font-semibold mt-4">{cat.name}</h4>
+              {categories.slice(0, 8).map((category) => (
+                <div key={category.id} className="text-center group cursor-pointer" onClick={() => setSelectedCategory(category.id)}>
+                  <div className="overflow-hidden rounded-lg mb-4">
+                    <img
+                      src={category.image || 'https://images.unsplash.com/photo-1441986300917-64674bd600d8'}
+                      alt={category.name}
+                      className="w-full h-48 object-cover group-hover:scale-105 transition-transform duration-300"
+                    />
+                  </div>
+                  <h4 className="text-lg font-semibold text-neutral-800">{category.name}</h4>
                 </div>
               ))}
             </div>
@@ -292,55 +294,97 @@ export default function Home() {
       )}
 
       <main id="products-section" className="py-16">
-        <div className="max-w-7xl mx-auto px-4 flex flex-col lg:flex-row gap-8">
-          <aside className="lg:w-64 flex-shrink-0">
-            <Card className="sticky top-24 p-6">
-              <h4 className="text-lg font-semibold mb-4 flex items-center"><Filter className="mr-2 h-5 w-5" /> Filters</h4>
-              <div className="mb-6">
-                <h5 className="font-medium mb-3">Price Range</h5>
-                {['under-250', '250-500', '500-1000', '1000-5000', 'over-5000'].map(r => (
-                  <div key={r} className="flex items-center space-x-2 mb-2">
-                    <Checkbox id={r} checked={priceFilter.includes(r)} onCheckedChange={(c) => handlePriceFilterChange(r, c as boolean)} />
-                    <label htmlFor={r} className="text-sm cursor-pointer capitalize">{r.replace('-', ' ')}</label>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+          <div className="flex flex-col lg:flex-row gap-8">
+            
+            {/* Sidebar Filters */}
+            <aside className="lg:w-64 flex-shrink-0">
+              <Card className="sticky top-24">
+                <CardContent className="p-6">
+                  <h4 className="text-lg font-semibold mb-4 flex items-center"><Filter className="mr-2 h-5 w-5" /> Filters</h4>
+                  
+                  <div className="mb-6">
+                    <h5 className="font-medium mb-3">Price Range</h5>
+                    <div className="space-y-2">
+                      {[
+                        { id: 'under-250', label: 'Under ₹250' },
+                        { id: '250-500', label: '₹250 - ₹500' },
+                        { id: '500-1000', label: '₹500 - ₹1000' },
+                        { id: '1000-5000', label: '₹1000 - ₹5000' },
+                        { id: 'over-5000', label: 'Over ₹5000' },
+                      ].map((range) => (
+                        <div key={range.id} className="flex items-center space-x-2">
+                          <Checkbox id={range.id} checked={priceFilter.includes(range.id)} onCheckedChange={(c) => handlePriceFilterChange(range.id, c as boolean)} />
+                          <label htmlFor={range.id} className="text-sm cursor-pointer">{range.label}</label>
+                        </div>
+                      ))}
+                    </div>
                   </div>
-                ))}
-              </div>
-            </Card>
-          </aside>
 
-          <div className="flex-1">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-2xl font-bold">
-                {searchQuery ? `Results for "${searchQuery}"` : selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : 'Featured Products'}
-              </h3>
-              <Select value={sortBy} onValueChange={setSortBy}>
-                <SelectTrigger className="w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="best-match">Best Match</SelectItem>
-                  <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  <SelectItem value="price-high">Price: High to Low</SelectItem>
-                </SelectContent>
-              </Select>
+                  <div className="mb-6">
+                    <h5 className="font-medium mb-3">Categories</h5>
+                    <div className="space-y-2">
+                      <div className="flex items-center space-x-2">
+                        <Checkbox id="all" checked={!selectedCategory} onCheckedChange={() => setSelectedCategory(null)} />
+                        <label htmlFor="all" className="text-sm cursor-pointer font-medium text-primary">All Categories</label>
+                      </div>
+                      {categories.map((cat) => (
+                        <div key={cat.id} className="flex items-center space-x-2">
+                          <Checkbox id={`cat-${cat.id}`} checked={selectedCategory === cat.id} onCheckedChange={() => setSelectedCategory(selectedCategory === cat.id ? null : cat.id)} />
+                          <label htmlFor={`cat-${cat.id}`} className="text-sm cursor-pointer">{cat.name}</label>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </aside>
+
+            {/* Product Display Area */}
+            <div className="flex-1">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-8 gap-4">
+                <h3 className="text-2xl font-bold text-neutral-900">
+                  {searchQuery ? `Search results for "${searchQuery}"` : 
+                   selectedCategory ? categories.find(c => c.id === selectedCategory)?.name : 
+                   'Featured Products'}
+                </h3>
+                <div className="flex items-center space-x-4 w-full md:w-auto">
+                  <Select value={sortBy} onValueChange={setSortBy}>
+                    <SelectTrigger className="w-full md:w-48"><SelectValue placeholder="Sort by" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="best-match">Best Match</SelectItem>
+                      <SelectItem value="price-low">Price: Low to High</SelectItem>
+                      <SelectItem value="price-high">Price: High to Low</SelectItem>
+                      <SelectItem value="rating">Customer Rating</SelectItem>
+                      <SelectItem value="newest">Newest First</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {productsLoading || featuredProductsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-80 w-full rounded-xl" />)}
+                </div>
+              ) : filteredProducts.length === 0 ? (
+                <div className="text-center py-20 bg-white rounded-xl shadow-sm border">
+                  <p className="text-gray-500 text-lg mb-6">कोई प्रोडक्ट नहीं मिला।</p>
+                  <Button onClick={() => { setSelectedCategory(null); setSearchQuery(""); setPriceFilter([]); }} variant="outline">सारे फिल्टर्स हटाएँ</Button>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                  {filteredProducts.map((product) => (
+                    <ProductCard key={product.id} product={product} />
+                  ))}
+                </div>
+              )}
             </div>
-
-            {(productsLoading || featuredProductsLoading) ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-80 w-full" />)}
-              </div>
-            ) : filteredProducts.length === 0 ? (
-              <div className="text-center py-12">
-                <p className="text-gray-500">No products found.</p>
-                <Button onClick={() => { setSelectedCategory(null); setSearchQuery(""); setPriceFilter([]); }} className="mt-4" variant="outline">Clear Filters</Button>
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-                {filteredProducts.map((p) => <ProductCard key={p.id} product={p} />)}
-              </div>
-            )}
           </div>
         </div>
       </main>
+
       <Footer />
     </div>
   );
-      }
+          }
+
