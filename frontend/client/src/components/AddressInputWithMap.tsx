@@ -148,33 +148,44 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
   );
 
   // मेरी वर्तमान लोकेशन का उपयोग करें
-  const handleGeolocation = useCallback(async () => {
-    if (navigator.geolocation) {
-      setLoadingLocation(true);
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const newLat = pos.coords.latitude;
-          const newLng = pos.coords.longitude;
+// मेरी वर्तमान लोकेशन का उपयोग करें
+const handleGeolocation = useCallback(async () => {
+  if (navigator.geolocation) {
+    setLoadingLocation(true);
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
 
-          // 🛑 FIX: processLocation से परिणाम की अपेक्षा करें और onLocationUpdate को कॉल करें
-          const result = await processLocation(newLat, newLng); 
-          
-          if (result && result.address && result.location) {
-              onLocationUpdate(result.address, result.location as GeocodedLocation); 
-          }
+        // 🛑 FIX: processLocation से परिणाम की अपेक्षा करें
+        const result = await processLocation(newLat, newLng); 
+        
+        if (result && result.address && result.location) {
+            onLocationUpdate(result.address, result.location as GeocodedLocation); 
+        }
 
-          if (onClose) onClose();
-          setLoadingLocation(false);
-        },
-        (error) => {
-          console.error("Geolocation Error: ", error);
-          setLoadingLocation(false);
-        },
-        { enableHighAccuracy: true, timeout: 5000, maximumAge: 0 }
-      );
-    }
-  }, [processLocation, onClose, setLoadingLocation, onLocationUpdate]); // 🛑 Dependencies अपडेट किए गए
-
+        if (onClose) onClose();
+        setLoadingLocation(false);
+      },
+      (error) => {
+        console.error("Geolocation Error: ", error);
+        // 💡 यूजर को एरर के हिसाब से मैसेज देना बेहतर है
+        if (error.code === 3) {
+          alert("लोकेशन ढूंढने में समय लग रहा है। कृपया दोबारा कोशिश करें या अपना एड्रेस टाइप करें।");
+        } else if (error.code === 1) {
+          alert("कृपया ब्राउज़र में लोकेशन की अनुमति (Permission) दें।");
+        }
+        setLoadingLocation(false);
+      },
+      { 
+        enableHighAccuracy: false, // 👈 'false' करने से सेलुलर डेटा/वाईफाई का उपयोग होगा जो जल्दी काम करता है
+        timeout: 15000,            // 👈 समय बढ़ाकर 15 सेकंड कर दें (15000ms)
+        maximumAge: 0 
+      }
+    );
+  }
+}, [processLocation, onClose, setLoadingLocation, onLocationUpdate]);
+  
   if (loadError) return <div>नक्शा लोड नहीं हो पाया।</div>;
   if (!isLoaded) return <div>लोकेशन लोडिंग...</div>;
 
