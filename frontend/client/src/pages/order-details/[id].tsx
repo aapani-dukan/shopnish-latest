@@ -201,7 +201,8 @@ const OrderDetailsPage = () => {
               {/* Sub-Orders Section */}
               <h2 className="text-2xl font-bold mb-4 flex items-center text-gray-800">
                    <ShoppingBag className="h-6 w-6 mr-2 text-indigo-600" /> 
-                   Sub-Orders ({subOrdersToDisplay.length})
+                   Sub-Orders ({subOrdersToDisplay?.length || 0})
+
               </h2>
               
               {subOrdersToDisplay.length === 0 && isFiltered && (
