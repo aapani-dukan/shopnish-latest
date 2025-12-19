@@ -64,7 +64,7 @@ export function initSocket(server: HTTPServer) {
     });
 
     // Delivery-boy sends location updates
-    socket.on('deliveryboy:location_update', async (data: { orderId: number, lat: number, lng: number }) => {
+    socket.on('deliveryBoy:location_update', async (data: { orderId: number, lat: number, lng: number }) => {
       const serverIo = getIO();
       if (!data.orderId || !data.lat || !data.lng) return;
 
