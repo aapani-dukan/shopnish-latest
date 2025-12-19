@@ -1034,39 +1034,35 @@ export const getOrderTrackingDetails = async (
       .from(deliveryBatches)
       .where(eq(deliveryBatches.masterOrderId, orderId));
 
-    /* 5️⃣ Attach Delivery Boy + Live Location */
-    for (const batch of deliveryBatchesList) {
-      let deliveryBoy = null;
+    
+    /* 5️⃣ Attach Delivery Boy (LIVE LOCATION FROM delivery_boys table) */
+for (const batch of deliveryBatchesList) {
+  let deliveryBoy = null;
 
-      if (batch.deliveryBoyId) {
-        const boyResult = await db
-          .select()
-          .from(deliveryBoys)
-          .where(eq(deliveryBoys.id, batch.deliveryBoyId))
-          .limit(1);
+  if (batch.deliveryBoyId) {
+    const boyResult = await db
+      .select()
+      .from(deliveryBoys)
+      .where(eq(deliveryBoys.id, batch.deliveryBoyId))
+      .limit(1);
 
-        deliveryBoy = boyResult[0] || null;
+    if (boyResult.length) {
+      deliveryBoy = {
+        id: boyResult[0].id,
+        name: boyResult[0].name,
+        phone: boyResult[0].phone,
+        currentLocation: boyResult[0].currentLat && boyResult[0].currentLng
+          ? {
+              lat: Number(boyResult[0].currentLat),
+              lng: Number(boyResult[0].currentLng),
+            }
+          : null,
+      };
+    }
+  }
 
-        if (deliveryBoy) {
-          const locationResult = await db
-            .select()
-            .from(deliveryBoyLocations)
-            .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
-            .orderBy(desc(deliveryBoyLocations.timestamp))
-            .limit(1);
-
-          deliveryBoy.currentLocation = locationResult[0]
-            ? {
-                lat: Number(locationResult[0].latitude),
-                lng: Number(locationResult[0].longitude),
-                timestamp: locationResult[0].timestamp,
-              }
-            : null;
-        }
-      }
-
-      (batch as any).deliveryBoy = deliveryBoy;
-    } // ✅ for loop properly closed here
+  (batch as any).deliveryBoy = deliveryBoy;
+}
 
     /* 6️⃣ Tracking History */
     const trackingHistory = await db
