@@ -176,11 +176,11 @@ export const orderTrackingRelations = relations(orderTracking, ({ one }) => ({
     references: [orders.id],
    // optional: true,
   }),
-  deliveryBatch: one(deliveryBatches, {
-    fields: [orderTracking.deliveryBatchId],
-    references: [deliveryBatches.id],
+  //deliveryBatch: one(deliveryBatches, {
+  //  fields: [orderTracking.deliveryBatchId],
+ //   references: [deliveryBatches.id],
   //  optional: true,
-  }),
+//  }),
   updatedBy: one(users, {
     fields: [orderTracking.updatedBy],
     references: [users.id],
