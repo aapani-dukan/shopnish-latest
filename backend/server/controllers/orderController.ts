@@ -975,14 +975,10 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
  * विशिष्ट मास्टर ऑर्डर के लिए विस्तृत ट्रैकिंग जानकारी फ़ेच करता है।
  * उद्देश्य: मैप पर ट्रैकिंग और बैच-वाइज डिलीवरी प्रगति दिखाना।
  */
-
-
 export const getOrderTrackingDetails = async (
   req: AuthenticatedRequest,
   res: Response
 ) => {
-  console.log("🧪 [TEST API] Order tracking (flat queries)");
-
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -990,12 +986,13 @@ export const getOrderTrackingDetails = async (
     if (!customerId) {
       return res.status(401).json({ message: "Unauthorized" });
     }
+
     if (Number.isNaN(orderId)) {
       return res.status(400).json({ message: "Invalid order ID" });
     }
 
-    // 🟢 1. Master Order (NO relations)
-    const masterOrder = await db
+    // 1️⃣ Master Order (flat query – stable)
+    const masterOrderResult = await db
       .select()
       .from(orders)
       .where(
@@ -1006,47 +1003,70 @@ export const getOrderTrackingDetails = async (
       )
       .limit(1);
 
-    if (!masterOrder.length) {
+    if (!masterOrderResult.length) {
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 🟢 2. Delivery Address (separate)
-    const deliveryAddress = masterOrder[0].deliveryAddressId
-      ? await db
-          .select()
-          .from(deliveryAddresses)
-          .where(eq(deliveryAddresses.id, masterOrder[0].deliveryAddressId))
-          .limit(1)
-      : [];
+    const masterOrder = masterOrderResult[0];
 
-    // 🟢 3. Sub Orders (separate)
+    // 2️⃣ Delivery Address
+    let customerDeliveryAddress = null;
+
+    if (masterOrder.deliveryAddressId) {
+      const addressResult = await db
+        .select()
+        .from(deliveryAddresses)
+        .where(eq(deliveryAddresses.id, masterOrder.deliveryAddressId))
+        .limit(1);
+
+      customerDeliveryAddress = addressResult[0] || null;
+    }
+
+    // 3️⃣ Sub Orders
     const subOrdersList = await db
       .select()
       .from(subOrders)
       .where(eq(subOrders.masterOrderId, orderId));
 
-    // 🟢 4. Order Tracking (separate)
+    // 4️⃣ Order Tracking History
     const trackingHistory = await db
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
-      .orderBy(desc(orderTracking.timestamp))
-      .limit(5);
+      .orderBy(desc(orderTracking.timestamp));
 
-    // 🟢 RESPONSE (simple & safe)
+    // 5️⃣ Delivery Batch Summary (simple derive)
+    const deliveryBatchesSummary = [
+      ...new Set(
+        subOrdersList
+          .map((s) => s.deliveryBatchId)
+          .filter(Boolean)
+      ),
+    ].map((batchId) => ({
+      deliveryBatchId: batchId,
+    }));
+
+    // ✅ FINAL PRODUCTION RESPONSE
     return res.status(200).json({
-      testMode: true,
-      masterOrder: masterOrder[0],
-      deliveryAddress: deliveryAddress[0] || null,
+      masterOrderId: masterOrder.id,
+      masterOrderNumber: masterOrder.orderNumber,
+      status: masterOrder.status,
+      paymentMethod: masterOrder.paymentMethod,
+      paymentStatus: masterOrder.paymentStatus,
+      total: masterOrder.total,
+      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
+      createdAt: masterOrder.createdAt,
+
+      customerDeliveryAddress,
       subOrders: subOrdersList,
-      tracking: trackingHistory,
+      deliveryBatchesSummary,
+      masterOrderTrackingHistory: trackingHistory,
     });
 
   } catch (error) {
-    console.error("❌ TEST API ERROR:", error);
+    console.error("❌ Order Tracking API Error:", error);
     return res.status(500).json({
-      message: "TEST FAILED",
-      error: true,
+      message: "Failed to fetch order tracking details",
     });
   }
 };
