@@ -1,7 +1,7 @@
 import { Server, Socket } from "socket.io";
 import type { Server as HTTPServer } from "http";
 import { db } from "./db"; 
-import { orders } from "../shared/backend/schema";
+import { orders, deliveryBatches, deliveryBoys} from "../shared/backend/schema";
 import { eq } from "drizzle-orm";
 import { authAdmin } from "./lib/firebaseAdmin";
 
@@ -64,24 +64,54 @@ export function initSocket(server: HTTPServer) {
     });
 
     // Delivery-boy sends location updates
-    socket.on('deliveryBoy:location_update', async (data: { orderId: number, lat: number, lng: number }) => {
-      const serverIo = getIO();
-      if (!data.orderId || !data.lat || !data.lng) return;
+    socket.on(
+  "deliveryBoy:location_update",
+  async (data: { batchId: number; lat: number; lng: number }) => {
 
-      console.log(`🏍️ Location Update for Order ${data.orderId}: (${data.lat}, ${data.lng})`);
+    const { batchId, lat, lng } = data;
+    if (!batchId || !lat || !lng) return;
 
-      try {
-        serverIo.to(`order:${data.orderId}`).emit('order:delivery_location', {
-          orderId: data.orderId,
-          lat: data.lat,
-          lng: data.lng,
-          timestamp: new Date().toISOString()
-        });
-        console.log(`✅ Location broadcasted to order:${data.orderId}`);
-      } catch (error) {
-        console.error("❌ Error processing location update:", error);
+    console.log(`🏍️ GPS update | batch ${batchId} → (${lat}, ${lng})`);
+
+    try {
+      // 1️⃣ batch se deliveryBoyId nikalo
+      const batchResult = await db
+        .select()
+        .from(deliveryBatches)
+        .where(eq(deliveryBatches.id, batchId))
+        .limit(1);
+
+      if (!batchResult.length || !batchResult[0].deliveryBoyId) {
+        console.log("❌ No delivery boy linked to batch");
+        return;
       }
-    });
+
+      const deliveryBoyId = batchResult[0].deliveryBoyId;
+
+      // 2️⃣ deliveryBoys table update
+      await db
+        .update(deliveryBoys)
+        .set({
+          currentLat: String(lat),
+          currentLng: String(lng),
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryBoys.id, deliveryBoyId));
+
+      console.log(`✅ Location saved for deliveryBoy ${deliveryBoyId}`);
+
+      // 3️⃣ Customer ko realtime update (optional)
+      io?.emit("order:delivery_location", {
+        batchId,
+        lat,
+        lng,
+      });
+
+    } catch (err) {
+      console.error("❌ GPS save failed:", err);
+    }
+  }
+);
 
     socket.on("chat:message", (msg) => {
       console.log("💬 Message received:", msg);
