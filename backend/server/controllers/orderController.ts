@@ -991,7 +991,7 @@ export const getOrderTrackingDetails = async (
       return res.status(400).json({ message: "Invalid order ID" });
     }
 
-    // 1️⃣ Master Order (flat query – stable)
+    /* 1️⃣ Master Order */
     const masterOrderResult = await db
       .select()
       .from(orders)
@@ -1009,44 +1009,60 @@ export const getOrderTrackingDetails = async (
 
     const masterOrder = masterOrderResult[0];
 
-    // 2️⃣ Delivery Address
-    let customerDeliveryAddress = null;
+    /* 2️⃣ Delivery Address */
+    const customerDeliveryAddress = masterOrder.deliveryAddressId
+      ? (
+          await db
+            .select()
+            .from(deliveryAddresses)
+            .where(eq(deliveryAddresses.id, masterOrder.deliveryAddressId))
+            .limit(1)
+        )[0] || null
+      : null;
 
-    if (masterOrder.deliveryAddressId) {
-      const addressResult = await db
-        .select()
-        .from(deliveryAddresses)
-        .where(eq(deliveryAddresses.id, masterOrder.deliveryAddressId))
-        .limit(1);
-
-      customerDeliveryAddress = addressResult[0] || null;
-    }
-
-    // 3️⃣ Sub Orders
+    /* 3️⃣ Sub Orders */
     const subOrdersList = await db
       .select()
       .from(subOrders)
       .where(eq(subOrders.masterOrderId, orderId));
 
-    // 4️⃣ Order Tracking History
+    /* 4️⃣ Order Timeline */
     const trackingHistory = await db
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
       .orderBy(desc(orderTracking.timestamp));
 
-    // 5️⃣ Delivery Batch Summary (simple derive)
-    const deliveryBatchesSummary = [
-      ...new Set(
-        subOrdersList
-          .map((s) => s.deliveryBatchId)
-          .filter(Boolean)
-      ),
-    ].map((batchId) => ({
-      deliveryBatchId: batchId,
-    }));
+    /* 5️⃣ Delivery Batch Summary (Frontend Compatible) */
+    const deliveryBatchesSummary = [];
 
-    // ✅ FINAL PRODUCTION RESPONSE
+    for (const subOrder of subOrdersList) {
+      const batchId = subOrder.deliveryBatchId || 0;
+
+      let batch = deliveryBatchesSummary.find(
+        (b) => b.batchId === batchId
+      );
+
+      if (!batch) {
+        batch = {
+          batchId,
+          batchStatus: subOrder.status,
+          deliveryBoy: null,        // future ready
+          subOrders: [],
+          storeLocations: [],
+        };
+        deliveryBatchesSummary.push(batch);
+      }
+
+      batch.subOrders.push({
+        subOrderId: subOrder.id,
+        sellerName: subOrder.sellerName || "Seller",
+        subOrderStatus: subOrder.status,
+        isSelfDelivery: subOrder.isSelfDelivery,
+      });
+    }
+
+    /* ✅ FINAL RESPONSE (Frontend Safe) */
     return res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
@@ -1058,19 +1074,17 @@ export const getOrderTrackingDetails = async (
       createdAt: masterOrder.createdAt,
 
       customerDeliveryAddress,
-      subOrders: subOrdersList,
       deliveryBatchesSummary,
       masterOrderTrackingHistory: trackingHistory,
     });
 
   } catch (error) {
-    console.error("❌ Order Tracking API Error:", error);
+    console.error("❌ Order Tracking Error:", error);
     return res.status(500).json({
-      message: "Failed to fetch order tracking details",
+      message: "Unable to fetch order tracking details",
     });
   }
 };
-
 // ---------------------------------------------------------------------------------
 // **NOTES:** getSubOrderDetails और getOrderDetail में मुख्य ट्रैकिंग लॉजिक शामिल नहीं है
 // ---------------------------------------------------------------------------------
