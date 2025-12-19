@@ -58,7 +58,7 @@ interface BatchSubOrderSummary {
 }
 
 export interface DeliveryBatchSummary {
-  batchId: number | string; // 0 या 'unassigned' हो सकता है
+  batchId: number;
   batchStatus: string;
   deliveryBoy: DeliveryBoySummary | null;
   subOrders: BatchSubOrderSummary[];
@@ -231,27 +231,34 @@ const getStatusText = (status: string) => {
   } = trackingResponse; // अब यह सुनिश्चित है कि trackingResponse एक मान्य ऑब्जेक्ट है
   
   // 🟢 FIX 4: MapComponent के लिए डेटा तैयार करें
-  const activeBatchesForMap = deliveryBatchesSummary.filter(b => 
-    (b.batchStatus === 'picked_up' || b.batchStatus === 'out_for_delivery' || b.batchStatus === 'in transit') && b.deliveryBoy
+  const activeBatchesForMap = deliveryBatchesSummary.filter(
+  (b) =>
+    b.deliveryBoy !== null &&
+    ["picked_up", "out_for_delivery", "in transit"].includes(b.batchStatus)
+);
+
+  const mapDeliveryBoys = activeBatchesForMap
+  .map((batch) => ({
+    ...batch.deliveryBoy!,
+    batchId: batch.batchId,
+    currentLocation:
+      liveLocations.get(batch.batchId) ||
+      batch.deliveryBoy?.currentLocation ||
+      { lat: 0, lng: 0 },
+  }))
+  .filter(
+    (db) => db.currentLocation.lat !== 0 || db.currentLocation.lng !== 0
   );
-
-  const mapDeliveryBoys = activeBatchesForMap.map(batch => ({
-    ...batch.deliveryBoy,
-    batchId: batch.batchId as number,
-    // लाइव लोकेशन को प्राथमिकता दें
-    currentLocation: liveLocations.get(batch.batchId as number) || batch.deliveryBoy?.currentLocation || { lat: 0, lng: 0 }, 
-  })).filter(db => db.currentLocation.lat !== 0 || db.currentLocation.lng !== 0); // Invalid locations filter
-
-  // सभी बैचों से स्टोर स्थानों को इकट्ठा करें
-  // (deliveryBatchesSummary || []) का उपयोग करने की आवश्यकता नहीं है क्योंकि हमने ऊपर इसे default [] कर दिया है
   const mapStores = Array.from(new Set(
     deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s))) // storeLocations को भी सुरक्षित करें
   )).map(s => JSON.parse(s));
 
-  const estimatedTime = new Date(masterOrderDetails.estimatedDeliveryTime).toLocaleTimeString('en-IN', {
-    hour: '2-digit', minute: '2-digit'
-  });
-
+  const estimatedTime = masterOrderDetails.estimatedDeliveryTime
+  ? new Date(masterOrderDetails.estimatedDeliveryTime).toLocaleTimeString(
+      "en-IN",
+      { hour: "2-digit", minute: "2-digit" }
+    )
+  : "TBD";
   
   return (
     <div className="min-h-screen bg-gray-50 py-8">
