@@ -1164,9 +1164,9 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
                         // ... बाकी subOrders का डेटा ...
                     },
                 },
-                orderTracking: {
-                    orderBy: [desc(orderTracking.createdAt)],
-                }
+             //   orderTracking: {
+                //    orderBy: [desc(orderTracking.createdAt)],
+              //  }
             },
         });
         
