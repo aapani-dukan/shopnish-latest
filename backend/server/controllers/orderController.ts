@@ -1036,33 +1036,45 @@ export const getOrderTrackingDetails = async (
 
     
     /* 5️⃣ Attach Delivery Boy (LIVE LOCATION FROM delivery_boys table) */
-for (const batch of deliveryBatchesList) {
-  let deliveryBoy = null;
+   for (const batch of deliveryBatchesList) {
+  let deliveryBoy: any = null;
 
+  // delivery boy assigned hai ya nahi
   if (batch.deliveryBoyId) {
     const boyResult = await db
-      .select()
+      .select({
+        id: deliveryBoys.id,
+        name: deliveryBoys.name,
+        phone: deliveryBoys.phone,
+        currentLat: deliveryBoys.currentLat,
+        currentLng: deliveryBoys.currentLng,
+      })
       .from(deliveryBoys)
       .where(eq(deliveryBoys.id, batch.deliveryBoyId))
       .limit(1);
 
-    if (boyResult.length) {
+    if (boyResult.length > 0) {
+      const boy = boyResult[0];
+
       deliveryBoy = {
-        id: boyResult[0].id,
-        name: boyResult[0].name,
-        phone: boyResult[0].phone,
-        currentLocation: boyResult[0].currentLat && boyResult[0].currentLng
-          ? {
-              lat: Number(boyResult[0].currentLat),
-              lng: Number(boyResult[0].currentLng),
-            }
-          : null,
+        id: boy.id,
+        name: boy.name,
+        phone: boy.phone,
+        currentLocation:
+          boy.currentLat !== null &&
+          boy.currentLng !== null
+            ? {
+                lat: Number(boy.currentLat),
+                lng: Number(boy.currentLng),
+              }
+            : null,
       };
     }
   }
 
+  // 👇 batch me attach kar do (yeh line rehni hi chahiye)
   (batch as any).deliveryBoy = deliveryBoy;
-}
+   }
 
     /* 6️⃣ Tracking History */
     const trackingHistory = await db
