@@ -1030,7 +1030,7 @@ export const getOrderTrackingDetails = async (
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
-      .orderBy(desc(orderTracking.createdAt))
+      .orderBy(desc(orderTracking.timestamp))
       .limit(5);
 
     // 🟢 RESPONSE (simple & safe)
