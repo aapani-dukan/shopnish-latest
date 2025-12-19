@@ -1046,25 +1046,23 @@ export const getOrderTrackingDetails = async (
         deliveryBoy = boyResult[0] || null;
 
         if (deliveryBoy) {
-          const locationResult = await db
-            .select()
-            .from(deliveryBoyLocations)
-            .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
-            .orderBy(desc(deliveryBoyLocations.timestamp))
-            .limit(1);
+  const locationResult = await db
+    .select()
+    .from(deliveryBoyLocations)
+    .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
+    .orderBy(desc(deliveryBoyLocations.timestamp))
+    .limit(1);
 
-          deliveryBoy.currentLocation = locationResult[0]
-            ? {
-                lat: Number(locationResult[0].latitude),
-                lng: Number(locationResult[0].longitude),
-                timestamp: locationResult[0].timestamp,
-              }
-            : null;
-        }
+  deliveryBoy.currentLocation = locationResult[0]
+    ? {
+        lat: Number(locationResult[0].latitude),
+        lng: Number(locationResult[0].longitude),
+        timestamp: locationResult[0].timestamp,
       }
+    : null;
+}
 
-      (batch as any).deliveryBoy = deliveryBoy;
-    }
+(batch as any).deliveryBoy = deliveryBoy;
 
     /* 6️⃣ Order Timeline */
     const trackingHistory = await db
