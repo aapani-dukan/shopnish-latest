@@ -67,52 +67,35 @@ export function initSocket(server: HTTPServer) {
     socket.on(
   "deliveryBoy:location_update",
   async (data: { batchId: number; lat: number; lng: number }) => {
+    if (!data.batchId || !data.lat || !data.lng) return;
 
-    const { batchId, lat, lng } = data;
-    if (!batchId || !lat || !lng) return;
-
-    console.log(`🏍️ GPS update | batch ${batchId} → (${lat}, ${lng})`);
+    console.log("🏍️ GPS update:", data);
 
     try {
-      // 1️⃣ batch se deliveryBoyId nikalo
-      const batchResult = await db
-        .select()
-        .from(deliveryBatches)
-        .where(eq(deliveryBatches.id, batchId))
-        .limit(1);
-
-      if (!batchResult.length || !batchResult[0].deliveryBoyId) {
-        console.log("❌ No delivery boy linked to batch");
-        return;
-      }
-
-      const deliveryBoyId = batchResult[0].deliveryBoyId;
-
-      // 2️⃣ deliveryBoys table update
-      await db
-        .update(deliveryBoys)
-        .set({
-          currentLat: String(lat),
-          currentLng: String(lng),
-          updatedAt: new Date(),
-        })
-        .where(eq(deliveryBoys.id, deliveryBoyId));
-
-      console.log(`✅ Location saved for deliveryBoy ${deliveryBoyId}`);
-
-      // 3️⃣ Customer ko realtime update (optional)
-      io?.emit("order:delivery_location", {
-        batchId,
-        lat,
-        lng,
+      // 1️⃣ batch → masterOrderId nikalo
+      const batch = await db.query.deliveryBatches.findFirst({
+        where: (b, { eq }) => eq(b.id, data.batchId),
       });
 
+      if (!batch?.masterOrderId) return;
+
+      // 2️⃣ customer ke order room me bhejo
+      io?.to(`order:${batch.masterOrderId}`).emit(
+        "order:delivery_location",
+        {
+          lat: data.lat,
+          lng: data.lng,
+          batchId: data.batchId,
+          timestamp: new Date().toISOString(),
+        }
+      );
+
+      console.log(`📡 Sent to order:${batch.masterOrderId}`);
     } catch (err) {
-      console.error("❌ GPS save failed:", err);
+      console.error("❌ GPS socket error", err);
     }
   }
 );
-
     socket.on("chat:message", (msg) => {
       console.log("💬 Message received:", msg);
       io?.emit("chat:message", msg);
