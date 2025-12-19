@@ -151,7 +151,7 @@ const getStatusText = (status: string) => {
     },
     enabled: !!numericOrderId, // केवल तभी Fetch करें जब numericOrderId मौजूद हो
   });
-
+console.log("✅ TRACKING RESPONSE:", trackingResponse);
   // 🟢 FIX 3: Live Location Update Logic
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
