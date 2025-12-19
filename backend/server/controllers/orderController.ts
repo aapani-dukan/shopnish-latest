@@ -1169,7 +1169,11 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
               //  }
             },
         });
-        
+        const trackingHistory = await db.query.orderTracking.findMany({
+  where: eq(orderTracking.masterOrderId, orderId),
+  orderBy: { column: orderTracking.createdAt, order: "desc" },
+  limit: 5,
+});
         // यदि masterOrderDetail नहीं मिला
         if (!masterOrderDetail) {
             return res.status(404).json({ message: "Master order not found or access denied." });
