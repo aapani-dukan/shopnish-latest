@@ -976,8 +976,14 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
  * उद्देश्य: मैप पर ट्रैकिंग और बैच-वाइज डिलीवरी प्रगति दिखाना।
  */
 
-export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+
+      export const getOrderTrackingDetails = async (
+  req: AuthenticatedRequest,
+  res: Response,
+  next: NextFunction
+) => {
   console.log("📡 [API] Received request to get master order tracking details.");
+  
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -985,7 +991,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID." });
     if (!customerId) return res.status(401).json({ message: "Unauthorized: User not logged in." });
 
-    // 🟢 Master order fetch without deliveryBatch / orderTracking relations
+    // 🟢 Master order fetch
     const masterOrder = await db.query.orders.findFirst({
       where: and(
         eq(orders.id, orderId),
@@ -1001,6 +1007,13 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
             store: {
               columns: { id: true, storeName: true, address: true, latitude: true, longitude: true },
             },
+            deliveryBatch: {
+              with: {
+                deliveryBoy: {
+                  columns: { id: true, name: true, phone: true, currentLat: true, currentLng: true },
+                },
+              },
+            },
           },
         },
       },
@@ -1010,73 +1023,73 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       return res.status(404).json({ message: "Master order not found or access denied." });
     }
 
-    // 🟢 Parse deliveryAddress
+    // 🟢 Order tracking fetch (fixed DESC syntax)
+    const orderTrackingHistory = await db.query.orderTracking.findMany({
+      where: eq(orderTracking.masterOrderId, orderId),
+      orderBy: { column: orderTracking.createdAt, order: "desc" },
+      limit: 5,
+    });
+
+    // JSON parsing for deliveryAddress
     let parsedDeliveryAddress: any = {};
     try {
-      parsedDeliveryAddress = typeof masterOrder.deliveryAddress === 'string' 
-                              ? JSON.parse(masterOrder.deliveryAddress) 
-                              : masterOrder.deliveryAddress;
+      parsedDeliveryAddress = typeof masterOrder.deliveryAddress === 'string'
+        ? JSON.parse(masterOrder.deliveryAddress)
+        : masterOrder.deliveryAddress;
     } catch (e) {
       console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
     }
 
-    // 🟢 Fetch order tracking separately
-    const trackingHistory = await db
-      .select()
-      .from(orderTracking)
-      .where(eq(orderTracking.masterOrderId, orderId))
-      .orderBy(desc(orderTracking.createdAt))
-      .limit(5);
-
-    // 🟢 Organize batches map (still works without deliveryBatch relation)
+    // 🟢 Group subOrders by delivery batch
     const batchesMap = new Map();
     (masterOrder.subOrders || []).forEach(subOrder => {
-        const batchId = subOrder.deliveryBatch?.id || 0; // undefined safe
-        const batchKey = batchId === 0 ? 'unassigned' : batchId;
+      const batchId = subOrder.deliveryBatch?.id || 0;
+      const batchKey = batchId === 0 ? 'unassigned' : batchId;
 
-        if (!batchesMap.has(batchKey)) {
-            batchesMap.set(batchKey, {
-                batchId: batchId,
-                batchStatus: subOrder.deliveryBatch?.status || subOrder.status || masterOrder.status, 
-                deliveryBoy: subOrder.deliveryBatch?.deliveryBoy ? {
-                    id: subOrder.deliveryBatch.deliveryBoy.id,
-                    name: subOrder.deliveryBatch.deliveryBoy.name,
-                    phone: subOrder.deliveryBatch.deliveryBoy.phone,
-                    currentLocation: { 
-                      lat: subOrder.deliveryBatch.deliveryBoy.currentLat, 
-                      lng: subOrder.deliveryBatch.deliveryBoy.currentLng 
-                    },
-                } : null,
-                subOrders: [],
-                storeLocations: new Set(),
-            });
-        }
-
-        const batchData = batchesMap.get(batchKey);
-        batchData.subOrders.push({
-            subOrderId: subOrder.id,
-            sellerId: subOrder.sellerId,
-            sellerName: subOrder.seller?.businessName,
-            subOrderStatus: subOrder.status, 
-            isSelfDelivery: subOrder.isSelfDeliveryBySeller,
+      if (!batchesMap.has(batchKey)) {
+        batchesMap.set(batchKey, {
+          batchId: batchId,
+          batchStatus: subOrder.deliveryBatch?.status || subOrder.status || masterOrder.status,
+          deliveryBoy: subOrder.deliveryBatch?.deliveryBoy ? {
+            id: subOrder.deliveryBatch.deliveryBoy.id,
+            name: subOrder.deliveryBatch.deliveryBoy.name,
+            phone: subOrder.deliveryBatch.deliveryBoy.phone,
+            currentLocation: {
+              lat: subOrder.deliveryBatch.deliveryBoy.currentLat,
+              lng: subOrder.deliveryBatch.deliveryBoy.currentLng,
+            },
+          } : null,
+          subOrders: [],
+          storeLocations: new Set(),
         });
+      }
 
-        if (subOrder.store?.latitude && subOrder.store?.longitude) {
-            batchData.storeLocations.add(JSON.stringify({ 
-                lat: subOrder.store.latitude, 
-                lng: subOrder.store.longitude, 
-                name: subOrder.store.storeName 
-            }));
-        }
+      const batchData = batchesMap.get(batchKey);
+
+      batchData.subOrders.push({
+        subOrderId: subOrder.id,
+        sellerId: subOrder.sellerId,
+        sellerName: subOrder.seller?.businessName,
+        subOrderStatus: subOrder.status,
+        isSelfDelivery: subOrder.isSelfDeliveryBySeller,
+      });
+
+      if (subOrder.store?.latitude && subOrder.store?.longitude) {
+        batchData.storeLocations.add(JSON.stringify({
+          lat: subOrder.store.latitude,
+          lng: subOrder.store.longitude,
+          name: subOrder.store.storeName
+        }));
+      }
     });
 
     // 🟢 Send response
     res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
-      status: masterOrder.status, 
-      paymentMethod: masterOrder.paymentMethod || 'N/A', 
-      paymentStatus: masterOrder.paymentStatus || 'pending', 
+      status: masterOrder.status,
+      paymentMethod: masterOrder.paymentMethod || 'N/A',
+      paymentStatus: masterOrder.paymentStatus || 'pending',
       total: masterOrder.total || '0.00',
       estimatedDeliveryTime: masterOrder.estimatedDeliveryTime || new Date().toISOString(),
       createdAt: masterOrder.createdAt || new Date().toISOString(),
@@ -1084,7 +1097,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
         lng: masterOrder.deliveryLng || 0,
-        address: parsedDeliveryAddress.addressLine1 || '', 
+        address: parsedDeliveryAddress.addressLine1 || '',
         city: parsedDeliveryAddress.city || '',
         pincode: parsedDeliveryAddress.pincode || '',
         fullName: parsedDeliveryAddress.fullName || '',
@@ -1092,11 +1105,11 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       },
 
       deliveryBatchesSummary: Array.from(batchesMap.values()).map((batch: any) => ({
-          ...batch,
-          storeLocations: Array.from(batch.storeLocations).map(JSON.parse),
+        ...batch,
+        storeLocations: Array.from(batch.storeLocations).map(JSON.parse),
       })),
 
-      masterOrderTrackingHistory: trackingHistory,
+      masterOrderTrackingHistory: orderTrackingHistory,
     });
 
   } catch (error) {
