@@ -176,7 +176,9 @@ export const deliveryBoys = pgTable("delivery_boys", {
   isAvailable: boolean("is_available").default(true),
   currentLat: decimal("current_lat", { precision: 10, scale: 8 }),
   currentLng: decimal("current_lng", { precision: 11, scale: 8 }),
-  rating: decimal("rating", { precision: 3, scale: 2 }).default("5.0"),
+  rating: decimal("rating", { precision: 3, scale: 2 })
+  .$type<number>()
+  .default(5),
   totalDeliveries: integer("total_deliveries").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at"),
@@ -267,7 +269,7 @@ export const orders = pgTable("orders", {
   orderNumber: text("order_number").notNull().unique(),
   customerId: integer("customer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   deliveryAddressId: integer("delivery_address_id").notNull().references(() => deliveryAddresses.id, { onDelete: "cascade" }),
-  deliveryAddress: text("delivery_address").notNull().$type<string>(),
+ // deliveryAddress: text("delivery_address").notNull().$type<string>(),
   deliveryCity: text("delivery_city").notNull().default('Unknown'),
   deliveryState: text("delivery_state").notNull().default('Unknown'),
   deliveryPincode: text("delivery_pincode").notNull().default('000000'),
@@ -284,9 +286,16 @@ export const orders = pgTable("orders", {
   transactionId: text("transaction_id"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).default('0.0').notNull(),
-  promoCode: text("promo_code"),
-  discount: decimal("discount", { precision: 5, scale: 2 }).$type<number>().default(0.0),
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 })
+  .$type<number>()
+  .default(0)
+  .notNull(),
+promoCode: text("promo_code"),
+discount: decimal("discount", { precision: 5, scale: 2 })
+  .$type<number>()
+  .default(0),
+  
+  
   status: masterOrderStatusEnum("status").default("pending").notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
@@ -295,29 +304,6 @@ export const orders = pgTable("orders", {
     orderNumberUnique: unique("order_number_unique").on(table.orderNumber),
   };
 });
-
-// 14. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
-export const subOrders = pgTable("sub_orders", {
-  id: serial("id").primaryKey(),
-  masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
-  subOrderNumber: text("sub_order_number").notNull().unique(),
-  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id, { onDelete: "cascade" }),
-  storeId: integer("store_id").references(() => stores.id, { onDelete: 'set null' }),
-  status: subOrderStatusEnum("status").default("pending").notNull(),
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }).notNull().default('0.0').$type<number>(),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id),
-  estimatedPreparationTime: text("estimated_preparation_time"),
-  isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false),
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-}, (table) => {
-  return {
-    subOrderNumberUnique: unique("sub_order_number_unique").on(table.subOrderNumber),
-  };
-});
-
 // 15. deliveryBatches - orders, deliveryBoys, deliveryAddresses को संदर्भित करता है
 export const deliveryBatches = pgTable("delivery_batches", {
     id: serial("id").primaryKey(),
@@ -332,6 +318,32 @@ export const deliveryBatches = pgTable("delivery_batches", {
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// 14. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
+export const subOrders = pgTable("sub_orders", {
+  id: serial("id").primaryKey(),
+  masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
+  subOrderNumber: text("sub_order_number").notNull().unique(),
+  sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id, { onDelete: "cascade" }),
+  storeId: integer("store_id").references(() => stores.id, { onDelete: 'set null' }),
+  status: subOrderStatusEnum("status").default("pending").notNull(),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 })
+  .$type<number>()
+  .default(0)
+  .notNull(),
+  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
+  deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id),
+  estimatedPreparationTime: text("estimated_preparation_time"),
+  isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+}, (table) => {
+  return {
+    subOrderNumberUnique: unique("sub_order_number_unique").on(table.subOrderNumber),
+  };
+});
+
 
 // 16. cartItems - users, products, sellersPgTable को संदर्भित करता है
 export const cartItems = pgTable("cart_items", {
@@ -362,10 +374,18 @@ export const orderItems = pgTable("order_items", {
   productId: integer("product_id").notNull().references(() => products.id),
   productName: text("product_name").notNull().default('Unknown Product'),
   productImage: text("product_image"),
-  productPrice: decimal("product_price", { precision: 10, scale: 2 }).notNull().default('0.0').$type<number>(),
+  productPrice: decimal("product_price", { precision: 10, scale: 2 })
+  .$type<number>()
+  .default(0)
+  .notNull(),
+
+
   productUnit: text("product_unit").notNull().default('piece'),
   quantity: integer("quantity").notNull(),
-  itemTotal: decimal("item_total", { precision: 10, scale: 2 }).notNull().default('0.00').$type<number>(),
+  itemTotal: decimal("item_total", { precision: 10, scale: 2 })
+  .$type<number>()
+  .default(0)
+  .notNull(),
   status: orderItemStatusEnum("status").default('pending').notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
