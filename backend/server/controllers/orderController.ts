@@ -1114,6 +1114,7 @@ export const getOrderTrackingDetails = async (
     return res.status(500).json({
       message: "Unable to fetch order tracking details",
     });
+      }
   }
 };
     
