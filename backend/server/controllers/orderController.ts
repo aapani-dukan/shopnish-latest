@@ -975,6 +975,7 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
  * विशिष्ट मास्टर ऑर्डर के लिए विस्तृत ट्रैकिंग जानकारी फ़ेच करता है।
  * उद्देश्य: मैप पर ट्रैकिंग और बैच-वाइज डिलीवरी प्रगति दिखाना।
  */
+
 export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log("📡 [API] Received request to get master order tracking details.");
   try {
@@ -984,7 +985,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     if (isNaN(orderId)) return res.status(400).json({ message: "Invalid order ID." });
     if (!customerId) return res.status(401).json({ message: "Unauthorized: User not logged in." });
 
-
+    // 🟢 Master order fetch without deliveryBatch / orderTracking relations
     const masterOrder = await db.query.orders.findFirst({
       where: and(
         eq(orders.id, orderId),
@@ -993,25 +994,14 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       with: {
         deliveryAddress: true,
         subOrders: {
-            with: {
-                seller: {
-                    columns: { id: true, businessName: true, latitude: true, longitude: true },
-                },
-                store: {
-                    columns: { id: true, storeName: true, address: true, latitude: true, longitude: true },
-                },
-                deliveryBatch: {
-                    with: {
-                        deliveryBoy: {
-                            columns: { id: true, name: true, phone: true, currentLat: true, currentLng: true },
-                        },
-                    },
-                },
+          with: {
+            seller: {
+              columns: { id: true, businessName: true, latitude: true, longitude: true },
             },
-        },
-        orderTracking: { 
-            orderBy: [desc(orderTracking.createdAt)],
-            limit: 5, 
+            store: {
+              columns: { id: true, storeName: true, address: true, latitude: true, longitude: true },
+            },
+          },
         },
       },
     });
@@ -1019,28 +1009,34 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     if (!masterOrder) {
       return res.status(404).json({ message: "Master order not found or access denied." });
     }
-    
-    // JSON पार्सिंग
+
+    // 🟢 Parse deliveryAddress
     let parsedDeliveryAddress: any = {};
     try {
-      // Drizzle/Postgres में JSONB फील्ड को parse करना पड़ सकता है
       parsedDeliveryAddress = typeof masterOrder.deliveryAddress === 'string' 
                               ? JSON.parse(masterOrder.deliveryAddress) 
-                              : masterOrder.deliveryAddress; // यदि यह पहले से ही ऑब्जेक्ट है
+                              : masterOrder.deliveryAddress;
     } catch (e) {
       console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrder.id}:`, e);
     }
 
-    // 🟢 FIX: डिलीवरी जानकारी को बैच ID द्वारा समूहित करें
+    // 🟢 Fetch order tracking separately
+    const trackingHistory = await db
+      .select()
+      .from(orderTracking)
+      .where(eq(orderTracking.masterOrderId, orderId))
+      .orderBy(desc(orderTracking.createdAt))
+      .limit(5);
+
+    // 🟢 Organize batches map (still works without deliveryBatch relation)
     const batchesMap = new Map();
     (masterOrder.subOrders || []).forEach(subOrder => {
-        const batchId = subOrder.deliveryBatch?.id || 0; 
+        const batchId = subOrder.deliveryBatch?.id || 0; // undefined safe
         const batchKey = batchId === 0 ? 'unassigned' : batchId;
-        
+
         if (!batchesMap.has(batchKey)) {
             batchesMap.set(batchKey, {
                 batchId: batchId,
-                // असाइन न किए गए बैच के लिए, सब-ऑर्डर का स्टेटस या मास्टर ऑर्डर का स्टेटस दिखाएँ
                 batchStatus: subOrder.deliveryBatch?.status || subOrder.status || masterOrder.status, 
                 deliveryBoy: subOrder.deliveryBatch?.deliveryBoy ? {
                     id: subOrder.deliveryBatch.deliveryBoy.id,
@@ -1055,10 +1051,8 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
                 storeLocations: new Set(),
             });
         }
-        
+
         const batchData = batchesMap.get(batchKey);
-        
-        // सब-ऑर्डर को बैच के अंदर जोड़ें
         batchData.subOrders.push({
             subOrderId: subOrder.id,
             sellerId: subOrder.sellerId,
@@ -1067,7 +1061,6 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
             isSelfDelivery: subOrder.isSelfDeliveryBySeller,
         });
 
-        // स्टोर लोकेशन जोड़ें (ट्रैकिंग मैप के लिए)
         if (subOrder.store?.latitude && subOrder.store?.longitude) {
             batchData.storeLocations.add(JSON.stringify({ 
                 lat: subOrder.store.latitude, 
@@ -1077,7 +1070,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
         }
     });
 
-    // 🟢 FIX: रिस्पॉन्स भेजना
+    // 🟢 Send response
     res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
@@ -1087,8 +1080,7 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
       total: masterOrder.total || '0.00',
       estimatedDeliveryTime: masterOrder.estimatedDeliveryTime || new Date().toISOString(),
       createdAt: masterOrder.createdAt || new Date().toISOString(),
-  
-      
+
       customerDeliveryAddress: {
         lat: masterOrder.deliveryLat || 0,
         lng: masterOrder.deliveryLng || 0,
@@ -1098,12 +1090,13 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
         fullName: parsedDeliveryAddress.fullName || '',
         phoneNumber: parsedDeliveryAddress.phoneNumber || '',
       },
-      // बैच समरी
+
       deliveryBatchesSummary: Array.from(batchesMap.values()).map((batch: any) => ({
           ...batch,
-          storeLocations: Array.from(batch.storeLocations).map(JSON.parse), 
+          storeLocations: Array.from(batch.storeLocations).map(JSON.parse),
       })),
-      masterOrderTrackingHistory: masterOrder.orderTracking,
+
+      masterOrderTrackingHistory: trackingHistory,
     });
 
   } catch (error) {
@@ -1111,8 +1104,6 @@ export const getOrderTrackingDetails = async (req: AuthenticatedRequest, res: Re
     res.status(500).json({ message: "Failed to fetch tracking details." });
   }
 };
-
-
 
 // ---------------------------------------------------------------------------------
 // **NOTES:** getSubOrderDetails और getOrderDetail में मुख्य ट्रैकिंग लॉजिक शामिल नहीं है
