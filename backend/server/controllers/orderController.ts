@@ -1026,85 +1026,90 @@ export const getOrderTrackingDetails = async (
       .from(subOrders)
       .where(eq(subOrders.masterOrderId, orderId));
 
-    // 1. Get all delivery batches for this masterOrder
-const deliveryBatches = await db
-  .select()
-  .from(deliveryBatches)
-  .where(eq(deliveryBatches.masterOrderId, orderId));
-
-// 2. For each batch, get deliveryBoy info (if assigned)
-for (let batch of deliveryBatches) {
-  if (batch.deliveryBoyId) {
-    const deliveryBoy = await db
+    /* 4️⃣ Delivery Batches (IMPORTANT: variable rename) */
+    const deliveryBatchesList = await db
       .select()
-      .from(deliveryBoys)
-      .where(eq(deliveryBoys.id, batch.deliveryBoyId))
-      .limit(1);
-    
-    batch.deliveryBoy = deliveryBoy[0] || null;
+      .from(deliveryBatches)
+      .where(eq(deliveryBatches.masterOrderId, orderId));
 
-    // Fetch currentLocation from live tracking table or last known location
-    const location = await db
-      .select()
-      .from(deliveryBoyLocations)
-      .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
-      .orderBy(desc(deliveryBoyLocations.timestamp))
-      .limit(1);
-    
-    batch.deliveryBoy.currentLocation = location[0] || null;
-  }
-}
-    /* 4️⃣ Order Timeline */
+    /* 5️⃣ Attach Delivery Boy + Live Location */
+    for (const batch of deliveryBatchesList) {
+      let deliveryBoy = null;
+
+      if (batch.deliveryBoyId) {
+        const boyResult = await db
+          .select()
+          .from(deliveryBoys)
+          .where(eq(deliveryBoys.id, batch.deliveryBoyId))
+          .limit(1);
+
+        deliveryBoy = boyResult[0] || null;
+
+        if (deliveryBoy) {
+          const locationResult = await db
+            .select()
+            .from(deliveryBoyLocations)
+            .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
+            .orderBy(desc(deliveryBoyLocations.timestamp))
+            .limit(1);
+
+          deliveryBoy.currentLocation = locationResult[0]
+            ? {
+                lat: Number(locationResult[0].latitude),
+                lng: Number(locationResult[0].longitude),
+                timestamp: locationResult[0].timestamp,
+              }
+            : null;
+        }
+      }
+
+      (batch as any).deliveryBoy = deliveryBoy;
+    }
+
+    /* 6️⃣ Order Timeline */
     const trackingHistory = await db
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
       .orderBy(desc(orderTracking.timestamp));
 
-    /* 5️⃣ Delivery Batch Summary (Frontend Compatible) */
-    const deliveryBatchesSummary = [];
+    /* 7️⃣ Delivery Batch Summary (Frontend Required Shape) */
+    const deliveryBatchesSummary: any[] = [];
 
-    for (const subOrder of subOrdersList) {
-      const batchId = subOrder.deliveryBatchId || 0;
-
-      let batch = deliveryBatchesSummary.find(
-        (b) => b.batchId === batchId
+    for (const batch of deliveryBatchesList) {
+      const relatedSubOrders = subOrdersList.filter(
+        so => so.deliveryBatchId === batch.id
       );
 
-      if (!batch) {
-        batch = {
-          batchId,
-          batchStatus: subOrder.status,
-          deliveryBoy: null,        // future ready
-          subOrders: [],
-          storeLocations: [],
-        };
-        deliveryBatchesSummary.push(batch);
-      }
-
-      batch.subOrders.push({
-        subOrderId: subOrder.id,
-        sellerName: subOrder.sellerName || "Seller",
-        subOrderStatus: subOrder.status,
-        isSelfDelivery: subOrder.isSelfDelivery,
+      deliveryBatchesSummary.push({
+        batchId: batch.id,
+        batchStatus: batch.status,
+        deliveryBoy: (batch as any).deliveryBoy,
+        subOrders: relatedSubOrders.map(so => ({
+          subOrderId: so.id,
+          sellerName: so.sellerName || "Seller",
+          subOrderStatus: so.status,
+          isSelfDelivery: so.isSelfDeliveryBySeller,
+        })),
+        storeLocations: [], // future use (map markers)
       });
     }
 
     /* ✅ FINAL RESPONSE (Frontend Safe) */
-return res.status(200).json({
-  masterOrderId: masterOrder.id,
-  masterOrderNumber: masterOrder.orderNumber,
-  status: masterOrder.status,
-  paymentMethod: masterOrder.paymentMethod,
-  paymentStatus: masterOrder.paymentStatus,
-  total: masterOrder.total,
-  estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
-  createdAt: masterOrder.createdAt,
+    return res.status(200).json({
+      masterOrderId: masterOrder.id,
+      masterOrderNumber: masterOrder.orderNumber,
+      status: masterOrder.status,
+      paymentMethod: masterOrder.paymentMethod,
+      paymentStatus: masterOrder.paymentStatus,
+      total: masterOrder.total,
+      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
+      createdAt: masterOrder.createdAt,
 
-  customerDeliveryAddress,
-  deliveryBatchesSummary: deliveryBatches, // ✅ Use updated batches with deliveryBoy & currentLocation
-  masterOrderTrackingHistory: trackingHistory,
-});
+      customerDeliveryAddress,
+      deliveryBatchesSummary,
+      masterOrderTrackingHistory: trackingHistory,
+    });
 
   } catch (error) {
     console.error("❌ Order Tracking Error:", error);
@@ -1113,6 +1118,7 @@ return res.status(200).json({
     });
   }
 };
+    
 // ---------------------------------------------------------------------------------
 // **NOTES:** getSubOrderDetails और getOrderDetail में मुख्य ट्रैकिंग लॉजिक शामिल नहीं है
 // ---------------------------------------------------------------------------------
