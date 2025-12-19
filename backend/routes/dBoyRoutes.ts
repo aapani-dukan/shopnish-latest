@@ -419,35 +419,7 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: AuthenticatedRequest,
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
 });
-// UPDATE DELIVERY BOY LIVE LOCATION
-router.post(
-  "/delivery-boy/location",
-  authenticateDeliveryBoy,
-  async (req, res) => {
-    try {
-      const deliveryBoyId = req.user?.id;
-      const { lat, lng } = req.body;
 
-      if (!deliveryBoyId || !lat || !lng) {
-        return res.status(400).json({ message: "Lat Lng required" });
-      }
-
-      await db
-        .update(deliveryBoys)
-        .set({
-          currentLat: lat,
-          currentLng: lng,
-          updatedAt: new Date(),
-        })
-        .where(eq(deliveryBoys.id, deliveryBoyId));
-
-      return res.json({ success: true });
-    } catch (error) {
-      console.error("Location update error", error);
-      return res.status(500).json({ message: "Location update failed" });
-    }
-  }
-);
 /**
  * ✅ Send OTP to Customer (Dedicated Route for Delivery Boy Dashboard)
  * POST /api/delivery/batches/:batchId/send-otp
