@@ -10,8 +10,9 @@ import {
 import {
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
-  orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
+  orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrdersRelations,deliveryBatchesRelations
+//orderTrackingRelations,
 } from './relations';
 
 import {
@@ -162,9 +163,9 @@ productCategoryEnum,deliveryStatusEnum,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
-  orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
+  orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrdersRelations,deliveryBatchesRelations,
-
+//orderTrackingRelations,
   // Schemas
   insertUserSchema, insertSellerSchema, updateSellerSchema, insertStoreSchema, insertCategorySchema,
   insertProductSchema, insertDeliveryAreaSchema, insertDeliveryBoySchema, insertCartItemSchema,
@@ -185,7 +186,8 @@ export const schema = {
   // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
-  orderItemsRelations, orderTrackingRelations, promoCodesRelations, serviceCategoriesRelations,
+  orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, 
   couponRelations, subOrdersRelations, deliveryBatchesRelations
+//orderTrackingRelations,
 };
