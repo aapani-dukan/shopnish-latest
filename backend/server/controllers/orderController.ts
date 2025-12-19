@@ -1026,6 +1026,34 @@ export const getOrderTrackingDetails = async (
       .from(subOrders)
       .where(eq(subOrders.masterOrderId, orderId));
 
+    // 1. Get all delivery batches for this masterOrder
+const deliveryBatches = await db
+  .select()
+  .from(deliveryBatches)
+  .where(eq(deliveryBatches.masterOrderId, orderId));
+
+// 2. For each batch, get deliveryBoy info (if assigned)
+for (let batch of deliveryBatches) {
+  if (batch.deliveryBoyId) {
+    const deliveryBoy = await db
+      .select()
+      .from(deliveryBoys)
+      .where(eq(deliveryBoys.id, batch.deliveryBoyId))
+      .limit(1);
+    
+    batch.deliveryBoy = deliveryBoy[0] || null;
+
+    // Fetch currentLocation from live tracking table or last known location
+    const location = await db
+      .select()
+      .from(deliveryBoyLocations)
+      .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
+      .orderBy(desc(deliveryBoyLocations.timestamp))
+      .limit(1);
+    
+    batch.deliveryBoy.currentLocation = location[0] || null;
+  }
+}
     /* 4️⃣ Order Timeline */
     const trackingHistory = await db
       .select()
@@ -1063,20 +1091,20 @@ export const getOrderTrackingDetails = async (
     }
 
     /* ✅ FINAL RESPONSE (Frontend Safe) */
-    return res.status(200).json({
-      masterOrderId: masterOrder.id,
-      masterOrderNumber: masterOrder.orderNumber,
-      status: masterOrder.status,
-      paymentMethod: masterOrder.paymentMethod,
-      paymentStatus: masterOrder.paymentStatus,
-      total: masterOrder.total,
-      estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
-      createdAt: masterOrder.createdAt,
+return res.status(200).json({
+  masterOrderId: masterOrder.id,
+  masterOrderNumber: masterOrder.orderNumber,
+  status: masterOrder.status,
+  paymentMethod: masterOrder.paymentMethod,
+  paymentStatus: masterOrder.paymentStatus,
+  total: masterOrder.total,
+  estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
+  createdAt: masterOrder.createdAt,
 
-      customerDeliveryAddress,
-      deliveryBatchesSummary,
-      masterOrderTrackingHistory: trackingHistory,
-    });
+  customerDeliveryAddress,
+  deliveryBatchesSummary: deliveryBatches, // ✅ Use updated batches with deliveryBoy & currentLocation
+  masterOrderTrackingHistory: trackingHistory,
+});
 
   } catch (error) {
     console.error("❌ Order Tracking Error:", error);
