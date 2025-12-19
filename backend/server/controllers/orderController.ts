@@ -975,6 +975,8 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
  * विशिष्ट मास्टर ऑर्डर के लिए विस्तृत ट्रैकिंग जानकारी फ़ेच करता है।
  * उद्देश्य: मैप पर ट्रैकिंग और बैच-वाइज डिलीवरी प्रगति दिखाना।
  */
+
+          
 export const getOrderTrackingDetails = async (
   req: AuthenticatedRequest,
   res: Response
@@ -1026,7 +1028,7 @@ export const getOrderTrackingDetails = async (
       .from(subOrders)
       .where(eq(subOrders.masterOrderId, orderId));
 
-    /* 4️⃣ Delivery Batches (IMPORTANT: variable rename) */
+    /* 4️⃣ Delivery Batches */
     const deliveryBatchesList = await db
       .select()
       .from(deliveryBatches)
@@ -1046,32 +1048,34 @@ export const getOrderTrackingDetails = async (
         deliveryBoy = boyResult[0] || null;
 
         if (deliveryBoy) {
-  const locationResult = await db
-    .select()
-    .from(deliveryBoyLocations)
-    .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
-    .orderBy(desc(deliveryBoyLocations.timestamp))
-    .limit(1);
+          const locationResult = await db
+            .select()
+            .from(deliveryBoyLocations)
+            .where(eq(deliveryBoyLocations.deliveryBoyId, batch.deliveryBoyId))
+            .orderBy(desc(deliveryBoyLocations.timestamp))
+            .limit(1);
 
-  deliveryBoy.currentLocation = locationResult[0]
-    ? {
-        lat: Number(locationResult[0].latitude),
-        lng: Number(locationResult[0].longitude),
-        timestamp: locationResult[0].timestamp,
+          deliveryBoy.currentLocation = locationResult[0]
+            ? {
+                lat: Number(locationResult[0].latitude),
+                lng: Number(locationResult[0].longitude),
+                timestamp: locationResult[0].timestamp,
+              }
+            : null;
+        }
       }
-    : null;
-}
 
-(batch as any).deliveryBoy = deliveryBoy;
+      (batch as any).deliveryBoy = deliveryBoy;
+    } // ✅ for loop properly closed here
 
-    /* 6️⃣ Order Timeline */
+    /* 6️⃣ Tracking History */
     const trackingHistory = await db
       .select()
       .from(orderTracking)
       .where(eq(orderTracking.masterOrderId, orderId))
       .orderBy(desc(orderTracking.timestamp));
 
-    /* 7️⃣ Delivery Batch Summary (Frontend Required Shape) */
+    /* 7️⃣ Delivery Batch Summary */
     const deliveryBatchesSummary: any[] = [];
 
     for (const batch of deliveryBatchesList) {
@@ -1089,11 +1093,11 @@ export const getOrderTrackingDetails = async (
           subOrderStatus: so.status,
           isSelfDelivery: so.isSelfDeliveryBySeller,
         })),
-        storeLocations: [], // future use (map markers)
+        storeLocations: [],
       });
     }
 
-    /* ✅ FINAL RESPONSE (Frontend Safe) */
+    /* ✅ FINAL RESPONSE */
     return res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
@@ -1114,7 +1118,6 @@ export const getOrderTrackingDetails = async (
     return res.status(500).json({
       message: "Unable to fetch order tracking details",
     });
-      }
   }
 };
     
