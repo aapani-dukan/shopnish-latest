@@ -307,6 +307,8 @@ export default function DeliveryDashboard() {
 
   // --- GPS tracking (Batch-based logic) ---
   useEffect(() => {
+    console.log("STEP-1 myDeliveryBoyId =", myDeliveryBoyId);
+console.log("STEP-1 batchesRaw =", batchesRaw);
     if (!socket || !user || isLoading || myDeliveryBoyId === undefined || myDeliveryBoyId === null) return;
 
     let watchId: number | null = null;
