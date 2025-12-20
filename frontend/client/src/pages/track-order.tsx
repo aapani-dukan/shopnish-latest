@@ -206,25 +206,34 @@ const { mapDeliveryBoys, mapStores } = useMemo(() => {
       const live = liveLocations.get(batch.batchId);
       
       // 1️⃣ Ensure coordinates are always valid numbers
-      const currentLoc = {
-        lat: Number(live?.lat ?? batch.deliveryBoy?.currentLocation?.lat ?? 0),
-        lng: Number(live?.lng ?? batch.deliveryBoy?.currentLocation?.lng ?? 0)
-      };
+      // 1️⃣ Ensure coordinates are always valid numbers
+const currentLoc = {
+  lat: Number(live?.lat ?? batch.deliveryBoy?.currentLocation?.lat ?? 20.5937), // Default: India center if null
+  lng: Number(live?.lng ?? batch.deliveryBoy?.currentLocation?.lng ?? 78.9629)
+};
 
-      // 2️⃣ Final Destination Logic (Sanitized)
-      let dest = { 
-        lat: Number(trackingResponse.customerDeliveryAddress?.lat ?? 0), 
-        lng: Number(trackingResponse.customerDeliveryAddress?.lng ?? 0) 
-      };
+// 2️⃣ Final Destination Logic (Sanitized)
+// यहाँ 0 नहीं, बल्कि चेक करना है कि डेटा है या नहीं
+const customerLat = Number(trackingResponse.customerDeliveryAddress?.lat);
+const customerLng = Number(trackingResponse.customerDeliveryAddress?.lng);
+
+let dest = { 
+  lat: !isNaN(customerLat) && customerLat !== 0 ? customerLat : 20.5937, 
+  lng: !isNaN(customerLng) && customerLng !== 0 ? customerLng : 78.9629 
+};
+
+const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"].includes(batch.batchStatus.toLowerCase());
+
+if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
+  const storeLat = Number(batch.storeLocations[0].lat);
+  const storeLng = Number(batch.storeLocations[0].lng);
+  
+  // केवल तभी अपडेट करें जब स्टोर की लोकेशन असली हो
+  if (!isNaN(storeLat) && storeLat !== 0) {
+    dest = { lat: storeLat, lng: storeLng };
+  }
+}
       
-      const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"].includes(batch.batchStatus.toLowerCase());
-      
-      if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
-        dest = { 
-          lat: Number(batch.storeLocations[0].lat ?? 0), 
-          lng: Number(batch.storeLocations[0].lng ?? 0) 
-        };
-      }
 
       return {
         ...batch.deliveryBoy!,
