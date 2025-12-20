@@ -72,14 +72,26 @@ export function initSocket(server: HTTPServer) {
     console.log("🏍️ GPS update:", data);
 
     try {
-      // 1️⃣ batch → masterOrderId nikalo
+      // 1️⃣ Batch से masterOrderId और deliveryBoyId निकालें
       const batch = await db.query.deliveryBatches.findFirst({
         where: (b, { eq }) => eq(b.id, data.batchId),
       });
 
       if (!batch?.masterOrderId) return;
 
-      // 2️⃣ customer ke order room me bhejo
+      // 🛑 2️⃣ DATABASE UPDATE (यह वो हिस्सा है जो आपके NULL को खत्म करेगा)
+      if (batch.deliveryBoyId) {
+        await db.update(deliveryBoys)
+          .set({
+            currentLat: String(data.lat), // String/Decimal mismatch handling
+            currentLng: String(data.lng),
+          })
+          .where(eq(deliveryBoys.id, batch.deliveryBoyId));
+        
+        console.log(`💾 DB Updated for Rider: ${batch.deliveryBoyId}`);
+      }
+
+      // 3️⃣ Customer को लाइव अपडेट भेजें
       io?.to(`order:${batch.masterOrderId}`).emit(
         "order:delivery_location",
         {
@@ -96,6 +108,8 @@ export function initSocket(server: HTTPServer) {
     }
   }
 );
+    
+    
     socket.on("chat:message", (msg) => {
       console.log("💬 Message received:", msg);
       io?.emit("chat:message", msg);
