@@ -42,7 +42,10 @@ interface GoogleMapTrackerProps {
 const containerStyle = { width: "100%", height: "100%" };
 const LIBRARIES: ("geometry" | "marker")[] = ["geometry", "marker"];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
+// 1. सबसे ऊपर एक सुरक्षित चेक फंक्शन जोड़ें
+const isValidLatLng = (coord: any) => {
+  return coord && typeof coord.lat === 'number' && typeof coord.lng === 'number' && !isNaN(coord.lat) && !isNaN(coord.lng);
+};
 // ✅ स्मूथ मूवमेंट के लिए इंटरपोलेशन फंक्शन
 function interpolate(
   start: google.maps.LatLngLiteral,
@@ -164,38 +167,56 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
 
         {/* लाइव राइडर्स (Smooth Animation + Rotation) */}
         {deliveryBoys.map((db) => {
-          const prevPos = animatedPositions.current.get(db.id) || db.currentLocation;
-          const nextPos = db.currentLocation;
-          animatedPositions.current.set(db.id, nextPos);
+  // डेटा को नंबर में कन्वर्ट करना सुनिश्चित करें (ताकि "28.5" नंबर 28.5 बन जाए)
+  const currentCoords = {
+    lat: Number(db.currentLocation.lat),
+    lng: Number(db.currentLocation.lng)
+  };
 
-          // रोटेशन निकालें
-          const heading = window.google.maps.geometry.spherical.computeHeading(
-            new window.google.maps.LatLng(prevPos.lat, prevPos.lng),
-            new window.google.maps.LatLng(nextPos.lat, nextPos.lng)
-          );
+  const prevPos = animatedPositions.current.get(db.id) || currentCoords;
+  const nextPos = currentCoords;
+  
+  // रेंडरिंग से पहले डेटा वैलिडेट करें
+  if (!isValidLatLng(prevPos) || !isValidLatLng(nextPos)) return null;
 
-          return (
-            <MarkerF
-              key={db.id}
-              position={prevPos}
-              icon={{
-                ...icons?.bike,
-                rotation: heading
-              } as google.maps.Symbol}
-              onLoad={(marker) => {
-                let frame = 0;
-                const totalFrames = 60; 
-                const animate = () => {
-                  frame++;
-                  const pos = interpolate(prevPos, nextPos, frame / totalFrames);
-                  marker.setPosition(pos);
-                  if (frame < totalFrames) requestAnimationFrame(animate);
-                };
-                animate();
-              }}
-            />
-          );
-        })}
+  animatedPositions.current.set(db.id, nextPos);
+
+  // Rotation Calculation (Safe)
+  let heading = 0;
+  if (window.google?.maps?.geometry) {
+    heading = window.google.maps.geometry.spherical.computeHeading(
+      new window.google.maps.LatLng(prevPos.lat, prevPos.lng),
+      new window.google.maps.LatLng(nextPos.lat, nextPos.lng)
+    );
+  }
+
+  return (
+    <MarkerF
+      key={db.id}
+      position={prevPos}
+      icon={{
+        ...icons?.bike,
+        rotation: heading
+      } as google.maps.Symbol}
+      onLoad={(marker) => {
+        let frame = 0;
+        const totalFrames = 60;
+        const animate = () => {
+          frame++;
+          const pos = interpolate(prevPos, nextPos, frame / totalFrames);
+          
+          // ✅ ERROR FIX: केवल तभी सेट करें जब वैल्यू वैध नंबर हो
+          if (isValidLatLng(pos)) {
+            marker.setPosition(pos);
+          }
+          
+          if (frame < totalFrames) requestAnimationFrame(animate);
+        };
+        animate();
+      }}
+    />
+  );
+})}
 
         {/* एनिमेटेड पॉलीलाइन्स (रूट्स) */}
         {routes.map((r) => (
