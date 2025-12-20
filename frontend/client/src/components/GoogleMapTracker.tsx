@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useEffect, useRef } from 'react';
 import {
   GoogleMap,
   MarkerF,
@@ -52,7 +52,7 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     deliveryBoys, 
     stores 
 }) => {
-
+const mapRef = useRef<google.maps.Map | null>(null);
   // 1️⃣ Google Maps Loader
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
@@ -141,11 +141,13 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
         {bikeIcon && deliveryBoys.map((db) => (
           typeof db.currentLocation.lat === 'number' && typeof db.currentLocation.lng === 'number' && isFinite(db.currentLocation.lat) && isFinite(db.currentLocation.lng) && (
             <MarkerF
-              key={db.id}
-              position={db.currentLocation}
-              icon={bikeIcon}
-              title={`डिलीवरी पार्टनर: ${db.name} (Batch #${db.batchId})`}
-            />
+  key={db.id}
+  position={db.currentLocation}
+  icon={bikeIcon}
+  options={{
+    optimized: false, // 🔥 animation के लिए जरूरी
+  }}
+/>
           )
         ))}
       </GoogleMap>
