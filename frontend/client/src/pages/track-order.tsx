@@ -195,8 +195,7 @@ export default function TrackOrder() {
     };
   }, [socket, numericOrderId, user?.id, refetch]);
 
-  // Map Data Preparation
-  // ✅ Map Data Preparation (Updated with Safety Checks)
+  // ✅ Map Data Preparation (Updated for Backend compatibility)
 const { mapDeliveryBoys, mapStores } = useMemo(() => {
   if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
 
@@ -205,35 +204,27 @@ const { mapDeliveryBoys, mapStores } = useMemo(() => {
     .map(batch => {
       const live = liveLocations.get(batch.batchId);
       
-      // 1️⃣ Ensure coordinates are always valid numbers
-      // 1️⃣ Ensure coordinates are always valid numbers
-const currentLoc = {
-  lat: Number(live?.lat ?? batch.deliveryBoy?.currentLocation?.lat ?? 20.5937), // Default: India center if null
-  lng: Number(live?.lng ?? batch.deliveryBoy?.currentLocation?.lng ?? 78.9629)
-};
+      // बैकेंड से आ रहे latitude/longitude को lat/lng में बदलें
+      const currentLoc = {
+        lat: parseFloat(String(live?.lat || batch.deliveryBoy?.currentLocation?.latitude || 0)),
+        lng: parseFloat(String(live?.lng || batch.deliveryBoy?.currentLocation?.longitude || 0))
+      };
 
-// 2️⃣ Final Destination Logic (Sanitized)
-// यहाँ 0 नहीं, बल्कि चेक करना है कि डेटा है या नहीं
-const customerLat = Number(trackingResponse.customerDeliveryAddress?.lat);
-const customerLng = Number(trackingResponse.customerDeliveryAddress?.lng);
-
-let dest = { 
-  lat: !isNaN(customerLat) && customerLat !== 0 ? customerLat : 20.5937, 
-  lng: !isNaN(customerLng) && customerLng !== 0 ? customerLng : 78.9629 
-};
-
-const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"].includes(batch.batchStatus.toLowerCase());
-
-if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
-  const storeLat = Number(batch.storeLocations[0].lat);
-  const storeLng = Number(batch.storeLocations[0].lng);
-  
-  // केवल तभी अपडेट करें जब स्टोर की लोकेशन असली हो
-  if (!isNaN(storeLat) && storeLat !== 0) {
-    dest = { lat: storeLat, lng: storeLng };
-  }
-}
+      // कस्टमर का एड्रेस भी latitude नाम से आ रहा है
+      let dest = { 
+        lat: parseFloat(String(trackingResponse.customerDeliveryAddress?.latitude || 0)), 
+        lng: parseFloat(String(trackingResponse.customerDeliveryAddress?.longitude || 0)) 
+      };
       
+      const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"]
+        .includes(batch.batchStatus.toLowerCase());
+      
+      if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
+        dest = { 
+          lat: parseFloat(String(batch.storeLocations[0].latitude || 0)), 
+          lng: parseFloat(String(batch.storeLocations[0].longitude || 0)) 
+        };
+      }
 
       return {
         ...batch.deliveryBoy!,
@@ -242,14 +233,19 @@ if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
         destination: dest
       };
     })
-    // 3️⃣ Filter out any boy with 0,0 location to prevent map errors
-    .filter(db => db.currentLocation.lat !== 0 && db.currentLocation.lng !== 0);
+    // 0,0 वाली लोकेशन हटा दें ताकि मैप क्रैश न हो
+    .filter(db => db.currentLocation.lat !== 0);
 
-  // 4️⃣ Store Deduplication (Safe Parse)
   const stores = Array.from(new Set(
     trackingResponse.deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
-  )).map(s => JSON.parse(s))
-    .filter(s => s.lat && s.lng); // Only keep stores with valid coords
+  )).map(s => {
+    const parsed = JSON.parse(s);
+    return {
+      ...parsed,
+      lat: parseFloat(String(parsed.latitude || 0)),
+      lng: parseFloat(String(parsed.longitude || 0))
+    };
+  }).filter(s => s.lat !== 0);
 
   return { mapDeliveryBoys: boys, mapStores: stores };
 }, [trackingResponse, liveLocations]);
