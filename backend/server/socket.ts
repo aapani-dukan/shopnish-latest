@@ -64,39 +64,43 @@ export function initSocket(server: HTTPServer) {
     });
 
     // Delivery-boy sends location updates
-    socket.on(
+    
+      socket.on(
   "deliveryBoy:location_update",
   async (data: { batchId: number; lat: number; lng: number }) => {
-    if (!data.batchId || !data.lat || !data.lng) return;
+
+    if (
+      !data.batchId ||
+      typeof data.lat !== "number" ||
+      typeof data.lng !== "number"
+    ) {
+      console.log("❌ Invalid GPS payload", data);
+      return;
+    }
 
     console.log("🏍️ GPS update:", data);
 
     try {
-      // 1️⃣ Batch से masterOrderId और deliveryBoyId निकालें
       const batch = await db.query.deliveryBatches.findFirst({
         where: (b, { eq }) => eq(b.id, data.batchId),
       });
 
-      if (!batch?.masterOrderId) return;
+      if (!batch?.masterOrderId || !batch.deliveryBoyId) return;
 
-      // 🛑 2️⃣ DATABASE UPDATE (यह वो हिस्सा है जो आपके NULL को खत्म करेगा)
-      
-if (batch.deliveryBoyId) {
-  await db.update(deliveryBoys)
-    .set({
-      // PostgreSQL decimal expects a string or number, 
-      // precision handle करने के लिए toString() सुरक्षित है
-      currentLat: data.lat.toString(), 
-      currentLng: data.lng.toString(),
-      updatedAt: new Date(), // रिकॉर्ड को अपडेटेड रखने के लिए
-    })
-    .where(eq(deliveryBoys.id, batch.deliveryBoyId));
-  
-  console.log(`💾 DB Updated Rider ${batch.deliveryBoyId}: ${data.lat}, ${data.lng}`);
-}
-      
+      // ✅ SAVE location in DB (frontend compatible)
+      await db.update(deliveryBoys)
+        .set({
+          currentLocation: {
+            lat: data.lat,
+            lng: data.lng,
+          },
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryBoys.id, batch.deliveryBoyId));
 
-      // 3️⃣ Customer को लाइव अपडेट भेजें
+      console.log(`💾 Rider ${batch.deliveryBoyId} saved location`);
+
+      // ✅ SEND to customer
       io?.to(`order:${batch.masterOrderId}`).emit(
         "order:delivery_location",
         {
@@ -107,14 +111,11 @@ if (batch.deliveryBoyId) {
         }
       );
 
-      console.log(`📡 Sent to order:${batch.masterOrderId}`);
     } catch (err) {
       console.error("❌ GPS socket error", err);
     }
   }
 );
-    
-    
     socket.on("chat:message", (msg) => {
       console.log("💬 Message received:", msg);
       io?.emit("chat:message", msg);
