@@ -113,35 +113,62 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
   }, []);
 
   // 3️⃣ Improved Routing Logic
-  useEffect(() => {
-    if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
-    const service = new window.google.maps.DirectionsService();
+  // ✅ 3️⃣ Updated Routing Logic with Error Tracking
+useEffect(() => {
+  if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
+  const service = new window.google.maps.DirectionsService();
 
-    deliveryBoys.forEach((db) => {
-      const origin = { lat: Number(db.currentLocation.lat), lng: Number(db.currentLocation.lng) };
-      const destination = db.destination ? { lat: Number(db.destination.lat), lng: Number(db.destination.lng) } : null;
+  deliveryBoys.forEach((db) => {
+    // डेटा को पक्के नंबर में बदलें
+    const origin = { 
+      lat: Number(db.currentLocation.lat), 
+      lng: Number(db.currentLocation.lng) 
+    };
+    const destination = db.destination ? { 
+      lat: Number(db.destination.lat), 
+      lng: Number(db.destination.lng) 
+    } : null;
 
-      if (!destination || destination.lat === 0 || isNaN(destination.lat)) return;
+    // 🛑 सुरक्षा चेक: अगर डेस्टिनेशन गलत है तो गूगल को रिक्वेस्ट न भेजें
+    if (!destination || isNaN(destination.lat) || destination.lat === 0 || destination.lat === 20.5937) {
+      console.warn(`[Map] Batch ${db.batchId} skipping route: Invalid Destination`, destination);
+      return;
+    }
 
-      service.route(
-        {
-          origin,
-          destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result?.routes[0]) {
-            const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
-            const durationText = result.routes[0].legs[0]?.duration?.text || "Calculating...";
-            setRoutes((prev) => {
-              const filtered = prev.filter(r => r.dbId !== db.id);
-              return [...filtered, { dbId: db.id, path, eta: durationText }];
-            });
+    service.route(
+      {
+        origin,
+        destination,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === "OK" && result?.routes[0]) {
+          const path = result.routes[0].overview_path.map((p) => ({
+            lat: p.lat(),
+            lng: p.lng(),
+          }));
+          
+          const durationText = result.routes[0].legs[0]?.duration?.text || "Arriving soon";
+
+          setRoutes((prev) => {
+            const filtered = prev.filter(r => r.dbId !== db.id);
+            return [...filtered, { dbId: db.id, path, eta: durationText }];
+          });
+        } else {
+          // 🛑 अगर Calculating... आ रहा है, तो यहाँ कंसोल में एरर दिखेगा
+          console.error(`[Google Maps Error] Status: ${status} for Batch: ${db.batchId}`);
+          
+          if (status === "REQUEST_DENIED") {
+            console.error("ALERT: 'Directions API' is not enabled in your Google Cloud Console!");
+          } else if (status === "ZERO_RESULTS") {
+            console.warn("ALERT: No driving route found between Rider and Destination.");
           }
         }
-      );
-    });
-  }, [deliveryBoys, isLoaded]);
+      }
+    );
+  });
+}, [deliveryBoys, isLoaded]);
+  
 
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
