@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery } from "@tanstack/react-query";
 import { apiRequest } from "../lib/queryClient";
@@ -18,10 +18,17 @@ import {
   User,
   Store,
   AlertCircle,
-  ChevronRight
+  ChevronRight,
+  Circle,
+  ShieldCheck,
+  CreditCard,
+  Navigation,
+  Info
 } from "lucide-react";
 
-// -------------------- Interfaces (Multi-Batch Tracking) --------------------
+/* ==========================================================================
+   INTERFACES (COMPREHENSIVE)
+   ========================================================================== */
 
 interface Location {
   lat: number;
@@ -43,12 +50,15 @@ interface StoreLocationSummary {
   lat: number;
   lng: number;
   name: string;
+  address?: string;
 }
 
 interface DeliveryBoySummary {
   id: number;
   name: string;
   phone: string;
+  rating?: string | number;
+  vehicleType?: string;
   currentLocation?: { lat: number; lng: number };
 }
 
@@ -57,6 +67,7 @@ interface BatchSubOrderSummary {
   sellerName: string;
   subOrderStatus: string;
   isSelfDelivery: boolean;
+  itemsCount?: number;
 }
 
 export interface DeliveryBatchSummary {
@@ -66,6 +77,7 @@ export interface DeliveryBatchSummary {
   subOrders: BatchSubOrderSummary[];
   storeLocations: StoreLocationSummary[];
   estimatedDeliveryTime?: string;
+  actualPickupTime?: string;
 }
 
 export interface TrackingResponse {
@@ -79,67 +91,70 @@ export interface TrackingResponse {
   createdAt: string;
   customerDeliveryAddress: CustomerDeliveryAddress;
   deliveryBatchesSummary: DeliveryBatchSummary[];
-  masterOrderTrackingHistory: any[];
+  masterOrderTrackingHistory: { 
+    status: string; 
+    timestamp: string; 
+    message?: string;
+    locationName?: string;
+  }[];
 }
 
-// -------------------- Helpers --------------------
+/* ==========================================================================
+   HELPERS & LOGIC
+   ========================================================================== */
 
-const getStatusColor = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'placed':
-    case 'confirmed':
-    case 'accepted':
-      return 'bg-blue-500';
-    case 'preparing':
-      return 'bg-yellow-500';
-    case 'ready_for_pickup':
-      return 'bg-orange-500';
-    case 'picked_up':
-    case 'out_for_delivery':
-    case 'in transit':
-      return 'bg-purple-600';
-    case 'delivered':
-      return 'bg-green-500';
-    case 'cancelled':
-    case 'rejected':
-      return 'bg-red-500';
-    default:
-      return 'bg-gray-500';
+const getStatusColor = (status: string = "") => {
+  const s = status.toLowerCase();
+  if (['placed', 'confirmed', 'accepted'].includes(s)) return 'bg-blue-500';
+  if (['preparing', 'processing'].includes(s)) return 'bg-yellow-500';
+  if (['ready_for_pickup', 'packed'].includes(s)) return 'bg-orange-500';
+  if (['picked_up', 'out_for_delivery', 'in transit', 'shipped'].includes(s)) return 'bg-purple-600';
+  if (['delivered', 'completed'].includes(s)) return 'bg-green-500';
+  if (['cancelled', 'rejected', 'failed'].includes(s)) return 'bg-red-500';
+  return 'bg-gray-500';
+};
+
+const getStatusText = (status: string = "") => {
+  const s = status.toLowerCase();
+  switch (s) {
+    case 'placed': return 'Order Placed Successfully';
+    case 'confirmed': return 'Confirmed by Kitchen/Store';
+    case 'preparing': return 'Items being Prepared';
+    case 'ready_for_pickup': return 'Order Packed & Ready';
+    case 'picked_up': return 'Picked up by Partner';
+    case 'out_for_delivery': return 'Rider is on the way';
+    case 'in transit': return 'In Transit';
+    case 'delivered': return 'Delivered to your Doorstep';
+    case 'cancelled': return 'Order Cancelled';
+    default: return status.replace(/_/g, ' ').toUpperCase();
   }
 };
 
-const getStatusText = (status: string) => {
-  switch (status?.toLowerCase()) {
-    case 'placed': return 'Order Placed';
-    case 'confirmed': return 'Order Confirmed';
-    case 'accepted': return 'Order Accepted';
-    case 'preparing': return 'Preparing Order';
-    case 'ready_for_pickup': return 'Ready for Pickup';
-    case 'picked_up': return 'Picked Up';
-    case 'out_for_delivery': return 'Out For Delivery';
-    case 'in transit': return 'Delivery In Progress';
-    case 'delivered': return 'Delivered';
-    case 'cancelled': return 'Cancelled';
-    case 'rejected': return 'Rejected';
-    default: return status;
-  }
+const isStepCompleted = (stepStatus: string, currentStatus: string, history: any[]) => {
+  const order = ['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered'];
+  const currentIndex = order.indexOf(currentStatus.toLowerCase());
+  const stepIndex = order.indexOf(stepStatus.toLowerCase());
+  if (stepIndex <= currentIndex && stepIndex !== -1) return true;
+  return history.some(h => h.status.toLowerCase() === stepStatus.toLowerCase());
 };
 
-// -------------------- Component --------------------
+/* ==========================================================================
+   MAIN COMPONENT
+   ========================================================================== */
 
 export default function TrackOrder() {
   const { orderId } = useParams<{ orderId: string }>();
   const numericOrderId = orderId ? Number(orderId) : null;
-
   const { socket } = useSocket();
   const { user } = useAuth();
-
   const [liveLocations, setLiveLocations] = useState<Map<number, Location>>(new Map());
 
+  // Data Fetching
   const { 
     data: trackingResponse, 
-    isLoading: isTrackingLoading,
-    isError 
+    isLoading: isTrackingLoading, 
+    isError,
+    refetch 
   } = useQuery<TrackingResponse>({
     queryKey: [`/api/orders/${numericOrderId}/tracking`], 
     queryFn: async () => {
@@ -147,21 +162,19 @@ export default function TrackOrder() {
       return response as TrackingResponse;
     },
     enabled: !!numericOrderId,
+    refetchInterval: 30000, // Auto-refresh data every 30s
   });
 
+  // Socket.io Implementation
   useEffect(() => {
     const userIdToUse = user?.id || user?.uid;
     if (!socket || !numericOrderId || !userIdToUse) return; 
 
+    // Join order-specific room for real-time updates
     socket.emit("register-client", { role: "user", userId: userIdToUse });
     socket.emit("join-order-room", { orderId: numericOrderId });
-
-    const handleLocationUpdate = (data: {
-      lat: number;
-      lng: number;
-      batchId: number;
-      timestamp?: string;
-    }) => {
+    
+    const handleLocationUpdate = (data: { lat: number; lng: number; batchId: number; timestamp?: string }) => {
       setLiveLocations((prev) => {
         const newMap = new Map(prev);
         newMap.set(data.batchId, {
@@ -174,317 +187,428 @@ export default function TrackOrder() {
     };
 
     socket.on("order:delivery_location", handleLocationUpdate);
+    socket.on("order:status_updated", () => refetch());
+
     return () => {
       socket.off("order:delivery_location", handleLocationUpdate);
+      socket.off("order:status_updated");
     };
-  }, [socket, numericOrderId, user]);
+  }, [socket, numericOrderId, user?.id, refetch]);
+
+  // Map Data Preparation
+  const { mapDeliveryBoys, mapStores } = useMemo(() => {
+    if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
+
+    const boys = trackingResponse.deliveryBatchesSummary
+      .filter(b => b.deliveryBoy !== null)
+      .map(batch => {
+        const live = liveLocations.get(batch.batchId);
+        const currentLoc = {
+          lat: Number(live?.lat || batch.deliveryBoy?.currentLocation?.lat || 0),
+          lng: Number(live?.lng || batch.deliveryBoy?.currentLocation?.lng || 0)
+        };
+
+        // Logic: Destination is Store if not picked up yet, else Customer
+        let dest = { 
+          lat: Number(trackingResponse.customerDeliveryAddress.lat), 
+          lng: Number(trackingResponse.customerDeliveryAddress.lng) 
+        };
+        
+        const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed"].includes(batch.batchStatus.toLowerCase());
+        if (isNotPickedUp && batch.storeLocations.length > 0) {
+          dest = { lat: Number(batch.storeLocations[0].lat), lng: Number(batch.storeLocations[0].lng) };
+        }
+
+        return {
+          ...batch.deliveryBoy!,
+          batchId: batch.batchId,
+          currentLocation: currentLoc,
+          destination: dest
+        };
+      })
+      .filter(db => db.currentLocation.lat !== 0);
+
+    const stores = Array.from(new Set(
+      trackingResponse.deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
+    )).map(s => JSON.parse(s));
+
+    return { mapDeliveryBoys: boys, mapStores: stores };
+  }, [trackingResponse, liveLocations]);
+
+  /* ==========================================================================
+     RENDER STATES (LOADING / ERROR)
+     ========================================================================== */
 
   if (isTrackingLoading || !numericOrderId) {
-    if (!numericOrderId) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50">
-          <Card className="p-6 text-center shadow-lg">
-            <AlertCircle className="w-12 h-12 text-red-500 mx-auto mb-4" />
-            <h3 className="text-xl font-bold">Error: Invalid Order ID</h3>
-          </Card>
-        </div>
-      );
-    }
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <div className="animate-spin w-10 h-10 border-4 border-primary border-t-transparent rounded-full"></div>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-white">
+        <div className="relative">
+          <div className="w-20 h-20 border-4 border-primary/20 border-t-primary rounded-full animate-spin" />
+          <Package className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 text-primary w-8 h-8" />
+        </div>
+        <p className="mt-6 text-gray-500 font-black animate-pulse tracking-widest uppercase text-xs">Syncing Live Status...</p>
       </div>
     );
   }
 
   if (isError || !trackingResponse || !trackingResponse.masterOrderId) {
     return (
-      <div className="min-h-screen flex items-center justify-center p-4">
-        <Card className="w-full max-w-md">
-          <CardContent className="pt-8 text-center">
-            <Package className="mx-auto h-16 w-16 text-red-500 mb-4" />
-            <h3 className="text-xl font-bold mb-2">Order Tracking Not Available</h3>
-            <p className="text-gray-600 mb-6">
-              We could not find the tracking details for Order #{numericOrderId}. It may have been cancelled, or there is a server issue.
-            </p>
-            <Button onClick={() => window.location.reload()} variant="outline" className="w-full">
-              Retry Fetching
+      <div className="min-h-screen flex items-center justify-center bg-gray-50 p-6">
+        <Card className="w-full max-w-lg text-center p-10 shadow-2xl rounded-[2rem] border-none bg-white">
+          <div className="w-24 h-24 bg-red-50 rounded-full flex items-center justify-center mx-auto mb-6">
+            <AlertCircle className="h-12 w-12 text-red-500" />
+          </div>
+          <CardTitle className="text-3xl font-black text-gray-900 mb-4">TRACKING UNAVAILABLE</CardTitle>
+          <p className="text-gray-500 mb-8 leading-relaxed font-medium">
+            We're having trouble connecting to the tracking server for Order #{numericOrderId}. 
+            This could be due to a network error or the order might have been archived.
+          </p>
+          <div className="flex flex-col gap-3">
+            <Button className="w-full h-14 rounded-2xl font-black text-lg shadow-lg shadow-primary/30" onClick={() => refetch()}>
+              RETRY CONNECTION
             </Button>
-          </CardContent>
+            <Button variant="ghost" className="w-full font-bold text-gray-400" onClick={() => window.history.back()}>
+              Go Back
+            </Button>
+          </div>
         </Card>
       </div>
     );
   }
 
   const { 
-    deliveryBatchesSummary = [], 
     customerDeliveryAddress, 
-    masterOrderTrackingHistory = [], 
     masterOrderNumber, 
-    status: masterStatus,
-    ...masterOrderDetails 
+    status: masterStatus, 
+    masterOrderTrackingHistory = [],
+    total,
+    paymentMethod,
+    paymentStatus,
+    estimatedDeliveryTime
   } = trackingResponse;
 
-  const activeBatchesForMap = deliveryBatchesSummary.filter(
-    (b) => b.deliveryBoy !== null && ["picked_up", "out_for_delivery", "in transit"].includes(b.batchStatus)
-  );
-
-  const mapDeliveryBoys = activeBatchesForMap.map((batch) => {
-    const live = liveLocations.get(batch.batchId);
-    return {
-      ...batch.deliveryBoy!,
-      batchId: batch.batchId,
-      currentLocation: {
-        lat: Number(live?.lat || batch.deliveryBoy?.currentLocation?.lat || 0),
-        lng: Number(live?.lng || batch.deliveryBoy?.currentLocation?.lng || 0)
-      },
-      // ✅ MapTracker requires destination for routing
-      destination: { 
-        lat: Number(customerDeliveryAddress.lat), 
-        lng: Number(customerDeliveryAddress.lng) 
-      }
-    };
-  }).filter(db => db.currentLocation.lat !== 0);
-
-  const mapStores = Array.from(new Set(
-    deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
-  )).map(s => JSON.parse(s));
-
-  const estimatedTime = masterOrderDetails.estimatedDeliveryTime
-    ? new Date(masterOrderDetails.estimatedDeliveryTime).toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })
-    : "TBD";
+  /* ==========================================================================
+     MAIN UI RENDER
+     ========================================================================== */
 
   return (
-    <div className="min-h-screen bg-gray-50 py-8">
-      <div className="max-w-5xl mx-auto px-4">
+    <div className="min-h-screen bg-[#F4F7FE] py-8 md:py-12 px-4 md:px-6">
+      <div className="max-w-7xl mx-auto">
         
-        {/* Header Section */}
-        <div className="mb-8 flex flex-col md:flex-row justify-between items-start md:items-end gap-4">
-          <div>
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">TRACK YOUR ORDER</h1>
-            <p className="text-lg text-gray-500 font-medium">Order Reference: #{masterOrderNumber}</p>
+        {/* TOP BAR / HEADER */}
+        <header className="mb-10 flex flex-col md:flex-row justify-between items-start md:items-end gap-6">
+          <div className="space-y-2">
+            <div className="flex items-center gap-3">
+               <div className="px-3 py-1 bg-green-100 text-green-600 rounded-full flex items-center gap-2">
+                 <span className="relative flex h-2 w-2">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"></span>
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-green-500"></span>
+                 </span>
+                 <span className="text-[10px] font-black uppercase tracking-widest">Live Updates</span>
+               </div>
+               <span className="text-gray-300 font-light">|</span>
+               <span className="text-gray-500 font-bold text-sm">#{masterOrderNumber}</span>
+            </div>
+            <h1 className="text-4xl md:text-5xl font-black text-gray-900 tracking-tight">TRACK ORDER</h1>
           </div>
-          <Badge className={`${getStatusColor(masterStatus)} text-white px-6 py-2 text-sm font-bold shadow-md`}>
-            {getStatusText(masterStatus).toUpperCase()}
-          </Badge>
-        </div>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
           
-          {/* Main Column */}
-          <div className="lg:col-span-2 space-y-6">
-            
-            {/* 📍 Map Card */}
-            {activeBatchesForMap.length > 0 && (
-              <Card className="overflow-hidden shadow-lg border-none">
-                <CardHeader className="bg-white border-b py-4 px-6">
-                  <CardTitle className="text-md flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <MapPin className="w-5 h-5 text-purple-600" />
-                      <span>Real-time Tracking ({activeBatchesForMap.length} Deliveries)</span>
-                    </div>
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="p-0">
-                  <div className="w-full h-[400px]">
-                    <GoogleMapTracker
-                      customerAddress={{ lat: customerDeliveryAddress.lat, lng: customerDeliveryAddress.lng }}
-                      deliveryBoys={mapDeliveryBoys} 
-                      stores={mapStores} 
-                    />
-                  </div>
-                  <div className="p-4 border-t bg-gray-50 flex items-center justify-between">
-                    <p className="text-sm font-bold text-gray-700 tracking-tight flex items-center gap-2">
-                      <Truck className="w-4 h-4 text-purple-600" /> Tracking {mapDeliveryBoys.length} active delivery partners.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
+          <div className="flex items-center gap-4 w-full md:w-auto">
+            <div className="flex-1 md:text-right">
+              <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest leading-none mb-1">Current Status</p>
+              <p className="text-xl font-black text-gray-800 uppercase">{getStatusText(masterStatus)}</p>
+            </div>
+            <div className={`w-14 h-14 rounded-2xl ${getStatusColor(masterStatus)} flex items-center justify-center shadow-xl shadow-primary/20`}>
+               <Navigation className="text-white w-7 h-7" />
+            </div>
+          </div>
+        </header>
 
-            {/* Overall Order Status (Master Card) */}
-            <Card className="border-none shadow-sm overflow-hidden">
-              <div className={`h-2 ${getStatusColor(masterStatus)}`} />
-              <CardContent className="p-6">
-                <div className="flex items-center space-x-6">
-                  <div className={`w-16 h-16 rounded-2xl ${getStatusColor(masterStatus)} flex items-center justify-center shadow-lg rotate-3`}>
-                    <Package className="w-8 h-8 text-white -rotate-3" />
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 items-start">
+          
+          {/* LEFT SECTION (8 COLS) */}
+          <div className="lg:col-span-8 space-y-8">
+            
+            {/* 1. MAP CARD (RE-ENGINEERED) */}
+            <Card className="overflow-hidden shadow-2xl border-none rounded-[2.5rem] bg-white group">
+              <CardHeader className="px-8 py-6 border-b border-gray-50 flex flex-row items-center justify-between bg-white">
+                <div className="flex items-center gap-3">
+                  <div className="p-2 bg-purple-50 rounded-lg text-purple-600">
+                    <MapPin className="w-5 h-5" />
                   </div>
                   <div>
-                    <p className="font-black text-2xl text-gray-900">{getStatusText(masterStatus)}</p>
-                    <p className="text-gray-500 font-medium">
-                      {masterStatus === 'delivered'
-                        ? 'Your entire order has been delivered successfully.'
-                        : activeBatchesForMap.length > 0
-                        ? `${activeBatchesForMap.length} separate deliveries are currently in transit.`
-                        : 'Your order is confirmed and being prepared by our sellers.'
-                      }
-                    </p>
+                    <CardTitle className="text-lg font-black text-gray-800">Delivery Route</CardTitle>
+                    <p className="text-xs font-bold text-gray-400 uppercase tracking-tighter">Real-time Location Stream</p>
+                  </div>
+                </div>
+                {mapDeliveryBoys.length > 0 && (
+                  <Badge className="bg-green-500 text-white border-none px-4 py-1.5 rounded-full font-black text-[10px] animate-bounce">
+                    {mapDeliveryBoys.length} RIDER(S) ACTIVE
+                  </Badge>
+                )}
+              </CardHeader>
+              <CardContent className="p-0 relative">
+                <div className="w-full h-[350px] md:h-[550px] z-10">
+                  <GoogleMapTracker
+                    customerAddress={{ lat: customerDeliveryAddress.lat, lng: customerDeliveryAddress.lng }}
+                    deliveryBoys={mapDeliveryBoys} 
+                    stores={mapStores} 
+                  />
+                </div>
+                {/* Map Overlay Info */}
+                <div className="absolute bottom-6 left-6 right-6 z-20 flex flex-col md:flex-row gap-3">
+                  <div className="flex-1 bg-white/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/20 flex items-center gap-4">
+                    <div className="w-10 h-10 bg-primary rounded-xl flex items-center justify-center text-white shrink-0">
+                      <Truck className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <p className="text-[10px] font-black text-gray-400 uppercase">Estimated Arrival</p>
+                      <p className="text-lg font-black text-gray-900 leading-none">
+                        {estimatedDeliveryTime ? new Date(estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Calculating..."}
+                      </p>
+                    </div>
+                  </div>
+                  <div className="hidden md:flex bg-gray-900/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/10 items-center gap-4 text-white">
+                    <ShieldCheck className="w-6 h-6 text-green-400" />
+                    <div>
+                      <p className="text-[10px] font-black text-white/50 uppercase">Safety Protocol</p>
+                      <p className="text-xs font-bold">Contactless Delivery Enabled</p>
+                    </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* 📦 Detailed Batch Progress */}
-            <div className="space-y-4">
-              <h3 className="text-xl font-black text-gray-800 flex items-center gap-2 ml-1">
-                <Truck className="w-6 h-6" /> DELIVERY BATCHES
-              </h3>
-              {deliveryBatchesSummary.map((batch) => (
-                <Card key={batch.batchId} className="border-none shadow-sm overflow-hidden group">
-                  <CardContent className="p-0">
-                    <div className="p-5 flex flex-wrap justify-between items-center gap-4 border-b bg-white">
-                      <div>
-                        <h4 className="font-black text-gray-900">Batch #{batch.batchId === 0 ? "Unassigned" : batch.batchId}</h4>
-                        <p className="text-xs font-bold text-gray-400 uppercase tracking-widest">{batch.subOrders.length} Sub-orders Included</p>
+            {/* 2. BATCHES & SUBORDERS (RE-ENGINEERED) */}
+            <section className="space-y-6">
+              <div className="flex items-center justify-between px-2">
+                <h3 className="text-2xl font-black text-gray-900 tracking-tight flex items-center gap-3">
+                  <Package className="w-7 h-7 text-primary" /> SHIPMENT DETAILS
+                </h3>
+                <span className="text-sm font-bold text-gray-400 italic">Total {trackingResponse.deliveryBatchesSummary.length} Batch(es)</span>
+              </div>
+
+              {trackingResponse.deliveryBatchesSummary.map((batch, bIdx) => (
+                <Card key={batch.batchId || bIdx} className="border-none shadow-xl rounded-[2rem] overflow-hidden bg-white group hover:ring-2 ring-primary/10 transition-all">
+                  <div className={`h-2 ${getStatusColor(batch.batchStatus)} w-full opacity-80`} />
+                  <CardContent className="p-8">
+                    <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-8">
+                      <div className="flex items-center gap-5">
+                        <div className="w-16 h-16 bg-gray-50 rounded-2xl flex items-center justify-center border border-gray-100 font-black text-xl text-gray-400 shadow-inner">
+                          {batch.batchId || "01"}
+                        </div>
+                        <div>
+                          <h4 className="font-black text-2xl text-gray-900 leading-none mb-1">Batch Logistics</h4>
+                          <div className="flex items-center gap-2">
+                            <Clock className="w-3.5 h-3.5 text-primary" />
+                            <span className="text-sm font-black text-primary">
+                              ETA: {batch.estimatedDeliveryTime ? new Date(batch.estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "TBD"}
+                            </span>
+                          </div>
+                        </div>
                       </div>
-                      <Badge className={`${getStatusColor(batch.batchStatus)} text-white px-3 py-1 font-bold`}>
-                        {getStatusText(batch.batchStatus)}
+                      <Badge className={`${getStatusColor(batch.batchStatus)} text-white px-6 py-2 text-xs font-black rounded-xl border-none shadow-lg`}>
+                        {getStatusText(batch.batchStatus).toUpperCase()}
                       </Badge>
                     </div>
-                    
+
                     {batch.deliveryBoy && (
-                      <div className="p-4 bg-gray-50 border-b">
-                        <div className="flex items-center justify-between">
-                          <div className="flex items-center space-x-4">
-                            <div className="w-12 h-12 rounded-full bg-white border-2 border-primary/20 flex items-center justify-center">
-                              <User className="w-6 h-6 text-primary" />
+                      <div className="flex items-center justify-between bg-gray-50/50 p-5 rounded-[1.5rem] border border-gray-100 mb-8 transition-colors group-hover:bg-gray-50">
+                        <div className="flex items-center gap-4">
+                          <div className="relative">
+                            <div className="w-14 h-14 bg-white rounded-full shadow-md flex items-center justify-center border border-gray-200">
+                              <User className="w-7 h-7 text-gray-400" />
                             </div>
-                            <div>
-                              <p className="text-sm font-black text-gray-900">{batch.deliveryBoy.name}</p>
-                              <p className="text-xs text-gray-500 font-medium">Professional Rider</p>
+                            <div className="absolute bottom-0 right-0 w-5 h-5 bg-green-500 border-4 border-white rounded-full shadow-sm" />
+                          </div>
+                          <div>
+                            <p className="text-lg font-black text-gray-900 leading-none">{batch.deliveryBoy.name}</p>
+                            <div className="flex items-center gap-1 mt-1">
+                               <div className="flex text-yellow-400">★ ★ ★ ★ ★</div>
+                               <span className="text-[10px] font-black text-gray-400 ml-1">TOP RATED</span>
                             </div>
                           </div>
-                          <Button 
-                            variant="secondary" 
-                            size="sm" 
-                            className="rounded-full font-bold px-4"
-                            onClick={() => window.location.href = `tel:${batch.deliveryBoy?.phone}`}
-                          >
-                            <Phone className="w-3 h-3 mr-2" /> Call Partner
-                          </Button>
                         </div>
+                        <Button 
+                          size="lg" 
+                          aria-label={`Call Partner ${batch.deliveryBoy.name}`}
+                          className="rounded-2xl shadow-xl bg-white text-gray-900 hover:bg-primary hover:text-white border border-gray-100 h-14 px-8 font-black transition-all" 
+                          onClick={() => window.location.href = `tel:${batch.deliveryBoy?.phone}`}
+                        >
+                          <Phone className="w-5 h-5 mr-3" /> CALL
+                        </Button>
                       </div>
                     )}
 
-                    <div className="p-4 space-y-3 bg-white">
+                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {batch.subOrders.map(so => (
-                        <div key={so.subOrderId} className="flex items-center justify-between p-3 rounded-xl border border-gray-100 hover:border-primary/30 transition-colors">
-                          <div className="flex items-center gap-3">
-                            <Store className="w-4 h-4 text-gray-400" />
-                            <span className="text-sm font-bold text-gray-700">{so.sellerName}</span>
-                          </div>
-                          <span className="text-xs font-black text-gray-400 italic">{getStatusText(so.subOrderStatus)}</span>
+                        <div key={so.subOrderId} className="flex items-center justify-between p-4 bg-white border border-gray-100 rounded-2xl shadow-sm hover:shadow-md transition-shadow">
+                           <div className="flex items-center gap-3 truncate">
+                             <div className="w-8 h-8 bg-gray-50 rounded-lg flex items-center justify-center shrink-0">
+                               <Store className="w-4 h-4 text-gray-400"/>
+                             </div>
+                             <div className="truncate">
+                               <p className="text-xs font-black text-gray-800 truncate uppercase">{so.sellerName}</p>
+                               <p className="text-[9px] font-bold text-gray-400">Order ID: #{so.subOrderId}</p>
+                             </div>
+                           </div>
+                           <Badge variant="secondary" className="bg-gray-100 text-[9px] font-black text-gray-500 rounded-lg py-1">
+                             {getStatusText(so.subOrderStatus)}
+                           </Badge>
                         </div>
                       ))}
                     </div>
                   </CardContent>
                 </Card>
               ))}
-            </div>
-
-            {/* 🕒 Tracking Timeline (History) */}
-            <Card className="border-none shadow-sm">
-              <CardHeader className="border-b">
-                <CardTitle className="text-lg font-black uppercase tracking-tight">Order Timeline</CardTitle>
-              </CardHeader>
-              <CardContent className="pt-8">
-                <div className="relative pl-8 space-y-8 before:absolute before:left-[11px] before:top-2 before:bottom-2 before:w-0.5 before:bg-gray-200">
-                  {masterOrderTrackingHistory.map((step: any, index: number) => (
-                    <div key={index} className="relative">
-                      <div className="absolute -left-[29px] top-1 w-5 h-5 rounded-full bg-white border-4 border-primary z-10 shadow-sm" />
-                      <div>
-                        <p className="font-black text-gray-900 leading-none">{getStatusText(step.status)}</p>
-                        <p className="text-xs text-gray-400 mt-1 font-bold flex items-center gap-1">
-                          <Clock className="w-3 h-3" /> {new Date(step.timestamp).toLocaleString()}
-                        </p>
-                        {step.message && <p className="text-sm text-gray-600 mt-2 p-2 bg-gray-50 rounded-lg border-l-2 border-primary italic">"{step.message}"</p>}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-            
+            </section>
           </div>
-          
-          {/* Sidebar Column */}
-          <div className="space-y-6">
+
+          {/* RIGHT SECTION (4 COLS) - SIDEBAR */}
+          <div className="lg:col-span-4 space-y-8">
             
-            {/* Bill Details */}
-            <Card className="border-none shadow-md overflow-hidden">
-              <CardHeader className="bg-gray-900 text-white py-4">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest">Billing Summary</CardTitle>
+            {/* 3. PAYMENT SUMMARY */}
+            <Card className="border-none shadow-2xl rounded-[2.5rem] bg-gray-900 text-white overflow-hidden relative">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-primary/20 rounded-full blur-3xl -mr-16 -mt-16" />
+              <CardHeader className="border-b border-white/5 px-8 py-6">
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-white/40">Checkout Summary</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6 space-y-4">
-                <div className="flex justify-between items-center">
-                  <span className="text-gray-500 font-bold">Total Amount</span>
-                  <span className="text-2xl font-black text-gray-900">₹{Number(masterOrderDetails.total).toLocaleString('en-IN')}</span>
+              <CardContent className="p-8 space-y-8">
+                <div className="flex justify-between items-end">
+                  <span className="text-white/50 font-bold text-sm">Amount Paid</span>
+                  <span className="text-4xl font-black tracking-tighter">₹{Number(total).toLocaleString('en-IN')}</span>
                 </div>
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-gray-500 font-medium">Payment Mode</span>
-                  <Badge variant="secondary" className="font-black uppercase tracking-tighter">
-                    {masterOrderDetails.paymentMethod === 'cod' ? 'Cash On Delivery' : 'Paid Online'}
-                  </Badge>
-                </div>
-                <div className="flex justify-between items-center text-sm border-t pt-4">
-                  <span className="text-gray-500 font-medium">Payment Status</span>
-                  <Badge className={masterOrderDetails.paymentStatus === 'paid' ? 'bg-green-500' : 'bg-orange-500'}>
-                    {masterOrderDetails.paymentStatus.toUpperCase()}
-                  </Badge>
-                </div>
-                <div className="mt-4 p-4 bg-primary/5 rounded-2xl border border-primary/10 flex items-center gap-4">
-                  <div className="bg-primary p-2 rounded-lg text-white">
-                    <Clock className="w-6 h-6" />
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[9px] font-black text-white/30 uppercase mb-1">Method</p>
+                    <p className="text-sm font-black flex items-center gap-2 uppercase">
+                      <CreditCard className="w-4 h-4 text-primary" /> {paymentMethod}
+                    </p>
                   </div>
-                  <div>
-                    <p className="text-[10px] text-primary font-black uppercase tracking-widest leading-none">Arrival Time</p>
-                    <p className="text-xl font-black text-primary">{estimatedTime}</p>
+                  <div className="bg-white/5 p-4 rounded-2xl border border-white/5">
+                    <p className="text-[9px] font-black text-white/30 uppercase mb-1">Status</p>
+                    <Badge className={`${paymentStatus === 'paid' ? 'bg-green-500' : 'bg-orange-500'} text-white border-none font-black text-[9px]`}>
+                      {paymentStatus.toUpperCase()}
+                    </Badge>
                   </div>
+                </div>
+                <div className="bg-primary p-6 rounded-[1.5rem] shadow-2xl shadow-primary/40 flex items-center gap-5">
+                   <div className="w-12 h-12 bg-white/20 rounded-xl flex items-center justify-center backdrop-blur-md">
+                     <Clock className="w-6 h-6 text-white" />
+                   </div>
+                   <div>
+                     <p className="text-[10px] font-black text-white/60 uppercase tracking-widest">Master Arrival</p>
+                     <p className="text-2xl font-black leading-none mt-1">
+                        {estimatedDeliveryTime ? new Date(estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "TBD"}
+                     </p>
+                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Shipping Address */}
-            <Card className="border-none shadow-md">
-              <CardHeader className="border-b">
-                <CardTitle className="text-sm font-bold uppercase tracking-widest text-gray-400">Ship To</CardTitle>
+            {/* 4. SHIP-TO ADDRESS */}
+            <Card className="border-none shadow-xl rounded-[2.5rem] bg-white">
+              <CardHeader className="border-b border-gray-50 px-8 py-6">
+                <CardTitle className="text-sm font-black uppercase tracking-widest text-gray-400">Destination</CardTitle>
               </CardHeader>
-              <CardContent className="pt-6">
-                <div className="flex gap-4">
-                  <div className="w-10 h-10 bg-red-50 rounded-xl flex items-center justify-center shrink-0">
-                    <MapPin className="w-5 h-5 text-red-500" />
+              <CardContent className="p-8">
+                <div className="flex gap-5">
+                  <div className="w-14 h-14 bg-red-50 rounded-2xl flex items-center justify-center shrink-0 shadow-inner border border-red-100">
+                    <MapPin className="w-7 h-7 text-red-500" />
                   </div>
-                  <div className="space-y-1">
-                    <p className="font-black text-gray-900 leading-none">{customerDeliveryAddress.fullName}</p>
-                    <p className="text-sm text-gray-600 font-medium leading-relaxed">{customerDeliveryAddress.address}</p>
-                    <p className="text-sm text-gray-900 font-black">{customerDeliveryAddress.city}, {customerDeliveryAddress.pincode}</p>
-                    <div className="pt-3 flex items-center gap-2 text-primary font-bold">
-                      <Phone className="w-4 h-4" />
-                      <span>{customerDeliveryAddress.phoneNumber}</span>
+                  <div className="space-y-2">
+                    <p className="font-black text-xl text-gray-900 leading-tight">{customerDeliveryAddress.fullName}</p>
+                    <p className="text-sm text-gray-500 font-medium leading-relaxed">{customerDeliveryAddress.address}</p>
+                    <div className="flex flex-wrap gap-2 pt-2">
+                      <Badge variant="secondary" className="bg-gray-100 text-gray-600 font-black text-[10px]">{customerDeliveryAddress.city}</Badge>
+                      <Badge variant="secondary" className="bg-gray-100 text-gray-600 font-black text-[10px]">{customerDeliveryAddress.pincode}</Badge>
+                    </div>
+                    <div className="pt-4 flex items-center gap-3 text-primary font-black">
+                      <div className="p-2 bg-primary/10 rounded-lg">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <span className="text-lg tracking-tight">{customerDeliveryAddress.phoneNumber}</span>
                     </div>
                   </div>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Help Support */}
-            <Card className="bg-gray-50 border-dashed border-2 border-gray-200 shadow-none">
-              <CardContent className="p-6">
-                <h4 className="font-black text-gray-900 mb-2 uppercase text-sm">Need Help?</h4>
-                <p className="text-xs text-gray-500 mb-6 font-medium">Facing issues with your delivery or items? Our support team is available 24/7.</p>
-                <div className="space-y-3">
-                  <Button variant="outline" className="w-full justify-start font-bold bg-white">
-                    <Phone className="w-4 h-4 mr-2 text-primary" /> Call Support
-                  </Button>
-                  <Button variant="outline" className="w-full justify-start font-bold bg-white">
-                    <Package className="w-4 h-4 mr-2 text-primary" /> Report Batch Issue
-                  </Button>
+            {/* 5. ENHANCED VERTICAL TIMELINE */}
+            <Card className="border-none shadow-xl rounded-[2.5rem] bg-white overflow-hidden">
+              <CardHeader className="bg-gray-50 px-8 py-6">
+                <CardTitle className="text-xs font-black uppercase tracking-widest text-gray-400">Order Journey</CardTitle>
+              </CardHeader>
+              <CardContent className="p-8">
+                <div className="relative">
+                  <div className="absolute left-[15px] top-0 bottom-0 w-1 bg-gray-50 rounded-full" />
+                  
+                  {['placed', 'confirmed', 'preparing', 'ready_for_pickup', 'picked_up', 'out_for_delivery', 'delivered'].map((stage, idx) => {
+                    const completed = isStepCompleted(stage, masterStatus, masterOrderTrackingHistory);
+                    const historyItem = masterOrderTrackingHistory.find(h => h.status.toLowerCase() === stage.toLowerCase());
+                    
+                    return (
+                      <div key={idx} className={`relative pl-14 pb-10 last:pb-0 transition-all duration-500 ${completed ? 'opacity-100 scale-100' : 'opacity-20 scale-95'}`}>
+                        {/* Dot */}
+                        <div className={`absolute left-0 top-0 w-8 h-8 rounded-full flex items-center justify-center z-10 shadow-lg border-4 border-white ${completed ? 'bg-green-500' : 'bg-gray-300'}`}>
+                          {completed ? <CheckCircle className="w-4 h-4 text-white" /> : <Circle className="w-2 h-2 text-white" />}
+                        </div>
+                        
+                        <div>
+                          <p className={`font-black uppercase text-sm tracking-tight ${completed ? 'text-gray-900' : 'text-gray-400'}`}>
+                            {getStatusText(stage)}
+                          </p>
+                          {completed && historyItem && (
+                            <div className="mt-1 flex items-center gap-2">
+                              <Clock className="w-3 h-3 text-gray-400" />
+                              <p className="text-[10px] text-gray-400 font-bold">
+                                {new Date(historyItem.timestamp).toLocaleString('en-IN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: 'short' })}
+                              </p>
+                            </div>
+                          )}
+                          {completed && historyItem?.message && (
+                            <p className="mt-3 p-3 bg-gray-50 rounded-xl text-xs text-gray-500 font-medium italic border-l-4 border-primary/20">
+                              "{historyItem.message}"
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
                 </div>
               </CardContent>
             </Card>
+
+            {/* 6. SUPPORT CARD */}
+            <Card className="bg-gradient-to-br from-indigo-600 to-primary text-white border-none rounded-[2.5rem] shadow-2xl relative overflow-hidden group">
+               <div className="absolute -right-10 -bottom-10 opacity-10 group-hover:scale-110 transition-transform duration-700">
+                 <Truck size={180} />
+               </div>
+               <CardContent className="p-10 relative z-10">
+                  <div className="w-16 h-16 bg-white/20 rounded-2xl flex items-center justify-center mb-6 backdrop-blur-xl">
+                    <Info className="w-8 h-8 text-white" />
+                  </div>
+                  <h4 className="font-black text-2xl mb-3 tracking-tight">NEED ASSISTANCE?</h4>
+                  <p className="text-sm font-bold text-white/70 mb-8 leading-relaxed">
+                    Experiencing delays or have a question about your order batches? We're here 24/7.
+                  </p>
+                  <div className="space-y-3">
+                    <Button className="w-full h-14 bg-white text-primary font-black hover:bg-gray-100 rounded-2xl shadow-xl transition-all active:scale-95">
+                      LIVE CHAT SUPPORT
+                    </Button>
+                    <Button variant="ghost" className="w-full text-white/80 font-black hover:bg-white/10 rounded-2xl">
+                      VIEW FAQS
+                    </Button>
+                  </div>
+               </CardContent>
+            </Card>
+
           </div>
         </div>
+        
+        {/* FOOTER INFO */}
+        <footer className="mt-16 text-center border-t border-gray-200 pt-10">
+           <p className="text-[10px] font-black text-gray-400 uppercase tracking-[0.3em]">Shopnish Secure Logistics System v2.4</p>
+        </footer>
       </div>
     </div>
   );
