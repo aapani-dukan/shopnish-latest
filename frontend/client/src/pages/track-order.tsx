@@ -160,15 +160,23 @@ console.log("✅ TRACKING RESPONSE:", trackingResponse);
     if (!socket || !numericOrderId || !userIdToUse) return; 
 
     // डेटा में batchId शामिल होना चाहिए
-    const handleLocationUpdate = (data: Location & { batchId: number; orderId: number }) => {
-      if (data.orderId === numericOrderId) {
-        setLiveLocations(prev => {
-          const newMap = new Map(prev);
-          newMap.set(data.batchId, { lat: data.lat, lng: data.lng, timestamp: data.timestamp });
-          return newMap;
-        });
-      }
-    };
+    const handleLocationUpdate = (data: {
+  lat: number;
+  lng: number;
+  batchId: number;
+  timestamp?: string;
+}) => {
+  // 🔥 orderId check हटाओ — room already order specific है
+  setLiveLocations((prev) => {
+    const newMap = new Map(prev);
+    newMap.set(data.batchId, {
+      lat: data.lat,
+      lng: data.lng,
+      timestamp: data.timestamp,
+    });
+    return newMap;
+  });
+};
 
     socket.emit("register-client", { role: "user", userId: userIdToUse });
     socket.emit("join-order-room", { orderId: numericOrderId }); // Master order room
