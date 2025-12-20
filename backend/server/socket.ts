@@ -80,16 +80,21 @@ export function initSocket(server: HTTPServer) {
       if (!batch?.masterOrderId) return;
 
       // 🛑 2️⃣ DATABASE UPDATE (यह वो हिस्सा है जो आपके NULL को खत्म करेगा)
-      if (batch.deliveryBoyId) {
-        await db.update(deliveryBoys)
-          .set({
-            currentLat: String(data.lat), // String/Decimal mismatch handling
-            currentLng: String(data.lng),
-          })
-          .where(eq(deliveryBoys.id, batch.deliveryBoyId));
-        
-        console.log(`💾 DB Updated for Rider: ${batch.deliveryBoyId}`);
-      }
+      
+if (batch.deliveryBoyId) {
+  await db.update(deliveryBoys)
+    .set({
+      // PostgreSQL decimal expects a string or number, 
+      // precision handle करने के लिए toString() सुरक्षित है
+      currentLat: data.lat.toString(), 
+      currentLng: data.lng.toString(),
+      updatedAt: new Date(), // रिकॉर्ड को अपडेटेड रखने के लिए
+    })
+    .where(eq(deliveryBoys.id, batch.deliveryBoyId));
+  
+  console.log(`💾 DB Updated Rider ${batch.deliveryBoyId}: ${data.lat}, ${data.lng}`);
+}
+      
 
       // 3️⃣ Customer को लाइव अपडेट भेजें
       io?.to(`order:${batch.masterOrderId}`).emit(
