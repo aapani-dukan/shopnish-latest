@@ -52,6 +52,16 @@ const LIBRARIES: (
 
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+function interpolate(
+  start: google.maps.LatLngLiteral,
+  end: google.maps.LatLngLiteral,
+  fraction: number
+): google.maps.LatLngLiteral {
+  return {
+    lat: start.lat + (end.lat - start.lat) * fraction,
+    lng: start.lng + (end.lng - start.lng) * fraction,
+  };
+}
 /* =======================
    Component
 ======================= */
@@ -63,7 +73,7 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
 }) => {
   /* 🔴 MAP REF */
   const mapRef = useRef<google.maps.Map | null>(null);
-
+const animatedPositions = useRef<Map<number, google.maps.LatLngLiteral>>(new Map());
   /* 1️⃣ Google Maps Loader */
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || "",
