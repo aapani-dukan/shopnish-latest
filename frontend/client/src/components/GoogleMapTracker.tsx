@@ -11,22 +11,26 @@ import { Truck, MapPin, Store as StoreIconLucide } from "lucide-react";
    INTERFACES & TYPES
    ========================================================================== */
 interface CustomerLocation {
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
+  latitude?: string | number; // बैकएंड कीज़ को हैंडल करने के लिए
+  longitude?: string | number;
   address?: string;
 }
 
 interface DeliveryBoyTracker {
   id: number;
   batchId: number | string;
-  currentLocation: { lat: number; lng: number };
+  currentLocation: { lat?: number; lng?: number; latitude?: string | number; longitude?: string | number };
   name: string;
-  destination?: { lat: number; lng: number };
+  destination?: { lat?: number; lng?: number; latitude?: string | number; longitude?: string | number };
 }
 
 interface StoreTracker {
-  lat: number;
-  lng: number;
+  lat?: number;
+  lng?: number;
+  latitude?: string | number;
+  longitude?: string | number;
   name: string;
 }
 
@@ -43,26 +47,23 @@ const containerStyle = { width: "100%", height: "100%" };
 const LIBRARIES: ("geometry" | "marker")[] = ["geometry", "marker"];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-// 1️⃣ Strict Validation: Check if values are proper numbers
-const isValidLatLng = (coord: any) => {
-  return (
-    coord &&
-    typeof Number(coord.lat) === "number" &&
-    typeof Number(coord.lng) === "number" &&
-    !isNaN(Number(coord.lat)) &&
-    !isNaN(Number(coord.lng))
-  );
+// ✅ हेल्पर: किसी भी की (lat/latitude) से शुद्ध नंबर निकालना
+const getCoords = (obj: any): { lat: number; lng: number } => {
+  const lat = parseFloat(String(obj?.lat || obj?.latitude || 0));
+  const lng = parseFloat(String(obj?.lng || obj?.longitude || 0));
+  return { lat, lng };
 };
 
-// 2️⃣ Safe Interpolation: Error preventer for animation
-function interpolate(
-  start: { lat: number; lng: number },
-  end: { lat: number; lng: number },
-  fraction: number
-): google.maps.LatLngLiteral {
-  const lat = Number(start.lat) + (Number(end.lat) - Number(start.lat)) * fraction;
-  const lng = Number(start.lng) + (Number(end.lng) - Number(start.lng)) * fraction;
-  return { lat, lng };
+const isValidLatLng = (coord: any) => {
+  const c = getCoords(coord);
+  return c.lat !== 0 && c.lng !== 0 && !isNaN(c.lat) && !isNaN(c.lng);
+};
+
+function interpolate(start: { lat: number; lng: number }, end: { lat: number; lng: number }, fraction: number) {
+  return {
+    lat: start.lat + (end.lat - start.lat) * fraction,
+    lng: start.lng + (end.lng - start.lng) * fraction,
+  };
 }
 
 /* ==========================================================================
@@ -82,6 +83,15 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || "",
     libraries: LIBRARIES,
   });
+
+  // क्लीन डेटा तैयार करना (ताकि पूरे कंपोनेंट में lat/lng ही यूज़ हो)
+  const cleanCustomer = useMemo(() => getCoords(customerAddress), [customerAddress]);
+  const cleanStores = useMemo(() => stores.map(s => ({ ...getCoords(s), name: s.name })), [stores]);
+  const cleanBoys = useMemo(() => deliveryBoys.map(db => ({
+    ...db,
+    currentLocation: getCoords(db.currentLocation),
+    destination: getCoords(db.destination)
+  })), [deliveryBoys]);
 
   const icons = useMemo(() => {
     if (!isLoaded || !window.google?.maps) return null;
@@ -112,72 +122,44 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     return () => cancelAnimationFrame(animationFrame);
   }, []);
 
-  // 3️⃣ Improved Routing Logic
-  // ✅ 3️⃣ Updated Routing Logic with Error Tracking
-useEffect(() => {
-  if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
-  const service = new window.google.maps.DirectionsService();
+  // 3️⃣ Improved Routing Logic with Error Logging
+  useEffect(() => {
+    if (!isLoaded || !window.google || cleanBoys.length === 0) return;
+    const service = new window.google.maps.DirectionsService();
 
-  deliveryBoys.forEach((db) => {
-    // डेटा को पक्के नंबर में बदलें
-    const origin = { 
-      lat: Number(db.currentLocation.lat), 
-      lng: Number(db.currentLocation.lng) 
-    };
-    const destination = db.destination ? { 
-      lat: Number(db.destination.lat), 
-      lng: Number(db.destination.lng) 
-    } : null;
+    cleanBoys.forEach((db) => {
+      if (!isValidLatLng(db.destination)) return;
 
-    // 🛑 सुरक्षा चेक: अगर डेस्टिनेशन गलत है तो गूगल को रिक्वेस्ट न भेजें
-    if (!destination || isNaN(destination.lat) || destination.lat === 0 || destination.lat === 20.5937) {
-      console.warn(`[Map] Batch ${db.batchId} skipping route: Invalid Destination`, destination);
-      return;
-    }
-
-    service.route(
-      {
-        origin,
-        destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === "OK" && result?.routes[0]) {
-          const path = result.routes[0].overview_path.map((p) => ({
-            lat: p.lat(),
-            lng: p.lng(),
-          }));
-          
-          const durationText = result.routes[0].legs[0]?.duration?.text || "Arriving soon";
-
-          setRoutes((prev) => {
-            const filtered = prev.filter(r => r.dbId !== db.id);
-            return [...filtered, { dbId: db.id, path, eta: durationText }];
-          });
-        } else {
-          // 🛑 अगर Calculating... आ रहा है, तो यहाँ कंसोल में एरर दिखेगा
-          console.error(`[Google Maps Error] Status: ${status} for Batch: ${db.batchId}`);
-          
-          if (status === "REQUEST_DENIED") {
-            console.error("ALERT: 'Directions API' is not enabled in your Google Cloud Console!");
-          } else if (status === "ZERO_RESULTS") {
-            console.warn("ALERT: No driving route found between Rider and Destination.");
+      service.route(
+        {
+          origin: db.currentLocation,
+          destination: db.destination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === "OK" && result?.routes[0]) {
+            const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+            const durationText = result.routes[0].legs[0]?.duration?.text || "Arriving soon";
+            setRoutes((prev) => {
+              const filtered = prev.filter(r => r.dbId !== db.id);
+              return [...filtered, { dbId: db.id, path, eta: durationText }];
+            });
+          } else {
+            console.error(`Google Directions Error (${status}) for Batch ${db.batchId}`);
           }
         }
-      }
-    );
-  });
-}, [deliveryBoys, isLoaded]);
-  
+      );
+    });
+  }, [cleanBoys, isLoaded]);
 
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
     const bounds = new window.google.maps.LatLngBounds();
-    if (isValidLatLng(customerAddress)) bounds.extend(customerAddress);
-    stores.forEach(s => isValidLatLng(s) && bounds.extend(s));
-    deliveryBoys.forEach(d => isValidLatLng(d.currentLocation) && bounds.extend(d.currentLocation));
+    if (isValidLatLng(cleanCustomer)) bounds.extend(cleanCustomer);
+    cleanStores.forEach(s => isValidLatLng(s) && bounds.extend(s));
+    cleanBoys.forEach(d => isValidLatLng(d.currentLocation) && bounds.extend(d.currentLocation));
     if (!bounds.isEmpty()) mapRef.current.fitBounds(bounds, { top: 80, right: 50, bottom: 50, left: 50 });
-  }, [customerAddress, stores, deliveryBoys, isLoaded]);
+  }, [cleanCustomer, cleanStores, cleanBoys, isLoaded]);
 
   if (loadError) return <div className="h-full flex items-center justify-center bg-gray-100 text-red-500 font-bold">Map Error</div>;
   if (!isLoaded) return <div className="h-full w-full bg-gray-100 animate-pulse" />;
@@ -193,22 +175,16 @@ useEffect(() => {
           gestureHandling: "greedy"
         }}
       >
-        {isValidLatLng(customerAddress) && <MarkerF position={customerAddress} icon={icons?.home} />}
+        {isValidLatLng(cleanCustomer) && <MarkerF position={cleanCustomer} icon={icons?.home} />}
 
-        {stores.map((store, i) => 
+        {cleanStores.map((store, i) => 
           isValidLatLng(store) && <MarkerF key={i} position={store} icon={icons?.store} title={store.name} />
         )}
 
-        {deliveryBoys.map((db) => {
-          const currentCoords = {
-            lat: Number(db.currentLocation.lat),
-            lng: Number(db.currentLocation.lng)
-          };
-
-          const prevPos = animatedPositions.current.get(db.id) || currentCoords;
-          const nextPos = currentCoords;
+        {cleanBoys.map((db) => {
+          const prevPos = animatedPositions.current.get(db.id) || db.currentLocation;
+          const nextPos = db.currentLocation;
           
-          if (!isValidLatLng(prevPos) || !isValidLatLng(nextPos)) return null;
           animatedPositions.current.set(db.id, nextPos);
 
           let heading = 0;
@@ -226,14 +202,11 @@ useEffect(() => {
               icon={{ ...icons?.bike, rotation: heading } as google.maps.Symbol}
               onLoad={(marker) => {
                 let frame = 0;
-                const totalFrames = 60;
                 const animate = () => {
                   frame++;
-                  const pos = interpolate(prevPos, nextPos, frame / totalFrames);
-                  if (isValidLatLng(pos) && marker) {
-                    marker.setPosition(pos);
-                  }
-                  if (frame < totalFrames) requestAnimationFrame(animate);
+                  const pos = interpolate(prevPos, nextPos, frame / 60);
+                  if (isValidLatLng(pos) && marker) marker.setPosition(pos);
+                  if (frame < 60) requestAnimationFrame(animate);
                 };
                 animate();
               }}
