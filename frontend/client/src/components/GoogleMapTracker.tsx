@@ -196,19 +196,37 @@ const animatedPositions = useRef<Map<number, google.maps.LatLngLiteral>>(new Map
 
         {/* 🏍️ Delivery Boys */}
         {bikeIcon &&
-          deliveryBoys.map(
-            (db) =>
-              isFinite(db.currentLocation.lat) &&
-              isFinite(db.currentLocation.lng) && (
-                <MarkerF
-                  key={db.id}
-                  position={db.currentLocation}
-                  icon={bikeIcon}
-                  options={{ optimized: false }}
-                  title={`Delivery Partner: ${db.name}`}
-                />
-              )
-          )}
+  deliveryBoys.map((db) => {
+    const prev = animatedPositions.current.get(db.id) || db.currentLocation;
+    const next = db.currentLocation;
+
+    animatedPositions.current.set(db.id, next);
+
+    return (
+      <MarkerF
+        key={db.id}
+        position={prev}
+        icon={bikeIcon}
+        options={{ optimized: false }}
+        onLoad={(marker) => {
+          let step = 0;
+          const totalSteps = 30;
+
+          const animate = () => {
+            step++;
+            const pos = interpolate(prev, next, step / totalSteps);
+            marker.setPosition(pos);
+
+            if (step < totalSteps) {
+              requestAnimationFrame(animate);
+            }
+          };
+
+          animate();
+        }}
+      />
+    );
+  })}
       </GoogleMap>
 
       {/* ℹ️ Info Box */}
