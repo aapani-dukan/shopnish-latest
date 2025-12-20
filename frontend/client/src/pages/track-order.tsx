@@ -303,6 +303,12 @@ const { mapDeliveryBoys, mapStores } = useMemo(() => {
 
   return (
     <div className="min-h-screen bg-[#F4F7FE] py-8 md:py-12 px-4 md:px-6">
+      
+<pre className="text-[10px] text-red-500">
+  Map Data Status: {mapDeliveryBoys.length > 0 ? "Data Sent to Map" : "No Rider Data"}
+  Destinations: {JSON.stringify(mapDeliveryBoys.map(d => d.destination))}
+</pre>
+      
       <div className="max-w-7xl mx-auto">
         
         {/* TOP BAR / HEADER */}
