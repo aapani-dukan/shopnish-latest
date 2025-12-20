@@ -196,45 +196,55 @@ export default function TrackOrder() {
   }, [socket, numericOrderId, user?.id, refetch]);
 
   // Map Data Preparation
-  const { mapDeliveryBoys, mapStores } = useMemo(() => {
-    if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
+  // ✅ Map Data Preparation (Updated with Safety Checks)
+const { mapDeliveryBoys, mapStores } = useMemo(() => {
+  if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
 
-    const boys = trackingResponse.deliveryBatchesSummary
-      .filter(b => b.deliveryBoy !== null)
-      .map(batch => {
-        const live = liveLocations.get(batch.batchId);
-        const currentLoc = {
-          lat: Number(live?.lat || batch.deliveryBoy?.currentLocation?.lat || 0),
-          lng: Number(live?.lng || batch.deliveryBoy?.currentLocation?.lng || 0)
+  const boys = trackingResponse.deliveryBatchesSummary
+    .filter(b => b.deliveryBoy !== null)
+    .map(batch => {
+      const live = liveLocations.get(batch.batchId);
+      
+      // 1️⃣ Ensure coordinates are always valid numbers
+      const currentLoc = {
+        lat: Number(live?.lat ?? batch.deliveryBoy?.currentLocation?.lat ?? 0),
+        lng: Number(live?.lng ?? batch.deliveryBoy?.currentLocation?.lng ?? 0)
+      };
+
+      // 2️⃣ Final Destination Logic (Sanitized)
+      let dest = { 
+        lat: Number(trackingResponse.customerDeliveryAddress?.lat ?? 0), 
+        lng: Number(trackingResponse.customerDeliveryAddress?.lng ?? 0) 
+      };
+      
+      const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"].includes(batch.batchStatus.toLowerCase());
+      
+      if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
+        dest = { 
+          lat: Number(batch.storeLocations[0].lat ?? 0), 
+          lng: Number(batch.storeLocations[0].lng ?? 0) 
         };
+      }
 
-        // Logic: Destination is Store if not picked up yet, else Customer
-        let dest = { 
-          lat: Number(trackingResponse.customerDeliveryAddress.lat), 
-          lng: Number(trackingResponse.customerDeliveryAddress.lng) 
-        };
-        
-        const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed"].includes(batch.batchStatus.toLowerCase());
-        if (isNotPickedUp && batch.storeLocations.length > 0) {
-          dest = { lat: Number(batch.storeLocations[0].lat), lng: Number(batch.storeLocations[0].lng) };
-        }
+      return {
+        ...batch.deliveryBoy!,
+        batchId: batch.batchId,
+        currentLocation: currentLoc,
+        destination: dest
+      };
+    })
+    // 3️⃣ Filter out any boy with 0,0 location to prevent map errors
+    .filter(db => db.currentLocation.lat !== 0 && db.currentLocation.lng !== 0);
 
-        return {
-          ...batch.deliveryBoy!,
-          batchId: batch.batchId,
-          currentLocation: currentLoc,
-          destination: dest
-        };
-      })
-      .filter(db => db.currentLocation.lat !== 0);
+  // 4️⃣ Store Deduplication (Safe Parse)
+  const stores = Array.from(new Set(
+    trackingResponse.deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
+  )).map(s => JSON.parse(s))
+    .filter(s => s.lat && s.lng); // Only keep stores with valid coords
 
-    const stores = Array.from(new Set(
-      trackingResponse.deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
-    )).map(s => JSON.parse(s));
-
-    return { mapDeliveryBoys: boys, mapStores: stores };
-  }, [trackingResponse, liveLocations]);
-
+  return { mapDeliveryBoys: boys, mapStores: stores };
+}, [trackingResponse, liveLocations]);
+  
   /* ==========================================================================
      RENDER STATES (LOADING / ERROR)
      ========================================================================== */
