@@ -42,20 +42,27 @@ interface GoogleMapTrackerProps {
 const containerStyle = { width: "100%", height: "100%" };
 const LIBRARIES: ("geometry" | "marker")[] = ["geometry", "marker"];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-// 1. सबसे ऊपर एक सुरक्षित चेक फंक्शन जोड़ें
+
+// 1️⃣ Strict Validation: Check if values are proper numbers
 const isValidLatLng = (coord: any) => {
-  return coord && typeof coord.lat === 'number' && typeof coord.lng === 'number' && !isNaN(coord.lat) && !isNaN(coord.lng);
+  return (
+    coord &&
+    typeof Number(coord.lat) === "number" &&
+    typeof Number(coord.lng) === "number" &&
+    !isNaN(Number(coord.lat)) &&
+    !isNaN(Number(coord.lng))
+  );
 };
-// ✅ स्मूथ मूवमेंट के लिए इंटरपोलेशन फंक्शन
+
+// 2️⃣ Safe Interpolation: Error preventer for animation
 function interpolate(
-  start: google.maps.LatLngLiteral,
-  end: google.maps.LatLngLiteral,
+  start: { lat: number; lng: number },
+  end: { lat: number; lng: number },
   fraction: number
 ): google.maps.LatLngLiteral {
-  return {
-    lat: start.lat + (end.lat - start.lat) * fraction,
-    lng: start.lng + (end.lng - start.lng) * fraction,
-  };
+  const lat = Number(start.lat) + (Number(end.lat) - Number(start.lat)) * fraction;
+  const lng = Number(start.lng) + (Number(end.lng) - Number(start.lng)) * fraction;
+  return { lat, lng };
 }
 
 /* ==========================================================================
@@ -76,12 +83,11 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     libraries: LIBRARIES,
   });
 
-  // ✅ 1. प्रीमियम आइकन्स (HD Icons)
   const icons = useMemo(() => {
     if (!isLoaded || !window.google?.maps) return null;
     return {
       bike: {
-        url: "https://cdn-icons-png.flaticon.com/512/3448/3448601.png", // High-end Rider Icon
+        url: "https://cdn-icons-png.flaticon.com/512/3448/3448601.png",
         scaledSize: new window.google.maps.Size(45, 45),
         anchor: new window.google.maps.Point(22, 22),
       },
@@ -96,7 +102,6 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     };
   }, [isLoaded]);
 
-  // ✅ 2. पॉलीलाइन एनीमेशन (दौड़ती हुई बिंदी)
   useEffect(() => {
     let animationFrame: number;
     const animateDash = () => {
@@ -107,56 +112,44 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     return () => cancelAnimationFrame(animationFrame);
   }, []);
 
-  // ✅ 3. लाइव राउटिंग (Directions API)
-            
-useEffect(() => {
-  if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
+  // 3️⃣ Improved Routing Logic
+  useEffect(() => {
+    if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
+    const service = new window.google.maps.DirectionsService();
 
-  const service = new window.google.maps.DirectionsService();
+    deliveryBoys.forEach((db) => {
+      const origin = { lat: Number(db.currentLocation.lat), lng: Number(db.currentLocation.lng) };
+      const destination = db.destination ? { lat: Number(db.destination.lat), lng: Number(db.destination.lng) } : null;
 
-  deliveryBoys.forEach((db) => {
-    // 🛑 Check: अगर destination 0 है तो कॉल न करें
-    if (!db.destination || db.destination.lat === 0) {
-      console.warn(`Batch ${db.batchId} has no valid destination`);
-      return;
-    }
+      if (!destination || destination.lat === 0 || isNaN(destination.lat)) return;
 
-    service.route(
-      {
-        origin: db.currentLocation,
-        destination: db.destination,
-        travelMode: window.google.maps.TravelMode.DRIVING,
-      },
-      (result, status) => {
-        if (status === "OK" && result?.routes[0]) {
-          const path = result.routes[0].overview_path.map((p) => ({
-            lat: p.lat(),
-            lng: p.lng(),
-          }));
-          
-          // ✅ यहाँ से समय (ETA) आ रहा है
-          const durationText = result.routes[0].legs[0]?.duration?.text || "Fast";
-
-          setRoutes((prev) => {
-            const filtered = prev.filter(r => r.dbId !== db.id);
-            return [...filtered, { dbId: db.id, path, eta: durationText }];
-          });
-        } else {
-          console.error("Directions Request Failed:", status);
+      service.route(
+        {
+          origin,
+          destination,
+          travelMode: window.google.maps.TravelMode.DRIVING,
+        },
+        (result, status) => {
+          if (status === "OK" && result?.routes[0]) {
+            const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+            const durationText = result.routes[0].legs[0]?.duration?.text || "Calculating...";
+            setRoutes((prev) => {
+              const filtered = prev.filter(r => r.dbId !== db.id);
+              return [...filtered, { dbId: db.id, path, eta: durationText }];
+            });
+          }
         }
-      }
-    );
-  });
-}, [deliveryBoys, isLoaded]);
-  
-  // ✅ 4. ऑटो-फिट (Bounds)
+      );
+    });
+  }, [deliveryBoys, isLoaded]);
+
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
     const bounds = new window.google.maps.LatLngBounds();
-    bounds.extend(customerAddress);
-    stores.forEach(s => bounds.extend(s));
-    deliveryBoys.forEach(d => bounds.extend(d.currentLocation));
-    mapRef.current.fitBounds(bounds, { top: 80, right: 50, bottom: 50, left: 50 });
+    if (isValidLatLng(customerAddress)) bounds.extend(customerAddress);
+    stores.forEach(s => isValidLatLng(s) && bounds.extend(s));
+    deliveryBoys.forEach(d => isValidLatLng(d.currentLocation) && bounds.extend(d.currentLocation));
+    if (!bounds.isEmpty()) mapRef.current.fitBounds(bounds, { top: 80, right: 50, bottom: 50, left: 50 });
   }, [customerAddress, stores, deliveryBoys, isLoaded]);
 
   if (loadError) return <div className="h-full flex items-center justify-center bg-gray-100 text-red-500 font-bold">Map Error</div>;
@@ -169,78 +162,61 @@ useEffect(() => {
         onLoad={(map) => (mapRef.current = map)}
         options={{
           disableDefaultUI: true,
-          styles: silverMapStyle, // ✅ क्लीनर मैप लुक
+          styles: silverMapStyle,
           gestureHandling: "greedy"
         }}
       >
-        {/* कस्टमर मार्कर */}
-        <MarkerF position={customerAddress} icon={icons?.home} />
+        {isValidLatLng(customerAddress) && <MarkerF position={customerAddress} icon={icons?.home} />}
 
-        {/* स्टोर मार्कर्स */}
-        {stores.map((store, i) => (
-          <MarkerF key={i} position={store} icon={icons?.store} title={store.name} />
-        ))}
+        {stores.map((store, i) => 
+          isValidLatLng(store) && <MarkerF key={i} position={store} icon={icons?.store} title={store.name} />
+        )}
 
-        {/* लाइव राइडर्स (Smooth Animation + Rotation) */}
         {deliveryBoys.map((db) => {
-  // डेटा को नंबर में कन्वर्ट करना सुनिश्चित करें (ताकि "28.5" नंबर 28.5 बन जाए)
-  const currentCoords = {
-    lat: Number(db.currentLocation.lat),
-    lng: Number(db.currentLocation.lng)
-  };
+          const currentCoords = {
+            lat: Number(db.currentLocation.lat),
+            lng: Number(db.currentLocation.lng)
+          };
 
-  const prevPos = animatedPositions.current.get(db.id) || currentCoords;
-  const nextPos = currentCoords;
-  
-  // रेंडरिंग से पहले डेटा वैलिडेट करें
-  if (!isValidLatLng(prevPos) || !isValidLatLng(nextPos)) return null;
-
-  animatedPositions.current.set(db.id, nextPos);
-
-  // Rotation Calculation (Safe)
-  let heading = 0;
-  if (window.google?.maps?.geometry) {
-    heading = window.google.maps.geometry.spherical.computeHeading(
-      new window.google.maps.LatLng(prevPos.lat, prevPos.lng),
-      new window.google.maps.LatLng(nextPos.lat, nextPos.lng)
-    );
-  }
-
-  return (
-    <MarkerF
-      key={db.id}
-      position={prevPos}
-      icon={{
-        ...icons?.bike,
-        rotation: heading
-      } as google.maps.Symbol}
-      onLoad={(marker) => {
-        let frame = 0;
-        const totalFrames = 60;
-        const animate = () => {
-          frame++;
-          const pos = interpolate(prevPos, nextPos, frame / totalFrames);
+          const prevPos = animatedPositions.current.get(db.id) || currentCoords;
+          const nextPos = currentCoords;
           
-          // ✅ ERROR FIX: केवल तभी सेट करें जब वैल्यू वैध नंबर हो
-          if (isValidLatLng(pos)) {
-            marker.setPosition(pos);
+          if (!isValidLatLng(prevPos) || !isValidLatLng(nextPos)) return null;
+          animatedPositions.current.set(db.id, nextPos);
+
+          let heading = 0;
+          if (window.google?.maps?.geometry) {
+            heading = window.google.maps.geometry.spherical.computeHeading(
+              new window.google.maps.LatLng(prevPos.lat, prevPos.lng),
+              new window.google.maps.LatLng(nextPos.lat, nextPos.lng)
+            );
           }
-          
-          if (frame < totalFrames) requestAnimationFrame(animate);
-        };
-        animate();
-      }}
-    />
-  );
-})}
 
-        {/* एनिमेटेड पॉलीलाइन्स (रूट्स) */}
+          return (
+            <MarkerF
+              key={db.id}
+              position={prevPos}
+              icon={{ ...icons?.bike, rotation: heading } as google.maps.Symbol}
+              onLoad={(marker) => {
+                let frame = 0;
+                const totalFrames = 60;
+                const animate = () => {
+                  frame++;
+                  const pos = interpolate(prevPos, nextPos, frame / totalFrames);
+                  if (isValidLatLng(pos) && marker) {
+                    marker.setPosition(pos);
+                  }
+                  if (frame < totalFrames) requestAnimationFrame(animate);
+                };
+                animate();
+              }}
+            />
+          );
+        })}
+
         {routes.map((r) => (
           <React.Fragment key={r.dbId}>
-            <Polyline
-              path={r.path}
-              options={{ strokeColor: "#8b5cf6", strokeOpacity: 0.2, strokeWeight: 6 }}
-            />
+            <Polyline path={r.path} options={{ strokeColor: "#8b5cf6", strokeOpacity: 0.2, strokeWeight: 6 }} />
             <Polyline
               path={r.path}
               options={{
@@ -256,7 +232,6 @@ useEffect(() => {
         ))}
       </GoogleMap>
 
-      {/* छोटा फ्लोटिंग इन्फो कार्ड */}
       <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-4 z-20">
         <div className="flex items-center gap-1 text-primary font-black text-xs uppercase tracking-tighter">
           <Truck size={14} /> {deliveryBoys.length} Riders
@@ -270,7 +245,6 @@ useEffect(() => {
   );
 };
 
-// क्लीन सिल्वर थीम स्टाइल
 const silverMapStyle = [
   { featureType: "all", elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
   { featureType: "poi", stylers: [{ visibility: "off" }] },
