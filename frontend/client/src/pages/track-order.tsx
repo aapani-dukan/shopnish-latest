@@ -196,22 +196,26 @@ export default function TrackOrder() {
   }, [socket, numericOrderId, user?.id, refetch]);
 
   // ✅ Map Data Preparation (Updated for Backend compatibility)
-const { mapDeliveryBoys, mapStores } = useMemo(() => {
+
+  const { mapDeliveryBoys, mapStores } = useMemo(() => {
   if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
+
+  console.log("Full Tracking Response:", trackingResponse); // Debugging के लिए
 
   const boys = trackingResponse.deliveryBatchesSummary
     .filter(b => b.deliveryBoy !== null)
     .map(batch => {
       const live = liveLocations.get(batch.batchId);
       
-      // बैकेंड से आ रहे latitude/longitude को lat/lng में बदलें
+      // ✅ 1. Rider Location (Safe Extraction)
+      // बैकेंड में चेक करें कि क्या 'currentLocation' ऑब्जेक्ट है या सीधा 'latitude' है
       const currentLoc = {
-        lat: parseFloat(String(live?.lat || batch.deliveryBoy?.currentLocation?.latitude || 0)),
-        lng: parseFloat(String(live?.lng || batch.deliveryBoy?.currentLocation?.longitude || 0))
+        lat: parseFloat(String(live?.lat || batch.deliveryBoy?.currentLocation?.latitude || batch.deliveryBoy?.latitude || 0)),
+        lng: parseFloat(String(live?.lng || batch.deliveryBoy?.currentLocation?.longitude || batch.deliveryBoy?.longitude || 0))
       };
 
-      // कस्टमर का एड्रेस भी latitude नाम से आ रहा है
-      let dest = { 
+      // ✅ 2. Destination Location (Safe Extraction)
+      const dest = { 
         lat: parseFloat(String(trackingResponse.customerDeliveryAddress?.latitude || 0)), 
         lng: parseFloat(String(trackingResponse.customerDeliveryAddress?.longitude || 0)) 
       };
@@ -219,33 +223,32 @@ const { mapDeliveryBoys, mapStores } = useMemo(() => {
       const isNotPickedUp = ["preparing", "ready_for_pickup", "accepted", "confirmed", "placed"]
         .includes(batch.batchStatus.toLowerCase());
       
+      let finalDest = dest;
       if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
-        dest = { 
+        finalDest = { 
           lat: parseFloat(String(batch.storeLocations[0].latitude || 0)), 
           lng: parseFloat(String(batch.storeLocations[0].longitude || 0)) 
         };
       }
 
+      console.log(`Rider ${batch.deliveryBoy?.id} Location:`, currentLoc); // यहाँ चेक करें 0 तो नहीं आ रहा
+
       return {
         ...batch.deliveryBoy!,
         batchId: batch.batchId,
         currentLocation: currentLoc,
-        destination: dest
+        destination: finalDest
       };
     })
-    // 0,0 वाली लोकेशन हटा दें ताकि मैप क्रैश न हो
     .filter(db => db.currentLocation.lat !== 0);
 
-  const stores = Array.from(new Set(
-    trackingResponse.deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
-  )).map(s => {
-    const parsed = JSON.parse(s);
-    return {
-      ...parsed,
-      lat: parseFloat(String(parsed.latitude || 0)),
-      lng: parseFloat(String(parsed.longitude || 0))
-    };
-  }).filter(s => s.lat !== 0);
+  const stores = trackingResponse.deliveryBatchesSummary.flatMap(b => 
+    (b.storeLocations || []).map(s => ({
+      ...s,
+      lat: parseFloat(String(s.latitude || 0)),
+      lng: parseFloat(String(s.longitude || 0))
+    }))
+  ).filter(s => s.lat !== 0);
 
   return { mapDeliveryBoys: boys, mapStores: stores };
 }, [trackingResponse, liveLocations]);
