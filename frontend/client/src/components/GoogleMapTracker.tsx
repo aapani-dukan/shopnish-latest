@@ -1,14 +1,14 @@
-import React, { useMemo, useEffect, useRef } from 'react';
+import React, { useMemo, useEffect, useRef } from "react";
 import {
   GoogleMap,
   MarkerF,
   useJsApiLoader,
-} from '@react-google-maps/api';
-import { Truck, MapPin } from 'lucide-react';
+} from "@react-google-maps/api";
+import { Truck, MapPin } from "lucide-react";
 
-// ----------------------------
-// Interfaces (Multi-Batch Tracking)
-// ----------------------------
+/* =======================
+   Interfaces
+======================= */
 
 interface CustomerLocation {
   lat: number;
@@ -30,132 +30,187 @@ interface StoreTracker {
 }
 
 interface GoogleMapTrackerProps {
-  customerAddress: CustomerLocation; 
+  customerAddress: CustomerLocation;
   deliveryBoys: DeliveryBoyTracker[];
   stores: StoreTracker[];
 }
 
-// ----------------------------
-// Config
-// ----------------------------
-const containerStyle = { width: '100%', height: '100%' };
-const LIBRARIES: ('places' | 'geometry' | 'drawing' | 'localContext' | 'visualization' | 'marker')[] = [
-    'marker'
-];
+/* =======================
+   Config
+======================= */
+
+const containerStyle = { width: "100%", height: "100%" };
+
+const LIBRARIES: (
+  | "places"
+  | "geometry"
+  | "drawing"
+  | "localContext"
+  | "visualization"
+  | "marker"
+)[] = ["marker"];
+
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
-// ----------------------------
-// Component
-// ----------------------------
-const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({ 
-    customerAddress, 
-    deliveryBoys, 
-    stores 
+/* =======================
+   Component
+======================= */
+
+const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
+  customerAddress,
+  deliveryBoys,
+  stores,
 }) => {
-const mapRef = useRef<google.maps.Map | null>(null);
-  // 1️⃣ Google Maps Loader
+  /* 🔴 MAP REF */
+  const mapRef = useRef<google.maps.Map | null>(null);
+
+  /* 1️⃣ Google Maps Loader */
   const { isLoaded, loadError } = useJsApiLoader({
-    googleMapsApiKey: GOOGLE_MAPS_API_KEY || '',
+    googleMapsApiKey: GOOGLE_MAPS_API_KEY || "",
     libraries: LIBRARIES,
   });
 
-  // 2️⃣ Marker Icons
+  /* 2️⃣ Icons */
   const { bikeIcon, homeIcon, storeIcon } = useMemo(() => {
-    if (!isLoaded || !window.google?.maps) return { bikeIcon: undefined, homeIcon: undefined, storeIcon: undefined };
-
-    const BIKE_ICON: google.maps.Icon = {
-      url: 'https://cdn-icons-png.freepik.com/512/3233/3233076.png',
-      scaledSize: new window.google.maps.Size(35, 35),
-      anchor: new window.google.maps.Point(18, 35),
-    };
-
-    const HOME_ICON: google.maps.Icon = {
-      url: 'https://maps.gstatic.com/mapfiles/ms/micons/blue-dot.png',
-      scaledSize: new window.google.maps.Size(32, 32),
-    };
-
-    const STORE_ICON: google.maps.Icon = {
-      url: 'https://maps.gstatic.com/mapfiles/ms/micons/store.png',
-      scaledSize: new window.google.maps.Size(32, 32),
-    };
-
-    return { bikeIcon: BIKE_ICON, homeIcon: HOME_ICON, storeIcon: STORE_ICON };
-  }, [isLoaded]);
-
-  // 3️⃣ Map Center
-  const center = useMemo(() => {
-    const defaultCenter = { lat: 20.5937, lng: 78.9629 }; // fallback India
-
-    if (
-      typeof customerAddress.lat === 'number' && isFinite(customerAddress.lat) &&
-      typeof customerAddress.lng === 'number' && isFinite(customerAddress.lng)
-    ) {
-      return { lat: customerAddress.lat, lng: customerAddress.lng };
+    if (!isLoaded || !window.google?.maps) {
+      return { bikeIcon: undefined, homeIcon: undefined, storeIcon: undefined };
     }
 
-    return defaultCenter;
+    return {
+      bikeIcon: {
+        url: "https://cdn-icons-png.freepik.com/512/3233/3233076.png",
+        scaledSize: new window.google.maps.Size(35, 35),
+        anchor: new window.google.maps.Point(18, 35),
+      } as google.maps.Icon,
+
+      homeIcon: {
+        url: "https://maps.gstatic.com/mapfiles/ms/micons/blue-dot.png",
+        scaledSize: new window.google.maps.Size(32, 32),
+      } as google.maps.Icon,
+
+      storeIcon: {
+        url: "https://maps.gstatic.com/mapfiles/ms/micons/store.png",
+        scaledSize: new window.google.maps.Size(32, 32),
+      } as google.maps.Icon,
+    };
+  }, [isLoaded]);
+
+  /* 3️⃣ Default Center (fallback only) */
+  const fallbackCenter = { lat: 20.5937, lng: 78.9629 };
+
+  const center = useMemo(() => {
+    if (
+      typeof customerAddress.lat === "number" &&
+      typeof customerAddress.lng === "number" &&
+      isFinite(customerAddress.lat) &&
+      isFinite(customerAddress.lng)
+    ) {
+      return customerAddress;
+    }
+    return fallbackCenter;
   }, [customerAddress]);
 
-  const mapOptions = useMemo(() => ({
-    mapId: 'SHOPNISH_MULTI_TRACKER_MAP',
-    disableDefaultUI: false,
-    zoom: 14,
-    center,
-  }), [center]);
+  /* 4️⃣ AUTO FIT BOUNDS (🔥 MOST IMPORTANT FIX) */
+  useEffect(() => {
+    if (!mapRef.current || !window.google) return;
 
-  // 4️⃣ Guards
-  if (loadError) return <div>नक्शा लोड नहीं हो पाया: {String(loadError)}</div>;
-  if (!isLoaded) return <div>लोकेशन लोडिंग...</div>;
+    const bounds = new window.google.maps.LatLngBounds();
 
-  // 5️⃣ Render
+    // customer
+    if (center.lat && center.lng) {
+      bounds.extend(center);
+    }
+
+    // stores
+    stores.forEach((s) => {
+      if (isFinite(s.lat) && isFinite(s.lng)) {
+        bounds.extend({ lat: s.lat, lng: s.lng });
+      }
+    });
+
+    // delivery boys
+    deliveryBoys.forEach((d) => {
+      const loc = d.currentLocation;
+      if (isFinite(loc.lat) && isFinite(loc.lng)) {
+        bounds.extend(loc);
+      }
+    });
+
+    if (!bounds.isEmpty()) {
+      mapRef.current.fitBounds(bounds);
+    }
+  }, [center, stores, deliveryBoys]);
+
+  /* 5️⃣ Guards */
+  if (loadError) return <div>❌ Map load failed</div>;
+  if (!isLoaded) return <div>📍 Map loading…</div>;
+
+  /* 6️⃣ Render */
   return (
     <div className="relative w-full h-full">
       <GoogleMap
         mapContainerStyle={containerStyle}
         center={center}
         zoom={14}
-        options={mapOptions}
+        onLoad={(map) => {
+          mapRef.current = map; // 🔥 attach map
+        }}
+        options={{
+          mapId: "SHOPNISH_MULTI_TRACKER_MAP",
+          disableDefaultUI: false,
+        }}
       >
-        {/* Customer */}
+        {/* 🏠 Customer */}
         {homeIcon && (
           <MarkerF
             position={center}
             icon={homeIcon}
-            title="आपका डिलीवरी एड्रेस"
+            title="Delivery Address"
           />
         )}
 
-        {/* Stores */}
-        {storeIcon && stores.map((store, index) => (
-          typeof store.lat === 'number' && typeof store.lng === 'number' && isFinite(store.lat) && isFinite(store.lng) && (
-            <MarkerF
-              key={`store-${index}`}
-              position={{ lat: store.lat, lng: store.lng }}
-              icon={storeIcon}
-              title={`Store: ${store.name}`}
-            />
-          )
-        ))}
+        {/* 🏪 Stores */}
+        {storeIcon &&
+          stores.map(
+            (store, i) =>
+              isFinite(store.lat) &&
+              isFinite(store.lng) && (
+                <MarkerF
+                  key={`store-${i}`}
+                  position={{ lat: store.lat, lng: store.lng }}
+                  icon={storeIcon}
+                  title={store.name}
+                />
+              )
+          )}
 
-        {/* Delivery Boys */}
-        {bikeIcon && deliveryBoys.map((db) => (
-          typeof db.currentLocation.lat === 'number' && typeof db.currentLocation.lng === 'number' && isFinite(db.currentLocation.lat) && isFinite(db.currentLocation.lng) && (
-            <MarkerF
-  key={db.id}
-  position={db.currentLocation}
-  icon={bikeIcon}
-  options={{
-    optimized: false, // 🔥 animation के लिए जरूरी
-  }}
-/>
-          )
-        ))}
+        {/* 🏍️ Delivery Boys */}
+        {bikeIcon &&
+          deliveryBoys.map(
+            (db) =>
+              isFinite(db.currentLocation.lat) &&
+              isFinite(db.currentLocation.lng) && (
+                <MarkerF
+                  key={db.id}
+                  position={db.currentLocation}
+                  icon={bikeIcon}
+                  options={{ optimized: false }}
+                  title={`Delivery Partner: ${db.name}`}
+                />
+              )
+          )}
       </GoogleMap>
 
-      {/* Summary Info */}
-      <div className="absolute top-2 left-2 bg-white shadow-md rounded-lg p-2 text-sm font-medium text-gray-700">
-        <p><MapPin className="w-4 h-4 inline mr-1 text-blue-600"/> लोकेशन्स: {stores.length} स्टोर, 1 ग्राहक</p> 
-        <p><Truck className="w-4 h-4 inline mr-1 text-purple-600"/> लाइव डिलीवरी: {deliveryBoys.length}</p>
+      {/* ℹ️ Info Box */}
+      <div className="absolute top-2 left-2 bg-white shadow rounded-lg p-2 text-sm">
+        <p>
+          <MapPin className="inline w-4 h-4 mr-1 text-blue-600" />
+          Stores: {stores.length}, Customer: 1
+        </p>
+        <p>
+          <Truck className="inline w-4 h-4 mr-1 text-purple-600" />
+          Live Riders: {deliveryBoys.length}
+        </p>
       </div>
     </div>
   );
