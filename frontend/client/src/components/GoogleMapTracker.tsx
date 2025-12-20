@@ -108,31 +108,47 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
   }, []);
 
   // ✅ 3. लाइव राउटिंग (Directions API)
-  useEffect(() => {
-    if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
-    const service = new window.google.maps.DirectionsService();
+            
+useEffect(() => {
+  if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
 
-    deliveryBoys.forEach((db) => {
-      if (!db.destination) return;
-      service.route(
-        {
-          origin: db.currentLocation,
-          destination: db.destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result?.routes[0]) {
-            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
-            setRoutes(prev => {
-              const otherRoutes = prev.filter(r => r.dbId !== db.id);
-              return [...otherRoutes, { dbId: db.id, path, eta: result.routes[0].legs[0].duration?.text || "" }];
-            });
-          }
+  const service = new window.google.maps.DirectionsService();
+
+  deliveryBoys.forEach((db) => {
+    // 🛑 Check: अगर destination 0 है तो कॉल न करें
+    if (!db.destination || db.destination.lat === 0) {
+      console.warn(`Batch ${db.batchId} has no valid destination`);
+      return;
+    }
+
+    service.route(
+      {
+        origin: db.currentLocation,
+        destination: db.destination,
+        travelMode: window.google.maps.TravelMode.DRIVING,
+      },
+      (result, status) => {
+        if (status === "OK" && result?.routes[0]) {
+          const path = result.routes[0].overview_path.map((p) => ({
+            lat: p.lat(),
+            lng: p.lng(),
+          }));
+          
+          // ✅ यहाँ से समय (ETA) आ रहा है
+          const durationText = result.routes[0].legs[0]?.duration?.text || "Fast";
+
+          setRoutes((prev) => {
+            const filtered = prev.filter(r => r.dbId !== db.id);
+            return [...filtered, { dbId: db.id, path, eta: durationText }];
+          });
+        } else {
+          console.error("Directions Request Failed:", status);
         }
-      );
-    });
-  }, [deliveryBoys, isLoaded]);
-
+      }
+    );
+  });
+}, [deliveryBoys, isLoaded]);
+  
   // ✅ 4. ऑटो-फिट (Bounds)
   useEffect(() => {
     if (!mapRef.current || !isLoaded) return;
