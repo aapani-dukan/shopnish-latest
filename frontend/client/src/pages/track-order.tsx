@@ -200,21 +200,19 @@ export default function TrackOrder() {
   const { mapDeliveryBoys, mapStores } = useMemo(() => {
   if (!trackingResponse) return { mapDeliveryBoys: [], mapStores: [] };
 
-  console.log("Full Tracking Response:", trackingResponse); // Debugging के लिए
-
   const boys = trackingResponse.deliveryBatchesSummary
-    .filter(b => b.deliveryBoy !== null)
+    .filter(b => b.deliveryBoy !== null) // सिर्फ तभी जब राइडर असाइन हो
     .map(batch => {
       const live = liveLocations.get(batch.batchId);
-      
-      // ✅ 1. Rider Location (Safe Extraction)
-      // बैकेंड में चेक करें कि क्या 'currentLocation' ऑब्जेक्ट है या सीधा 'latitude' है
+      const db = batch.deliveryBoy;
+
+      // ✅ बैकेंड स्ट्रक्चर के हिसाब से डेटा निकालना: db.currentLocation.lat
       const currentLoc = {
-        lat: parseFloat(String(live?.lat || batch.deliveryBoy?.currentLocation?.latitude || batch.deliveryBoy?.latitude || 0)),
-        lng: parseFloat(String(live?.lng || batch.deliveryBoy?.currentLocation?.longitude || batch.deliveryBoy?.longitude || 0))
+        lat: Number(live?.lat || db?.currentLocation?.lat || 0),
+        lng: Number(live?.lng || db?.currentLocation?.lng || 0)
       };
 
-      // ✅ 2. Destination Location (Safe Extraction)
+      // ✅ कस्टमर एड्रेस बैकेंड में 'latitude' नाम से है
       const dest = { 
         lat: parseFloat(String(trackingResponse.customerDeliveryAddress?.latitude || 0)), 
         lng: parseFloat(String(trackingResponse.customerDeliveryAddress?.longitude || 0)) 
@@ -224,6 +222,7 @@ export default function TrackOrder() {
         .includes(batch.batchStatus.toLowerCase());
       
       let finalDest = dest;
+      // अगर पिकअप नहीं हुआ तो स्टोर की लोकेशन (नोट: बैकेंड में स्टोर लोकेशन अभी खाली [] आ रही है)
       if (isNotPickedUp && batch.storeLocations && batch.storeLocations.length > 0) {
         finalDest = { 
           lat: parseFloat(String(batch.storeLocations[0].latitude || 0)), 
@@ -231,16 +230,14 @@ export default function TrackOrder() {
         };
       }
 
-      console.log(`Rider ${batch.deliveryBoy?.id} Location:`, currentLoc); // यहाँ चेक करें 0 तो नहीं आ रहा
-
       return {
-        ...batch.deliveryBoy!,
+        ...db,
         batchId: batch.batchId,
         currentLocation: currentLoc,
         destination: finalDest
       };
     })
-    .filter(db => db.currentLocation.lat !== 0);
+    .filter(db => db.currentLocation.lat !== 0); // जिनकी लोकेशन 0 है उन्हें मैप पर न दिखाएँ
 
   const stores = trackingResponse.deliveryBatchesSummary.flatMap(b => 
     (b.storeLocations || []).map(s => ({
@@ -252,6 +249,7 @@ export default function TrackOrder() {
 
   return { mapDeliveryBoys: boys, mapStores: stores };
 }, [trackingResponse, liveLocations]);
+  
   
   /* ==========================================================================
      RENDER STATES (LOADING / ERROR)
