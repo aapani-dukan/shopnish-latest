@@ -5,11 +5,11 @@ import {
   Polyline,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { Truck, MapPin } from "lucide-react";
+import { Truck, MapPin, Store as StoreIconLucide } from "lucide-react";
 
-/* =======================
-   Interfaces
-======================= */
+/* ==========================================================================
+   INTERFACES & TYPES
+   ========================================================================== */
 interface CustomerLocation {
   lat: number;
   lng: number;
@@ -21,7 +21,7 @@ interface DeliveryBoyTracker {
   batchId: number | string;
   currentLocation: { lat: number; lng: number };
   name: string;
-  destination?: { lat: number; lng: number }; // optional for route
+  destination?: { lat: number; lng: number };
 }
 
 interface StoreTracker {
@@ -36,20 +36,14 @@ interface GoogleMapTrackerProps {
   stores: StoreTracker[];
 }
 
-/* =======================
-   Config
-======================= */
+/* ==========================================================================
+   CONFIG & HELPERS
+   ========================================================================== */
 const containerStyle = { width: "100%", height: "100%" };
-const LIBRARIES: (
-  | "places"
-  | "geometry"
-  | "drawing"
-  | "localContext"
-  | "visualization"
-  | "marker"
-)[] = ["geometry", "marker"];
+const LIBRARIES: ("geometry" | "marker")[] = ["geometry", "marker"];
 const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
+// ✅ स्मूथ मूवमेंट के लिए इंटरपोलेशन फंक्शन
 function interpolate(
   start: google.maps.LatLngLiteral,
   end: google.maps.LatLngLiteral,
@@ -61,9 +55,9 @@ function interpolate(
   };
 }
 
-/* =======================
-   Component
-======================= */
+/* ==========================================================================
+   MAIN COMPONENT
+   ========================================================================== */
 const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
   customerAddress,
   deliveryBoys,
@@ -71,68 +65,49 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
 }) => {
   const mapRef = useRef<google.maps.Map | null>(null);
   const animatedPositions = useRef<Map<number, google.maps.LatLngLiteral>>(new Map());
-  const [routes, setRoutes] = useState<
-    { dbId: number; path: google.maps.LatLngLiteral[]; eta: string }[]
-  >([]);
+  const [routes, setRoutes] = useState<{ dbId: number; path: google.maps.LatLngLiteral[]; eta: string }[]>([]);
   const [dashOffset, setDashOffset] = useState(0);
 
-  /* 1️⃣ Loader */
   const { isLoaded, loadError } = useJsApiLoader({
     googleMapsApiKey: GOOGLE_MAPS_API_KEY || "",
     libraries: LIBRARIES,
   });
 
-  /* 2️⃣ Icons */
-  const { bikeIcon, homeIcon, storeIcon } = useMemo(() => {
-    if (!isLoaded || !window.google?.maps)
-      return { bikeIcon: undefined, homeIcon: undefined, storeIcon: undefined };
-
+  // ✅ 1. प्रीमियम आइकन्स (HD Icons)
+  const icons = useMemo(() => {
+    if (!isLoaded || !window.google?.maps) return null;
     return {
-      bikeIcon: {
-        url: "https://cdn-icons-png.freepik.com/512/3233/3233076.png",
+      bike: {
+        url: "https://cdn-icons-png.flaticon.com/512/3448/3448601.png", // High-end Rider Icon
+        scaledSize: new window.google.maps.Size(45, 45),
+        anchor: new window.google.maps.Point(22, 22),
+      },
+      home: {
+        url: "https://cdn-icons-png.flaticon.com/512/1239/1239525.png",
         scaledSize: new window.google.maps.Size(35, 35),
-        anchor: new window.google.maps.Point(18, 35),
-      } as google.maps.Icon,
-      homeIcon: {
-        url: "https://maps.gstatic.com/mapfiles/ms/micons/blue-dot.png",
-        scaledSize: new window.google.maps.Size(32, 32),
-      } as google.maps.Icon,
-      storeIcon: {
-        url: "https://maps.gstatic.com/mapfiles/ms/micons/store.png",
-        scaledSize: new window.google.maps.Size(32, 32),
-      } as google.maps.Icon,
+      },
+      store: {
+        url: "https://cdn-icons-png.flaticon.com/512/606/606547.png",
+        scaledSize: new window.google.maps.Size(35, 35),
+      }
     };
   }, [isLoaded]);
 
-  /* 3️⃣ Center */
-  const fallbackCenter = { lat: 20.5937, lng: 78.9629 };
-  const center = useMemo(() => {
-    if (
-      typeof customerAddress.lat === "number" &&
-      typeof customerAddress.lng === "number" &&
-      isFinite(customerAddress.lat) &&
-      isFinite(customerAddress.lng)
-    ) {
-      return customerAddress;
-    }
-    return fallbackCenter;
-  }, [customerAddress]);
-
-  /* 4️⃣ Animate Polyline Dash */
+  // ✅ 2. पॉलीलाइन एनीमेशन (दौड़ती हुई बिंदी)
   useEffect(() => {
+    let animationFrame: number;
     const animateDash = () => {
-      setDashOffset((prev) => (prev + 1) % 20);
-      requestAnimationFrame(animateDash);
+      setDashOffset((prev) => (prev + 0.5) % 100);
+      animationFrame = requestAnimationFrame(animateDash);
     };
     animateDash();
+    return () => cancelAnimationFrame(animationFrame);
   }, []);
 
-  /* 5️⃣ Fetch Routes (Google Directions API, free plan) */
+  // ✅ 3. लाइव राउटिंग (Directions API)
   useEffect(() => {
-    if (!isLoaded || !window.google) return;
-
+    if (!isLoaded || !window.google || deliveryBoys.length === 0) return;
     const service = new window.google.maps.DirectionsService();
-    const newRoutes: typeof routes = [];
 
     deliveryBoys.forEach((db) => {
       if (!db.destination) return;
@@ -143,135 +118,127 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
           travelMode: window.google.maps.TravelMode.DRIVING,
         },
         (result, status) => {
-          if (status === "OK" && result.routes.length > 0) {
-            const path = result.routes[0].overview_path.map((p) => ({
-              lat: p.lat(),
-              lng: p.lng(),
-            }));
-
-            // ETA in minutes
-            const eta = result.routes[0].legs[0]?.duration?.text || "TBD";
-
-            newRoutes.push({ dbId: db.id, path, eta });
-            setRoutes([...newRoutes]); // update state
+          if (status === "OK" && result?.routes[0]) {
+            const path = result.routes[0].overview_path.map(p => ({ lat: p.lat(), lng: p.lng() }));
+            setRoutes(prev => {
+              const otherRoutes = prev.filter(r => r.dbId !== db.id);
+              return [...otherRoutes, { dbId: db.id, path, eta: result.routes[0].legs[0].duration?.text || "" }];
+            });
           }
         }
       );
     });
   }, [deliveryBoys, isLoaded]);
 
-  /* 6️⃣ Auto fit bounds */
+  // ✅ 4. ऑटो-फिट (Bounds)
   useEffect(() => {
-    if (!mapRef.current || !window.google) return;
+    if (!mapRef.current || !isLoaded) return;
     const bounds = new window.google.maps.LatLngBounds();
-    bounds.extend(center);
-    stores.forEach((s) => bounds.extend({ lat: s.lat, lng: s.lng }));
-    deliveryBoys.forEach((d) => bounds.extend(d.currentLocation));
-    if (!bounds.isEmpty()) mapRef.current.fitBounds(bounds);
-  }, [center, stores, deliveryBoys]);
+    bounds.extend(customerAddress);
+    stores.forEach(s => bounds.extend(s));
+    deliveryBoys.forEach(d => bounds.extend(d.currentLocation));
+    mapRef.current.fitBounds(bounds, { top: 80, right: 50, bottom: 50, left: 50 });
+  }, [customerAddress, stores, deliveryBoys, isLoaded]);
 
-  /* 7️⃣ Guards */
-  if (loadError) return <div>❌ Map load failed</div>;
-  if (!isLoaded) return <div>📍 Map loading…</div>;
+  if (loadError) return <div className="h-full flex items-center justify-center bg-gray-100 text-red-500 font-bold">Map Error</div>;
+  if (!isLoaded) return <div className="h-full w-full bg-gray-100 animate-pulse" />;
 
-  /* 8️⃣ Render */
   return (
     <div className="relative w-full h-full">
       <GoogleMap
         mapContainerStyle={containerStyle}
-        center={center}
-        zoom={14}
         onLoad={(map) => (mapRef.current = map)}
         options={{
-          mapId: "SHOPNISH_MULTI_TRACKER_MAP",
-          disableDefaultUI: false,
+          disableDefaultUI: true,
+          styles: silverMapStyle, // ✅ क्लीनर मैप लुक
+          gestureHandling: "greedy"
         }}
       >
-        {/* Customer */}
-        {homeIcon && <MarkerF position={center} icon={homeIcon} title="Customer" />}
+        {/* कस्टमर मार्कर */}
+        <MarkerF position={customerAddress} icon={icons?.home} />
 
-        {/* Stores */}
-        {storeIcon &&
-          stores.map(
-            (store, i) =>
-              isFinite(store.lat) &&
-              isFinite(store.lng) && (
-                <MarkerF key={`store-${i}`} position={store} icon={storeIcon} title={store.name} />
-              )
-          )}
+        {/* स्टोर मार्कर्स */}
+        {stores.map((store, i) => (
+          <MarkerF key={i} position={store} icon={icons?.store} title={store.name} />
+        ))}
 
-        {/* Delivery Boys + Animated */}
-        {bikeIcon &&
-          deliveryBoys.map((db) => {
-            const prev = animatedPositions.current.get(db.id) || db.currentLocation;
-            const next = db.currentLocation;
-            animatedPositions.current.set(db.id, next);
+        {/* लाइव राइडर्स (Smooth Animation + Rotation) */}
+        {deliveryBoys.map((db) => {
+          const prevPos = animatedPositions.current.get(db.id) || db.currentLocation;
+          const nextPos = db.currentLocation;
+          animatedPositions.current.set(db.id, nextPos);
 
-            return (
-              <MarkerF
-                key={db.id}
-                position={prev}
-                icon={bikeIcon}
-                options={{ optimized: false, rotation: db.destination ? getRotation(prev, next) : 0 }}
-                onLoad={(marker) => {
-                  let step = 0;
-                  const totalSteps = 30;
-                  const animate = () => {
-                    step++;
-                    const pos = interpolate(prev, next, step / totalSteps);
-                    marker.setPosition(pos);
-                    if (step < totalSteps) requestAnimationFrame(animate);
-                  };
-                  animate();
-                }}
-              />
-            );
-          })}
+          // रोटेशन निकालें
+          const heading = window.google.maps.geometry.spherical.computeHeading(
+            new window.google.maps.LatLng(prevPos.lat, prevPos.lng),
+            new window.google.maps.LatLng(nextPos.lat, nextPos.lng)
+          );
 
-        {/* Routes / Polylines */}
+          return (
+            <MarkerF
+              key={db.id}
+              position={prevPos}
+              icon={{
+                ...icons?.bike,
+                rotation: heading
+              } as google.maps.Symbol}
+              onLoad={(marker) => {
+                let frame = 0;
+                const totalFrames = 60; 
+                const animate = () => {
+                  frame++;
+                  const pos = interpolate(prevPos, nextPos, frame / totalFrames);
+                  marker.setPosition(pos);
+                  if (frame < totalFrames) requestAnimationFrame(animate);
+                };
+                animate();
+              }}
+            />
+          );
+        })}
+
+        {/* एनिमेटेड पॉलीलाइन्स (रूट्स) */}
         {routes.map((r) => (
-          <Polyline
-            key={r.dbId}
-            path={r.path}
-            options={{
-              strokeColor: "#FF0000",
-              strokeOpacity: 0.7,
-              strokeWeight: 4,
-              icons: [
-                {
-                  icon: { path: window.google.maps.SymbolPath.FORWARD_CLOSED_ARROW, scale: 4, strokeColor: "#FF0000" },
-                  offset: `${dashOffset}px`,
-                  repeat: "20px",
-                },
-              ],
-            }}
-          />
+          <React.Fragment key={r.dbId}>
+            <Polyline
+              path={r.path}
+              options={{ strokeColor: "#8b5cf6", strokeOpacity: 0.2, strokeWeight: 6 }}
+            />
+            <Polyline
+              path={r.path}
+              options={{
+                strokeColor: "#8b5cf6",
+                strokeWeight: 6,
+                icons: [{
+                  icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 3, fillOpacity: 1, color: "#fff" },
+                  offset: `${dashOffset}%`,
+                }],
+              }}
+            />
+          </React.Fragment>
         ))}
       </GoogleMap>
 
-      {/* Info Box */}
-      <div className="absolute top-2 left-2 bg-white shadow rounded-lg p-2 text-sm">
-        <p>
-          <MapPin className="inline w-4 h-4 mr-1 text-blue-600" />
-          Stores: {stores.length}, Customer: 1
-        </p>
-        <p>
-          <Truck className="inline w-4 h-4 mr-1 text-purple-600" />
-          Live Riders: {deliveryBoys.length}
-        </p>
+      {/* छोटा फ्लोटिंग इन्फो कार्ड */}
+      <div className="absolute top-4 left-4 bg-white/90 backdrop-blur-sm p-3 rounded-2xl shadow-xl border border-gray-100 flex items-center gap-4 z-20">
+        <div className="flex items-center gap-1 text-primary font-black text-xs uppercase tracking-tighter">
+          <Truck size={14} /> {deliveryBoys.length} Riders
+        </div>
+        <div className="w-[1px] h-4 bg-gray-200" />
+        <div className="flex items-center gap-1 text-gray-500 font-black text-xs uppercase tracking-tighter">
+          <StoreIconLucide size={14} /> {stores.length} Stores
+        </div>
       </div>
     </div>
   );
 };
 
-/* =======================
-   Helper: Rotation (Marker direction)
-======================= */
-function getRotation(prev: google.maps.LatLngLiteral, next: google.maps.LatLngLiteral): number {
-  const dx = next.lng - prev.lng;
-  const dy = next.lat - prev.lat;
-  const angle = Math.atan2(dy, dx) * (180 / Math.PI);
-  return angle;
-}
+// क्लीन सिल्वर थीम स्टाइल
+const silverMapStyle = [
+  { featureType: "all", elementType: "geometry", stylers: [{ color: "#f5f5f5" }] },
+  { featureType: "poi", stylers: [{ visibility: "off" }] },
+  { featureType: "road", elementType: "geometry", stylers: [{ color: "#ffffff" }] },
+  { featureType: "water", elementType: "geometry", stylers: [{ color: "#e9e9e9" }] }
+];
 
 export default React.memo(GoogleMapTracker);
