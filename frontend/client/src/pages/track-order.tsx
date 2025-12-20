@@ -212,17 +212,18 @@ export default function TrackOrder() {
     (b) => b.deliveryBoy !== null && ["picked_up", "out_for_delivery", "in transit"].includes(b.batchStatus)
   );
 
-  const mapDeliveryBoys = activeBatchesForMap.map((batch) => {
-    const live = liveLocations.get(batch.batchId);
-    return {
-      ...batch.deliveryBoy!,
-      batchId: batch.batchId,
-      currentLocation: {
-        lat: Number(live?.lat || batch.deliveryBoy?.currentLocation?.lat || 0),
-        lng: Number(live?.lng || batch.deliveryBoy?.currentLocation?.lng || 0)
-      }
-    };
-  }).filter(db => db.currentLocation.lat !== 0);
+  
+const mapDeliveryBoys = activeBatchesForMap.map((batch) => ({
+  ...batch.deliveryBoy!,
+  batchId: batch.batchId,
+  currentLocation: liveLocations.get(batch.batchId) || batch.deliveryBoy?.currentLocation || { lat: 0, lng: 0 },
+  // ✅ यहाँ destination जोड़ें (कस्टमर का एड्रेस)
+  destination: { 
+    lat: customerDeliveryAddress.lat, 
+    lng: customerDeliveryAddress.lng 
+  }
+})).filter(db => db.currentLocation.lat !== 0);
+  
 
   const mapStores = Array.from(new Set(
     deliveryBatchesSummary.flatMap(b => (b.storeLocations || []).map(s => JSON.stringify(s)))
