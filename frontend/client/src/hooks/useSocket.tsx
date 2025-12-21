@@ -9,110 +9,77 @@ interface SocketContextType {
 }
 
 const SocketContext = createContext<SocketContextType | undefined>(undefined);
-
 export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
   const { user, isAuthenticated, isLoadingAuth } = useAuth();
 
-  const socketRef = useRef<Socket | null>(null);
+  // ✅ Ref के साथ-साथ एक State भी रखें ताकि Context अपडेट हो सके
+  const [socket, setSocket] = useState<Socket | null>(null);
   const [isConnected, setIsConnected] = useState(false);
   const [latestLocation, setLatestLocation] = useState<{ lat: number; lng: number } | undefined>(undefined);
 
-  // ✅ अब हमेशा stable reference रहेगा
   const handleLocationUpdate = useCallback((data: { lat: number; lng: number }) => {
     console.log("📍 Location update received:", data);
     setLatestLocation(data);
   }, []);
 
   useEffect(() => {
-    if (isLoadingAuth) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
+    // अगर Auth लोड हो रहा है या यूजर लॉगिन नहीं है, तो पुराना सॉकेट हटा दें
+    if (isLoadingAuth || !isAuthenticated || !user) {
+      if (socket) {
+        socket.disconnect();
+        setSocket(null);
         setIsConnected(false);
       }
       return;
     }
 
-    if (!isAuthenticated) {
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
-      return;
-    }
+    // अगर पहले से कनेक्टेड है तो कुछ न करें
+    if (socket?.connected) return;
 
-    if (isAuthenticated && user) {
-      if (socketRef.current && socketRef.current.connected) return;
+    const socketUrl = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
 
-      if (socketRef.current) {
-        socketRef.current.disconnect();
-        socketRef.current = null;
-        setIsConnected(false);
-      }
+    const newSocket = io(socketUrl, {
+      transports: ["websocket"],
+      withCredentials: true,
+      auth: { token: user.idToken },
+    });
 
-      const socketUrl =
-        import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+    newSocket.on("connect", () => {
+      console.log("✅ Socket connected:", newSocket.id);
+      setIsConnected(true);
+      setSocket(newSocket); // ✅ यहाँ State अपडेट होगी जिससे Dashboard को socket मिलेगा
 
-      const newSocket = io(socketUrl, {
-        transports: ["websocket"],
-        withCredentials: true,
-        auth: {
-          token: user.idToken,
-        },
+      newSocket.emit("register-client", {
+        role: user.role,
+        userId: user.uid,
       });
+    });
 
-      newSocket.on("connect", () => {
-        console.log("✅ Socket connected:", newSocket.id);
-        setIsConnected(true);
+    newSocket.on("disconnect", (reason: string) => {
+      console.log("❌ Socket disconnected:", reason);
+      setIsConnected(false);
+      setSocket(null);
+    });
 
-        newSocket.emit("register-client", {
-          role: user.role,
-          userId: user.uid,
-        });
-      });
+    newSocket.on("location-update", handleLocationUpdate);
 
-      newSocket.on("disconnect", (reason: string) => {
-        console.log("❌ Socket disconnected:", reason);
-        setIsConnected(false);
-        if (socketRef.current === newSocket) {
-          socketRef.current = null;
-        }
-      });
+    return () => {
+      console.log("🧹 Cleaning up socket connection");
+      newSocket.off("location-update", handleLocationUpdate);
+      newSocket.disconnect();
+    };
+  }, [isAuthenticated, isLoadingAuth, user, handleLocationUpdate]);
 
-      newSocket.on("connect_error", (err: Error) => {
-        console.error("❌ Socket connection error:", err.message);
-        setIsConnected(false);
-        if (socketRef.current === newSocket) {
-          socketRef.current = null;
-        }
-      });
-
-      // ✅ अब location-update register
-      newSocket.on("location-update", handleLocationUpdate);
-
-      socketRef.current = newSocket;
-
-      return () => {
-        console.log("🧹 Cleaning up socket connection");
-        newSocket.off("location-update", handleLocationUpdate);
-        newSocket.disconnect();
-      };
-    }
-  }, [isAuthenticated, isLoadingAuth, user?.uid, user?.idToken, user?.role, handleLocationUpdate]);
-
+  // ✅ अब contextValue में State वाला socket जाएगा
   const contextValue: SocketContextType = {
-    socket: socketRef.current,
+    socket, 
     isConnected,
     latestLocation,
   };
 
-  return (
-    <SocketContext.Provider value={contextValue}>
-      {children}
-    </SocketContext.Provider>
-  );
+  return <SocketContext.Provider value={contextValue}>{children}</SocketContext.Provider>;
 };
+
 
 export const useSocket = () => {
   const context = useContext(SocketContext);
