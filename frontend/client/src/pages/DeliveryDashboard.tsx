@@ -323,19 +323,29 @@ console.log("STEP-1 batchesRaw =", batchesRaw);
     if (activeBatch && navigator.geolocation) {
       console.log(`📡 Starting GPS tracking for batch ${activeBatch.id}`); 
 
-      const sendLocation = (position: GeolocationPosition) => {
-        const { latitude, longitude } = position.coords;
-        if (typeof socket.emit === 'function') {
-          socket.emit("deliveryBoy:location_update", {
-            batchId: activeBatch.id, 
-            lat: latitude,
-            lng: longitude,
-            timestamp: new Date().toISOString()
-          });
-        } else {
-            console.error("❌ Socket.emit is not a function in GPS tracking.");
-        }
-      };
+     const sendLocation = (position: GeolocationPosition) => {
+  const { latitude, longitude } = position.coords;
+  
+  // 1. लॉग्स में चेक करें कि कोर्डिनेट्स सही आ रहे हैं या नहीं
+  console.log("📤 Attempting to send GPS:", latitude, longitude);
+
+  // 2. चेक करें कि socket मौजूद है और Connected भी है
+  if (socket && socket.connected) {
+    socket.emit("deliveryBoy:location_update", {
+      batchId: activeBatch.id, 
+      lat: latitude,
+      lng: longitude,
+      timestamp: new Date().toISOString()
+    });
+    console.log("✅ GPS successfully emitted to server");
+  } else {
+    // 3. अगर सॉकेट है पर कनेक्टेड नहीं है, तो एरर दिखाएँ
+    console.error("❌ Socket is not connected. Status:", socket ? "Disconnected" : "Null");
+    
+    // वैकल्पिक: आप यहाँ socket.connect() भी कॉल कर सकते हैं अगर वह disconnected है
+  }
+};
+      
 
       watchId = navigator.geolocation.watchPosition(
         sendLocation,
