@@ -33,11 +33,23 @@ export function initSocket(server: HTTPServer) {
 
     try {
       const decodedToken = await authAdmin.verifyIdToken(token);
+        let deliveryBoyId: number | null = null;
+
+    // 🔥 अगर role delivery-boy है तो DB से id निकालो
+    if (decoded.role === "delivery-boy") {
+      const dbDeliveryBoy = await db.query.deliveryBoys.findFirst({
+        where: (d, { eq }) => eq(d.firebaseUid, decoded.uid),
+      });
+
+      deliveryBoyId = dbDeliveryBoy?.id ?? null;
+    }
       socket.data.user = {
         uid: decodedToken.uid,
         email: decodedToken.email,
         role: decodedToken.role || "customer",
+        deliveryBoyId,
       };
+          console.log("🔐 Socket user attached:", socket.data.user);
       next();
     } catch (error) {
       console.error("❌ Socket authentication failed:", error);
