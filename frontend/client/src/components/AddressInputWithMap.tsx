@@ -140,36 +140,48 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
 
   // --- FIXED HANDLE GEOLOCATION ---
   const handleGeolocation = useCallback(async () => {
-    if (navigator.geolocation) {
-      setLoadingLocation(true);
+  if (navigator.geolocation) {
+    setLoadingLocation(true);
 
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          const newLat = pos.coords.latitude;
-          const newLng = pos.coords.longitude;
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        const newLat = pos.coords.latitude;
+        const newLng = pos.coords.longitude;
 
-          console.log("📍 GPS से कोर्डिनेट्स मिले:", newLat, newLng);
-          setMapCenter({ lat: newLat, lng: newLng });
+        console.log("📍 GPS से कोर्डिनेट्स मिले:", newLat, newLng);
+        
+        // 1. मैप सेंटर को पहले अपडेट करें
+        setMapCenter({ lat: newLat, lng: newLng });
 
-          try {
-            const result = await processLocation(newLat, newLng); 
-            
-            if (result && result.address && result.location) {
-              onLocationUpdate(result.address, result.location as GeocodedLocation); 
-              setInputAddress(result.address);
-              console.log("🏠 एड्रेस सफलतापूर्वक मिल गया:", result.address);
-            }
-          } catch (apiError) {
-            console.error("API Error:", apiError);
-            alert("कोर्डिनेट्स मिल गए, लेकिन एड्रेस लोड नहीं हो पाया।");
+        try {
+          const result = await processLocation(newLat, newLng); 
+          
+          if (result && result.address) {
+            console.log("🏠 एड्रेस मिल गया:", result.address);
+
+            // 2. ✅ महत्वपूर्ण: पहले स्टेट्स अपडेट करें
+            setInputAddress(result.address); 
+            onLocationUpdate(result.address, (result.location || { lat: newLat, lng: newLng, city: result.city, pincode: result.pincode }) as GeocodedLocation);
+
+            // 3. ✅ थोड़ा इंतज़ार करें फिर क्लोज करें (ताकि स्टेट सिंक हो जाए)
+            setTimeout(() => {
+              setLoadingLocation(false);
+              if (onClose) onClose();
+            }, 500); // 0.5 सेकंड का डिले
+
+          } else {
+            setLoadingLocation(false);
           }
-
+        } catch (apiError) {
+          console.error("API Error:", apiError);
           setLoadingLocation(false);
-          if (onClose) onClose();
-        },
+          alert("कोर्डिनेट्स मिल गए, लेकिन एड्रेस लोड नहीं हो पाया।");
+        }
+      },
         (error) => {
-          console.error("Geolocation Error: ", error);
           setLoadingLocation(false);
+          console.error("Geolocation Error: ", error);
+          
           if (error.code === 1) {
             alert("कृपया ब्राउज़र सेटिंग्स में लोकेशन 'Allow' करें।");
           } else if (error.code === 3) {
