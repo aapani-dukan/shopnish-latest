@@ -207,7 +207,7 @@ const handleGeolocation = useCallback(async () => {
   }
 }, [processLocation, onClose, setLoadingLocation, onLocationUpdate]);
   
-      },
+      
       (error) => {
         console.error("Geolocation Error: ", error);
         if (error.code === 1) {
