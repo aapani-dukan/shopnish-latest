@@ -394,11 +394,15 @@ const handleRouteUpdate = (durationText: string) => {
                       <Truck className="w-5 h-5" />
                     </div>
                     <div>
-                      <p className="text-[10px] font-black text-gray-400 uppercase">Estimated Arrival</p>
-                      <p className="text-lg font-black text-gray-900 leading-none">
-                        {estimatedDeliveryTime ? new Date(estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "Calculating..."}
-                      </p>
-                    </div>
+                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-wider">Estimated Arrival</p>
+                   <p className="text-lg font-black text-gray-900 leading-none mt-1">
+                    {estimatedDeliveryTime 
+                      ? new Date(estimatedDeliveryTime).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) 
+                     : (liveETA ? `${liveETA}` : "Calculating...")
+                    }
+                  </p>
+                </div>
+                    
                   </div>
                   <div className="hidden md:flex bg-gray-900/90 backdrop-blur-md p-4 rounded-2xl shadow-xl border border-white/10 items-center gap-4 text-white">
                     <ShieldCheck className="w-6 h-6 text-green-400" />
