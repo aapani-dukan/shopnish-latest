@@ -269,7 +269,7 @@ export const orders = pgTable("orders", {
   orderNumber: text("order_number").notNull().unique(),
   customerId: integer("customer_id").notNull().references(() => users.id, { onDelete: "cascade" }),
   deliveryAddressId: integer("delivery_address_id").notNull().references(() => deliveryAddresses.id, { onDelete: "cascade" }),
- // deliveryAddress: text("delivery_address").notNull().$type<string>(),
+  deliveryAddress: text("delivery_address").notNull().$type<string>(),
   deliveryCity: text("delivery_city").notNull().default('Unknown'),
   deliveryState: text("delivery_state").notNull().default('Unknown'),
   deliveryPincode: text("delivery_pincode").notNull().default('000000'),
