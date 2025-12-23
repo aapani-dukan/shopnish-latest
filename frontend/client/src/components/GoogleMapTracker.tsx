@@ -38,6 +38,7 @@ interface GoogleMapTrackerProps {
   customerAddress: CustomerLocation;
   deliveryBoys: DeliveryBoyTracker[];
   stores: StoreTracker[];
+  onRouteUpdate?: (durationText: string) => void;
 }
 
 /* ==========================================================================
@@ -73,6 +74,7 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
   customerAddress,
   deliveryBoys,
   stores,
+  onRouteUpdate, 
 }) => {
   const mapRef = useRef<google.maps.Map | null>(null);
   const animatedPositions = useRef<Map<number, google.maps.LatLngLiteral>>(new Map());
@@ -130,25 +132,33 @@ const GoogleMapTracker: React.FC<GoogleMapTrackerProps> = ({
     cleanBoys.forEach((db) => {
       if (!isValidLatLng(db.destination)) return;
 
-      service.route(
-        {
-          origin: db.currentLocation,
-          destination: db.destination,
-          travelMode: window.google.maps.TravelMode.DRIVING,
-        },
-        (result, status) => {
-          if (status === "OK" && result?.routes[0]) {
-            const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
-            const durationText = result.routes[0].legs[0]?.duration?.text || "Arriving soon";
-            setRoutes((prev) => {
-              const filtered = prev.filter(r => r.dbId !== db.id);
-              return [...filtered, { dbId: db.id, path, eta: durationText }];
-            });
-          } else {
-            console.error(`Google Directions Error (${status}) for Batch ${db.batchId}`);
-          }
-        }
-      );
+    
+service.route(
+  {
+    origin: db.currentLocation,
+    destination: db.destination,
+    travelMode: window.google.maps.TravelMode.DRIVING,
+  },
+  (result, status) => {
+    if (status === "OK" && result?.routes[0]) {
+      const path = result.routes[0].overview_path.map((p) => ({ lat: p.lat(), lng: p.lng() }));
+      const durationText = result.routes[0].legs[0]?.duration?.text || "Arriving soon";
+      
+      // ✅ यहाँ मुख्य पेज को डेटा भेजें
+      if (onRouteUpdate) {
+        onRouteUpdate(durationText);
+      }
+
+      setRoutes((prev) => {
+        const filtered = prev.filter(r => r.dbId !== db.id);
+        return [...filtered, { dbId: db.id, path, eta: durationText }];
+      });
+    } else {
+      console.error(`Google Directions Error (${status}) for Batch ${db.batchId}`);
+    }
+  }
+);
+      
     });
   }, [cleanBoys, isLoaded]);
 
