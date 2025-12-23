@@ -61,16 +61,18 @@ export default function Checkout() {
 const { address: contextAddress, city: contextCity, pincode: contextPincode } = useLocation();
   const [currentStep, setCurrentStep] = useState(1); // ✅ Corrected casing
 
-  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({ // ✅ Corrected casing
-    fullName: user?.firstName || "", // ✅ Use user data if available
+  const [deliveryAddress, setDeliveryAddress] = useState<DeliveryAddress>({
+    fullName: user?.firstName || "", 
     phone: user?.phone || "",
     address: "",
-    city: "Bundi", // Default city
+    city: "Bundi",
     pincode: "",
     landmark: "",
-    latitude: 25.4326, // Default to Bundi coordinates
-    longitude: 75.6450,
+    // ✅ डिफ़ॉल्ट को 0 रखें ताकि गलती का पता चल सके
+    latitude: 0, 
+    longitude: 0,
   });
+  
 
   const [paymentMethod, setPaymentMethod] = useState("cod"); // ✅ Corrected casing
   const [deliveryInstructions, setDeliveryInstructions] = useState(""); // ✅ Corrected casing
