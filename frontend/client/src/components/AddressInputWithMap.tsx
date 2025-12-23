@@ -152,8 +152,7 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
 const handleGeolocation = useCallback(async () => {
   if (navigator.geolocation) {
     setLoadingLocation(true);
-    
-    // ब्राउज़र से लोकेशन मांगना
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const newLat = pos.coords.latitude;
@@ -161,23 +160,53 @@ const handleGeolocation = useCallback(async () => {
 
         console.log("📍 GPS से कोर्डिनेट्स मिले:", newLat, newLng);
 
-        // आपके बैकएंड API को कॉल करना
+        // ✅ सुधार 1: कोर्डिनेट्स मिलते ही तुरंत मैप को वहां ले जाएं 
+        // ताकि यूजर को तुरंत फीडबैक मिले, भले ही एड्रेस आने में 2 सेकंड लगे
+        setMapCenter({ lat: newLat, lng: newLng });
+
         try {
+          // ✅ सुधार 2: बैकएंड API को कॉल करना
           const result = await processLocation(newLat, newLng); 
           
           if (result && result.address && result.location) {
-            // पैरेंट (Checkout.tsx) को डेटा भेजना
             onLocationUpdate(result.address, result.location as GeocodedLocation); 
-            // मैप के सेंटर को अपडेट करना ताकि पिन सही जगह दिखे
-            setMapCenter({ lat: newLat, lng: newLng });
-            setInputAddress(result.address); // इनपुट बॉक्स में एड्रेस भरना
+            setInputAddress(result.address);
+            console.log("🏠 एड्रेस सफलतापूर्वक मिल गया:", result.address);
           }
         } catch (apiError) {
-          console.error("API Error:", apiError);
+          console.error("API Error (Reverse Geocoding failed):", apiError);
+          alert("कोर्डिनेट्स तो मिल गए, लेकिन एड्रेस लोड नहीं हो पाया। कृपया मैन्युअल रूप से टाइप करें।");
         }
 
-        if (onClose) onClose();
+        // लोडिंग बंद करें
         setLoadingLocation(false);
+        if (onClose) onClose();
+      },
+      (error) => {
+        console.error("Geolocation Error Details: ", error);
+        setLoadingLocation(false);
+
+        // ✅ सुधार 3: एरर के अनुसार सही मैसेज
+        if (error.code === 1) {
+          alert("Permission Denied: कृपया ब्राउज़र की सेटिंग्स में लोकेशन 'Allow' करें।");
+        } else if (error.code === 3) {
+          alert("Timeout: लोकेशन खोजने में बहुत समय लग रहा है। कृपया दोबारा कोशिश करें या अच्छे नेटवर्क में जाएं।");
+        } else {
+          alert("लोकेशन ढूंढने में समस्या हुई। कृपया एड्रेस टाइप करें।");
+        }
+      },
+      { 
+        // ✅ सुधार 4: सेटिंग्स को बैलेंस करना
+        enableHighAccuracy: false, // इसे false रखें ताकि WiFi/टावर से जल्दी लोकेशन मिले
+        timeout: 20000,            // समय बढ़ाकर 20 सेकंड किया ताकि '0' से खोजने में आसानी हो
+        maximumAge: 10000          // 10 सेकंड पुरानी लोकेशन कैश से ले सकता है (स्पीड के लिए)
+      }
+    );
+  } else {
+    alert("आपका ब्राउज़र Geolocation सपोर्ट नहीं करता है।");
+  }
+}, [processLocation, onClose, setLoadingLocation, onLocationUpdate]);
+  
       },
       (error) => {
         console.error("Geolocation Error: ", error);
