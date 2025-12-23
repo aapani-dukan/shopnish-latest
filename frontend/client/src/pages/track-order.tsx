@@ -151,9 +151,13 @@ export default function TrackOrder() {
   const [liveETA, setLiveETA] = useState<string | null>(null);
 
 // 2. एक फंक्शन जो मैप कॉम्पोनेंट से डेटा लेगा (अगर आप Google Map Directions use कर रहे हैं)
-const handleRouteUpdate = (durationText: string) => {
-  setLiveETA(durationText);
-};
+const handleRouteUpdate = useCallback((durationText: string) => {
+  setLiveETA((prev) => {
+    if (prev === durationText) return prev; // अगर समय वही है तो अपडेट न करें
+    return durationText;
+  });
+}, []);
+  
   
   // Data Fetching
   const { 
@@ -381,11 +385,13 @@ const handleRouteUpdate = (durationText: string) => {
               </CardHeader>
               <CardContent className="p-0 relative">
                 <div className="w-full h-[350px] md:h-[550px] z-10">
-                  <GoogleMapTracker
-                    customerAddress={{ lat: customerDeliveryAddress.lat, lng: customerDeliveryAddress.lng }}
-                    deliveryBoys={mapDeliveryBoys} 
-                    stores={mapStores} 
-                  />
+                  <GoogleMapTracker 
+  customerAddress={customerDeliveryAddress}
+  deliveryBoys={mapDeliveryBoys}
+  stores={mapStores}
+  onRouteUpdate={handleRouteUpdate} // ✅ अब यह फंक्शन मैप से समय प्राप्त करेगा
+/>
+                  
                 </div>
                 {/* Map Overlay Info */}
                 <div className="absolute bottom-6 left-6 right-6 z-20 flex flex-col md:flex-row gap-3">
