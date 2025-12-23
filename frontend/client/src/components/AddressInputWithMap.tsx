@@ -152,16 +152,28 @@ const AddressInputWithMap: React.FC<AddressInputProps> = ({
 const handleGeolocation = useCallback(async () => {
   if (navigator.geolocation) {
     setLoadingLocation(true);
+    
+    // ब्राउज़र से लोकेशन मांगना
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         const newLat = pos.coords.latitude;
         const newLng = pos.coords.longitude;
 
-        // 🛑 FIX: processLocation से परिणाम की अपेक्षा करें
-        const result = await processLocation(newLat, newLng); 
-        
-        if (result && result.address && result.location) {
+        console.log("📍 GPS से कोर्डिनेट्स मिले:", newLat, newLng);
+
+        // आपके बैकएंड API को कॉल करना
+        try {
+          const result = await processLocation(newLat, newLng); 
+          
+          if (result && result.address && result.location) {
+            // पैरेंट (Checkout.tsx) को डेटा भेजना
             onLocationUpdate(result.address, result.location as GeocodedLocation); 
+            // मैप के सेंटर को अपडेट करना ताकि पिन सही जगह दिखे
+            setMapCenter({ lat: newLat, lng: newLng });
+            setInputAddress(result.address); // इनपुट बॉक्स में एड्रेस भरना
+          }
+        } catch (apiError) {
+          console.error("API Error:", apiError);
         }
 
         if (onClose) onClose();
@@ -169,17 +181,16 @@ const handleGeolocation = useCallback(async () => {
       },
       (error) => {
         console.error("Geolocation Error: ", error);
-        // 💡 यूजर को एरर के हिसाब से मैसेज देना बेहतर है
-        if (error.code === 3) {
-          alert("लोकेशन ढूंढने में समय लग रहा है। कृपया दोबारा कोशिश करें या अपना एड्रेस टाइप करें।");
-        } else if (error.code === 1) {
-          alert("कृपया ब्राउज़र में लोकेशन की अनुमति (Permission) दें।");
+        if (error.code === 1) {
+          alert("कृपया ब्राउज़र सेटिंग्स में लोकेशन 'Allow' करें।");
+        } else {
+          alert("लोकेशन ढूंढने में समय लग रहा है। कृपया फिर से कोशिश करें।");
         }
         setLoadingLocation(false);
       },
       { 
-        enableHighAccuracy: false, // 👈 'false' करने से सेलुलर डेटा/वाईफाई का उपयोग होगा जो जल्दी काम करता है
-        timeout: 15000,            // 👈 समय बढ़ाकर 15 सेकंड कर दें (15000ms)
+        enableHighAccuracy: false, // 🎯 इसे false रखने से मोबाइल टावर/WiFi से जल्दी लोकेशन मिलती है
+        timeout: 15000,            // ⏳ 15 सेकंड का समय दें
         maximumAge: 0 
       }
     );
