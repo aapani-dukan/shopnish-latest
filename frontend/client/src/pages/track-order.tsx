@@ -260,11 +260,11 @@ const handleRouteUpdate = useCallback((durationText: string) => {
   return { mapDeliveryBoys: boys, mapStores: stores };
 }, [trackingResponse, liveLocations]);
  
-  const handleRouteUpdate = (durationText: string) => {
-    if (liveETA !== durationText) {
-      setLiveETA(durationText);
-    }
-  };
+ // const handleRouteUpdate = (durationText: string) => {
+//    if (liveETA !== durationText) {
+ //     setLiveETA(durationText);
+//    }
+//  };
   
   /* ==========================================================================
      RENDER STATES (LOADING / ERROR)
