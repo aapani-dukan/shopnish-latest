@@ -64,8 +64,8 @@ const { address: contextAddress, city: contextCity, pincode: contextPincode } = 
     city: "Bundi", // Default to Bundi
     pincode: "",
     landmark: "",
-    latitude: 25.4419, // Default to Bundi coordinates
-    longitude: 75.6179,
+    latitude: 0, 
+    longitude: 0,
   });
   const [paymentMethod, setPaymentMethod] = useState("cod"); // ✅ Corrected casing
   const [deliveryInstructions, setDeliveryInstructions] = useState(""); // ✅ Corrected casing
