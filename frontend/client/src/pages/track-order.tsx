@@ -148,7 +148,13 @@ export default function TrackOrder() {
   const { socket } = useSocket();
   const { user } = useAuth();
   const [liveLocations, setLiveLocations] = useState<Map<number, Location>>(new Map());
+  const [liveETA, setLiveETA] = useState<string | null>(null);
 
+// 2. एक फंक्शन जो मैप कॉम्पोनेंट से डेटा लेगा (अगर आप Google Map Directions use कर रहे हैं)
+const handleRouteUpdate = (durationText: string) => {
+  setLiveETA(durationText);
+};
+  
   // Data Fetching
   const { 
     data: trackingResponse, 
@@ -249,7 +255,12 @@ export default function TrackOrder() {
 
   return { mapDeliveryBoys: boys, mapStores: stores };
 }, [trackingResponse, liveLocations]);
-  
+ 
+  const handleRouteUpdate = (durationText: string) => {
+    if (liveETA !== durationText) {
+      setLiveETA(durationText);
+    }
+  };
   
   /* ==========================================================================
      RENDER STATES (LOADING / ERROR)
