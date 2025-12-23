@@ -350,6 +350,7 @@ const [masterOrder] = await tx.insert(orders).values({
     deliveryLat: finalDeliveryLat,
     deliveryLng: finalDeliveryLng,
     subtotal: calculatedSubtotal,
+    deliveryCharge: deliveryCharge,
     total: total,
     
     // FIX APPLIED: Payment method converted to uppercase
