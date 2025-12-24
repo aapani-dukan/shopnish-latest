@@ -1230,8 +1230,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
 /**
  * fetches details for a specific master order id.
  */
-
- export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) => {
+export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -1262,12 +1261,14 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       try { parsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
     }
 
-    // 2. Formatting Sub-Orders and Items
+    // 2. Formatting Sub-Orders
     const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
       ...so,
+      // 🛑 यहाँ सभी अमाउंट्स को पक्का नंबर में बदलें
       total: Number(so.total || 0),
       subtotal: Number(so.subtotal || 0),
-      // आइटम्स को मैप करें और गायब फील्ड्स को भरें
+      deliveryCharge: Number(so.deliveryCharge || 0), // 👈 यह लाइन एरर फिक्स करेगी
+      
       items: (so.orderItems || []).map((item: any) => {
         const price = Number(item.productPrice || item.unitPrice || 0);
         const qty = Number(item.quantity || 0);
@@ -1275,17 +1276,19 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
           ...item,
           unitPrice: price,
           quantity: qty,
-          // ✅ यहाँ itemTotal को कैलकुलेट करके भेज रहे हैं ताकि तो .toFixed() काम करे
           itemTotal: price * qty 
         };
       })
     }));
 
+    // 3. Response
     return res.json({
       step: 1, 
       masterOrder: {
         ...masterOrder,
         total: Number(masterOrder.total || 0),
+        subtotal: Number(masterOrder.subtotal || 0),
+        deliveryCharge: Number(masterOrder.deliveryCharge || 0), // यहाँ भी सुरक्षित रखें
         deliveryAddress: parsedAddress
       },
       subOrders: formattedSubOrders 
