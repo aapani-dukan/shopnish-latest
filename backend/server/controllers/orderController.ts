@@ -1241,17 +1241,12 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
     }
 
     const masterOrder = await db.query.orders.findFirst({
-      where: and(
-        eq(orders.id, orderId),
-        eq(orders.customerId, customerId)
-      ),
+      where: and(eq(orders.id, orderId), eq(orders.customerId, customerId)),
       with: {
         subOrders: {
           with: {
             orderItems: true,
-            seller: {
-              columns: { businessName: true }
-            }
+            seller: { columns: { businessName: true } }
           }
         }
       }
@@ -1261,42 +1256,39 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 1️⃣ Address Parsing
+    // 1. Address Parsing
     let parsedAddress = masterOrder.deliveryAddress;
     if (typeof masterOrder.deliveryAddress === 'string') {
-      try {
-        parsedAddress = JSON.parse(masterOrder.deliveryAddress);
-      } catch (e) {
-        console.warn("Address parse failed");
-      }
+      try { parsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
     }
 
-    // 2️⃣ SubOrders के अंदर के 'total' को Number में बदलें (ताकि .toFixed एरर न दे)
-    // getOrderDetail के अंदर formattedSubOrders वाला हिस्सा ऐसे बदलें:
+    // 2. Formatting Sub-Orders and Items
+    const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
+      ...so,
+      total: Number(so.total || 0),
+      subtotal: Number(so.subtotal || 0),
+      // आइटम्स को मैप करें और गायब फील्ड्स को भरें
+      items: (so.orderItems || []).map((item: any) => {
+        const price = Number(item.productPrice || item.unitPrice || 0);
+        const qty = Number(item.quantity || 0);
+        return {
+          ...item,
+          unitPrice: price,
+          quantity: qty,
+          // ✅ यहाँ itemTotal को कैलकुलेट करके भेज रहे हैं ताकि तो .toFixed() काम करे
+          itemTotal: price * qty 
+        };
+      })
+    }));
 
-    // getOrderDetail के अंदर का सुधार
-const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
-  ...so,
-  total: Number(so.total || 0),
-  subtotal: Number(so.subtotal || 0),
-  deliveryCharge: Number(so.deliveryCharge || 0),
-  // आइटम्स के अंदर unitPrice को पक्का करें
-  items: (so.orderItems || []).map((item: any) => ({
-    ...item,
-    unitPrice: Number(item.productPrice || item.unitPrice || 0) // यहाँ सुधार है
-  }))
-}));
-    
-
-    // 3️⃣ Final Response
     return res.json({
       step: 1, 
       masterOrder: {
         ...masterOrder,
-        total: Number(masterOrder.total || 0), // Convert here too
+        total: Number(masterOrder.total || 0),
         deliveryAddress: parsedAddress
       },
-      subOrders: formattedSubOrders // सुधरा हुआ डेटा
+      subOrders: formattedSubOrders 
     });
 
   } catch (e) {
