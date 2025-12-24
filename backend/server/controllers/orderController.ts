@@ -1231,7 +1231,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
  * fetches details for a specific master order id.
  */
 
- export const getOrderDetail = async (req, res) => {
+ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) => {
   try {
     const customerId = req.user?.id;
     const orderId = Number(req.params.orderId);
@@ -1240,18 +1240,54 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    const masterOrder = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, orderId))
-      .limit(1);
-
-    return res.json({
-      step: 0,
-      masterOrder,
+    // 🔍 Drizzle 'query' का इस्तेमाल करें ताकि 'with' के जरिए सारा डेटा एक साथ आ जाए
+    const masterOrder = await db.query.orders.findFirst({
+      where: and(
+        eq(orders.id, orderId),
+        eq(orders.customerId, customerId)
+      ),
+      with: {
+        // ✅ यहाँ सारे Sub Orders लेकर आएं
+        subOrders: {
+          with: {
+            // ✅ हर Sub Order के सामान (Items) भी लेकर आएं
+            orderItems: true,
+            // दुकानदार का नाम भी ले आएं
+            seller: {
+              columns: { businessName: true }
+            }
+          }
+        }
+      }
     });
+
+    if (!masterOrder) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // फ्रंटएंड की सुविधा के लिए एड्रेस को JSON में बदलें (अगर वह स्ट्रिंग है)
+    let parsedAddress = masterOrder.deliveryAddress;
+    if (typeof masterOrder.deliveryAddress === 'string') {
+      try {
+        parsedAddress = JSON.parse(masterOrder.deliveryAddress);
+      } catch (e) {
+        console.warn("Address parse failed");
+      }
+    }
+
+    // ✅ अब सही फॉर्मेट में डेटा भेजें
+    return res.json({
+      step: 1, // स्टेप बढ़ा दिया ताकि फ्रंटएंड को पता चले डेटा लोड हो गया
+      masterOrder: {
+        ...masterOrder,
+        deliveryAddress: parsedAddress
+      },
+      // 🛑 फ्रंटएंड इसी का इंतज़ार कर रहा है
+      subOrders: masterOrder.subOrders || [] 
+    });
+
   } catch (e) {
-    console.error("STEP 0 ERROR", e);
-    return res.status(500).json({ step: 0, error: true });
+    console.error("❌ getOrderDetail Error:", e);
+    return res.status(500).json({ error: true, message: "Internal Server Error" });
   }
 };
