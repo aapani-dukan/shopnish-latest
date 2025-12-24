@@ -1272,12 +1272,16 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
     }
 
     // 2️⃣ SubOrders के अंदर के 'total' को Number में बदलें (ताकि .toFixed एरर न दे)
-    const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
-      ...so,
-      total: Number(so.total || 0), // String to Number conversion
-      subtotal: Number(so.subtotal || 0),
-      deliveryCharge: Number(so.deliveryCharge || 0)
-    }));
+    // getOrderDetail के अंदर formattedSubOrders वाला हिस्सा ऐसे बदलें:
+const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
+  ...so,
+  total: Number(so.total || 0),
+  // orderItems को items नाम से भेजें ताकि फ्रंटएंड न टूटे
+  items: so.orderItems || [], 
+  subtotal: Number(so.subtotal || 0),
+  deliveryCharge: Number(so.deliveryCharge || 0)
+}));
+    
 
     // 3️⃣ Final Response
     return res.json({
