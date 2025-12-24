@@ -1240,19 +1240,15 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       return res.status(401).json({ message: "Unauthorized" });
     }
 
-    // 🔍 Drizzle 'query' का इस्तेमाल करें ताकि 'with' के जरिए सारा डेटा एक साथ आ जाए
     const masterOrder = await db.query.orders.findFirst({
       where: and(
         eq(orders.id, orderId),
         eq(orders.customerId, customerId)
       ),
       with: {
-        // ✅ यहाँ सारे Sub Orders लेकर आएं
         subOrders: {
           with: {
-            // ✅ हर Sub Order के सामान (Items) भी लेकर आएं
             orderItems: true,
-            // दुकानदार का नाम भी ले आएं
             seller: {
               columns: { businessName: true }
             }
@@ -1265,7 +1261,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // फ्रंटएंड की सुविधा के लिए एड्रेस को JSON में बदलें (अगर वह स्ट्रिंग है)
+    // 1️⃣ Address Parsing
     let parsedAddress = masterOrder.deliveryAddress;
     if (typeof masterOrder.deliveryAddress === 'string') {
       try {
@@ -1275,15 +1271,23 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
       }
     }
 
-    // ✅ अब सही फॉर्मेट में डेटा भेजें
+    // 2️⃣ SubOrders के अंदर के 'total' को Number में बदलें (ताकि .toFixed एरर न दे)
+    const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
+      ...so,
+      total: Number(so.total || 0), // String to Number conversion
+      subtotal: Number(so.subtotal || 0),
+      deliveryCharge: Number(so.deliveryCharge || 0)
+    }));
+
+    // 3️⃣ Final Response
     return res.json({
-      step: 1, // स्टेप बढ़ा दिया ताकि फ्रंटएंड को पता चले डेटा लोड हो गया
+      step: 1, 
       masterOrder: {
         ...masterOrder,
+        total: Number(masterOrder.total || 0), // Convert here too
         deliveryAddress: parsedAddress
       },
-      // 🛑 फ्रंटएंड इसी का इंतज़ार कर रहा है
-      subOrders: masterOrder.subOrders || [] 
+      subOrders: formattedSubOrders // सुधरा हुआ डेटा
     });
 
   } catch (e) {
