@@ -66,17 +66,25 @@ export const validateRequest = (schema: Schema | ZodSchema<any>) => {
 // =================================================================
 
 export const createUserSchema: Schema = {
+  // Email ab optional hai (OTP login ke liye)
   email: {
-    isEmail: {
-      errorMessage: 'Invalid email address',
-    },
+    optional: { options: { nullable: true } },
+    isEmail: { errorMessage: 'Invalid email address' },
     normalizeEmail: true,
   },
+  // Password bhi optional hai (OTP login mein password nahi hota)
   password: {
+    optional: { options: { nullable: true } },
     isLength: {
       options: { min: 6 },
       errorMessage: 'Password must be at least 6 characters long',
     },
+  },
+  // Phone number add kiya validation ke liye
+  phone: {
+    optional: true,
+    isString: true,
+    errorMessage: 'Valid phone number is required',
   },
   role: {
     isIn: {
