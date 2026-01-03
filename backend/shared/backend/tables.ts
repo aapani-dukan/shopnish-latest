@@ -44,12 +44,21 @@ export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_s
 // 1. users - किसी को संदर्भित नहीं करता
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  firebaseUid: text("firebase_uid").unique(),
-  email: text("email").notNull().unique(),
-  password: text("password").notNull(),
-  firstName: text("first_name").notNull(),
-  lastName: text("last_name").notNull(),
-  phone: text("phone").notNull(),
+  firebaseUid: text("firebase_uid").unique(), // Isse primary pehchaan banayein
+  
+  // ✅ Badlav: .notNull() hata diya, ab email optional hai
+  email: text("email").unique(), 
+  
+  // ✅ Badlav: .notNull() hata diya, OTP mein password nahi chahiye
+  password: text("password"), 
+  
+  // ✅ Badlav: Inhe bhi optional (?) karein kyunki naya user sirf phone dega
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  
+  // ✅ Badlav: .notNull() rehne dein, lekin unique() zaroor karein
+  phone: text("phone").unique(), 
+  
   role: userRoleEnum("role").notNull().default("customer"),
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("approved"),
   address: text("address"),
@@ -62,6 +71,7 @@ export const users = pgTable("users", {
   welcomeMessageSent: boolean("welcome_message_sent").default(false),
   lastActivityAt: timestamp("last_activity_at").defaultNow(),
 });
+
 
 // 2. categories - किसी को संदर्भित नहीं करता
 export const categories = pgTable("categories", {
