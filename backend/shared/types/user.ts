@@ -10,8 +10,10 @@ export interface User {
   // Firebase ID Token
   idToken: string;
 
-  // सामान्य विवरण
-  email: string;
+  // ✅ Badlav: Email ab optional hai, aur Phone Number add kiya hai
+  email?: string | null;       // Phone login wale users ka email starting mein nahi hoga
+  phoneNumber?: string | null;  // OTP login ke liye
+  
   name?: string | null;
 
   role: z.infer<typeof userRoleEnum>;
@@ -19,18 +21,20 @@ export interface User {
   // Optional: Seller-specific details
   seller?: {
     approvalStatus: z.infer<typeof approvalStatusEnum>;
-       
   } | null;
-   
 }
 
-// AuthenticatedUser interface (delivery boy support सहित)
+// AuthenticatedUser interface
 export interface AuthenticatedUser {
   id: number;                     // DB user ID
   firebaseUid: string;            // Firebase UID
-  email: string;
+  
+  // ✅ Badlav: Yahan bhi email aur phone ko optional/nullable rakhein
+  email?: string | null;
+  phoneNumber?: string | null;
+  
   name?: string | null;
   role: z.infer<typeof userRoleEnum>;
   approvalStatus: z.infer<typeof approvalStatusEnum>;
-  deliveryBoyId?: number;         // ✅ सिर्फ delivery boy के लिए
+  deliveryBoyId?: number;         
 }
