@@ -23,29 +23,38 @@ export const verifyToken = async (req: AuthenticatedRequest, res: Response, next
   const idToken = authHeader.split('Bearer ')[1];
 
   try {
-    // Firebase Admin SDK से verify
     const decodedToken = await authAdmin.verifyIdToken(idToken);
-    console.log("✅ [verifyToken] Decoded Token UID:", decodedToken.uid);
+    
+    // 1. DB mein user dhoondo
+    let [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, decodedToken.uid));
 
-    // DB से user info fetch करें
-    const [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, decodedToken.uid));
-    console.log("🔍 [verifyToken] DB User Fetched:", dbUser);
-
+    // 🌟 HIGH-CLASS LOGIC: Agar user DB mein nahi hai, toh naya banao (Auto-Sync)
     if (!dbUser) {
-      console.error("❌ [verifyToken] User not found in database for UID:", decodedToken.uid);
-      return res.status(404).json({ message: 'User not found in database' });
+      console.log("🆕 [verifyToken] User not found, creating new entry for UID:", decodedToken.uid);
+      
+      const [newUser] = await db.insert(users).values({
+        firebaseUid: decodedToken.uid,
+        email: decodedToken.email || null,
+        phone: decodedToken.phone_number || null,
+        firstName: "New", // Baad mein profile update mein change kar sakte hain
+        lastName: "User",
+        role: "customer", // Default role
+        approvalStatus: "approved",
+      }).returning();
+      
+      dbUser = newUser;
     }
 
-    // Base user attach करें
+    // 2. Base user attach karein (Email ya Phone jo bhi available ho)
     req.user = {
       id: dbUser.id,
       firebaseUid: decodedToken.uid,
-      email: dbUser.email,
-      name: dbUser.name,
-      role: dbUser.role,
-      approvalStatus: dbUser.approvalStatus,
+      email: dbUser.email || decodedToken.email || null,
+      phoneNumber: dbUser.phone || decodedToken.phone_number || null,
+      name: dbUser.firstName ? `${dbUser.firstName} ${dbUser.lastName}` : "User",
+      role: dbUser.role as any,
+      approvalStatus: dbUser.approvalStatus as any,
     };
-
     console.log("✅ [verifyToken] Base User Attached:", req.user);
 
     // ✅ सिर्फ delivery-boy के लिए deliveryBoyId attach करें
