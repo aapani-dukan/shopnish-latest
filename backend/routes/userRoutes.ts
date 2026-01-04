@@ -33,22 +33,24 @@ userLoginRouter.post("/login", async (req: Request, res: Response) => {
             const nameParts = name.split(' ');
             const firstName = nameParts[0] || 'User'; // Default name agar name khali ho
             const lastName = nameParts.slice(1).join(' ') || ''; 
+const [newUser] = await db.insert(users).values({
+    firebaseUid,
+    // ✅ Agar email null hai, toh ye empty string ("") bhejega. 
+    // Isse Database ka 'NOT NULL' constraint break nahi hoga.
+    email: email || "", 
+    phone: phone || "", // Phone number save hoga
+    firstName: firstName || "User",
+    lastName: lastName || "",
+    role: "customer",
+    password: '', 
+    address: '',
+    city: '',
+    pincode: '',
+    
+}).returning();
 
-            const [newUser] = await db.insert(users).values({
-                firebaseUid,
-                email, // Ab ye null ho sakta hai, koi error nahi aayega
-                phone, // 👈 Firebase se aaya phone number yahan save hoga
-                firstName,
-                lastName,
-                role: "customer",
-                password: '', // OTP login mein password ki zarurat nahi
-                address: '',
-                city: '',
-                pincode: '',
-            }).returning();
-
-            console.log("✅ नया उपयोगकर्ता (Phone/Email) डेटाबेस में जोड़ा गया।");
-            user = newUser;
+console.log("✅ नया उपयोगकर्ता (Phone/Email) डेटाबेस में जोड़ा गया। ID:", newUser.id);
+user = newUser as any;
         }
 
         // 3️⃣ Session Cookie Logic (Aapka purana logic ekdum sahi hai)
