@@ -57,6 +57,13 @@
       "when": 1761633189225,
       "tag": "0007_shiny_miek",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1767514420867,
+      "tag": "0008_flowery_silver_fox",
+      "breakpoints": true
     }
   ]
 }
