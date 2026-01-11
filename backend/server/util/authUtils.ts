@@ -1,6 +1,6 @@
 // server/util/authUtils.ts
 
-import { authAdmin } from "../lib/firebaseAdmin.ts";
+import { authAdmin } from "../lib/firebaseAdmin";
 import { db } from "../db"; // ✅ Drizzle DB इंस्टेंस को इम्पोर्ट करें
 import { users } from "../../shared/backend/schema"; // ✅ Users स्कीमा को इम्पोर्ट करें
 import { eq } from 'drizzle-orm';

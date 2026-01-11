@@ -30,6 +30,14 @@ export const productCategoryEnum = pgEnum("product_category", [
   "Electronics", "Fashion", "Home & Kitchen", "Books", "Groceries", "Health & Beauty",
   "Sports & Outdoors", "Toys & Games", "Automotive", "Jewelry", "Pet Supplies", "Other"
 ]);
+export const sectionTypeEnum = pgEnum("section_type", [
+  "HERO_BANNER",       // Bada sliding banner
+  "CATEGORY_GRID",     // Gol icons wali categories
+  "PRODUCT_HORIZONTAL",// Sideways scroll hone wale products (Zomato style)
+  "PROMO_AD",         // Beech mein single bada banner (Offer ke liye)
+  "PRODUCT_GRID",      // Do column wale products (Amazon style)
+  "SEARCH_BAR"        // Dynamic search bar placement
+]);
 export const userRoleEnum = pgEnum("user_role", ["customer", "seller", "admin", "delivery-boy"]);
 export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected"]);
 export const paymentMethodEnum = pgEnum("payment_method", ["COD", "ONLINE"]);
@@ -228,6 +236,7 @@ export const stores = pgTable("stores", {
 
 
 // 11. products - sellersPgTable, stores, categories को संदर्भित करता है
+// 11. products - sellersPgTable, stores, categories को संदर्भित करता है
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
@@ -237,8 +246,15 @@ export const products = pgTable("products", {
   nameHindi: text("name_hindi"),
   description: text("description"),
   descriptionHindi: text("description_hindi"),
-  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).$type<number>(),
+  
+  // ✅ Badlav: Aapke purane discountTypeEnum ka use kiya hai
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(), // Selling Price
+  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).$type<number>(), // MRP (Strikethrough ke liye)
+  
+  discountType: discountTypeEnum("discount_type").default("percentage"), // percentage ya fixed_amount
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).default("0.00").$type<number>(),
+  offerLabel: text("offer_label"), // e.g., "Bestseller", "Deal of the Day"
+  
   image: text("image").notNull(),
   images: text("images").array().$type<string[]>(),
   unit: text("unit").notNull().default("piece"),
@@ -247,17 +263,20 @@ export const products = pgTable("products", {
   minOrderQty: integer("min_order_qty").default(1),
   maxOrderQty: integer("max_order_qty").default(100),
   isActive: boolean("is_active").default(true),
+  
+  // Delivery related
   deliveryScope: text("delivery_scope").notNull().default('LOCAL'),
   productDeliveryPincodes: text("product_delivery_pincodes").array().$type<string[]>(),
   productDeliveryRadiusKM: integer("product_delivery_radius_km").$type<number>(),
   estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'),
+  
+  // Status & Timestamps
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
 });
-
 
 // 12. serviceProviders - users, services को संदर्भित करता है
 export const serviceProviders = pgTable("service_providers", {
@@ -464,4 +483,34 @@ export const couponsPgTable = pgTable('coupons', {
   categoryId: integer('category_id').references(() => categories.id),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
+});
+// =========================================================================
+// Home Page Control (Dynamic Control)
+// =========================================================================
+
+export const homeLayout = pgTable("home_layout", {
+  id: serial("id").primaryKey(),
+  sectionName: text("section_name").notNull(), // Backend pehchan ke liye (e.g. "Diwali Special")
+  displayName: text("display_name"),           // App mein dikhne wala title (e.g. "Dhamaka Offers")
+  sectionType: sectionTypeEnum("section_type").notNull(),
+  priority: integer("priority").notNull().default(0), // 1 = Top, 10 = Bottom
+  isActive: boolean("is_active").default(true),
+  
+  // Isme JSON format mein content rakhenge taaki flexibility rahe
+  // Banners ke liye: [{image, deeplink, title}]
+  // Products ke liye: {category_id: 5} ya {manual_product_ids: [10, 15, 20]}
+  config: json("config").$type<{
+    items?: {
+      title?: string;
+      image?: string;
+      deeplink?: string; // e.g. "shopnish://product/45"
+      productId?: number;
+    }[];
+    categoryId?: number;
+    limit?: number;
+    manualProductIds?: number[]; // Agar hum manually chunna chahein konse products dikhein
+  }>().notNull(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
 });

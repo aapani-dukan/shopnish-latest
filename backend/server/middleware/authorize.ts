@@ -1,8 +1,13 @@
 // backend/server/middleware/authorize.ts
 
-import { Response, NextFunction } from "express";
+import { Response, NextFunction, RequestHandler } from "express";
 import { AuthenticatedRequest } from "./verifyToken"; 
+import { authAdmin } from "../lib/firebaseAdmin";
+import { db } from "../db";
+import { users } from "../../shared/backend/schema";
+import { eq } from "drizzle-orm";
 
+// ✅ PROTECT Middleware (Ye ab AUTO-SYNC kar raha hai)
 // ✅ PROTECT ko hatane ki zaroorat hai agar aap verifyToken use kar rahe ho, 
 // lekin agar aap ise rakhna chahte ho toh isme bhi AUTO-SYNC logic daalna padega.
 
@@ -50,15 +55,20 @@ export const protect = async (req: AuthenticatedRequest, res: Response, next: Ne
 };
 
 // ✅ AUTHORIZE Middleware (Ye ekdum sahi hai, isme sirf roles check honge)
-export const authorize = (allowedRoles: string[]) => {
-  return (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    if (!req.user || !req.user.role) {
-      return res.status(403).json({ message: "Forbidden: No role found" });
+export const authorize = (allowedRoles: string[]): RequestHandler => {
+  return (req: any, res: Response, next: NextFunction) => {
+    // req ko AuthenticatedRequest ki tarah treat karein
+    const authReq = req as AuthenticatedRequest;
+    const userRole = authReq.user?.role as string | undefined;
+
+    if (!authReq.user || !userRole) {
+      return res.status(403).json({ message: "Forbidden: No user or role found" });
     }
 
-    if (!allowedRoles.includes(req.user.role)) {
+    // Role check logic
+    if (!allowedRoles.includes(userRole)) {
       return res.status(403).json({
-        message: `Forbidden: Access denied for ${req.user.role}`,
+        message: `Forbidden: Access denied for ${userRole}`,
       });
     }
 

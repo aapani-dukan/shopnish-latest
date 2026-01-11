@@ -1,165 +1,160 @@
 // client/src/pages/admin/AdminProductDetailsPage.tsx
-
 "use client";
 
 import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom";
-import { toast } from "../../hooks/use-toast";
+import { useToast } from "../../hooks/use-toast"; // Fixed: useToast hook properly
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
-import { Loader2, ArrowLeft } from "lucide-react";
-import { apiRequest } from "../../lib/queryClient"; // Ensure this path is correct
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../../components/ui/select";
+import { Loader2, ArrowLeft, TrendingUp, Tag } from "lucide-react";
+import { apiRequest } from "../../lib/queryClient";
 
-// Interfaces
 interface Product {
   id: number;
   name: string;
   description: string;
   price: number;
+  discountedPrice?: number; // Backend field
+  priority?: number;        // Ranking field
   approvalStatus: "pending" | "approved" | "rejected";
-  imageUrl?: string; // Assuming product might have an image
-  // New field for settings
-  deliveryPincodes?: string[]; // Optional array of pincodes for the product
+  imageUrl?: string;
+  deliveryPincodes?: string[];
 }
 
 const AdminProductDetailsPage: React.FC = () => {
-  const { id } = useParams<{ id: string }>(); // Get product ID from URL params
+  const { id } = useParams<{ id: string }>();
   const productId = Number(id);
-  const { toast } = toast();
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
-  const [productData, setProductData] = useState<Partial<Product>>({}); // State for form data
+  const [productData, setProductData] = useState<Partial<Product>>({});
+  const [discountType, setDiscountType] = useState<"none" | "percentage" | "flat">("none");
+  const [discountValue, setDiscountValue] = useState<number>(0);
 
-  // 1. Fetch Product Details
   const { data: product, isLoading: isLoadingProduct, error: productError } = useQuery<Product, Error>({
     queryKey: ["adminProductDetails", productId],
-    queryFn: () => apiRequest('GET', `/api/admin/products/${productId}`), // Assumed API endpoint for single product
-    enabled: !!productId, // Only fetch if productId is available
+    queryFn: () => apiRequest('GET', `/api/admin/products/${productId}`),
+    enabled: !!productId,
   });
 
   useEffect(() => {
     if (product) {
-      setProductData(product); // Initialize form data with fetched product data
+      setProductData(product);
+      // Priority initialize karein
+      if (product.priority) setProductData(prev => ({ ...prev, priority: product.priority }));
     }
   }, [product]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const { id, value } = e.target;
-    setProductData(prev => ({
-      ...prev,
-      [id]: value,
-    }));
+  // Discount Calculation Logic for UI Preview
+  const getPreviewPrice = () => {
+    const originalPrice = product?.price || 0;
+    if (discountType === "percentage") {
+      return originalPrice - (originalPrice * discountValue / 100);
+    } else if (discountType === "flat") {
+      return Math.max(0, originalPrice - discountValue);
+    }
+    return originalPrice;
   };
 
-  const handlePincodesChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    setProductData(prev => ({
-      ...prev,
-      deliveryPincodes: value.split(',').map(p => p.trim()).filter(p => p.length > 0),
-    }));
-  };
-
-  // 2. Update Product Settings Mutation
-  const updateProductSettingsMutation = useMutation<void, Error, Partial<Product>>({
+  const updateProductMutation = useMutation<void, Error, Partial<Product>>({
     mutationFn: async (dataToUpdate: Partial<Product>) => {
-      await apiRequest('PUT', `/api/admin/products/${productId}`, dataToUpdate); // Assumed API endpoint for updating product
+      // Data prepare karein jisme discountedPrice calculate ho chuka ho
+      const finalData = {
+        ...dataToUpdate,
+        discountedPrice: getPreviewPrice(),
+      };
+      await apiRequest('PUT', `/api/admin/products/${productId}`, finalData);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["adminProductDetails", productId] });
-      toast({
-        title: "उत्पाद सेटिंग्स अपडेटेड",
-        description: "उत्पाद की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।",
-        variant: "default",
-      });
-    },
-    onError: (err) => {
-      toast({
-        title: "अपडेट विफल",
-        description: (err as any).response?.data?.message || err.message || "उत्पाद की सेटिंग्स अपडेट करने में विफल।",
-        variant: "destructive",
-      });
+      toast({ title: "सफलता", description: "उत्पाद रैंकिंग और ऑफर्स अपडेट कर दिए गए हैं।" });
     },
   });
 
-  const handleUpdateSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateProductSettingsMutation.mutate(productData);
-  };
-
-  if (isLoadingProduct) {
+  if (isLoadingProduct) return <div className="flex justify-center p-20"><Loader2 className="animate-spin" /></div>;
+if (productError) {
     return (
-      <div className="flex justify-center items-center h-64">
-        <Loader2 className="h-8 w-8 animate-spin text-gray-500" />
+      <div className="p-4 text-red-500 text-center bg-red-50 rounded-lg m-10 border border-red-200">
+        <h2 className="font-bold">सर्वर से संपर्क नहीं हो पाया</h2>
+        <p className="text-sm">त्रुटि: {productError.message}</p>
+        <Button onClick={() => navigate(-1)} className="mt-4" variant="outline">पीछे जाएं</Button>
       </div>
     );
   }
-
-  if (productError) {
-    return <p className="p-4 text-red-500 text-center">उत्पाद विवरण लोड करने में त्रुटि: {productError.message}</p>;
-  }
-
-  if (!product) {
-    return <p className="p-4 text-center">उत्पाद नहीं मिला।</p>;
-  }
-
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-inter">
       <div className="flex items-center mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="mr-2">
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <h1 className="text-3xl font-bold text-gray-800">उत्पाद विवरण: {product.name}</h1>
+        <Button variant="ghost" onClick={() => navigate(-1)}><ArrowLeft className="mr-2 h-4 w-4" /> वापस</Button>
+        <h1 className="text-2xl font-bold ml-4">उत्पाद पावर कंट्रोलर</h1>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        {/* Product Basic Information */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">मूलभूत जानकारी</h2>
-          {product.imageUrl && (
-            <img src={product.imageUrl} alt={product.name} className="w-full h-48 object-cover rounded-md mb-4" />
-          )}
-          <p className="mb-2"><strong>ID:</strong> {product.id}</p>
-          <p className="mb-2"><strong>नाम:</strong> {product.name}</p>
-          <p className="mb-2"><strong>विवरण:</strong> {product.description}</p>
-          <p className="mb-2"><strong>मूल्य:</strong> ₹{product.price}</p>
-          <p className="mb-2">
-            <strong>स्थिति:</strong>
-            <span className={`ml-2 px-3 py-1 rounded-full text-sm font-medium ${
-                product.approvalStatus === "approved" ? "bg-green-100 text-green-800" :
-                product.approvalStatus === "pending" ? "bg-yellow-100 text-yellow-800" :
-                "bg-red-100 text-red-800"
-              }`}>
-              {product.approvalStatus}
-            </span>
-          </p>
-          {/* Add more product details here if needed */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        {/* 1. Basic Info Card */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border">
+          <h2 className="text-lg font-bold mb-4 flex items-center"><Tag className="mr-2 text-blue-500" /> मूलभूत जानकारी</h2>
+          {product?.imageUrl && <img src={product.imageUrl} className="w-full h-40 object-cover rounded-lg mb-4" />}
+          <div className="space-y-2">
+            <p className="text-sm"><strong>नाम:</strong> {product?.name}</p>
+            <p className="text-sm text-green-600 font-bold text-lg"><strong>मूल्य:</strong> ₹{product?.price}</p>
+            {discountValue > 0 && (
+              <p className="text-sm text-orange-600 font-bold"><strong>नया मूल्य:</strong> ₹{getPreviewPrice()}</p>
+            )}
+          </div>
         </div>
 
-        {/* Product Delivery Pincode Settings */}
-        <div className="bg-white p-6 rounded-lg shadow-md">
-          <h2 className="text-xl font-semibold mb-4 text-gray-700">डिलीवरी पिनकोड सेटिंग्स</h2>
-          <form onSubmit={handleUpdateSettings} className="space-y-4">
-            <div>
-              <Label htmlFor="deliveryPincodes">डिलीवरी पिनकोड (कॉमा से अलग)</Label>
-              <Input
-                id="deliveryPincodes"
-                type="text"
-                value={productData.deliveryPincodes?.join(', ') ?? ''}
-                onChange={handlePincodesChange}
-                placeholder="उदा. 110001, 110002, 110003"
-              />
-              <p className="text-xs text-muted-foreground mt-1">
-                विशिष्ट पिनकोड जहां इस उत्पाद की डिलीवरी की जा सकती है। यह उच्चतम प्राथमिकता का नियम है।
-              </p>
-            </div>
+        {/* 2. Ranking & Visibility Card */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+          <h2 className="text-lg font-bold mb-4 flex items-center text-indigo-700"><TrendingUp className="mr-2" /> रैंकिंग (Sort Order)</h2>
+          <div className="space-y-4">
+            <Label htmlFor="priority">प्रायोरिटी लेवल (1-100)</Label>
+            <Input 
+              id="priority" 
+              type="number" 
+              value={productData.priority || 0} 
+              onChange={(e) => setProductData({...productData, priority: Number(e.target.value)})}
+              placeholder="Higher = Top of list"
+            />
+            <p className="text-xs text-gray-500 italic">जितना नंबर ज्यादा होगा, उत्पाद उतना ही ऊपर दिखेगा।</p>
+          </div>
+        </div>
 
-            <Button type="submit" disabled={updateProductSettingsMutation.isPending}>
-              {updateProductSettingsMutation.isPending ? 'सेटिंग्स सेव हो रही हैं...' : 'सेटिंग्स सेव करें'}
+        {/* 3. Offers & Discounts Card */}
+        <div className="bg-white p-6 rounded-xl shadow-sm border border-green-100">
+          <h2 className="text-lg font-bold mb-4 text-green-700">धमाका ऑफर्स (Discounts)</h2>
+          <div className="space-y-4">
+            <Label>डिस्काउंट का प्रकार</Label>
+            <Select onValueChange={(v: any) => setDiscountType(v)}>
+              <SelectTrigger><SelectValue placeholder="चुने..." /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">कोई नहीं</SelectItem>
+                <SelectItem value="percentage">प्रतिशत (%) Off</SelectItem>
+                <SelectItem value="flat">फ्लैट (₹) Off</SelectItem>
+              </SelectContent>
+            </Select>
+
+            {discountType !== "none" && (
+              <>
+                <Label>डिस्काउंट वैल्यू ({discountType === 'percentage' ? '%' : '₹'})</Label>
+                <Input 
+                  type="number" 
+                  value={discountValue} 
+                  onChange={(e) => setDiscountValue(Number(e.target.value))} 
+                />
+              </>
+            )}
+
+            <Button 
+              className="w-full mt-4 bg-indigo-600 hover:bg-indigo-700"
+              onClick={() => updateProductMutation.mutate(productData)}
+              disabled={updateProductMutation.isPending}
+            >
+              {updateProductMutation.isPending ? "सेव हो रहा है..." : "सेटिंग्स सेव करें"}
             </Button>
-          </form>
+          </div>
         </div>
       </div>
     </div>
@@ -167,4 +162,3 @@ const AdminProductDetailsPage: React.FC = () => {
 };
 
 export default AdminProductDetailsPage;
-    

@@ -1,41 +1,43 @@
 import { Router, Request, Response } from "express";
-import { db } from "./db.ts";
+import { db } from "./db";
 import {
   users,
   userRoleEnum,
   approvalStatusEnum,
   sellersPgTable,
   deliveryBoys,
-} from "../shared/backend/schema.ts";
-import { AuthenticatedRequest } from "./middleware/verifyToken.ts";
-import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware.ts";
-import { authAdmin } from "./lib/firebaseAdmin.ts";
+  orders,
+} from "../shared/backend/schema";
+import { AuthenticatedRequest } from "./middleware/verifyToken";
+import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware";
+import { authAdmin } from "./lib/firebaseAdmin";
 import { eq } from "drizzle-orm";
-import { Authorize } from "./middleware/authorization";
+import { authorize } from "./middleware/authorize";
 import { validateRequest } from "./middleware/validation";
 // ✅ Sub-route modules
-import apiAuthLoginRouter from "./roots/apiAuthLogin.ts";
+import apiAuthLoginRouter from "./roots/apiAuthLogin";
 //import adminApproveProductRoutes from "./roots/admin/approve-product.ts";
 //import adminRejectProductRoutes from "./roots/admin/reject-product.ts";
 import adminProductsRoutes from "./roots/admin/adminProductsRoutes";
-import adminVendorsRoutes from "./roots/admin/vendors.ts";
+import adminVendorsRoutes from "./roots/admin/vendors";
 //import adminPasswordRoutes from "./roots/admin/admin-password.ts";
-import sellerRouter from "../routes/sellers/sellerRoutes.ts";
-import productsRouter from "../routes/productRoutes.ts";
-import cartRouter from "../routes/cartRoutes.ts";
-import dBoyRouter from "../routes/dBoyRoutes.ts";
-import admindBoyRouter from "./roots/admin/admindBoyRoutes.ts";
+import sellerRouter from "../routes/sellers/sellerRoutes";
+import productsRouter from "../routes/productRoutes";
+import cartRouter from "../routes/cartRoutes";
+import dBoyRouter from "../routes/dBoyRoutes";
+import admindBoyRouter from "./roots/admin/admindBoyRoutes";
 import orderConfirmationRouter from "../routes/orderConfirmationRouter";
-import userLoginRouter from "../routes/userRoutes.ts";
+import userLoginRouter from "../routes/userRoutes";
 import orderRoutes from "../routes/orderRoutes";
 import { verifyToken } from "./middleware/verifyToken";
-import { categories } from "../shared/backend/schema.ts";
-import whatsappRouter from '../routes/whatsappRoutes.ts';
-import addressRouter from '../routes/addressRoutes.ts';
-import adminDiscountsRouter from './roots/admin/adminDiscounts.ts';
+import { categories } from "../shared/backend/schema";
+import whatsappRouter from '../routes/whatsappRoutes';
+import addressRouter from '../routes/addressRoutes';
+import adminDiscountsRouter from './roots/admin/adminDiscounts';
 //import adminOrdersRouter from "./roots/admin/adminOrderRoutes";
 import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 import customerRouter from '../routes/customerRoutes';
+import layoutRoutes from '../routes/layoutRoutes'; // Check karein path sahi ho
 const router = Router();
 
 // ✅ Health Check
@@ -56,25 +58,32 @@ router.post("/register", async (req: Request, res: Response) => {
     }
 
     const [newUser] = await db.insert(users).values({
-      firebaseUid: userData.firebaseUid,
-      email: userData.email,
-      name: userData.name || null,
-      role: userRoleEnum.enumValues[0],
-      approvalStatus: approvalStatusEnum.enumValues[1],
-      password: userData.password || "",
-      firstName: userData.firstName || "",
-      lastName: userData.lastName || "",
-      phone: userData.phone || "",
-      address: userData.address || "",
-      city: userData.city || "",
-      pincode: userData.pincode || "",
-    }).returning();
+    firebaseUid: userData.firebaseUid,
+    email: userData.email || null,
+    // 'name' column nahi hai, isliye ise hata diya gaya hai
+    firstName: userData.firstName || userData.name || "", // Agar 'name' aa raha hai toh use firstName mein daal sakte hain
+    lastName: userData.lastName || "",
+    phone: userData.phone || "",
+    
+    // Enum values ko string ke taur par pass karein
+    role: "customer", 
+    approvalStatus: "approved", 
+    
+    password: userData.password || null, // Schema mein optional hai
+    address: userData.address || null,
+    city: userData.city || null,
+    pincode: userData.pincode || null,
+    
+    isActive: true,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  }).returning();
 
-    res.status(201).json(newUser);
-  } catch (error: any) {
-    console.error("User registration failed:", error);
-    res.status(400).json({ error: error.message });
-  }
+  res.status(201).json(newUser);
+} catch (error: any) {
+  console.error("❌ User registration failed:", error);
+  res.status(400).json({ error: error.message });
+}
 });
 
 // ✅ User Profile
@@ -145,34 +154,35 @@ router.get(
     }
 
     try {
-      // 1. डेटाबेस से ऑर्डर और डिलीवरी पता प्राप्त करें
-      //    (सुरक्षा के लिए, सुनिश्चित करें कि यह ऑर्डर वास्तव में इसी ग्राहक का है)
-      const [order] = await db
-        .select()
-        .from(orders)
-        .where(eq(orders.id, Number(orderId)))
-        .limit(1);
+  // 1. Database se order fetch karein
+  // Note: Yahan hum [orderData] variable use kar rahe hain taaki 'order' se conflict na ho
+  const [orderData] = await db
+    .select()
+    .from(orders) // Yeh aapke schema se aayi hui table hai
+    .where(eq(orders.id, Number(orderId))) // Table name 'orders' yahan fix hai
+    .limit(1);
 
-      if (!order || order.customerId !== customerId) {
-        return res.status(404).json({ error: "Order not found or access denied." });
-      }
+  // Aapne kaha tha variable ka naam 'order' rakhna hai
+  // Humne database se aaye data ko 'order' variable mein assign kar diya
+  const order = orderData as any; 
 
-      // 2. ट्रैकिंग डेटा वापस भेजें
-      res.status(200).json({
-        orderId: order.id,
-        status: order.status,
-        deliveryAddress: order.deliveryAddress, // ग्राहक का पता
-        // Note: लाइव लोकेशन इस endpoint से नहीं आती है, वह Socket.IO से आती है।
-        // यह endpoint केवल प्रारंभिक डेटा (पता, स्थिति) प्रदान करता है।
-      });
-      
-    } catch (error) {
-      console.error("Tracking details fetch failed:", error);
-      res.status(500).json({ error: "Failed to fetch tracking details." });
-    }
+  if (!order || order.customerId !== customerId) {
+    return res.status(404).json({ error: "Order not found or access denied." });
   }
-);
 
+  // 2. Response bhejye
+  res.status(200).json({
+    orderId: order.id,
+    status: order.status,
+    deliveryAddress: order.deliveryAddress,
+  });
+  
+} catch (error) {
+  console.error("❌ Tracking fetch failed:", error);
+  res.status(500).json({ error: "Internal server error" });
+}
+
+});
 
 // ✅ Initial Login Route: नए उपयोगकर्ताओं के लिए
 router.post("/auth/initial-login", async (req: Request, res: Response) => {
@@ -281,7 +291,8 @@ router.use("/whatsapp", whatsappRouter);
 router.use("/addresses",addressRouter);
 // ✅ Delivery Boy
 router.use("/delivery", dBoyRouter);
-
+// ✅ Home Layout (Banners, Ads, Unique Sections)
+router.use("/layout", layoutRoutes);
 
 // ✅ Admin Routes
 const adminRouter = Router();

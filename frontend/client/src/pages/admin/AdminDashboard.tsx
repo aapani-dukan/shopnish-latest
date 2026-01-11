@@ -12,7 +12,9 @@ import { useSocket } from "../../hooks/useSocket";
 import { useNavigate } from "react-router-dom"; 
 import AdminSettingsPage from "./AdminSettingsPage"; 
 import AdminOrderDashboard from "./AdminOrderDashboard"; 
-
+import { Image as ImageIcon, PlusCircle, Trash2 } from "lucide-react";
+import { Label } from "../../components/ui/label";
+import { Input } from "../../components/ui/input";
 // Interfaces
 interface Vendor {
   id: number;
@@ -34,13 +36,21 @@ interface DeliveryBoy {
   approvalStatus: "pending" | "approved" | "rejected";
   rejectionReason?: string;
 }
-
+// Interfaces mein ye jodiye
+interface LayoutElement {
+  id: number;
+  type: string;
+  imageUrl: string;
+  title?: string;
+  link?: string;
+}
 const AdminDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("pending-vendors");
   const { socket } = useSocket();
   const navigate = useNavigate();
-
+const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerType, setBannerType] = useState("main_banner");
   // Socket.io real-time updates
   useEffect(() => {
     if (!socket) {
@@ -140,6 +150,40 @@ const AdminDashboard: React.FC = () => {
       return res.data;
     },
   });
+  // --- Layout API Calls ---
+  const { data: layoutElements, isLoading: isLoadingLayout } = useQuery<LayoutElement[]>({
+    queryKey: ["adminLayout"],
+    queryFn: async () => {
+      const res = await api.get("/api/layout/public");
+      return res.data;
+    },
+    enabled: activeTab === "layout-mgmt"
+  });
+
+  const uploadBannerMutation = useMutation({
+    mutationFn: async (formData: FormData) => {
+      return await api.post("/api/layout/admin/add", formData, {
+        headers: { "Content-Type": "multipart/form-data" }
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Banner Uploaded Successfully!" });
+      setBannerFile(null);
+      queryClient.invalidateQueries({ queryKey: ["adminLayout"] });
+    },
+    onError: (err: any) => {
+      toast({ title: "Upload Failed", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const handleBannerSubmit = () => {
+    if (!bannerFile) return toast({ title: "Please select an image" });
+    const formData = new FormData();
+    formData.append("image", bannerFile);
+    formData.append("type", bannerType);
+    formData.append("title", "New Promotion"); // Aap ise dynamic bhi kar sakte hain
+    uploadBannerMutation.mutate(formData);
+  };
 
   // --- Mutations (existing logic for approval/rejection remains) ---
   const approveVendorMutation = useMutation({
@@ -327,13 +371,14 @@ const AdminDashboard: React.FC = () => {
           </div>
         );
 
+
       case "pending-deliveryboys": 
         return (
           <div>
             <h2 className="text-lg font-semibold mb-2">Pending Delivery Boys</h2> 
             {Array.isArray(pendingDeliveryBoys) && pendingDeliveryBoys.length > 0 ? ( 
               pendingDeliveryBoys.map((dboy) => ( 
-                <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm"> 
+                <div key={dboy.id} className="flex justify-between items-center bg-white p-2 rounded mb-2 shadow-sm border"> 
                   <span>{dboy.name}</span>
                   <div className="flex items-center space-x-2"> 
                     <Button variant="outline" size="sm" onClick={() => approveDeliveryBoyMutation.mutate(dboy.id)} disabled={approveDeliveryBoyMutation.isPending}> 
@@ -357,7 +402,7 @@ const AdminDashboard: React.FC = () => {
             <h2 className="text-lg font-semibold mb-2">Approved Delivery Boys</h2> 
             {Array.isArray(approvedDeliveryBoys) && approvedDeliveryBoys.length > 0 ? ( 
               approvedDeliveryBoys.map((dboy) => ( 
-                <div key={dboy.id} className="bg-white p-2 rounded mb-2 shadow-sm"> 
+                <div key={dboy.id} className="bg-white p-2 rounded mb-2 shadow-sm border px-4 py-3"> 
                   <span>{dboy.name}</span>
                 </div>
               ))
@@ -373,39 +418,96 @@ const AdminDashboard: React.FC = () => {
       case "orders":
         return <AdminOrderDashboard />; 
 
+      case "layout-mgmt":
+        return (
+          <div className="space-y-6">
+            <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+              <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800">
+                <PlusCircle className="mr-2" /> Add New Banner / Promotion
+              </h2>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                <div className="space-y-2">
+                  <Label>Promotion Type</Label>
+                  <select 
+                    className="w-full p-2 border rounded-md bg-white" 
+                    value={bannerType} 
+                    onChange={(e) => setBannerType(e.target.value)}
+                  >
+                    <option value="main_banner">Main Home Banner (Top)</option>
+                    <option value="flash_sale">Flash Sale Ad (Middle)</option>
+                    <option value="category_ad">Category Special Ad</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Select Image</Label>
+                  <Input type="file" onChange={(e) => setBannerFile(e.target.files?.[0] || null)} />
+                </div>
+                <Button 
+                  onClick={handleBannerSubmit} 
+                  disabled={uploadBannerMutation.isPending}
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
+                >
+                  {uploadBannerMutation.isPending ? <Loader2 className="animate-spin" /> : "Upload Now"}
+                </Button>
+              </div>
+            </div>
+
+            <div className="bg-white p-6 rounded-xl shadow-sm border">
+              <h2 className="text-lg font-bold mb-4">Current Active Layout Elements</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {isLoadingLayout ? <Loader2 className="animate-spin" /> : 
+                  layoutElements?.map((el) => (
+                    <div key={el.id} className="relative group border rounded-lg overflow-hidden shadow-sm">
+                      <img src={el.imageUrl} alt={el.type} className="w-full h-32 object-cover" />
+                      <div className="p-2 bg-gray-50 flex justify-between items-center border-t">
+                        <span className="text-xs font-bold uppercase text-gray-500">{el.type.replace('_', ' ')}</span>
+                        <Button variant="ghost" size="sm" className="text-red-500 hover:text-red-700 p-0 h-8 w-8">
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))
+                }
+              </div>
+            </div>
+          </div>
+        );
+
       default:
-        return <p>Select a tab</p>; 
+        return <p className="text-gray-500">Select a tab to view content.</p>; 
     }
-  };
+  }; // <--- renderContent function ends here
 
   return (
     <div className="p-4 bg-gray-50 min-h-screen font-inter"> 
-      <h1 className="text-2xl font-bold mb-4">Admin Dashboard</h1> 
-      <div className="flex flex-wrap gap-4 mb-6"> 
+      <h1 className="text-2xl font-bold mb-4 text-indigo-900">Shopnish Admin Dashboard</h1> 
+      
+      <div className="flex flex-wrap gap-2 mb-6 bg-white p-3 rounded-lg shadow-sm border"> 
         <Button variant={activeTab === "pending-vendors" ? "default" : "outline"} onClick={() => setActiveTab("pending-vendors")}>Pending Vendors</Button> 
         <Button variant={activeTab === "approved-vendors" ? "default" : "outline"} onClick={() => setActiveTab("approved-vendors")}>Approved Vendors</Button>
-        
-        {/* ✅ ADDED: Rejected Vendors Button */}
         <Button 
             variant={activeTab === "rejected-vendors" ? "destructive" : "outline"} 
-            className={activeTab === "rejected-vendors" ? "bg-red-600 hover:bg-red-700 text-white" : ""}
+            className={activeTab === "rejected-vendors" ? "bg-red-600 text-white" : ""}
             onClick={() => setActiveTab("rejected-vendors")}
         >
             Rejected Vendors ({rejectedVendors?.length || 0})
         </Button> 
-        
         <Button variant={activeTab === "pending-products" ? "default" : "outline"} onClick={() => setActiveTab("pending-products")}>Pending Products</Button>
         <Button variant={activeTab === "approved-products" ? "default" : "outline"} onClick={() => setActiveTab("approved-products")}>Approved Products</Button>
-        <Button variant={activeTab === "pending-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("pending-deliveryboys")}>Pending Delivery Boys</Button>
-        <Button variant={activeTab === "approved-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("approved-deliveryboys")}>Approved Delivery Boys</Button>
-        
+        <Button variant={activeTab === "pending-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("pending-deliveryboys")}>Pending D-Boys</Button>
+        <Button variant={activeTab === "approved-deliveryboys" ? "default" : "outline"} onClick={() => setActiveTab("approved-deliveryboys")}>Approved D-Boys</Button>
         <Button variant={activeTab === "orders" ? "default" : "outline"} onClick={() => setActiveTab("orders")}>Orders</Button>
-        <Button variant={activeTab === "platform-settings" ? "default" : "outline"} onClick={() => setActiveTab("platform-settings")}>Platform Settings</Button>
+        <Button variant={activeTab === "layout-mgmt" ? "default" : "outline"} className={activeTab === "layout-mgmt" ? "bg-indigo-600 text-white" : "text-indigo-600 border-indigo-200"} onClick={() => setActiveTab("layout-mgmt")}>
+          <ImageIcon className="mr-2 h-4 w-4" /> Layout & Banners
+        </Button>
+        <Button variant={activeTab === "platform-settings" ? "default" : "outline"} onClick={() => setActiveTab("platform-settings")}>Settings</Button>
       </div>
-      {renderContent()}
+
+      <div className="mt-4">
+        {renderContent()}
+      </div>
     </div>
   );
 };
 
 export default AdminDashboard;
-          
