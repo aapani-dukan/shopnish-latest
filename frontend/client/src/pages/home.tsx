@@ -127,18 +127,24 @@ export default function Home() {
   });
 
   // --- 4. Featured Products Query ---
-  const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery({
-    queryKey: ['featuredProducts', currentLocation?.pincode],
-    queryFn: async () => {
-      const params = new URLSearchParams({
-        pincode: currentLocation?.pincode?.toString() || "",
-        featured: 'true',
-      });
-      const response = await axios.get(`/api/products?${params.toString()}`);
-      return Array.isArray(response.data) ? { products: response.data } : response.data;
-    },
-    enabled: isLocationReady,
-  });
+const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery({
+  queryKey: ['featuredProducts', currentLocation?.pincode],
+  queryFn: async () => {
+    // ✅ Pincode ke saath Lat aur Lng bhi bhejna zaroori hai
+    const loc = currentLocation as any;
+    const params = new URLSearchParams({
+      pincode: loc?.pincode?.toString() || "",
+      featured: 'true',
+      lat: loc?.latitude?.toString() || "", // ✅ Ab error nahi aayegi
+      lng: loc?.longitude?.toString() || "",
+    });
+    
+    const response = await axios.get(`/api/products?${params.toString()}`);
+    // Backend se data sahi format mein aaye iska check
+    return Array.isArray(response.data) ? { products: response.data } : response.data;
+  },
+  enabled: isLocationReady,
+});
 
   const products = productsData?.products || [];
   const featuredProducts = featuredProductsData?.products || [];
