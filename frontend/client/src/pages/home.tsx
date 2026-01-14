@@ -127,23 +127,27 @@ export default function Home() {
   });
 
   // --- 4. Featured Products Query ---
-const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery({
+   const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery({
+  // Query tab tak trigger nahi hogi jab tak pincode nahi mil jata
   queryKey: ['featuredProducts', currentLocation?.pincode],
   queryFn: async () => {
-    // ✅ Pincode ke saath Lat aur Lng bhi bhejna zaroori hai
     const loc = currentLocation as any;
+    
+    // Yahan hum empty string hi bhej rahe hain (Bina hardcode kiye)
     const params = new URLSearchParams({
       pincode: loc?.pincode?.toString() || "",
       featured: 'true',
-      lat: loc?.latitude?.toString() || "", // ✅ Ab error nahi aayegi
+      lat: loc?.latitude?.toString() || "",
       lng: loc?.longitude?.toString() || "",
     });
-    
+
     const response = await axios.get(`/api/products?${params.toString()}`);
-    // Backend se data sahi format mein aaye iska check
     return Array.isArray(response.data) ? { products: response.data } : response.data;
   },
-  enabled: isLocationReady,
+  // 🚀 SABSE IMPORTANT LINE: 
+  // Request tabhi jayegi jab pincode aur latitude dono available honge. 
+  // Isse 400 error aana band ho jayegi!
+  enabled: !!currentLocation?.pincode && !!(currentLocation as any)?.latitude,
 });
 
   const products = productsData?.products || [];
