@@ -51,6 +51,7 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
 const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerType, setBannerType] = useState("main_banner");
+  const [targetPincodes, setTargetPincodes] = useState<string>(""); // Comma separated pincodes ke liye
   // Socket.io real-time updates
   useEffect(() => {
     if (!socket) {
@@ -177,13 +178,21 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
   });
 
   const handleBannerSubmit = () => {
-    if (!bannerFile) return toast({ title: "Please select an image" });
-    const formData = new FormData();
-    formData.append("image", bannerFile);
-    formData.append("type", bannerType);
-    formData.append("title", "New Promotion"); // Aap ise dynamic bhi kar sakte hain
-    uploadBannerMutation.mutate(formData);
-  };
+  if (!bannerFile) return toast({ title: "Please select an image" });
+  
+  const formData = new FormData();
+  formData.append("image", bannerFile);
+  
+  // Database ki mandatory fields yahan add karein
+  formData.append("sectionName", `Banner_${Date.now()}`); // Ek unique name
+  formData.append("sectionType", "HERO_BANNER"); // Check karein ye Enum mein hai ya nahi
+  formData.append("displayName", "Top Offers"); 
+  formData.append("priority", "1");
+  formData.append("isActive", "true");
+  const pincodeArray = targetPincodes.split(",").map(p => p.trim()).filter(p => p !== "");
+  formData.append("pincodes", JSON.stringify(pincodeArray));
+  uploadBannerMutation.mutate(formData);
+};
 
   // --- Mutations (existing logic for approval/rejection remains) ---
   const approveVendorMutation = useMutation({
@@ -425,7 +434,7 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
               <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800">
                 <PlusCircle className="mr-2" /> Add New Banner / Promotion
               </h2>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
                 <div className="space-y-2">
                   <Label>Promotion Type</Label>
                   <select 
@@ -442,6 +451,15 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
                   <Label>Select Image</Label>
                   <Input type="file" onChange={(e) => setBannerFile(e.target.files?.[0] || null)} />
                 </div>
+                <div className="space-y-2">
+            <Label>Target Pincodes (Optional)</Label>
+            <Input 
+              placeholder="e.g. 323001, 302001" 
+              value={targetPincodes}
+              onChange={(e) => setTargetPincodes(e.target.value)}
+              className="placeholder:text-[10px]"
+            />
+          </div>
                 <Button 
                   onClick={handleBannerSubmit} 
                   disabled={uploadBannerMutation.isPending}
@@ -450,6 +468,9 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
                   {uploadBannerMutation.isPending ? <Loader2 className="animate-spin" /> : "Upload Now"}
                 </Button>
               </div>
+              <p className="mt-2 text-[10px] text-gray-400 font-medium">
+          * Pincodes ko comma (,) se alag karein. Khali chhodne par banner Global dikhega.
+        </p>
             </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border">

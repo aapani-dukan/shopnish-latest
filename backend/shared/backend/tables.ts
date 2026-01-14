@@ -1,7 +1,8 @@
 // backend/src/shared/backend/tables.ts
 
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, numeric, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
-import { relations } from "drizzle-orm"; // यह ठीक है कि यहाँ सीधे उपयोग नहीं किया गया
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+
 
 // =========================================================================
 // Enums - इन्हें हमेशा सबसे पहले रखें
@@ -490,25 +491,31 @@ export const couponsPgTable = pgTable('coupons', {
 
 export const homeLayout = pgTable("home_layout", {
   id: serial("id").primaryKey(),
-  sectionName: text("section_name").notNull(), // Backend pehchan ke liye (e.g. "Diwali Special")
-  displayName: text("display_name"),           // App mein dikhne wala title (e.g. "Dhamaka Offers")
+  sectionName: text("section_name").notNull(),
+  displayName: text("display_name"),
   sectionType: sectionTypeEnum("section_type").notNull(),
-  priority: integer("priority").notNull().default(0), // 1 = Top, 10 = Bottom
-  isActive: boolean("is_active").default(true),
   
-  // Isme JSON format mein content rakhenge taaki flexibility rahe
-  // Banners ke liye: [{image, deeplink, title}]
-  // Products ke liye: {category_id: 5} ya {manual_product_ids: [10, 15, 20]}
+  // ✅ 1. Pincode Targetting (Array of strings)
+  pincodes: text("pincodes").array().default(sql`ARRAY[]::text[]`), 
+
+  // ✅ 2. City Targetting (Specific city ke liye)
+  city: text("city"),
+
+  // ✅ 3. Global Toggle (Agar true hai toh pincode check nahi hoga)
+  isGlobal: boolean("is_global").default(false),
+
+  priority: integer("priority").notNull().default(0),
+  isActive: boolean("is_active").default(true),
   config: json("config").$type<{
     items?: {
       title?: string;
       image?: string;
-      deeplink?: string; // e.g. "shopnish://product/45"
+      deeplink?: string;
       productId?: number;
     }[];
     categoryId?: number;
     limit?: number;
-    manualProductIds?: number[]; // Agar hum manually chunna chahein konse products dikhein
+    manualProductIds?: number[];
   }>().notNull(),
 
   createdAt: timestamp("created_at").defaultNow(),

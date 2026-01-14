@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import { homeLayout } from '../../shared/backend/schema'; 
-import { eq, asc } from 'drizzle-orm';
+import { eq, asc, and, or, sql } from 'drizzle-orm'; // ✅ sql, and, or add kiya
 import { uploadImage } from '../cloudStorage';
 import fs from 'fs';
 
@@ -10,10 +10,7 @@ import fs from 'fs';
 // ==========================================
 export const addHomeElement = async (req: any, res: Response, next: NextFunction) => {
   try {
-    // Admin validation ke liye agar zaroorat pade
-    const adminId = req.user?.id; 
-
-    const { sectionName, displayName, sectionType, priority, isActive, linkTo, title } = req.body;
+    const { sectionName, displayName, sectionType, priority, isActive, linkTo, title, pincodes } = req.body;
     let uploadedImageUrl = '';
 
     // Image Upload Logic
@@ -21,14 +18,23 @@ export const addHomeElement = async (req: any, res: Response, next: NextFunction
       try {
         const fileBuffer = fs.readFileSync(req.file.path);
         uploadedImageUrl = await uploadImage(fileBuffer, req.file.originalname, req.file.mimetype);
-        fs.unlinkSync(req.file.path); // Temp file saaf karein
+        fs.unlinkSync(req.file.path); 
       } catch (uploadErr) {
-        console.error("❌ Image Upload Error:", uploadErr);
         return res.status(500).json({ message: "Image upload failed." });
       }
     }
 
-    // Aapka Schema 'config' JSON mang raha hai
+    // ✅ Pincodes parsing logic
+    // Frontend se stringified array aa raha hai: '["323001"]'
+    let parsedPincodes: string[] = [];
+    if (pincodes) {
+      try {
+        parsedPincodes = JSON.parse(pincodes);
+      } catch (e) {
+        parsedPincodes = []; // Agar parsing fail ho toh khali rakhein
+      }
+    }
+
     const configData = {
       items: [
         {
@@ -41,9 +47,10 @@ export const addHomeElement = async (req: any, res: Response, next: NextFunction
 
     // Database Insert
     const [newElement] = await db.insert(homeLayout).values({
-      sectionName: sectionName,
-      displayName: displayName || null,
-      sectionType: sectionType, // e.g., 'HERO_BANNER', 'PROMO_AD'
+      sectionName: sectionName || `Section_${Date.now()}`, 
+      displayName: displayName || "New Promotion",
+      sectionType: sectionType || 'HERO_BANNER', 
+      pincodes: parsedPincodes, // ✅ Naya Column yahan save ho raha hai
       priority: Number(priority) || 0,
       isActive: isActive === 'true' || isActive === true,
       config: configData, 
@@ -56,27 +63,36 @@ export const addHomeElement = async (req: any, res: Response, next: NextFunction
       data: newElement 
     });
   } catch (error) { 
-    console.error("❌ Layout Insert Error:", error);
     next(error); 
   }
 };
 
 // ==========================================
-// 2. Public: Get App Home Layout
+// 2. Public: Get App Home Layout (Filtered by Pincode)
 // ==========================================
 export const getHomeLayout = async (req: any, res: Response, next: NextFunction) => {
   try {
-    // db.select use kar rahe hain taaki 'Property homeLayout does not exist' error na aaye
+    const { pincode } = req.query; // ✅ Frontend se ?pincode=323001 aayega
+
     const sections = await db
       .select()
       .from(homeLayout)
-      .where(eq(homeLayout.isActive, true))
+      .where(
+        and(
+          eq(homeLayout.isActive, true),
+          // ✅ Smart Filter Logic
+          or(
+            // 1. Agar pincode ka array khali hai toh sabko dikhao (Global)
+            sql`cardinality(${homeLayout.pincodes}) = 0`,
+            // 2. Ya agar customer ka pincode us array ke andar hai
+            pincode ? sql`${homeLayout.pincodes} @> ARRAY[${pincode}]::text[]` : sql`false`
+          )
+        )
+      )
       .orderBy(asc(homeLayout.priority));
 
-    console.log(`✅ Fetched ${sections.length} layout sections.`);
     res.status(200).json(sections);
   } catch (error) { 
-    console.error("❌ Fetch Layout Error:", error);
     next(error); 
   }
 };

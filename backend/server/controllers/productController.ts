@@ -73,8 +73,14 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
       errors.push("Additional images must be an array of valid URLs.");
     }
   }
+// 1. ADD HINDI & BRAND VALIDATION (Hindi support ke liye)
+  if (data.nameHindi !== undefined && typeof data.nameHindi !== 'string') errors.push("Product Hindi name must be a string.");
+  if (data.descriptionHindi !== undefined && typeof data.descriptionHindi !== 'string') errors.push("Product Hindi description must be a string.");
+  if (data.brand !== undefined && typeof data.brand !== 'string') errors.push("Brand must be a string.");
 
+  
   // Delivery Radius & Pincode Logic (Very Important for Shopnish)
+  // 3. Delivery Radius & Pincode Logic (Cleaned - No Duplicates)
   if (data.deliveryScope === 'LOCAL') {
     if (data.productDeliveryRadiusKM !== undefined) {
       const radiusNum = Number(data.productDeliveryRadiusKM);
@@ -88,8 +94,10 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
     }
   } else if (data.deliveryScope === 'CITY' || data.deliveryScope === 'STATE') {
     if (data.productDeliveryPincodes !== undefined) {
-      if (!Array.isArray(data.productDeliveryPincodes) || data.productDeliveryPincodes.length === 0 || data.productDeliveryPincodes.some((p: any) => typeof p !== 'string' || p.length !== 6 || !/^\d+$/.test(p))) {
-        errors.push("Product delivery pincodes must be a non-empty array of valid 6-digit strings for CITY/STATE scope.");
+      if (!Array.isArray(data.productDeliveryPincodes) || 
+          data.productDeliveryPincodes.length === 0 || 
+          data.productDeliveryPincodes.some((p: any) => typeof p !== 'string' || p.length !== 6 || !/^\d+$/.test(p))) {
+        errors.push("Product delivery pincodes must be a non-empty array of valid 6-digit strings.");
       }
     } else if (!isUpdate) {
       errors.push("Product delivery pincodes are required for CITY/STATE scope.");
@@ -160,6 +168,10 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
       price: productData.price,
       stock: productData.stock,
       categoryId: Number(productData.categoryId),
+      originalPrice: productData.originalPrice ? Number(productData.originalPrice) : null, // ADDED
+  brand: productData.brand || null, // ADDED
+  
+  
       sellerId: sellerProfile.id,
       image: productData.image || null,
       unit: productData.unit || 'unit',
@@ -169,8 +181,8 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
       isActive: productData.isActive ?? true,
       nameHindi: productData.nameHindi || null,
       descriptionHindi: productData.descriptionHindi || null,
-      originalPrice: productData.originalPrice || null,
-      brand: productData.brand || null,
+      
+    
       deliveryScope: productData.deliveryScope || 'NATIONAL',
       productDeliveryRadiusKM: productData.productDeliveryRadiusKM || null,
       productDeliveryPincodes: productData.productDeliveryPincodes || null,
@@ -318,13 +330,28 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     else orderBy.push(sortOrder === 'asc' ? asc(products.createdAt) : desc(products.createdAt));
 
     const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
-    const productList = await db.query.products.findMany({
-      where: and(...whereClauses),
-      with: { category: true, seller: { with: { user: true } } },
-      orderBy: orderBy,
-      limit: limitNum,
-      offset: offset,
-    });
+    // getAllProducts function ke andar 'productList' wala part replace karein:
+const productList = await db.query.products.findMany({
+  where: and(...whereClauses),
+  with: { 
+    category: true, 
+    seller: { 
+      columns: {
+        id: true,
+        businessName: true,
+        latitude: true,
+        longitude: true,
+        deliveryRadius: true,
+        isDistanceBasedDelivery: true, // MISSING FIELD 1
+        deliveryPincodes: true,        // MISSING FIELD 2
+      },
+      with: { user: true } 
+    } 
+  },
+  orderBy: orderBy,
+  limit: limitNum,
+  offset: offset,
+});
 
     res.status(200).json({
       page: pageNum,

@@ -14,13 +14,13 @@ import {
 } from "@/components/ui/dialog"; // ✅ Corrected casing
 import { useNavigate } from "react-router-dom"; // ✅ Corrected casing
 
-interface Product {
+export interface Product {
   id: number;
   name: string;
   price: number;
   image: string;
   stock: number;
-  sellerid: number;
+  sellerId: number;
   seller: {
     id: number;
     businessname: string;
@@ -39,7 +39,7 @@ const ProductCard: React.FC<ProductCardProps> = ({ product }) => {
 
   const addToCartMutation = useMutation({
     mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => {
-      return await apiRequest("post", "/api/cart/add", { productId, quantity });
+      return await apiRequest("POST", "/api/cart/add", { productId, quantity });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/cart"] });

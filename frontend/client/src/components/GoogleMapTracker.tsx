@@ -5,7 +5,7 @@ import {
   Polyline,
   useJsApiLoader,
 } from "@react-google-maps/api";
-import { Truck, MapPin, Store as StoreIconLucide } from "lucide-react";
+import { Truck, Store as StoreIconLucide } from "lucide-react";
 
 /* ==========================================================================
    INTERFACES & TYPES
@@ -178,7 +178,7 @@ service.route(
     <div className="relative w-full h-full">
       <GoogleMap
         mapContainerStyle={containerStyle}
-        onLoad={(map) => (mapRef.current = map)}
+        onLoad={(map) => {mapRef.current = map}}
         options={{
           disableDefaultUI: true,
           styles: silverMapStyle,
@@ -233,7 +233,7 @@ service.route(
                 strokeColor: "#8b5cf6",
                 strokeWeight: 6,
                 icons: [{
-                  icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 3, fillOpacity: 1, color: "#fff" },
+                  icon: { path: window.google.maps.SymbolPath.CIRCLE, scale: 3, fillOpacity: 1, strokeColor: "#fff" },
                   offset: `${dashOffset}%`,
                 }],
               }}
