@@ -26,7 +26,7 @@ const BulkUpload = () => {
         setStatus(`${jsonData.length} प्रोडक्ट्स अपलोड हो रहे हैं...`);
 
         // आपकी API कॉल
-        const response = await fetch('http://localhost:3000/api/admin/bulk-products', {
+        const response = await fetch('http://shopnish.com/api/admin/bulk-products', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(jsonData),

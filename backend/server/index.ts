@@ -10,9 +10,9 @@ import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 
 // ✅ Import the single database instance
-import { db } from "./db.ts"; // Removed databasePool if not directly used here
+import { db } from "./db"; // Removed databasePool if not directly used here
 
-import { initSocket } from "./socket.ts";
+import { initSocket } from "./socket";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -37,7 +37,8 @@ app.use(
                 app.use(express.json());
                 app.use(express.urlencoded({ extended: false }));
                 app.use(cookieParser());
-
+app.use(express.json({ limit: '50mb' })); // 👈 यह लाइन बहुत जरूरी है
+app.use(express.urlencoded({ limit: '50mb', extended: true }));
                 // --- Drizzle Migrations ---
                 async function runMigrations() {
                   try {
