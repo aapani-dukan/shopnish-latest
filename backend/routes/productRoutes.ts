@@ -6,7 +6,11 @@ import { upload } from '../server/middleware/multerConfig';
 import * as ProductController from '../server/controllers/productController';
 
 const router = Router();
+router.get('/master-search', ProductController.searchMasterProducts);
 
+// --- 📦 BULK UPLOAD (New) ---
+// जो आपने शुरू में पूछा था, उसे यहाँ रजिस्टर कर रहे हैं
+router.post('/bulk-products', verifyToken, requireAdminAuth, ProductController.bulkUploadProducts);
 // Customer Endpoints
 router.get('/', ProductController.getAllProducts);
 router.get('/:id', ProductController.getProductById);

@@ -2,11 +2,12 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import {
   products,
+  masterProducts,
   categories as productCategories,
   sellersPgTable,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq, like, inArray, and, desc, asc, sql } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
@@ -123,77 +124,126 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
 
   return errors;
 }
+// 1. मास्टर कैटलॉग में सर्च करने के लिए
+export const searchMasterProducts = async (req: any, res: any) => {
+  const { q } = req.query;
 
+  if (!q || q.length < 2) {
+    return res.json([]);
+  }
+
+  try {
+    const results = await db
+      .select()
+      .from(masterProducts)
+      .where(
+        or(
+          ilike(masterProducts.name, `%${q}%`),
+          ilike(masterProducts.brand, `%${q}%`)
+        )
+      )
+      .limit(10); // टॉप 10 रिजल्ट्स ताकि सर्च फ़ास्ट रहे
+
+    res.json(results);
+  } catch (error) {
+    console.error("Master search error:", error);
+    res.status(500).json({ message: "खोजने में समस्या आई" });
+  }
+};
+
+// 2. बल्क अपलोड के लिए (जो हमने पहले डिस्कस किया था)
+export const bulkUploadProducts = async (req: any, res: any) => {
+  try {
+    const productsData = req.body;
+    if (!Array.isArray(productsData)) {
+      return res.status(400).json({ error: "Invalid data format" });
+    }
+
+    await db.insert(masterProducts).values(productsData).onConflictDoUpdate({
+      target: masterProducts.masterSku,
+      set: {
+        name: sql`excluded.name`,
+        image: sql`excluded.image`,
+        // बाकी फ़ील्ड्स जो अपडेट करनी हों
+      },
+    });
+
+    res.json({ message: "Bulk products uploaded successfully" });
+  } catch (error) {
+    console.error("Bulk upload error:", error);
+    res.status(500).json({ error: "Failed to upload bulk products" });
+  }
+};
 // =========================================================================
 // Controller Functions
 // =========================================================================
 
 export const createProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log("🚀 [API] Received request to create a new product.");
+  console.log("🚀 [API] Creating Product - Hybrid Mode (Master/Manual)");
+  
   const userId = req.user?.id;
-  if (!userId) return res.status(401).json({ message: "Unauthorized: Seller user not authenticated." });
+  if (!userId) return res.status(401).json({ message: "Unauthorized: Seller not authenticated." });
 
   try {
+    // 1. सेलर प्रोफाइल चेक करना
     const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
     if (!sellerProfile) return res.status(404).json({ message: "Seller profile not found." });
 
     const productData = req.body;
-    if (req.file) {
-  try {
-    // 1. File path se asli data (Buffer) read karein
-    const fileBuffer = fs.readFileSync(req.file.path);
-    
-    // 2. Buffer bhejein, path nahi (mimetype ke saath)
-    productData.image = await uploadImage(
-      fileBuffer,            // Pehla argument Buffer hai
-      req.file.originalname, // Dusra argument FileName
-      req.file.mimetype      // Teesra argument ContentType
-    );
-    
-    // 3. Upload ke baad temporary file delete karna na bhoolein (Good Practice)
-    fs.unlinkSync(req.file.path); 
-    
-  } catch (uploadError: any) {
-    console.error("❌ Image upload failed:", uploadError);
-    return res.status(500).json({ message: "Image upload failed." });
-  }
-}
 
-    const validationErrors = validateProductInput(productData);
-    if (validationErrors.length > 0) return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
+    // 2. इमेज हैंडलिंग (पुरानी Multer/File logic हटा दी क्योंकि अब Cloudinary URL सीधा body में आ रहा है)
+    // अगर फिर भी कोई फाइल आती है (बैकअप के लिए), तो आप पुरानी लॉजिक रख सकते हैं, 
+    // लेकिन अब 'productData.image' सीधा Frontend से मिलेगा।
 
+    // 3. डेटाबेस में इंसर्ट (Hybrid Fields के साथ)
     const [newProduct] = await db.insert(products).values({
+      // --- Hybrid Fields ---
+      masterProductId: productData.masterProductId ? Number(productData.masterProductId) : null,
+      
+      // --- Basic Info ---
       name: productData.name,
       description: productData.description || null,
-      price: productData.price,
-      stock: productData.stock,
+      price: String(productData.price),
+      stock: Number(productData.stock),
       categoryId: Number(productData.categoryId),
-      originalPrice: productData.originalPrice ? Number(productData.originalPrice) : null, // ADDED
-  brand: productData.brand || null, // ADDED
-  
-  
+      image: productData.image || null, // Cloudinary URL यहाँ आएगा
+      
+      // --- Advanced Info (जो आपने दी थी) ---
+      originalPrice: productData.originalPrice ? String(productData.originalPrice) : null,
+      brand: productData.brand || null,
       sellerId: sellerProfile.id,
-      image: productData.image || null,
       unit: productData.unit || 'unit',
-      minOrderQty: productData.minOrderQty || 1,
-      maxOrderQty: productData.maxOrderQty || null,
+      minOrderQty: Number(productData.minOrderQty) || 1,
+      maxOrderQty: productData.maxOrderQty ? Number(productData.maxOrderQty) : null,
       approvalStatus: 'pending',
       isActive: productData.isActive ?? true,
+      
+      // --- Localization ---
       nameHindi: productData.nameHindi || null,
       descriptionHindi: productData.descriptionHindi || null,
       
-    
+      // --- Shipping & Delivery ---
       deliveryScope: productData.deliveryScope || 'NATIONAL',
-      productDeliveryRadiusKM: productData.productDeliveryRadiusKM || null,
+      productDeliveryRadiusKM: productData.productDeliveryRadiusKM ? Number(productData.productDeliveryRadiusKM) : null,
       productDeliveryPincodes: productData.productDeliveryPincodes || null,
       estimatedDeliveryTime: productData.estimatedDeliveryTime || '2-3 business days',
+      
       createdAt: new Date(),
       updatedAt: new Date(),
-    }).returning();
+    }as any).returning();
 
-    res.status(201).json({ message: "Product created successfully. Awaiting admin approval.", product: newProduct });
-  } catch (error) { next(error); }
+    console.log("✅ Product Created Successfully:", newProduct.id);
+    res.status(201).json({ 
+      message: "Product created successfully. Awaiting admin approval.", 
+      product: newProduct 
+    });
+
+  } catch (error) { 
+    console.error("❌ Create Product Error:", error);
+    next(error); 
+  }
 };
+    
 
 export const updateProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log(`🔄 [API] Received request to update product ${req.params.productId}.`);

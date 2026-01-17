@@ -244,6 +244,7 @@ export const products = pgTable("products", {
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
   storeId: integer("store_id").references(() => stores.id),
   categoryId: integer("category_id").references(() => categories.id),
+  masterProductId: integer("master_product_id").references(() => masterProducts.id),
   name: text("name").notNull(),
   nameHindi: text("name_hindi"),
   description: text("description"),

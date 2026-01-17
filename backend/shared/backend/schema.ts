@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
+  services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
   subOrders,deliveryBatches,couponsPgTable,homeLayout,masterOrderStatusEnum, subOrderStatusEnum,
   paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum
 } from './tables';
@@ -157,7 +157,7 @@ export {
   // Tables
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews, userRoleEnum, approvalStatusEnum,
+  services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
   subOrders, deliveryBatches, couponsPgTable,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
 productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,
   // Relations
