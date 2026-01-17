@@ -12,9 +12,10 @@ import { useSocket } from "../../hooks/useSocket";
 import { useNavigate } from "react-router-dom"; 
 import AdminSettingsPage from "./AdminSettingsPage"; 
 import AdminOrderDashboard from "./AdminOrderDashboard"; 
-import { Image as ImageIcon, PlusCircle, Trash2 } from "lucide-react";
+import { Image as ImageIcon, PlusCircle, Trash2,PlusSquare, } from "lucide-react";
 import { Label } from "../../components/ui/label";
 import { Input } from "../../components/ui/input";
+import BulkUpload from './BulkUpload';
 // Interfaces
 interface Vendor {
   id: number;
@@ -426,6 +427,18 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
 
       case "orders":
         return <AdminOrderDashboard />; 
+        // switch (activeTab) के अंदर इसे जोड़ें
+case "bulk-upload":
+  return (
+    <div className="space-y-4">
+      <h2 className="text-xl font-bold text-gray-800">Master Product Inventory</h2>
+      <p className="text-sm text-gray-500">
+        यहाँ से आप मास्टर लिस्ट में 800+ प्रोडक्ट्स एक साथ डाल सकते हैं।
+      </p>
+      {/* हमारा नया BulkUpload कॉम्पोनेंट यहाँ दिखेगा */}
+      <BulkUpload /> 
+    </div>
+  );
 
       case "layout-mgmt":
         return (
@@ -522,6 +535,14 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
           <ImageIcon className="mr-2 h-4 w-4" /> Layout & Banners
         </Button>
         <Button variant={activeTab === "platform-settings" ? "default" : "outline"} onClick={() => setActiveTab("platform-settings")}>Settings</Button>
+        // Buttons वाली लिस्ट में नीचे इसे जोड़ें
+<Button 
+  variant={activeTab === "bulk-upload" ? "default" : "outline"} 
+  className={activeTab === "bulk-upload" ? "bg-green-600 text-white" : "text-green-600 border-green-200"}
+  onClick={() => setActiveTab("bulk-upload")}
+>
+  <PlusSquare className="mr-2 h-4 w-4" /> Master Bulk Upload
+</Button>
       </div>
 
       <div className="mt-4">

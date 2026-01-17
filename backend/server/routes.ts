@@ -11,7 +11,7 @@ import {
 import { AuthenticatedRequest } from "./middleware/verifyToken";
 import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware";
 import { authAdmin } from "./lib/firebaseAdmin";
-import { eq } from "drizzle-orm";
+import { eq,sql } from "drizzle-orm";
 import { authorize } from "./middleware/authorize";
 import { validateRequest } from "./middleware/validation";
 // ✅ Sub-route modules
@@ -38,6 +38,7 @@ import adminDiscountsRouter from './roots/admin/adminDiscounts';
 import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 import customerRouter from '../routes/customerRoutes';
 import layoutRoutes from '../routes/layoutRoutes'; // Check karein path sahi ho
+import { masterProducts } from "../shared/backend/tables";
 const router = Router();
 
 // ✅ Health Check
@@ -261,6 +262,42 @@ router.post("/auth/logout", async (req, res) => {
   } catch (error: any) {
     console.error(error);
     res.status(500).json({ message: "Logout failed." });
+  }
+});
+// Bulk Upload API
+router.post("/bulk-products", async (req, res) => {
+  try {
+    const products = req.body; // JSON डेटा जो आप भेजेंगे
+
+    if (!Array.isArray(products)) {
+      return res.status(400).json({ 
+        error: "Data format galat hai. Hume ek Array chahiye." 
+      });
+    }
+
+    // Drizzle का इस्तेमाल करके बल्क इंसर्ट (ये SQL से बहुत फ़ास्ट है)
+    // ये कोड पुराने को अपडेट करेगा और नए को ऐड करेगा
+await db.insert(masterProducts)
+  .values(products)
+  .onConflictDoUpdate({
+    target: masterProducts.masterSku, // अगर SKU मैच कर जाए
+    set: { 
+      name: sql`EXCLUDED.name`,
+      brand: sql`EXCLUDED.brand`,
+      unit: sql`EXCLUDED.unit`,
+      categoryId: sql`EXCLUDED.category_id`,
+      image: sql`EXCLUDED.image`
+    }
+  });
+
+    return res.status(200).json({ 
+      success: true, 
+      message: `${products.length} products successfully add ho gaye hain!` 
+    });
+  } catch (error: any) {
+    console.error("Bulk Upload Error:", error);
+    // अगर कोई SKU पहले से है, तो ये एरर दिखाएगा
+    return res.status(500).json({ error: error.message });
   }
 });
 

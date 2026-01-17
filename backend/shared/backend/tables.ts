@@ -88,6 +88,7 @@ export const categories = pgTable("categories", {
   sellerId: integer("seller_id"),
   name: text("name").notNull(),
   nameHindi: text("name_hindi"),
+  icon: text("icon"),
   slug: text("slug").notNull().unique(),
   description: text("description"),
   image: text("image"),
@@ -520,4 +521,19 @@ export const homeLayout = pgTable("home_layout", {
 
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+});
+  export const masterProducts = pgTable("master_products", {
+  id: serial("id").primaryKey(),
+  masterSku: text("master_sku").unique(), // एक्सेल का Master_SKU यहाँ आएगा
+  categoryId: integer("category_id").references(() => categories.id),
+  
+  name: text("name").notNull(), // एक्सेल का Product_Name
+  nameHindi: text("name_hindi"),
+  brand: text("brand"), // एक्सेल का Brand
+  unit: text("unit").notNull().default("piece"), // एक्सेल का Standard_Unit
+  productType: text("product_type"), // एक्सेल का Product_Type (Branded/Unique)
+  image: text("image").notNull(), 
+  description: text("description"),
+  isActive: boolean("is_active").default(true),
+  createdAt: timestamp("created_at").defaultNow(),
 });
