@@ -46,7 +46,7 @@ const BulkUpload = () => {
           
           setStatus(`अपलोड हो रहा है: ${uploadedCount} / ${totalProducts}...`);
 
-          const response = await fetch('https://shopnish-seprate.onrender.com/api/admin/bulk-products', {
+          const response = await fetch('https://shopnish-seprate.onrender.com/api/bulk-products', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
