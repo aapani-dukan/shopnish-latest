@@ -54,7 +54,7 @@ const SellerAddProductPage: React.FC = () => {
   useEffect(() => {
     const fetchCategories = async () => {
       try {
-        const res = await axios.get('/api/categories/all');
+        const res = await axios.get('/api/categories');
         setCategories(res.data);
       } catch (error) {
         toast.error("श्रेणियाँ लोड नहीं हो सकीं");
