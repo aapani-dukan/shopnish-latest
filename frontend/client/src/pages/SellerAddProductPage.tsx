@@ -212,6 +212,11 @@ const SellerAddProductPage: React.FC = () => {
                            <div className="flex-1">
                              <p className="font-bold text-gray-800 leading-tight">{p.name}</p>
                              <p className="text-xs text-indigo-600 font-medium">{p.brand || 'No Brand'}</p>
+                             {p.unit && (
+      <span className="text-[10px] bg-gray-200 text-gray-700 px-1.5 py-0.5 rounded font-bold">
+        {p.unit}
+      </span>
+    )}
                            </div>
                         </div>
 
