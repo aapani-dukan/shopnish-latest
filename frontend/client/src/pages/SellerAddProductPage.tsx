@@ -183,20 +183,25 @@ const [selectedProduct, setSelectedProduct] = useState<any>(null);
     const token = await user.getIdToken();
 
     // 4. पेलोड तैयार करना (Catalog vs Manual)
-    let payload;
-    if (mode === 'catalog' && selectedProduct) {
-      payload = {
-        ...formData, 
-        masterProductId: selectedProduct.id,
-        name: selectedProduct.name,
-        image: selectedProduct.image,
-        description: selectedProduct.description || "",
-        categoryId: parseInt(selectedProduct.categoryId), // नंबर में कन्वर्ट करना सुरक्षित रहता है
-        brand: selectedProduct.brand || "",
-      };
-    } else {
-      payload = formData;
-    }
+    // SellerAddProductPage.tsx के handleSubmit में यह हिस्सा बदलें:
+
+let payload;
+if (mode === 'catalog' && selectedProduct) {
+  payload = {
+    masterProductId: selectedProduct.id,
+    name: selectedProduct.name,
+    image: selectedProduct.image,
+    description: selectedProduct.description || "",
+    brand: selectedProduct.brand || "",
+    categoryId: parseInt(selectedProduct.categoryId), 
+    price: formData.price || 0, // सेलर द्वारा भरा गया प्राइस
+    stock: formData.stock || 0, // सेलर द्वारा भरा गया स्टॉक
+    unit: 'unit',
+    isActive: true
+  };
+} else {
+  payload = formData;
+}
 
     console.log("🚀 Sending Payload with Auth:", payload);
 
