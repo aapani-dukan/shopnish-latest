@@ -7,7 +7,7 @@ import {
   sellersPgTable,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq,ilike, like, inArray, and, desc, asc, sql, or } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
@@ -124,25 +124,41 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
 
   return errors;
 }
-// 1. मास्टर कैटलॉग में सर्च करने के लिए
-export const searchMasterProducts = async (req: any, res: any) => {
-  const { q } = req.query;
+// backend/controllers/productController.ts
 
-  if (!q || q.length < 2) {
-    return res.json([]);
-  }
+
+
+export const searchMasterProducts = async (req: any, res: any) => {
+  const { q, categoryId } = req.query;
 
   try {
-    const results = await db
-      .select()
-      .from(masterProducts)
-      .where(
+    const conditions: SQL[] = [];
+
+    // 1. अगर कैटेगरी आईडी भेजी गई है, तो उसे फिल्टर में जोड़ें
+    if (categoryId && categoryId !== 'all' && categoryId !== ' ') {
+      conditions.push(eq(masterProducts.categoryId, Number(categoryId)));
+    }
+
+    // 2. अगर सर्च टर्म (q) भेजा गया है और 2 अक्षर से बड़ा है
+    if (q && q.length >= 2) {
+      conditions.push(
         or(
           ilike(masterProducts.name, `%${q}%`),
           ilike(masterProducts.brand, `%${q}%`)
-        )
-      )
-      .limit(10); // टॉप 10 रिजल्ट्स ताकि सर्च फ़ास्ट रहे
+        ) as SQL
+      );
+    }
+
+    // 3. अगर न कैटेगरी है न सर्च, तो खाली लिस्ट भेजें
+    if (conditions.length === 0) {
+      return res.json([]);
+    }
+
+    const results = await db
+      .select()
+      .from(masterProducts)
+      .where(and(...conditions)) // category AND (name OR brand)
+      .limit(50); // बल्क मोड है इसलिए लिमिट थोड़ी बढ़ा दी है
 
     res.json(results);
   } catch (error) {
