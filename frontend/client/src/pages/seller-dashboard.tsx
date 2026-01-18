@@ -1,241 +1,183 @@
-// client/src/pages/SellerDashboard.tsx
-
 "use client";
 
-import React, { useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import type { Seller, OrderWithItems } from "../../../shared/backend/schema";
 import { apiRequest } from "../lib/queryClient";
 import { useToast } from "../hooks/use-toast";
 import { Link, useNavigate } from "react-router-dom"; 
 import {
-  Package, ShoppingCart, TrendingUp, Star, Clock, CheckCircle, Settings, XCircle,
+  Package, ShoppingCart, TrendingUp, Star, Clock, CheckCircle, Settings, XCircle, PlusCircle
 } from "lucide-react";
 import { useSocket } from "../hooks/useSocket";
 import { useAuth } from "../hooks/useAuth";
 
-// --- Import UI Components ---
+// --- UI Components ---
 import { Card, CardContent } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
 import { Skeleton } from "../components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs";
 import { Button } from "../components/ui/button";
-// ✅ Header इम्पोर्ट हटा दिया गया है
 
-// --- Import Managers ---
+// --- Managers ---
 import ProductManager from "../components/ProductManager";
 import OrderManager from "../components/OrderManager";
 import SellerProfileEdit from "../components/seller/SellerProfileEdit";
-
-// Types
-import { Seller, OrderWithItems } from "../lib/types";
 
 export default function SellerDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("products");
-
   const { socket, isConnected } = useSocket();
   const { user, isAuthenticated } = useAuth();
   const navigate = useNavigate();
 
-  // ----------------- socket.io logic -----------------
+  // ----------------- 1. Socket.io Logic -----------------
   useEffect(() => {
-    if (!socket || !isConnected || !isAuthenticated || user?.role !== "seller")
-      return;
+    if (!socket || !isConnected || !isAuthenticated || user?.role !== "seller") return;
 
     const handleNewOrder = (order: OrderWithItems) => {
-      console.log("📦 New order received for seller:", order);
       queryClient.invalidateQueries({ queryKey: ["/api/sellers/orders"] });
       toast({
-        title: "🔔 New Order!",
-        description: `You received a new order for order #${order.id}.`,
+        title: "🔔 नया ऑर्डर!",
+        description: `ऑर्डर #${order.id} प्राप्त हुआ है।`,
         duration: 5000,
       });
     };
 
-    const handleOrderUpdate = (order: OrderWithItems) => {
-      console.log("🚚 Order update received for seller:", order);
-      queryClient.invalidateQueries({ queryKey: ["/api/sellers/orders"] });
-      if (order.deliveryBoy && order.status !== 'pending') {
-        toast({
-          title: "✅ Delivery Assigned!",
-          description: `Order #${order.id} assigned to delivery boy ${order.deliveryBoy.name}.`,
-          duration: 8000,
-        });
-      }
-    };
-
     socket.on("new-order-for-seller", handleNewOrder);
-    socket.on("order-updated-for-seller", handleOrderUpdate);
-    return () => {
-      socket.off("new-order-for-seller", handleNewOrder);
-      socket.off("order-updated-for-seller", handleOrderUpdate);
-    };
+    return () => { socket.off("new-order-for-seller", handleNewOrder); };
   }, [socket, isConnected, isAuthenticated, user, toast, queryClient]);
 
-  // ----------------- fetch seller profile -----------------
+  // ----------------- 2. Fetch Seller Profile -----------------
   const {
     data: seller,
     isLoading: sellerLoading,
     error: sellerError,
-    // ✅ सुधार 1: डेटा को दोबारा लोड करने के लिए 'refetch' फ़ंक्शन प्राप्त करें
     refetch: refetchSeller,
   } = useQuery<Seller>({
     queryKey: ["/api/sellers/me"],
-    queryFn: () => apiRequest("GET", "/api/sellers/me", null, user?.idToken),
+    // ✅ Fix: Argument count error solved by removing extra token param (handled by client headers)
+    queryFn: () => apiRequest("GET", "/api/sellers/me"),
     staleTime: 5 * 60 * 1000,
     enabled: isAuthenticated && user?.role === "seller",
   });
 
-  // ----------------- fetch seller orders -----------------
+  // ----------------- 3. Fetch Seller Orders -----------------
   const {
     data: orders,
     isLoading: ordersLoading,
     error: ordersError,
   } = useQuery<OrderWithItems[]>({
     queryKey: ["/api/sellers/orders"],
-    queryFn: () => apiRequest("GET", "/api/sellers/orders", null, user?.idToken),
-    enabled: !!seller?.id, // सुनिश्चित करें कि seller.id उपलब्ध है
+    queryFn: () => apiRequest("GET", "/api/sellers/orders"),
+    enabled: !!seller?.id,
     staleTime: 0,
     refetchInterval: 60 * 1000,
   });
 
+  // ----------------- 4. Metrics & Revenue Fix -----------------
   // ----------------- metrics -----------------
-  // ✅ सुधार 2: डुप्लिकेट 'totalRevenue' गणना हटा दी गई है।
-  // अब सभी मेट्रिक्स सुरक्षित रूप से बैकएंड डेटा से या डिफ़ॉल्ट 0 से इनिशियलाइज़ होते हैं।
-  // इससे 'toLocaleString' वाली TypeError ठीक हो जाएगी।
-  const totalRevenue = seller?.totalRevenue || 0;
-  const totalOrders = seller?.totalOrders || 0;
-  const totalProducts = seller?.totalProducts || 0;
-  const averageRating = parseFloat(seller?.averageRating?.toString() || "0");
+// ✅ सुधार: TypeScript को बताने के लिए कि यह डेटा हो सकता है, 'as any' या fallback का उपयोग करें
+// या बेहतर होगा कि इसे Number में बदलें ताकि toLocaleString() काम करे।
 
-  // ----------------- loading / error UI -----------------
+const totalRevenue = Number((seller as any)?.totalRevenue || 0);
+const totalOrders = Number((seller as any)?.totalOrders || 0);
+const totalProducts = Number((seller as any)?.totalProducts || 0);
+const averageRating = parseFloat((seller as any)?.averageRating?.toString() || "0");
+
+  // ----------------- 5. Loading / Error States -----------------
   if (sellerLoading) {
     return (
-      <div className="py-8">
-        <div className="animate-pulse space-y-6">
-          <Skeleton className="h-8 w-64 mb-6" />
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-            {[...Array(4)].map((_, i) => (
-              <Skeleton key={i} className="h-32 rounded-xl" />
-            ))}
-          </div>
-          <Skeleton className="h-10 w-full mb-4 rounded-md" />
-          <Skeleton className="h-96 w-full rounded-xl" />
+      <div className="p-8 space-y-6">
+        <Skeleton className="h-10 w-64" />
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
+          {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-32 rounded-xl" />)}
         </div>
+        <Skeleton className="h-96 w-full rounded-xl" />
       </div>
     );
   }
 
   if (sellerError || !seller) {
-    // अगर sellerProfile.approvalStatus 'pending' या 'rejected' है तो रीडायरेक्ट करें
     if (seller?.approvalStatus === 'pending' || seller?.approvalStatus === 'rejected') {
         navigate(`/seller-status?status=${seller.approvalStatus}`, { replace: true });
         return null;
     }
-
     return (
       <div className="py-16 text-center">
-        <div className="text-6xl mb-4">
-          {sellerError ? (
-            <XCircle className="w-20 h-20 text-red-500 mx-auto" />
-          ) : (
-            "🏪"
-          )}
-        </div>
-        <h2 className="text-2xl font-bold mb-4">
-          {sellerError ? "Error Loading Profile" : "Seller Profile Not Found"}
-        </h2>
-        <p className="text-muted-foreground mb-6">
-          {sellerError
-            ? "There was an issue fetching your seller profile. Please try again."
-            : "It looks like you haven't set up your seller profile yet or it's not approved."}
-        </p>
-
-        {/* ✅ सुधार 3: Retry और Apply बटन के लिए अलग लॉजिक */}
-        {sellerError ? (
-          // यदि कोई एरर है, तो 'Retry' बटन दिखाएं जो डेटा को फिर से फेच करता है
-          <Button onClick={() => refetchSeller()} variant="default">
-            Retry
-          </Button>
-        ) : (
-          // यदि कोई एरर नहीं है लेकिन प्रोफाइल नहीं मिली, तो 'Apply' लिंक दिखाएं
-          <Link to="/seller-apply">
-            <Button>
-              Apply to be a Seller
-            </Button>
-          </Link>
-        )}
-
-        <Link to="/">
-          <Button variant="ghost" className="ml-4">
-            Go Back Home
-          </Button>
-        </Link>
+        <XCircle className="w-20 h-20 text-red-500 mx-auto mb-4" />
+        <h2 className="text-2xl font-bold mb-4">प्रोफ़ाइल लोड करने में समस्या</h2>
+        <Button onClick={() => refetchSeller()}>Retry</Button>
       </div>
     );
   }
 
-  // ----------------- Dashboard Content -----------------
+  // ----------------- 6. Dashboard Content -----------------
   return (
-    <div className="space-y-8">
-      {/* Header / Metrics सेक्शन */}
-      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between mb-8">
+    <div className="space-y-8 p-4 md:p-8">
+      {/* Top Header */}
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold text-foreground mb-2">Dashboard Overview</h1>
-          <p className="text-muted-foreground">Welcome back, {seller.businessName}</p>
+          <h1 className="text-3xl font-bold text-gray-900 tracking-tight">Dashboard Overview</h1>
+          <p className="text-muted-foreground">स्वागत है, {seller.businessName}</p>
         </div>
-        <div className="flex items-center space-x-4 mt-4 sm:mt-0">
+        
+        <div className="flex flex-wrap items-center gap-3">
+          {/* ✅ New High-Class Feature: Fast Link to Bulk Add Product */}
+          <Link to="/seller/add-product">
+            <Button className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold shadow-md gap-2">
+              <PlusCircle className="h-4 w-4" /> नया सामान जोड़ें
+            </Button>
+          </Link>
+
           {seller.approvalStatus === "approved" ? (
-            <Badge variant="default" className="bg-green-600">
-              <CheckCircle className="h-3 w-3 mr-1" /> Verified Seller
-            </Badge>
-          ) : seller.approvalStatus === "pending" ? (
-            <Badge variant="secondary">
-              <Clock className="h-3 w-3 mr-1" /> Pending Verification
-            </Badge>
+            <Badge className="bg-green-600 px-3 py-1">
+              <CheckCircle className="h-3 w-3" />
+              Verified Seller</Badge>
           ) : (
-            <Badge variant="destructive">
-              <XCircle className="h-3 w-3 mr-1" /> Rejected ({seller.rejectionReason || "no reason specified"})
-            </Badge>
+            <Badge variant="secondary" className="px-3 py-1">
+              <Clock className="h-3 w-3" />
+              Pending Review</Badge>
           )}
         </div>
       </div>
 
       {/* Metrics Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-        <Card>
+        <Card className="border-none shadow-sm bg-white">
           <CardContent className="p-6 flex items-center">
-            <TrendingUp className="h-8 w-8 text-primary" />
+            <div className="bg-green-100 p-3 rounded-lg"><TrendingUp className="h-6 w-6 text-green-600" /></div>
             <div className="ml-4">
               <p className="text-sm font-medium text-muted-foreground">Total Revenue</p>
-              {/* अब यह सुरक्षित है क्योंकि totalRevenue को 0 पर इनिशियलाइज़ किया गया है */}
-              <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString()}</p>
+              <p className="text-2xl font-bold">₹{totalRevenue.toLocaleString('en-IN')}</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="border-none shadow-sm bg-white">
           <CardContent className="p-6 flex items-center">
-            <ShoppingCart className="h-8 w-8 text-secondary" />
+            <div className="bg-blue-100 p-3 rounded-lg"><ShoppingCart className="h-6 w-6 text-blue-600" /></div>
             <div className="ml-4">
-              <p className="text-sm font-medium text-muted-foreground">Total Orders</p>
+              <p className="text-sm font-medium text-muted-foreground">Orders</p>
               <p className="text-2xl font-bold">{totalOrders}</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="border-none shadow-sm bg-white">
           <CardContent className="p-6 flex items-center">
-            <Package className="h-8 w-8 text-yellow-600" />
+            <div className="bg-orange-100 p-3 rounded-lg"><Package className="h-6 w-6 text-orange-600" /></div>
             <div className="ml-4">
               <p className="text-sm font-medium text-muted-foreground">Products</p>
               <p className="text-2xl font-bold">{totalProducts}</p>
             </div>
           </CardContent>
         </Card>
-        <Card>
+
+        <Card className="border-none shadow-sm bg-white">
           <CardContent className="p-6 flex items-center">
-            <Star className="h-8 w-8 text-yellow-500" />
+            <div className="bg-yellow-100 p-3 rounded-lg"><Star className="h-6 w-6 text-yellow-500" /></div>
             <div className="ml-4">
               <p className="text-sm font-medium text-muted-foreground">Rating</p>
               <p className="text-2xl font-bold">{averageRating.toFixed(1)}</p>
@@ -244,40 +186,30 @@ export default function SellerDashboard() {
         </Card>
       </div>
 
-      {/* Tabs */}
-      <Tabs
-        defaultValue="products"
-        value={activeTab}
-        onValueChange={setActiveTab}
-        className="space-y-4"
-      >
-        <TabsList>
-          <TabsTrigger value="products">
-            <Package className="h-4 w-4 mr-2" /> Products
-          </TabsTrigger>
-          <TabsTrigger value="orders">
-            <ShoppingCart className="h-4 w-4 mr-2" /> Orders
-          </TabsTrigger>
-          <TabsTrigger value="profile">
-            <Settings className="h-4 w-4 mr-2" /> Profile
-          </TabsTrigger>
+      {/* Main Tabs Section */}
+      <Tabs defaultValue="products" value={activeTab} onValueChange={setActiveTab} className="space-y-6">
+        <TabsList className="bg-gray-100 p-1">
+          <TabsTrigger value="products" className="gap-2"><Package className="h-4 w-4" /> Products</TabsTrigger>
+          <TabsTrigger value="orders" className="gap-2"><ShoppingCart className="h-4 w-4" /> Orders</TabsTrigger>
+          <TabsTrigger value="profile" className="gap-2"><Settings className="h-4 w-4" /> Settings</TabsTrigger>
         </TabsList>
 
-        <TabsContent value="products">
-          <ProductManager seller={seller} />
+        <TabsContent value="products" className="mt-0">
+          <Card className="border-none shadow-sm"><CardContent className="p-6">
+              <ProductManager seller={seller} />
+          </CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="orders">
-          <OrderManager
-            seller={seller}
-            orders={orders}
-            isLoading={ordersLoading}
-            error={ordersError}
-          />
+        <TabsContent value="orders" className="mt-0">
+          <Card className="border-none shadow-sm"><CardContent className="p-6">
+              <OrderManager seller={seller} orders={orders as any} isLoading={ordersLoading} error={ordersError} />
+          </CardContent></Card>
         </TabsContent>
 
-        <TabsContent value="profile">
-          <SellerProfileEdit />
+        <TabsContent value="profile" className="mt-0">
+          <Card className="border-none shadow-sm"><CardContent className="p-6">
+              <SellerProfileEdit />
+          </CardContent></Card>
         </TabsContent>
       </Tabs>
     </div>

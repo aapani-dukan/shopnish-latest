@@ -1,8 +1,8 @@
 // client/src/pages/deliveryBoy/DeliveryOrdersList.tsx (UPDATED for Batch Model)
 
 import React from "react";
-import { Navigation, Phone, MapPin, Loader2 } from "lucide-react"; 
-
+import { Navigation, Phone, MapPin } from "lucide-react"; 
+//import { Skeleton } from "@/components/ui/skeleton";
 // --- TypeScript Type Definitions ---
 // (Address, Seller, Product, OrderItem types are retained)
 
@@ -118,34 +118,34 @@ const normalizeDeliveryAddress = (raw: any): Address | null => {
 
 // 🛑 Updated normalizeSeller: Batch से Seller Details खींचना
 // 🛑 UPDATED normalizeSeller: अब सीधे batch.sellerDetails का उपयोग करता है
+// 🛑 UPDATED normalizeSeller: बैच से विक्रेता की जानकारी सुरक्षित तरीके से निकालता है
 const normalizeSeller = (batch: DeliveryBatch): Seller | null => {
-  let rawSellerData = batch.sellerDetails;
+  const rawSellerData = batch.sellerDetails;
 
-  // यदि विक्रेता array है (कई पिकअप), तो हम सिर्फ पहले वाले को प्रदर्शित कर सकते हैं
-  if (Array.isArray(rawSellerData) && rawSellerData.length > 0) {
-      rawSellerData = rawSellerData[0];
-  }
-  
-  if (!rawSellerData) {
-    return null;
-  }
+  // 1. अगर डेटा ही नहीं है, तो सीधा null वापस करो
+  if (!rawSellerData) return null;
 
-  // Seller के डेटा को normalise करें
+  // 2. अगर Array है, तो पहला सेलर लो, वर्ना वही इस्तेमाल करो
+  const sellerData: any = Array.isArray(rawSellerData) 
+    ? rawSellerData[0] 
+    : rawSellerData;
+
+  // 3. अगर निकालने के बाद भी डेटा नहीं मिला तो null
+  if (!sellerData) return null;
+
+  // 4. डेटा को 'Seller' इंटरफेस के हिसाब से ढालो (Normalizing)
   return {
-    id: rawSellerData.id,
-    name: rawSellerData.name ?? rawSellerData.businessName, 
-    businessName: rawSellerData.businessName ?? rawSellerData.name,
-    phone: rawSellerData.businessPhone ?? rawSellerData.phone ?? rawSellerData.phoneNumber,
-    
-    email: rawSellerData.email ?? null,
-    address: rawSellerData.businessAddress ?? rawSellerData.address ?? rawSellerData.addressLine1,
-    city: rawSellerData.city,
-    pincode: rawSellerData.pincode ?? rawSellerData.postalCode,
-    landmark: rawSellerData.landmark,
+    id: sellerData.id,
+    name: sellerData.name ?? sellerData.businessName, 
+    businessName: sellerData.businessName ?? sellerData.name,
+    phone: sellerData.businessPhone ?? sellerData.phone ?? sellerData.phoneNumber,
+    email: sellerData.email ?? null,
+    address: sellerData.businessAddress ?? sellerData.address ?? sellerData.addressLine1,
+    city: sellerData.city,
+    pincode: sellerData.pincode ?? sellerData.postalCode,
+    landmark: sellerData.landmark,
   };
 };
-
-
 // --- AddressBlock (Logic remains the same) ---
 const AddressBlock: React.FC<{
   title: string;

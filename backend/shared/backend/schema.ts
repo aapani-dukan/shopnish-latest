@@ -62,6 +62,11 @@ export type OrderWithItems = {
     paymentMethod: string; 
   paymentStatus: string; 
   };
+  deliveryBoy?: {   // 👈 यह हिस्सा जोड़ें
+    name: string;
+    phone?: string;
+    id: number;
+  } | null;
   items: OrderItemWithProduct[];
 };
 export type OrderWithDeliveryBoy = OrderWithItems & {
