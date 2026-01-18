@@ -1,47 +1,37 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Loader2, PlusCircle, UploadCloud, Search, Package, Plus } from 'lucide-react';
+import { Loader2, PlusCircle, UploadCloud, Search, Package, CheckCircle2, X } from 'lucide-react';
 import axios from 'axios';
 import { toast } from 'react-hot-toast';
 
-// UI Components (आपके प्रोजेक्ट के हिसाब से)
+// UI Components
 import { Button } from '../components/ui/button';
 import { Input } from '../components/ui/input';
 import { Textarea } from '../components/ui/textarea';
 import { Label } from '../components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '../components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../components/ui/select';
 import { auth } from "../lib/firebase";
-interface Category {
-  id: number;
-  name: string;
-}
+
+interface Category { id: number; name: string; }
 
 const SellerAddProductPage: React.FC = () => {
   const navigate = useNavigate();
 
-  // Mode: catalog (master list) or manual (new product)
+  // --- States ---
   const [mode, setMode] = useState<'catalog' | 'manual'>('catalog');
-  
   const [loading, setLoading] = useState(false);
   const [imageUploading, setImageUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [categoriesLoading, setCategoriesLoading] = useState(true);
-  // SellerAddProductPage.tsx के अंदर State सेक्शन में
-const [selectedProduct, setSelectedProduct] = useState<any>(null);
-  // Search state
+  
+  // Catalog States
+  const [selectedCat, setSelectedCat] = useState<string>('');
   const [searchTerm, setSearchTerm] = useState('');
-  const [searchResults, setSearchResults] = useState<any[]>([]);
-  const [errors, setErrors] = useState<Record<string, string>>({});
+  const [masterProducts, setMasterProducts] = useState<any[]>([]);
+  const [selectedItems, setSelectedItems] = useState<Record<number, {price: number, stock: number}>>({});
 
+  // Manual Mode State
   const [formData, setFormData] = useState({
-    masterProductId: null as number | null,
     name: '',
     description: '',
     price: 0,
@@ -51,357 +41,271 @@ const [selectedProduct, setSelectedProduct] = useState<any>(null);
     brand: ''
   });
 
-  // 1. श्रेणियों को लोड करना (पुरानी फाइल की तरह)
+  // 1. श्रेणियाँ लोड करें
   useEffect(() => {
     const fetchCategories = async () => {
       try {
         const res = await axios.get('/api/categories');
         setCategories(res.data);
-      } catch (error) {
-        toast.error("श्रेणियाँ लोड नहीं हो सकीं");
-      } finally {
-        setCategoriesLoading(false);
-      }
+      } catch (error) { toast.error("श्रेणियाँ लोड नहीं हो सकीं"); }
     };
     fetchCategories();
   }, []);
 
-  // 2. मास्टर प्रोडक्ट सर्च (Debounced Search)
+  // 2. मास्टर प्रोडक्ट लाइव सर्च और फिल्टर
   useEffect(() => {
-    const delayDebounceFn = setTimeout(async () => {
-      if (searchTerm.length > 2 && mode === 'catalog' && !formData.masterProductId) {
-        try {
-          const res = await axios.get(`https://shopnish-seprate.onrender.com/api/products/master-search?q=${searchTerm}`);
-          setSearchResults(res.data);
-        } catch (err) {
-          console.error("Search failed", err);
-        }
+    const fetchMasterData = async () => {
+      if (mode !== 'catalog') return;
+      if (!selectedCat && searchTerm.length < 2) {
+        setMasterProducts([]);
+        return;
       }
-    }, 500);
-    return () => clearTimeout(delayDebounceFn);
-  }, [searchTerm, mode, formData.masterProductId]);
+      try {
+        let url = `https://shopnish-seprate.onrender.com/api/products/master-search?q=${searchTerm}`;
+        if (selectedCat && selectedCat !== "all") url += `&categoryId=${selectedCat}`;
+        const res = await axios.get(url);
+        setMasterProducts(res.data);
+      } catch (err) { console.error("Search failed", err); }
+    };
+    const timer = setTimeout(fetchMasterData, 400);
+    return () => clearTimeout(timer);
+  }, [selectedCat, searchTerm, mode]);
 
-  const handleSelectMaster = (product: any) => {
-  // 1. मास्टर प्रोडक्ट को स्टेट में सेव करें
-  setSelectedProduct(product);
+  // --- Handlers ---
 
-  // 2. FormData भरें (इमेज समेत)
-  setFormData({
-    ...formData,
-    name: product.name,
-    description: product.description || '',
-    image: product.image, // मास्टर कैटलॉग की इमेज यहाँ आ गई
-    categoryId: product.categoryId.toString(),
-    brand: product.brand || ''
-  });
+  const toggleProduct = (productId: number) => {
+    setSelectedItems(prev => {
+      const newItems = { ...prev };
+      if (newItems[productId]) delete newItems[productId];
+      else newItems[productId] = { price: 0, stock: 10 };
+      return newItems;
+    });
+  };
 
-  // 3. पक्का करें कि अपलोडिंग स्टेटस 'false' है 
-  // ताकि handleSubmit उसे इमेज न होने की वजह से न रोके
-  if (typeof setImageUploading === 'function') {
-    setImageUploading(false);
-  }
+  const updateItemData = (id: number, field: 'price' | 'stock', value: number) => {
+    setSelectedItems(prev => ({
+      ...prev,
+      [id]: { ...prev[id], [field]: value }
+    }));
+  };
 
-  setSearchResults([]);
-  setSearchTerm(product.name);
-  setErrors({});
-  toast.success("Catalog product selected! Image loaded.");
-};
-
-  // 3. Cloudinary इमेज अपलोड (AI Optimization के साथ)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
-    if (file.size > 5 * 1024 * 1024) {
-      toast.error("File size 5MB से कम होनी चाहिए");
-      return;
-    }
-
     setImageUploading(true);
     const data = new FormData();
     data.append('file', file);
     data.append('upload_preset', 'shopnish_products'); 
+    try {
+      const res = await fetch(`https://api.cloudinary.com/v1_1/dcah0b2jy/image/upload`, { method: 'POST', body: data });
+      const fileData = await res.json();
+      setFormData(prev => ({ ...prev, image: fileData.secure_url }));
+      toast.success("Image uploaded!");
+    } catch (err) { toast.error("Upload failed!"); }
+    finally { setImageUploading(false); }
+  };
+
+  // 3. Submit Handler (Dono Modes ke liye)
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
 
     try {
-      const res = await fetch(`https://api.cloudinary.com/v1_1/dcah0b2jy/image/upload`, {
-        method: 'POST',
-        body: data,
-      });
-      const fileData = await res.json();
-      
-      // Cloudinary Transformation: Auto-crop to 800x800 square with white background
-      const optimizedUrl = fileData.secure_url.replace('/upload/', '/upload/c_pad,h_800,w_800,bg_white/');
-      
-      setFormData(prev => ({ ...prev, image: optimizedUrl }));
-      setErrors(prev => ({ ...prev, image: '' }));
-      toast.success("Image uploaded & optimized! ✅");
-    } catch (err) {
-      toast.error("इमेज अपलोड करने में विफल!");
-    } finally {
-      setImageUploading(false);
-    }
-  };
+      const user = auth.currentUser;
+      const token = await user?.getIdToken();
+      if (!token) throw new Error("No token found");
 
-  // 4. Form Validation (आपकी पुरानी फाइल वाला लॉजिक)
-  const validateForm = () => {
-    const newErrors: Record<string, string> = {};
-    if (!formData.name) newErrors.name = "उत्पाद का नाम आवश्यक है।";
-    if (!formData.description) newErrors.description = "विवरण आवश्यक है।";
-    if (formData.price <= 0) newErrors.price = "मूल्य 0 से अधिक होना चाहिए।";
-    if (formData.stock < 0) newErrors.stock = "स्टॉक ऋणात्मक नहीं हो सकता।";
-    if (!formData.image) newErrors.image = "कृपया इमेज अपलोड करें या मास्टर लिस्ट से चुनें।";
-    if (!formData.categoryId) newErrors.categoryId = "श्रेणी आवश्यक है।";
+      if (mode === 'catalog') {
+        // --- Catalog Bulk Submit ---
+        const itemIds = Object.keys(selectedItems);
+        if (itemIds.length === 0) { toast.error("कृपया कम से कम एक उत्पाद चुनें"); setLoading(false); return; }
 
-    setErrors(newErrors);
-    return Object.keys(newErrors).length === 0;
-  };
+        const payload = itemIds.map(id => {
+          const p = masterProducts.find(mp => mp.id === Number(id));
+          return {
+            masterProductId: p.id,
+            name: p.name,
+            image: p.image,
+            categoryId: p.categoryId,
+            price: selectedItems[p.id].price,
+            stock: selectedItems[p.id].stock,
+          };
+        });
 
- const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  
-  // 1. इमेज अपलोड चेक
-  if (imageUploading) { 
-    toast.error("कृपया इमेज अपलोड होने का इंतज़ार करें।"); 
-    return; 
-  }
-
-  // 2. मैन्युअल मोड में वैलिडेशन चेक
-  if (mode === 'manual' && !validateForm()) { 
-    toast.error("कृपया सभी आवश्यक फ़ील्ड भरें।"); 
-    return; 
-  }
-
-  setLoading(true);
-  try {
-    // 3. Firebase टोकन प्राप्त करना (Auth Header के लिए)
-    const user = auth.currentUser;
-    if (!user) {
-      toast.error("सत्र समाप्त हो गया है, कृपया फिर से लॉगिन करें।");
-      setLoading(false);
-      return;
-    }
-    const token = await user.getIdToken();
-
-    // 4. पेलोड तैयार करना (Catalog vs Manual)
-    // SellerAddProductPage.tsx के handleSubmit में यह हिस्सा बदलें:
-
-let payload;
-if (mode === 'catalog' && selectedProduct) {
-  payload = {
-    masterProductId: selectedProduct.id,
-    name: selectedProduct.name,
-    image: selectedProduct.image,
-    description: selectedProduct.description || "",
-    brand: selectedProduct.brand || "",
-    categoryId: parseInt(selectedProduct.categoryId), 
-    price: formData.price || 0, // सेलर द्वारा भरा गया प्राइस
-    stock: formData.stock || 0, // सेलर द्वारा भरा गया स्टॉक
-    unit: 'unit',
-    isActive: true
-  };
-} else {
-  payload = formData;
-}
-
-    console.log("🚀 Sending Payload with Auth:", payload);
-
-    // 5. बैकएंड को डेटा भेजना (टोकन के साथ)
-    const response = await axios.post("/api/products", payload, { 
-      headers: {
-        'Authorization': `Bearer ${token}` // ⭐ यह लाइन 401 एरर फिक्स करेगी
-      },
-      withCredentials: true 
-    });
-    
-    if (response.status === 200 || response.status === 201) {
-      toast.success("उत्पाद सफलतापूर्वक आपकी दुकान में जोड़ा गया!");
+        await axios.post("/api/products/bulk", { products: payload }, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success("Catalog items added!");
+      } else {
+        // --- Manual Mode Submit ---
+        if (!formData.image) { toast.error("कृपया इमेज अपलोड करें"); setLoading(false); return; }
+        await axios.post("/api/products", formData, {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        toast.success("New product published!");
+      }
       navigate("/seller-dashboard/products");
-    }
+    } catch (err: any) {
+      toast.error(err.response?.data?.message || "Submit failed!");
+    } finally { setLoading(false); }
+  };
 
-  } catch (err: any) {
-    console.error("❌ Submit Error:", err);
-    const errorMsg = err.response?.data?.message || "उत्पाद जोड़ने में समस्या आई!";
-    toast.error(errorMsg);
-  } finally {
-    setLoading(false);
-  }
-};
   return (
-    <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
-      <Card className="shadow-xl border-t-4 border-indigo-600">
-        <CardHeader className="pb-4">
-          <CardTitle className="text-3xl font-bold text-gray-800 flex items-center gap-3">
-            <Package className="w-8 h-8 text-indigo-600" /> उत्पाद जोड़ें
-          </CardTitle>
-          
-          <div className="flex flex-col sm:flex-row gap-3 mt-6">
-            <Button 
-              type="button"
-              variant={mode === 'catalog' ? 'default' : 'outline'}
-              onClick={() => { setMode('catalog'); setFormData({...formData, masterProductId: null, image: ''}); setSearchTerm(''); }}
-              className={`flex-1 h-12 ${mode === 'catalog' ? 'bg-indigo-600' : ''}`}
-            >
-              <Search className="w-4 h-4 mr-2" /> कैटलॉग से चुनें
-            </Button>
-            <Button 
-              type="button"
-              variant={mode === 'manual' ? 'default' : 'outline'}
-              onClick={() => { setMode('manual'); setFormData({...formData, masterProductId: null, image: '', name: '', description: '', categoryId: ''}); }}
-              className={`flex-1 h-12 ${mode === 'manual' ? 'bg-indigo-600' : ''}`}
-            >
-              <Plus className="w-4 h-4 mr-2" /> नया डिज़ाइन अपलोड करें
-            </Button>
+    <div className="max-w-5xl mx-auto p-4 md:p-8">
+      <Card className="shadow-2xl border-t-8 border-indigo-600">
+        <CardHeader className="space-y-4">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+            <CardTitle className="text-3xl font-black flex items-center gap-2">
+              <Package className="w-8 h-8 text-indigo-600" /> उत्पाद प्रबंधन
+            </CardTitle>
+            <div className="flex bg-gray-100 p-1 rounded-lg w-full md:w-auto">
+              <button 
+                onClick={() => setMode('catalog')}
+                className={`flex-1 md:px-6 py-2 rounded-md text-sm font-bold transition-all ${mode === 'catalog' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+              >
+                Catalog से जोड़ें
+              </button>
+              <button 
+                onClick={() => setMode('manual')}
+                className={`flex-1 md:px-6 py-2 rounded-md text-sm font-bold transition-all ${mode === 'manual' ? 'bg-white shadow text-indigo-600' : 'text-gray-500'}`}
+              >
+                खुद का नया उत्पाद
+              </button>
+            </div>
           </div>
         </CardHeader>
 
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            
-            {/* Catalog Search Section */}
-            {mode === 'catalog' && !formData.masterProductId && (
-              <div className="relative space-y-2">
-                <Label htmlFor="search">उत्पाद खोजें (जैसे: Nestle, Axe, Nike)</Label>
-                <div className="relative">
-                  <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
-                  <Input 
-                    id="search"
-                    placeholder="कैटलॉग में सर्च करें..." 
-                    className="pl-10 h-11"
-                    value={searchTerm}
-                    onChange={(e) => setSearchTerm(e.target.value)}
-                  />
+          {mode === 'catalog' ? (
+            <div className="space-y-6">
+              {/* Filter & Search */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 bg-indigo-50/50 p-4 rounded-xl border border-indigo-100">
+                <div className="space-y-2">
+                  <Label className="font-bold">Category</Label>
+                  <Select onValueChange={setSelectedCat} value={selectedCat}>
+                    <SelectTrigger className="bg-white"><SelectValue placeholder="कैटेगरी चुनें" /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">सभी श्रेणियाँ</SelectItem>
+                      {categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
                 </div>
-                {searchResults.length > 0 && (
-                  <div className="absolute z-50 w-full bg-white border rounded-lg mt-1 shadow-2xl max-h-72 overflow-y-auto">
-                    {searchResults.map((p) => (
-                      <div 
-                        key={p.id} 
-                        onClick={() => handleSelectMaster(p)}
-                        className="p-4 hover:bg-indigo-50 cursor-pointer flex items-center gap-4 border-b last:border-0 transition-colors"
-                      >
-                        <img src={p.image} className="w-14 h-14 object-cover rounded-md border" alt={p.name} />
-                        <div>
-                          <p className="font-bold text-gray-800">{p.name}</p>
-                          <p className="text-xs text-indigo-600 font-medium">{p.brand || 'General'}</p>
-                        </div>
-                      </div>
-                    ))}
+                <div className="space-y-2">
+                  <Label className="font-bold">Search Product</Label>
+                  <div className="relative">
+                    <Search className="absolute left-3 top-3 h-4 w-4 text-gray-400" />
+                    <Input className="pl-10 bg-white" placeholder="नाम से खोजें..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
                   </div>
-                )}
-              </div>
-            )}
-
-            {/* Selected Product Preview */}
-            {formData.image && (
-              <div className="p-4 border-2 border-dashed border-indigo-200 rounded-xl bg-indigo-50/50 flex flex-col sm:flex-row items-center gap-6">
-                <div className="relative">
-                   <img src={formData.image} className="w-32 h-32 object-contain bg-white rounded-lg border shadow-md" alt="Preview" />
-                   {mode === 'manual' && (
-                     <label className="absolute -bottom-2 -right-2 bg-white p-1.5 rounded-full shadow-lg border cursor-pointer hover:bg-gray-50">
-                       <UploadCloud className="w-4 h-4 text-indigo-600" />
-                       <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
-                     </label>
-                   )}
                 </div>
-                <div className="flex-1 text-center sm:text-left">
-                  <h4 className="text-lg font-bold text-indigo-900">{formData.name || 'उत्पाद का नाम'}</h4>
-                  <p className="text-sm text-gray-600 line-clamp-2">{formData.description}</p>
-                  {mode === 'catalog' && (
-                    <Button variant="ghost" size="sm" className="mt-2 text-red-500 h-8 hover:text-red-700 hover:bg-red-50" onClick={() => {setFormData({...formData, masterProductId: null, image: ''}); setSearchTerm('');}}>
-                      बदलें (Remove)
-                    </Button>
+              </div>
+
+              {/* Selection List */}
+              <div className="border rounded-xl bg-white overflow-hidden shadow-inner min-h-[300px]">
+                <div className="max-h-[500px] overflow-y-auto divide-y">
+                  {masterProducts.map((p) => {
+                    const isSelected = !!selectedItems[p.id];
+                    return (
+                      <div key={p.id} className={`flex flex-col sm:flex-row items-center gap-4 p-4 transition-all ${isSelected ? 'bg-indigo-50' : 'hover:bg-gray-50'}`}>
+                        <div className="flex items-center gap-4 w-full">
+                           <input type="checkbox" checked={isSelected} onChange={() => toggleProduct(p.id)} className="w-5 h-5 accent-indigo-600 cursor-pointer" />
+                           <img src={p.image} className="w-16 h-16 object-contain bg-white rounded-lg border shadow-sm" alt="" />
+                           <div className="flex-1">
+                             <p className="font-bold text-gray-800 leading-tight">{p.name}</p>
+                             <p className="text-xs text-indigo-600 font-medium">{p.brand || 'No Brand'}</p>
+                           </div>
+                        </div>
+
+                        {isSelected && (
+                          <div className="flex gap-3 w-full sm:w-auto pt-2 sm:pt-0 animate-in fade-in zoom-in-95">
+                            <div className="flex-1 sm:w-28">
+                              <Label className="text-[10px] uppercase font-bold text-gray-400">Price (₹)</Label>
+                              <Input type="number" className="h-9 border-indigo-200 focus:ring-indigo-500" placeholder="0" 
+                                onChange={(e) => updateItemData(p.id, 'price', Number(e.target.value))} />
+                            </div>
+                            <div className="flex-1 sm:w-24">
+                              <Label className="text-[10px] uppercase font-bold text-gray-400">Stock</Label>
+                              <Input type="number" className="h-9 border-indigo-200 focus:ring-indigo-500" placeholder="0" 
+                                onChange={(e) => updateItemData(p.id, 'stock', Number(e.target.value))} />
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                  {masterProducts.length === 0 && (
+                    <div className="p-20 text-center text-gray-400 flex flex-col items-center gap-2">
+                       <Search className="w-10 h-10 opacity-20" />
+                       <p>खोज शुरू करने के लिए कैटेगरी चुनें या नाम लिखें</p>
+                    </div>
                   )}
                 </div>
               </div>
-            )}
 
-            {/* Common Inputs: Price & Stock */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2">
-                <Label htmlFor="price">आपका विक्रय मूल्य (₹)</Label>
-                <Input 
-                  id="price"
-                  type="number" 
-                  value={formData.price || ''} 
-                  onChange={(e) => setFormData({...formData, price: Number(e.target.value)})} 
-                  placeholder="0.00"
-                />
-                {errors.price && <p className="text-red-500 text-xs">{errors.price}</p>}
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="stock">उपलब्ध स्टॉक</Label>
-                <Input 
-                  id="stock"
-                  type="number" 
-                  value={formData.stock || ''} 
-                  onChange={(e) => setFormData({...formData, stock: Number(e.target.value)})} 
-                  placeholder="कितने पीस हैं?"
-                />
-                {errors.stock && <p className="text-red-500 text-xs">{errors.stock}</p>}
-              </div>
+              <Button onClick={handleSubmit} disabled={loading || Object.keys(selectedItems).length === 0} className="w-full h-16 text-xl bg-indigo-600 hover:bg-indigo-700 rounded-xl shadow-lg transition-transform active:scale-95">
+                {loading ? <Loader2 className="animate-spin mr-2" /> : <CheckCircle2 className="mr-2" />}
+                {Object.keys(selectedItems).length} उत्पाद दुकान में जोड़ें
+              </Button>
             </div>
-
-            {/* Manual Mode Only Inputs */}
-            {mode === 'manual' && (
-              <div className="space-y-6 border-t pt-6">
-                <div className="space-y-2">
-                  <Label htmlFor="name">उत्पाद का नाम</Label>
-                  <Input id="name" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} placeholder="उदा: मेरी डिज़ाइन वाली टी-शर्ट" />
-                  {errors.name && <p className="text-red-500 text-xs">{errors.name}</p>}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="description">उत्पाद विवरण</Label>
-                  <Textarea id="description" value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} placeholder="उत्पाद के बारे में विस्तार से बताएं..." />
-                  {errors.description && <p className="text-red-500 text-xs">{errors.description}</p>}
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="space-y-2">
-                    <Label>श्रेणी (Category)</Label>
-                    <Select
-                      onValueChange={(val) => setFormData({...formData, categoryId: val})}
-                      value={formData.categoryId}
-                      disabled={categoriesLoading}
-                    >
-                      <SelectTrigger>
-                        <SelectValue placeholder="श्रेणी चुनें" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
-                      </SelectContent>
-                    </Select>
-                    {errors.categoryId && <p className="text-red-500 text-xs">{errors.categoryId}</p>}
+          ) : (
+            /* Manual Mode Form */
+            <form onSubmit={handleSubmit} className="space-y-6 animate-in fade-in duration-500">
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label className="font-bold">उत्पाद का नाम</Label>
+                      <Input placeholder="उदा: मेरी हाथ से बनी चॉकलेट" value={formData.name} onChange={(e) => setFormData({...formData, name: e.target.value})} required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold">विवरण (Description)</Label>
+                      <Textarea className="h-32" placeholder="उत्पाद की खूबियां बताएं..." value={formData.description} onChange={(e) => setFormData({...formData, description: e.target.value})} required />
+                    </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>इमेज अपलोड</Label>
-                    {!formData.image && (
-                      <div className="flex items-center justify-center w-full">
-                        <label className="flex flex-col items-center justify-center w-full h-32 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 hover:bg-gray-100">
-                          <div className="flex flex-col items-center justify-center pt-5 pb-6">
-                            {imageUploading ? <Loader2 className="animate-spin text-indigo-600" /> : <UploadCloud className="w-8 h-8 text-gray-500" />}
-                            <p className="text-sm text-gray-500 mt-2">फोटो चुनें</p>
-                          </div>
-                          <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" disabled={imageUploading} />
-                        </label>
+                  <div className="space-y-6">
+                    <div className="space-y-2">
+                      <Label className="font-bold">उत्पाद की फोटो</Label>
+                      <div className="relative group border-2 border-dashed border-gray-300 rounded-2xl h-48 flex items-center justify-center overflow-hidden bg-gray-50 hover:bg-gray-100 transition-colors">
+                        {formData.image ? (
+                          <>
+                            <img src={formData.image} className="w-full h-full object-contain" alt="Preview" />
+                            <button type="button" onClick={() => setFormData({...formData, image: ''})} className="absolute top-2 right-2 bg-red-500 text-white p-1 rounded-full shadow-lg"><X className="w-4 h-4" /></button>
+                          </>
+                        ) : (
+                          <label className="cursor-pointer flex flex-col items-center gap-2">
+                             {imageUploading ? <Loader2 className="animate-spin text-indigo-600" /> : <UploadCloud className="w-10 h-10 text-gray-400" />}
+                             <span className="text-sm font-medium text-gray-500">फोटो अपलोड करें</span>
+                             <input type="file" className="hidden" onChange={handleImageUpload} accept="image/*" />
+                          </label>
+                        )}
                       </div>
-                    )}
-                    {errors.image && <p className="text-red-500 text-xs">{errors.image}</p>}
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                       <div className="space-y-2">
+                         <Label className="font-bold">मूल्य (₹)</Label>
+                         <Input type="number" value={formData.price || ''} onChange={(e) => setFormData({...formData, price: Number(e.target.value)})} required />
+                       </div>
+                       <div className="space-y-2">
+                         <Label className="font-bold">स्टॉक</Label>
+                         <Input type="number" value={formData.stock || ''} onChange={(e) => setFormData({...formData, stock: Number(e.target.value)})} required />
+                       </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label className="font-bold">श्रेणी (Category)</Label>
+                      <Select onValueChange={(val) => setFormData({...formData, categoryId: val})} value={formData.categoryId}>
+                        <SelectTrigger><SelectValue placeholder="कैटेगरी चुनें" /></SelectTrigger>
+                        <SelectContent>
+                          {categories.map(c => <SelectItem key={c.id} value={c.id.toString()}>{c.name}</SelectItem>)}
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
-                </div>
-              </div>
-            )}
-
-            <Button 
-              type="submit" 
-              disabled={loading || imageUploading} 
-              className="w-full bg-indigo-600 hover:bg-indigo-700 h-14 text-lg font-bold transition-all shadow-lg active:scale-95"
-            >
-              {loading ? <Loader2 className="animate-spin mr-2" /> : <PlusCircle className="mr-2" />}
-              {mode === 'catalog' ? 'कैटलॉग से दुकान में जोड़ें' : 'अपना नया उत्पाद पब्लिश करें'}
-            </Button>
-          </form>
+               </div>
+               <Button type="submit" disabled={loading || imageUploading} className="w-full h-16 text-xl bg-indigo-600 hover:bg-indigo-700 rounded-xl">
+                 {loading ? <Loader2 className="animate-spin mr-2" /> : <PlusCircle className="mr-2" />}
+                 नया उत्पाद पब्लिश करें
+               </Button>
+            </form>
+          )}
         </CardContent>
       </Card>
     </div>

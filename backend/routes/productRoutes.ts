@@ -4,7 +4,7 @@ import { verifyToken } from '../server/middleware/verifyToken';
 import { requireSellerAuth, requireAdminAuth } from '../server/middleware/authMiddleware';
 import { upload } from '../server/middleware/multerConfig';
 import * as ProductController from '../server/controllers/productController';
-
+import { bulkCreateProducts } from "..//server/controllers/productController";
 const router = Router();
 router.get('/master-search', ProductController.searchMasterProducts);
 
@@ -20,7 +20,7 @@ router.post('/', verifyToken, requireSellerAuth, upload.single('image'), Product
 router.put('/:productId', verifyToken, requireSellerAuth, upload.single('image'), ProductController.updateProduct);
 router.delete('/:productId', verifyToken, requireSellerAuth, ProductController.deleteProduct);
 router.get('/seller', verifyToken, requireSellerAuth, ProductController.getSellerProducts);
-
+router.post("/bulk", verifyToken, bulkCreateProducts);
 // Admin Endpoints
 router.get('/admin/pending', verifyToken, requireAdminAuth, ProductController.getPendingProducts);
 router.put('/admin/:productId/approve', verifyToken, requireAdminAuth, ProductController.approveProduct);

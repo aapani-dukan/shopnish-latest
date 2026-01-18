@@ -244,7 +244,38 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
   }
 };
     
+// backend/controllers/productController.ts
 
+export const bulkCreateProducts = async (req: any, res: Response) => {
+  try {
+    const { products: productsList } = req.body;
+    const sellerId = req.user?.id; // पक्का करें कि auth middleware लगा है
+
+    if (!Array.isArray(productsList) || productsList.length === 0) {
+      return res.status(400).json({ error: "No products provided." });
+    }
+
+    const productsToInsert: any[] = productsList.map((p: any) => ({
+      sellerId: sellerId,
+      masterProductId: p.masterProductId,
+      name: p.name,
+      image: p.image,
+      categoryId: p.categoryId,
+      price: p.price,
+      stock: p.stock,
+      isActive: true,
+      approvalStatus: 'approved',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }));
+
+    await db.insert(products).values(productsToInsert);
+    res.status(201).json({ message: `${productsList.length} products added successfully!` });
+  } catch (error) {
+    console.error("Bulk Insert Error:", error);
+    res.status(500).json({ error: "Bulk upload failed" });
+  }
+};
 export const updateProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   console.log(`🔄 [API] Received request to update product ${req.params.productId}.`);
   const userId = req.user?.id;
