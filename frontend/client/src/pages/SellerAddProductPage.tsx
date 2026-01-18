@@ -33,7 +33,8 @@ const SellerAddProductPage: React.FC = () => {
   const [imageUploading, setImageUploading] = useState(false);
   const [categories, setCategories] = useState<Category[]>([]);
   const [categoriesLoading, setCategoriesLoading] = useState(true);
-  
+  // SellerAddProductPage.tsx के अंदर State सेक्शन में
+const [selectedProduct, setSelectedProduct] = useState<any>(null);
   // Search state
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState<any[]>([]);
@@ -81,20 +82,30 @@ const SellerAddProductPage: React.FC = () => {
   }, [searchTerm, mode, formData.masterProductId]);
 
   const handleSelectMaster = (product: any) => {
-    setFormData({
-      ...formData,
-      masterProductId: product.id,
-      name: product.name,
-      description: product.description,
-      image: product.image,
-      categoryId: product.categoryId.toString(),
-      brand: product.brand || ''
-    });
-    setSearchResults([]);
-    setSearchTerm(product.name);
-    setErrors({});
-    toast.success("Master product selected!");
-  };
+  // 1. मास्टर प्रोडक्ट को स्टेट में सेव करें
+  setSelectedProduct(product);
+
+  // 2. FormData भरें (इमेज समेत)
+  setFormData({
+    ...formData,
+    name: product.name,
+    description: product.description || '',
+    image: product.image, // मास्टर कैटलॉग की इमेज यहाँ आ गई
+    categoryId: product.categoryId.toString(),
+    brand: product.brand || ''
+  });
+
+  // 3. पक्का करें कि अपलोडिंग स्टेटस 'false' है 
+  // ताकि handleSubmit उसे इमेज न होने की वजह से न रोके
+  if (typeof setImageUploading === 'function') {
+    setImageUploading(false);
+  }
+
+  setSearchResults([]);
+  setSearchTerm(product.name);
+  setErrors({});
+  toast.success("Catalog product selected! Image loaded.");
+};
 
   // 3. Cloudinary इमेज अपलोड (AI Optimization के साथ)
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -146,22 +157,53 @@ const SellerAddProductPage: React.FC = () => {
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (imageUploading) { toast.error("कृपया इमेज अपलोड होने का इंतज़ार करें।"); return; }
-    if (!validateForm()) { toast.error("कृपया सभी आवश्यक फ़ील्ड भरें।"); return; }
+  e.preventDefault();
+  
+  if (imageUploading) { 
+    toast.error("कृपया इमेज अपलोड होने का इंतज़ार करें।"); 
+    return; 
+  }
 
-    setLoading(true);
-    try {
-      await axios.post("/api/products/create", formData, { withCredentials: true });
-      toast.success("उत्पाद सफलतापूर्वक जोड़ा गया!");
-      navigate("/seller-dashboard/products");
-    } catch (err: any) {
-      toast.error(err.response?.data?.message || "उत्पाद जोड़ने में समस्या!");
-    } finally {
-      setLoading(false);
+  // अगर कैटलॉग मोड है, तो मैन्युअल वैलिडेशन की ज़रूरत कम हो सकती है
+  if (mode === 'manual' && !validateForm()) { 
+    toast.error("कृपया सभी आवश्यक फ़ील्ड भरें।"); 
+    return; 
+  }
+
+  setLoading(true);
+  try {
+    let payload;
+
+    if (mode === 'catalog' && selectedProduct) {
+      // 1. कैटलॉग मोड का डेटा (Master Product से लिंक)
+      payload = {
+        ...formData, // इसमें price और stock होगा जो सेलर ने भरा है
+        masterProductId: selectedProduct.id,
+        name: selectedProduct.name,
+        image: selectedProduct.image,
+        description: selectedProduct.description,
+        categoryId: selectedProduct.categoryId,
+        brand: selectedProduct.brand,
+      };
+    } else {
+      // 2. मैन्युअल मोड का डेटा (जो सेलर खुद भर रहा है)
+      payload = formData;
     }
-  };
 
+    console.log("🚀 Sending Payload:", payload);
+
+    // नोट: URL को अपने बैकएंड रूट के हिसाब से बदलें (शायद सिर्फ /api/products हो)
+    await axios.post("/api/products", payload, { withCredentials: true });
+    
+    toast.success("उत्पाद सफलतापूर्वक जोड़ा गया!");
+    navigate("/seller-dashboard/products");
+  } catch (err: any) {
+    console.error("❌ Submit Error:", err);
+    toast.error(err.response?.data?.message || "उत्पाद जोड़ने में समस्या!");
+  } finally {
+    setLoading(false);
+  }
+};
   return (
     <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
       <Card className="shadow-xl border-t-4 border-indigo-600">
