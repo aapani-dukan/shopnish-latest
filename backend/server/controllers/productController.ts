@@ -265,26 +265,40 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
 export const bulkCreateProducts = async (req: any, res: Response) => {
   try {
     const { products: productsList } = req.body;
-    const sellerId = req.user?.id; // पक्का करें कि auth middleware लगा है
+    const userId = req.user?.id; // यह आपकी User ID (34) है
 
     if (!Array.isArray(productsList) || productsList.length === 0) {
-      return res.status(400).json({ error: "No products provided." });
+      return res.status(400).json({ error: "कोई उत्पाद नहीं मिला।" });
     }
 
+    // 1. User ID का इस्तेमाल करके Sellers टेबल से असली Seller ID (10) निकालें
+    const sellerData = await db
+      .select()
+      .from(sellersPgTable)
+      .where(eq(sellersPgTable.userId, userId))
+      .limit(1);
+
+    // अगर सेलर प्रोफाइल नहीं मिलता
+    if (!sellerData.length) {
+      return res.status(404).json({ error: "सेलर प्रोफाइल नहीं मिला। कृपया पहले सेलर रजिस्टर करें।" });
+    }
+
+    const realSellerId = sellerData[0].id; // यहाँ अब 10 आ जाएगा ✅
+
+    // 2. पेलोड तैयार करें (असली Seller ID के साथ)
     const productsToInsert: any[] = productsList.map((p: any) => ({
-      sellerId: sellerId,
+      sellerId: realSellerId, // अब यहाँ 10 जाएगा, जिससे Foreign Key Error नहीं आएगा
       masterProductId: p.masterProductId,
       name: p.name,
       image: p.image,
       categoryId: p.categoryId,
-      price: p.price,
+      price: p.price.toString(), // Decimal के लिए string में बदलना सुरक्षित है
       stock: p.stock,
       isActive: true,
-      approvalStatus: 'approved',
+      approvalStatus: 'approved' as const, // Type safety के लिए
       createdAt: new Date(),
       updatedAt: new Date(),
     }));
-
     await db.insert(products).values(productsToInsert);
     res.status(201).json({ message: `${productsList.length} products added successfully!` });
   } catch (error) {
