@@ -17,7 +17,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '../components/ui/select';
-
+import { auth } from "../lib/firebase";
 interface Category {
   id: number;
   name: string;
@@ -156,15 +156,16 @@ const [selectedProduct, setSelectedProduct] = useState<any>(null);
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
+ const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   
+  // 1. इमेज अपलोड चेक
   if (imageUploading) { 
     toast.error("कृपया इमेज अपलोड होने का इंतज़ार करें।"); 
     return; 
   }
 
-  // अगर कैटलॉग मोड है, तो मैन्युअल वैलिडेशन की ज़रूरत कम हो सकती है
+  // 2. मैन्युअल मोड में वैलिडेशन चेक
   if (mode === 'manual' && !validateForm()) { 
     toast.error("कृपया सभी आवश्यक फ़ील्ड भरें।"); 
     return; 
@@ -172,34 +173,50 @@ const [selectedProduct, setSelectedProduct] = useState<any>(null);
 
   setLoading(true);
   try {
-    let payload;
+    // 3. Firebase टोकन प्राप्त करना (Auth Header के लिए)
+    const user = auth.currentUser;
+    if (!user) {
+      toast.error("सत्र समाप्त हो गया है, कृपया फिर से लॉगिन करें।");
+      setLoading(false);
+      return;
+    }
+    const token = await user.getIdToken();
 
+    // 4. पेलोड तैयार करना (Catalog vs Manual)
+    let payload;
     if (mode === 'catalog' && selectedProduct) {
-      // 1. कैटलॉग मोड का डेटा (Master Product से लिंक)
       payload = {
-        ...formData, // इसमें price और stock होगा जो सेलर ने भरा है
+        ...formData, 
         masterProductId: selectedProduct.id,
         name: selectedProduct.name,
         image: selectedProduct.image,
-        description: selectedProduct.description,
-        categoryId: selectedProduct.categoryId,
-        brand: selectedProduct.brand,
+        description: selectedProduct.description || "",
+        categoryId: parseInt(selectedProduct.categoryId), // नंबर में कन्वर्ट करना सुरक्षित रहता है
+        brand: selectedProduct.brand || "",
       };
     } else {
-      // 2. मैन्युअल मोड का डेटा (जो सेलर खुद भर रहा है)
       payload = formData;
     }
 
-    console.log("🚀 Sending Payload:", payload);
+    console.log("🚀 Sending Payload with Auth:", payload);
 
-    // नोट: URL को अपने बैकएंड रूट के हिसाब से बदलें (शायद सिर्फ /api/products हो)
-    await axios.post("/api/products", payload, { withCredentials: true });
+    // 5. बैकएंड को डेटा भेजना (टोकन के साथ)
+    const response = await axios.post("/api/products", payload, { 
+      headers: {
+        'Authorization': `Bearer ${token}` // ⭐ यह लाइन 401 एरर फिक्स करेगी
+      },
+      withCredentials: true 
+    });
     
-    toast.success("उत्पाद सफलतापूर्वक जोड़ा गया!");
-    navigate("/seller-dashboard/products");
+    if (response.status === 200 || response.status === 201) {
+      toast.success("उत्पाद सफलतापूर्वक आपकी दुकान में जोड़ा गया!");
+      navigate("/seller-dashboard/products");
+    }
+
   } catch (err: any) {
     console.error("❌ Submit Error:", err);
-    toast.error(err.response?.data?.message || "उत्पाद जोड़ने में समस्या!");
+    const errorMsg = err.response?.data?.message || "उत्पाद जोड़ने में समस्या आई!";
+    toast.error(errorMsg);
   } finally {
     setLoading(false);
   }
