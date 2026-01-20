@@ -158,6 +158,7 @@ export const deliveryAddresses = pgTable('delivery_addresses', {
 export const sellersPgTable = pgTable("sellers", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").unique().notNull().references(() => users.id),
+  categoryId: integer("category_id").references(() => categories.id), 
   businessName: text("business_name").notNull(),
   businessType: text("business_type").notNull(),
   description: text("description"),

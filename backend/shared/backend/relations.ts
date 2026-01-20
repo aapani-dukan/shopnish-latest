@@ -29,6 +29,10 @@ export const sellersRelations = relations(sellersPgTable, ({ one, many }) => ({
     fields: [sellersPgTable.userId],
     references: [users.id],
   }),
+  category: one(categories, {
+    fields: [sellersPgTable.categoryId], // चेक करें कि आपकी टेबल में categoryId कॉलम है
+    references: [categories.id],
+  }),
   products: many(products),
   stores: many(stores),
   subOrders: many(subOrders),
@@ -44,6 +48,7 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
 }));
 
 export const categoriesRelations = relations(categories, ({ many }) => ({
+  shops: many(sellersPgTable),
   products: many(products),
 }));
 
