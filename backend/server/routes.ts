@@ -312,16 +312,27 @@ router.use("/order-confirmation", orderConfirmationRouter);
 router.use("/sellers", verifyToken, sellerRouter);
 
 // ✅ Categories
+// ✅ Categories with Related Shops and Products
 router.get("/categories", async (req: Request, res: Response) => {
   try {
-    const categoriesList = await db.select().from(categories);
+    // 1. db.query का उपयोग करें जो 'Include' करने की अनुमति देता है
+    const categoriesList = await db.query.categories.findMany({
+      with: {
+        // यहाँ हम दुकानें जोड़ रहे हैं जो इस कैटेगरी से जुड़ी हैं
+        shops: true, 
+        // यहाँ हम प्रोडक्ट्स जोड़ रहे हैं (होम पेज के लिए सिर्फ 6 काफी हैं)
+        products: {
+          limit: 6,
+        },
+      },
+    });
+
     res.status(200).json(categoriesList);
   } catch (error: any) {
-    console.error(error);
+    console.error("Error fetching categories with relations:", error);
     res.status(500).json({ error: "Internal error." });
   }
 });
-
 // ✅ Products
 router.use("/products", productsRouter);
 router.use("/whatsapp", whatsappRouter);
