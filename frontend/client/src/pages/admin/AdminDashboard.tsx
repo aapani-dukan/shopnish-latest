@@ -184,14 +184,31 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
   const formData = new FormData();
   formData.append("image", bannerFile);
   
-  // Database ki mandatory fields yahan add karein
-  formData.append("sectionName", `Banner_${Date.now()}`); // Ek unique name
-  formData.append("sectionType", "HERO_BANNER"); // Check karein ye Enum mein hai ya nahi
-  formData.append("displayName", "Top Offers"); 
-  formData.append("priority", "1");
+  // ✅ 1. Dynamic Section Type (Yahan galti thi)
+  // Hum dropdown ki state 'bannerType' ko Backend ke Enum se map kar rahe hain
+  let finalSectionType = "HERO_BANNER";
+  if (bannerType === "flash_sale") finalSectionType = "flash_sale";
+  if (bannerType === "category_ad") finalSectionType = "category_special";
+
+  formData.append("sectionType", finalSectionType); 
+
+  // ✅ 2. Dynamic Details based on Type
+  formData.append("sectionName", `${finalSectionType}_${Date.now()}`); 
+  formData.append("displayName", bannerType.replace('_', ' ').toUpperCase()); 
+  
+  // ✅ 3. Priority Logic
+  // Hero banner ko priority 1, baaki ko niche ke liye zyada number
+  const priority = finalSectionType === "HERO_BANNER" ? "1" : "5";
+  formData.append("priority", priority);
+  
   formData.append("isActive", "true");
-  const pincodeArray = targetPincodes.split(",").map(p => p.trim()).filter(p => p !== "");
+
+  // Pincode Logic
+  const pincodeArray = targetPincodes.split(",")
+    .map(p => p.trim())
+    .filter(p => p !== "");
   formData.append("pincodes", JSON.stringify(pincodeArray));
+
   uploadBannerMutation.mutate(formData);
 };
 
