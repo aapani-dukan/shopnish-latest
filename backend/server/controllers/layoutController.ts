@@ -72,26 +72,40 @@ export const addHomeElement = async (req: any, res: Response, next: NextFunction
 // ==========================================
 export const getHomeLayout = async (req: any, res: Response, next: NextFunction) => {
   try {
-    const { pincode } = req.query; // ✅ Frontend se ?pincode=323001 aayega
+    const { pincode } = req.query;
 
-    const sections = await db
+    const rawSections = await db
       .select()
       .from(homeLayout)
       .where(
         and(
           eq(homeLayout.isActive, true),
-          // ✅ Smart Filter Logic
           or(
-            // 1. Agar pincode ka array khali hai toh sabko dikhao (Global)
             sql`cardinality(${homeLayout.pincodes}) = 0`,
-            // 2. Ya agar customer ka pincode us array ke andar hai
             pincode ? sql`${homeLayout.pincodes} @> ARRAY[${pincode}]::text[]` : sql`false`
           )
         )
       )
       .orderBy(asc(homeLayout.priority));
 
-    res.status(200).json(sections);
+    // ✅ ग्रुपिंग लॉजिक: एक ही टाइप के बैनर्स को एक साथ जोड़ें
+    const grouped = rawSections.reduce((acc: any[], section: any) => {
+      const existingSection = acc.find(s => s.sectionType === section.sectionType);
+      
+      if (existingSection && ["HERO_BANNER", "flash_sale", "category_special"].includes(section.sectionType)) {
+        // अगर ये बैनर टाइप है, तो इसके आइटम्स को पुराने वाले में जोड़ दो
+        existingSection.items = [...existingSection.items, ...section.config.items];
+      } else {
+        // नया सेक्शन बनाएँ
+        acc.push({
+          ...section,
+          items: section.config.items || []
+        });
+      }
+      return acc;
+    }, []);
+
+    res.status(200).json(grouped);
   } catch (error) { 
     next(error); 
   }
