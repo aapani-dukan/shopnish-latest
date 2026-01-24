@@ -32,12 +32,14 @@ export const productCategoryEnum = pgEnum("product_category", [
   "Sports & Outdoors", "Toys & Games", "Automotive", "Jewelry", "Pet Supplies", "Other"
 ]);
 export const sectionTypeEnum = pgEnum("section_type", [
-  "HERO_BANNER",       // Bada sliding banner
-  "CATEGORY_GRID",     // Gol icons wali categories
-  "PRODUCT_HORIZONTAL",// Sideways scroll hone wale products (Zomato style)
-  "PROMO_AD",         // Beech mein single bada banner (Offer ke liye)
-  "PRODUCT_GRID",      // Do column wale products (Amazon style)
-  "SEARCH_BAR"        // Dynamic search bar placement
+  "HERO_BANNER",
+  "flash_sale",        // ✅ अब यह डेटाबेस में भी है
+  "category_special",   // ✅ यह भी
+  "CATEGORY_GRID",
+  "PRODUCT_HORIZONTAL",
+  "PROMO_AD",
+  "PRODUCT_GRID",
+  "SEARCH_BAR"
 ]);
 export const userRoleEnum = pgEnum("user_role", ["customer", "seller", "admin", "delivery-boy"]);
 export const approvalStatusEnum = pgEnum("approval_status", ["pending", "approved", "rejected"]);
