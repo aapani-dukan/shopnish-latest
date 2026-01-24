@@ -13,56 +13,49 @@ export const addHomeElement = async (req: any, res: Response, next: NextFunction
     const { sectionName, displayName, sectionType, priority, isActive, linkTo, title, pincodes } = req.body;
     let uploadedImageUrl = '';
 
-    // Image Upload Logic
+    // Image Upload Logic (Keep as is)
     if (req.file) {
-      try {
-        const fileBuffer = fs.readFileSync(req.file.path);
-        uploadedImageUrl = await uploadImage(fileBuffer, req.file.originalname, req.file.mimetype);
-        fs.unlinkSync(req.file.path); 
-      } catch (uploadErr) {
-        return res.status(500).json({ message: "Image upload failed." });
-      }
+      const fileBuffer = fs.readFileSync(req.file.path);
+      uploadedImageUrl = await uploadImage(fileBuffer, req.file.originalname, req.file.mimetype);
+      fs.unlinkSync(req.file.path);
     }
 
-    // ✅ Pincodes parsing logic
-    // Frontend se stringified array aa raha hai: '["323001"]'
+    // ✅ FIX 1: Pincodes Parsing (String to Array)
     let parsedPincodes: string[] = [];
     if (pincodes) {
       try {
-        parsedPincodes = JSON.parse(pincodes);
+        // अगर स्ट्रिंग आ रही है तो parse करें, वरना खाली array
+        const temp = typeof pincodes === 'string' ? JSON.parse(pincodes) : pincodes;
+        parsedPincodes = Array.isArray(temp) ? temp : [];
       } catch (e) {
-        parsedPincodes = []; // Agar parsing fail ho toh khali rakhein
+        parsedPincodes = [];
       }
     }
 
     const configData = {
-      items: [
-        {
-          title: title || displayName || '',
-          image: uploadedImageUrl,
-          deeplink: linkTo || ''
-        }
-      ]
+      items: [{
+        title: title || displayName || '',
+        image: uploadedImageUrl,
+        deeplink: linkTo || ''
+      }]
     };
 
-    // Database Insert
+    // ✅ FIX 2: Matching Schema Columns
     const [newElement] = await db.insert(homeLayout).values({
       sectionName: sectionName || `Section_${Date.now()}`, 
-      displayName: displayName || "New Promotion",
+      displayName: displayName || "Promotion",
       sectionType: sectionType || 'HERO_BANNER', 
-      pincodes: parsedPincodes, // ✅ Naya Column yahan save ho raha hai
-      priority: Number(priority) || 0,
+      pincodes: parsedPincodes, // अब यह सही Array फॉर्मेट में जाएगा
+      priority: parseInt(priority) || 0, // पक्का करें कि यह Number है
       isActive: isActive === 'true' || isActive === true,
+      isGlobal: parsedPincodes.length === 0, // अगर पिनकोड नहीं तो ग्लोबल True
+      city: "ALL", // Schema के हिसाब से default value
       config: configData, 
-      createdAt: new Date(),
-      updatedAt: new Date(),
     }).returning();
 
-    res.status(201).json({ 
-      message: "Home layout section created successfully!", 
-      data: newElement 
-    });
+    res.status(201).json({ message: "Layout updated!", data: newElement });
   } catch (error) { 
+    console.error("Insert Error:", error); // ताकि आपको terminal में असली वजह दिखे
     next(error); 
   }
 };
