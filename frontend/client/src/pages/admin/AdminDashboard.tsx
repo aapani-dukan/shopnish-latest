@@ -6,7 +6,7 @@ import React, { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; 
 import { toast } from "../../hooks/use-toast";
 import { Button } from "../../components/ui/button"; 
-import { Check, X, Loader2, Pencil } from "lucide-react";
+import { Check, X, Loader2, Pencil, Upload } from "lucide-react";
 import api from "../../lib/api"; // ✅ api - assuming this is your Axios instance
 import { useSocket } from "../../hooks/useSocket"; 
 import { useNavigate } from "react-router-dom"; 
@@ -52,6 +52,10 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
 const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerType, setBannerType] = useState("main_banner");
+  // अपनी स्टेट को ऐसे बदलें:
+const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none">("none");
+  const [linkValue, setLinkValue] = useState<string>(""); // Product ID, Category ID, or URL based on linkType
+
   const [targetPincodes, setTargetPincodes] = useState<string>(""); // Comma separated pincodes ke liye
   // Socket.io real-time updates
   useEffect(() => {
@@ -203,6 +207,17 @@ const [bannerFile, setBannerFile] = useState<File | null>(null);
   
   formData.append("isActive", "true");
 
+  const config = {
+    items: [{
+      title: bannerType.replace('_', ' ').toUpperCase(),
+      image: "", // Backend handles this
+      // Target decide karega click hone par kya khulega
+      productId: linkType === 'product' ? linkValue : null,
+      categoryId: linkType === 'category' ? linkValue : null,
+      deeplink: linkType === 'url' ? linkValue : ""
+    }]
+  };
+  formData.append("config", JSON.stringify(config));
   // Pincode Logic
   const pincodeArray = targetPincodes.split(",")
     .map(p => p.trim())
@@ -457,51 +472,92 @@ case "bulk-upload":
     </div>
   );
 
-      case "layout-mgmt":
-        return (
-          <div className="space-y-6">
-            <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
-              <h2 className="text-xl font-bold mb-4 flex items-center text-indigo-800">
-                <PlusCircle className="mr-2" /> Add New Banner / Promotion
-              </h2>
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 items-end">
-                <div className="space-y-2">
-                  <Label>Promotion Type</Label>
-                  <select 
-                    className="w-full p-2 border rounded-md bg-white" 
-                    value={bannerType} 
-                    onChange={(e) => setBannerType(e.target.value)}
-                  >
-                    <option value="main_banner">Main Home Banner (Top)</option>
-                    <option value="flash_sale">Flash Sale Ad (Middle)</option>
-                    <option value="category_ad">Category Special Ad</option>
-                  </select>
-                </div>
-                <div className="space-y-2">
-                  <Label>Select Image</Label>
-                  <Input type="file" onChange={(e) => setBannerFile(e.target.files?.[0] || null)} />
-                </div>
-                <div className="space-y-2">
-            <Label>Target Pincodes (Optional)</Label>
-            <Input 
+case "layout-mgmt":
+  return (
+    <div className="space-y-6">
+      <div className="bg-white p-6 rounded-xl shadow-sm border border-indigo-100">
+        <h2 className="text-xl font-bold mb-6 flex items-center text-indigo-800">
+          <PlusCircle className="mr-2" /> Add New Banner / Promotion
+        </h2>
+        
+        {/* Main Grid */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 items-start">
+          
+          {/* 1. Type & Image */}
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-indigo-900 font-semibold">Promotion Type</Label>
+              <select 
+                className="w-full p-2 border rounded-md bg-white focus:ring-2 focus:ring-indigo-500 outline-none" 
+                value={bannerType} 
+                onChange={(e) => setBannerType(e.target.value)}
+              >
+                <option value="main_banner">Main Home Banner (Top)</option>
+                <option value="flash_sale">Flash Sale Ad (Middle)</option>
+                <option value="category_ad">Category Special Ad</option>
+              </select>
+            </div>
+            <div className="space-y-2">
+              <Label className="text-indigo-900 font-semibold">Select Image</Label>
+              <Input type="file" onChange={(e) => setBannerFile(e.target.files?.[0] || null)} />
+            </div>
+          </div>
+
+          {/* 2. Target Pincodes */}
+          <div className="space-y-2">
+            <Label className="text-indigo-900 font-semibold">Target Pincodes (Optional)</Label>
+            <textarea 
               placeholder="e.g. 323001, 302001" 
               value={targetPincodes}
               onChange={(e) => setTargetPincodes(e.target.value)}
-              className="placeholder:text-[10px]"
+              className="w-full p-2 border rounded-md h-[105px] text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
             />
+            <p className="text-[10px] text-gray-400 font-medium leading-tight">
+              * Khali chhodne par banner Global dikhega.
+            </p>
           </div>
-                <Button 
-                  onClick={handleBannerSubmit} 
-                  disabled={uploadBannerMutation.isPending}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white"
-                >
-                  {uploadBannerMutation.isPending ? <Loader2 className="animate-spin" /> : "Upload Now"}
-                </Button>
-              </div>
-              <p className="mt-2 text-[10px] text-gray-400 font-medium">
-          * Pincodes ko comma (,) se alag karein. Khali chhodne par banner Global dikhega.
-        </p>
-            </div>
+
+          {/* 3. Click Action (Naya Section) */}
+          <div className="space-y-2 p-3 border rounded-lg bg-slate-50 border-slate-200">
+            <Label className="text-indigo-900 font-semibold flex items-center">
+               Banner Click Action
+            </Label>
+            <select 
+              value={linkType} 
+              onChange={(e) => setLinkType(e.target.value as any)}
+              className="w-full p-2 border rounded text-sm bg-white mb-2"
+            >
+              <option value="none">कोई एक्शन नहीं</option>
+              <option value="product">Product (ID डालें)</option>
+              <option value="category">Category (ID डालें)</option>
+              <option value="url">Website (URL डालें)</option>
+            </select>
+
+            {linkType !== "none" && (
+              <Input
+                type="text"
+                placeholder={linkType === 'url' ? "https://..." : "ID (e.g. 101)"}
+                value={linkValue}
+                onChange={(e) => setLinkValue(e.target.value)}
+                className="h-9 text-sm"
+              />
+            )}
+          </div>
+
+          {/* 4. Action Button */}
+          <div className="flex items-end h-full pb-1">
+            <Button 
+              onClick={handleBannerSubmit} 
+              disabled={uploadBannerMutation.isPending}
+              className="w-full bg-indigo-600 hover:bg-indigo-700 text-white h-12 shadow-md transition-all active:scale-95"
+            >
+              {uploadBannerMutation.isPending ? <Loader2 className="animate-spin" /> : (
+                <><Upload className="mr-2 h-4 w-4" /> Upload Now</>
+              )}
+            </Button>
+          </div>
+        </div>
+      </div>
 
             <div className="bg-white p-6 rounded-xl shadow-sm border">
               <h2 className="text-lg font-bold mb-4">Current Active Layout Elements</h2>
