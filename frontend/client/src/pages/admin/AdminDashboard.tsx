@@ -206,7 +206,9 @@ const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none"
   formData.append("priority", priority);
   
   formData.append("isActive", "true");
-
+formData.append("productId", linkType === 'product' ? linkValue : "");
+  // अगर linkType 'category' है, तो linkValue को categoryId के नाम से भेजो
+  formData.append("categoryId", linkType === 'category' ? linkValue : "");
   const config = {
     items: [{
       title: bannerType.replace('_', ' ').toUpperCase(),

@@ -10,56 +10,61 @@ import fs from 'fs';
 // ==========================================
 export const addHomeElement = async (req: any, res: Response, next: NextFunction) => {
   try {
-    const { sectionName, displayName, sectionType, priority, isActive, linkTo, title, pincodes } = req.body;
-    let uploadedImageUrl = '';
+    // 1. यहाँ productId और categoryId को भी निकालें
+    const { 
+      sectionName, displayName, sectionType, priority, 
+      isActive, linkTo, title, pincodes, 
+      productId, categoryId // 👈 ये दोनों नए ऐड किए
+    } = req.body;
 
-    // Image Upload Logic (Keep as is)
+    let uploadedImageUrl = '';
     if (req.file) {
       const fileBuffer = fs.readFileSync(req.file.path);
       uploadedImageUrl = await uploadImage(fileBuffer, req.file.originalname, req.file.mimetype);
       fs.unlinkSync(req.file.path);
     }
 
-    // ✅ FIX 1: Pincodes Parsing (String to Array)
     let parsedPincodes: string[] = [];
     if (pincodes) {
       try {
-        // अगर स्ट्रिंग आ रही है तो parse करें, वरना खाली array
         const temp = typeof pincodes === 'string' ? JSON.parse(pincodes) : pincodes;
         parsedPincodes = Array.isArray(temp) ? temp : [];
-      } catch (e) {
-        parsedPincodes = [];
-      }
+      } catch (e) { parsedPincodes = []; }
     }
 
-    const configData = {
-      items: [{
-        title: title || displayName || '',
-        image: uploadedImageUrl,
-        deeplink: linkTo || ''
-      }]
-    };
+    // ✅ FIX: अब configData में productId और categoryId भी जाएंगे
+    // ✅ सही तरीका: undefined का उपयोग करें और items के अंदर सब कुछ रखें
+const configData = {
+  items: [{
+    title: String(title || displayName || ''),
+    image: uploadedImageUrl,
+    deeplink: linkTo || '',
+    // NULL की जगह undefined का उपयोग करें ताकि Drizzle खुश रहे
+    productId: productId ? parseInt(productId) : undefined,
+  }],
+  // अगर आपका Schema categoryId को items के बाहर मांग रहा है:
+  categoryId: categoryId ? parseInt(categoryId) : undefined,
+};
 
-    // ✅ FIX 2: Matching Schema Columns
-    const [newElement] = await db.insert(homeLayout).values({
-      sectionName: sectionName || `Section_${Date.now()}`, 
-      displayName: displayName || "Promotion",
-      sectionType: sectionType || 'HERO_BANNER', 
-      pincodes: parsedPincodes, // अब यह सही Array फॉर्मेट में जाएगा
-      priority: parseInt(priority) || 0, // पक्का करें कि यह Number है
-      isActive: isActive === 'true' || isActive === true,
-      isGlobal: parsedPincodes.length === 0, // अगर पिनकोड नहीं तो ग्लोबल True
-      city: "ALL", // Schema के हिसाब से default value
-      config: configData, 
-    }).returning();
+// Insert करते समय:
+const [newElement] = await db.insert(homeLayout).values({
+  sectionName: sectionName || `Section_${Date.now()}`, 
+  displayName: displayName || "Promotion",
+  sectionType: sectionType || 'HERO_BANNER', 
+  pincodes: parsedPincodes,
+  priority: parseInt(priority) || 0,
+  isActive: isActive === 'true' || isActive === true,
+  isGlobal: parsedPincodes.length === 0,
+  city: "ALL",
+  config: configData as any, // 👈 'as any' लगा देने से Drizzle के सख्त Types शांत हो जाएंगे
+}).returning();
 
     res.status(201).json({ message: "Layout updated!", data: newElement });
   } catch (error) { 
-    console.error("Insert Error:", error); // ताकि आपको terminal में असली वजह दिखे
+    console.error("Insert Error:", error);
     next(error); 
   }
 };
-
 // ==========================================
 // 2. Public: Get App Home Layout (Filtered by Pincode)
 // ==========================================
