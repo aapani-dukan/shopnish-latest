@@ -400,23 +400,24 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     const effectiveLat = parseFloat(lat?.toString() || customerLat?.toString() || "");
     const effectiveLng = parseFloat(lng?.toString() || customerLng?.toString() || "");
 
-    // 2. Strict Check for General Feed (Agar sellerId nahi hai toh location chahiye)
-    if (!sellerId && (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng))) {
-      return res.status(400).json({ message: "Customer location is required for filtering." });
-    }
-
-    // 3. Base Conditions (Approved & Active)
+    // 2. Base Conditions (Approved & Active)
     const whereClauses = [
       eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
       eq(products.isActive, true)
     ];
 
-    // 4. ✅ SELLER FILTER LOGIC (Main Fix)
+    // 3. ✅ SMART FILTERING LOGIC
     if (sellerId) {
-      // Agar Shop pe click kiya hai toh sirf us shop ke products
+      // CASE A: स्पेसिफिक दुकान के लिए - सीधा ID से फ़िल्टर (लोकेशन बाईपास)
       whereClauses.push(eq(products.sellerId, Number(sellerId)));
-    } else {
-      // General list ke liye Distance/Pincode check karein
+    } 
+    else {
+      // CASE B: कैटेगरी या जनरल सर्च के लिए - लोकेशन अनिवार्य है!
+      if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
+        return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai." });
+      }
+
+      // अपने एरिया (Bundi vs Kota) के सेलर्स ढूंढें
       const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
       const deliverableSellerIds: number[] = [];
       const distanceCheckPromises: Promise<void>[] = [];
@@ -434,27 +435,33 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
             })());
           }
         } else {
-          if ((seller.deliveryPincodes as string[])?.includes(effectivePincode)) deliverableSellerIds.push(seller.id);
+          if ((seller.deliveryPincodes as string[])?.includes(effectivePincode)) {
+            deliverableSellerIds.push(seller.id);
+          }
         }
       }
       await Promise.all(distanceCheckPromises);
 
+      // अगर एरिया में कोई सेलर नहीं है, तो खाली एरे भेजें
       if (deliverableSellerIds.length === 0) return res.json({ products: [], total: 0 });
+      
+      // सिर्फ उन सेलर्स के प्रोडक्ट दिखाएं जो आपके एरिया में डिलीवरी दे सकते हैं
       whereClauses.push(inArray(products.sellerId, deliverableSellerIds));
     }
 
-    // 5. Add Extra Filters
-    if (search) whereClauses.push(like(products.name, `%${search}%`));
+    // 4. Extra Filters (जैसे कैटेगरी, सर्च, प्राइस)
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
+    if (search) whereClauses.push(like(products.name, `%${search}%`));
     if (minPrice) whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
     if (maxPrice) whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
 
-    // 6. Final Order & Execution (Bahat important hai ki ye 'if' ke bahar ho)
+    // 5. Sorting Logic
     const orderBy = [];
     if (sortBy === 'price') orderBy.push(sortOrder === 'asc' ? asc(products.price) : desc(products.price));
     else if (sortBy === 'name') orderBy.push(sortOrder === 'asc' ? asc(products.name) : desc(products.name));
     else orderBy.push(desc(products.createdAt));
 
+    // 6. Execute Queries
     const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
     
     const productList = await db.query.products.findMany({
@@ -472,6 +479,7 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       totalPages: Math.ceil((totalCount?.count || 0) / limitNum),
       products: productList.map(p => formatProductWithOffers(p)),
     });
+
   } catch (error) { 
     console.error("Fetch Error:", error);
     next(error); 
