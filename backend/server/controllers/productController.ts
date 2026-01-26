@@ -385,84 +385,85 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
 
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const { categoryId, search, customerPincode, customerLat, customerLng, lat, lng, pincode, minPrice, maxPrice, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 10 } = req.query;
+    const { 
+      categoryId, sellerId, search, pincode, lat, lng, 
+      customerPincode, customerLat, customerLng,
+      minPrice, maxPrice, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 10 
+    } = req.query;
+
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
 
+    // 1. Location Data Extract Karein
     const effectivePincode = (pincode?.toString() || customerPincode?.toString() || "").trim();
     const effectiveLat = parseFloat(lat?.toString() || customerLat?.toString() || "");
     const effectiveLng = parseFloat(lng?.toString() || customerLng?.toString() || "");
 
-    console.log("📍 Customer Location Data:", { effectivePincode, effectiveLat, effectiveLng });
-
-    if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
+    // 2. Strict Check for General Feed (Agar sellerId nahi hai toh location chahiye)
+    if (!sellerId && (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng))) {
       return res.status(400).json({ message: "Customer location is required for filtering." });
     }
 
-    const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
-    const deliverableSellerIds: number[] = [];
-    const distanceCheckPromises: Promise<void>[] = [];
-
-    for (const seller of allApprovedSellers) {
-      const sLat = parseFloat(seller.latitude?.toString() || '');
-      const sLon = parseFloat(seller.longitude?.toString() || '');
-      const sRad = parseFloat(seller.deliveryRadius?.toString() || '');
-
-      if (seller.isDistanceBasedDelivery) {
-        if (!isNaN(sLat) && !isNaN(sLon) && sRad > 0) {
-          distanceCheckPromises.push((async () => {
-            const distance = await
-            calculateDistanceKm(sLat, sLon, effectiveLat, effectiveLng);
-            if (distance !== null && distance <= sRad) deliverableSellerIds.push(seller.id);
-          })());
-        }
-      } else {
-        if ((seller.deliveryPincodes as string[])?.includes(effectivePincode)) deliverableSellerIds.push(seller.id);
-      }
-    }
-    await Promise.all(distanceCheckPromises);
-
-    if (deliverableSellerIds.length === 0) return res.json({ products: [], total: 0 });
-
+    // 3. Base Conditions (Approved & Active)
     const whereClauses = [
-      inArray(products.sellerId, deliverableSellerIds),
       eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
       eq(products.isActive, true)
     ];
+
+    // 4. ✅ SELLER FILTER LOGIC (Main Fix)
+    if (sellerId) {
+      // Agar Shop pe click kiya hai toh sirf us shop ke products
+      whereClauses.push(eq(products.sellerId, Number(sellerId)));
+    } else {
+      // General list ke liye Distance/Pincode check karein
+      const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
+      const deliverableSellerIds: number[] = [];
+      const distanceCheckPromises: Promise<void>[] = [];
+
+      for (const seller of allApprovedSellers) {
+        const sLat = parseFloat(seller.latitude?.toString() || '');
+        const sLon = parseFloat(seller.longitude?.toString() || '');
+        const sRad = parseFloat(seller.deliveryRadius?.toString() || '');
+
+        if (seller.isDistanceBasedDelivery) {
+          if (!isNaN(sLat) && !isNaN(sLon) && sRad > 0) {
+            distanceCheckPromises.push((async () => {
+              const distance = await calculateDistanceKm(sLat, sLon, effectiveLat, effectiveLng);
+              if (distance !== null && distance <= sRad) deliverableSellerIds.push(seller.id);
+            })());
+          }
+        } else {
+          if ((seller.deliveryPincodes as string[])?.includes(effectivePincode)) deliverableSellerIds.push(seller.id);
+        }
+      }
+      await Promise.all(distanceCheckPromises);
+
+      if (deliverableSellerIds.length === 0) return res.json({ products: [], total: 0 });
+      whereClauses.push(inArray(products.sellerId, deliverableSellerIds));
+    }
+
+    // 5. Add Extra Filters
     if (search) whereClauses.push(like(products.name, `%${search}%`));
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
     if (minPrice) whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
     if (maxPrice) whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
 
+    // 6. Final Order & Execution (Bahat important hai ki ye 'if' ke bahar ho)
     const orderBy = [];
     if (sortBy === 'price') orderBy.push(sortOrder === 'asc' ? asc(products.price) : desc(products.price));
     else if (sortBy === 'name') orderBy.push(sortOrder === 'asc' ? asc(products.name) : desc(products.name));
-    else orderBy.push(sortOrder === 'asc' ? asc(products.createdAt) : desc(products.createdAt));
+    else orderBy.push(desc(products.createdAt));
 
     const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
-    // getAllProducts function ke andar 'productList' wala part replace karein:
-const productList = await db.query.products.findMany({
-  where: and(...whereClauses),
-  with: { 
-    category: true, 
-    seller: { 
-      columns: {
-        id: true,
-        businessName: true,
-        latitude: true,
-        longitude: true,
-        deliveryRadius: true,
-        isDistanceBasedDelivery: true, // MISSING FIELD 1
-        deliveryPincodes: true,        // MISSING FIELD 2
-      },
-      with: { user: true } 
-    } 
-  },
-  orderBy: orderBy,
-  limit: limitNum,
-  offset: offset,
-});
+    
+    const productList = await db.query.products.findMany({
+      where: and(...whereClauses),
+      with: { category: true, seller: { with: { user: true } } },
+      orderBy: orderBy,
+      limit: limitNum,
+      offset: offset,
+    });
 
     res.status(200).json({
       page: pageNum,
@@ -471,9 +472,11 @@ const productList = await db.query.products.findMany({
       totalPages: Math.ceil((totalCount?.count || 0) / limitNum),
       products: productList.map(p => formatProductWithOffers(p)),
     });
-  } catch (error) { next(error); }
+  } catch (error) { 
+    console.error("Fetch Error:", error);
+    next(error); 
+  }
 };
-
 export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const product = await db.query.products.findFirst({
