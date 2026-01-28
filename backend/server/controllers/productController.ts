@@ -451,7 +451,10 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
 
     // 4. Extra Filters (जैसे कैटेगरी, सर्च, प्राइस)
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
-    if (search) whereClauses.push(like(products.name, `%${search}%`));
+    if (search) {
+  // ilike का मतलब है "Insensitive Like" - यह H और h में फर्क नहीं करेगा
+  whereClauses.push(ilike(products.name, `%${search}%`));
+}
     if (minPrice) whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
     if (maxPrice) whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
 
