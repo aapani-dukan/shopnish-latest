@@ -22,27 +22,37 @@ export const requireAuth = [
 export const requireAdminAuth = [
   ...requireAuth,
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    // 1. पहले चेक करें कि user मौजूद है या नहीं (Safety First)
+    if (!req.user) {
+      return res.status(401).json({
+        message: "Unauthorized: User not found.",
+      });
+    }
+
+    // 2. अब Role चेक करें
+    // userRoleEnum.enumValues[2] 'admin' है, यह पक्का करने के लिए सीधा चेक भी लगा सकते हैं
     if (req.user.role !== userRoleEnum.enumValues[2]) {
-      // ✅ admin
       return res.status(403).json({
         message: "Forbidden: Admin access required.",
       });
     }
+
     next();
   },
 ];
-
 // केवल Seller के लिए
 export const requireSellerAuth = [
   ...requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ async जोड़ें
-    if (req.user.role !== userRoleEnum.enumValues[1]) {
+    if (req.user?.role !== userRoleEnum.enumValues[1]) {
       // ✅ seller
       return res.status(403).json({
         message: "Forbidden: Seller access required.",
       });
     }
-
+if (!req.user) {
+  return res.status(401).json({ message: "Not authorized, no user found" });
+}
     const userId = req.user.id;
     
     // 1. Postgres User ID का उपयोग करके Seller ID और Approval Status खोजें।

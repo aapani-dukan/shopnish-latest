@@ -1,13 +1,25 @@
 // server/middleware/verifyToken.ts
 import { Request, Response, NextFunction } from 'express';
-import { authAdmin } from '../lib/firebaseAdmin.ts';
-import { db } from '../db.ts';
-import { users, deliveryBoys } from '../../shared/backend/schema.ts'; 
+import { authAdmin } from '../lib/firebaseAdmin';
+import { db } from '../db';
+import { users, deliveryBoys } from '../../shared/backend/schema'; 
 import { eq } from 'drizzle-orm';
-import { AuthenticatedUser } from '../../shared/types/user.ts';
+import { AuthenticatedUser } from '../../shared/types/user';
 
+// जहाँ ये interface डिफाइन है, उसे ऐसे बदलें:
 export interface AuthenticatedRequest extends Request {
-  user?: AuthenticatedUser & { deliveryBoyId?: number }; 
+  user: {
+    id: number;      // या number, जो भी आप इस्तेमाल कर रहे हैं
+    role: string;
+    email?: string | null;
+    sellerId?: number | null;      // ✅ ये जोड़ना भूल गए थे!
+    deliveryBoyId?: number | null;
+    firebaseUid?: string; // ✅ भविष्य के लिए ये भी रख लो
+    phoneNumber?: string | null;
+    name?: string | null;
+    approvalStatus?: string; // ✅ भविष्य के लिए ये भी रख लो
+    
+  };
 }
 
 export const verifyToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
