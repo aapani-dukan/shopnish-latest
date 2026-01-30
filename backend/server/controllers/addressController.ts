@@ -24,11 +24,17 @@ export const processCurrentLocation = async (req: Request, res: Response) => {
     try {
         // 1. Zod Validation
         const validation = ProcessLocationSchema.safeParse(req.body);
+        
         if (!validation.success) {
-            console.error("[ERROR] processCurrentLocation: Zod validation failed.", validation.error.errors);
+            // हमने .errors की जगह .flatten() का इस्तेमाल किया है जो ज़्यादा क्लीन है
+            const fieldErrors = validation.error.flatten().fieldErrors;
+            
+            console.error("[ERROR] processCurrentLocation: Zod validation failed.", fieldErrors);
+            
             return res.status(400).json({
-                message: "Invalid input for coordinates.",
-                errors: validation.error.errors
+                success: false,
+                message: "Coordinates validation failed.",
+                errors: fieldErrors // यह { latitude: ['...'], longitude: ['...'] } के रूप में दिखेगा
             });
         }
         const { latitude, longitude } = validation.data;

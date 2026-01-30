@@ -44,7 +44,7 @@ const updateSellerBodySchema = z.object({
   minOrderValue: z.string().regex(/^\d+(\.\d{1,2})?$/, "Minimum order value must be a valid decimal number.").optional(),
   avgDeliveryTime: z.string().min(1, "Average delivery time is required.").optional(),
   isActive: z.boolean().optional(),
-  approvalStatus: z.nativeEnum(approvalStatusEnum).optional(),
+  ApprovalStatus: z.enum(approvalStatusEnum.enumValues).optional(),
   rejectionReason: z.string().optional().nullable(),
 }).partial();
 
@@ -52,7 +52,7 @@ const updateSellerBodySchema = z.object({
 /**
  * ✅ GET /api/admin/vendors - सभी सेलर्स फ़ेच करें (पेंडिंग, अप्रूव्ड, रिजेक्टेड)
  */
-adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.get('/', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const allSellers = await db.query.sellersPgTable.findMany({
       with: {
@@ -73,7 +73,7 @@ adminVendorsRouter.get('/', authorize(['admin']), async (req: AuthenticatedReque
  * ✅ GET /api/admin/vendors/pending
  * सभी लंबित (pending) सेलर्स को फ़ेच करें
  */
-adminVendorsRouter.get('/pending', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.get('/pending', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const pendingSellers = await db.query.sellersPgTable.findMany({
       where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
@@ -93,7 +93,7 @@ adminVendorsRouter.get('/pending', authorize(['admin']), async (req: Authenticat
  * ✅ GET /api/admin/vendors/approved
  * सभी स्वीकृत (approved) सेलर्स को फ़ेच करें
  */
-adminVendorsRouter.get('/approved', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.get('/approved', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const approvedSellers = await db.query.sellersPgTable.findMany({
       where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
@@ -114,7 +114,7 @@ adminVendorsRouter.get('/approved', authorize(['admin']), async (req: Authentica
  * ✅ GET /api/admin/vendors/rejected
  * सभी अस्वीकृत (rejected) सेलर्स को फ़ेच करें
  */
-adminVendorsRouter.get('/rejected', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.get('/rejected', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const rejectedSellers = await db.query.sellersPgTable.findMany({
       where: eq(sellersPgTable.approvalStatus, approvalStatusEnum.enumValues[2]), // 'rejected'
@@ -137,7 +137,7 @@ adminVendorsRouter.get('/rejected', authorize(['admin']), async (req: Authentica
  * ✅ GET /api/admin/vendors/:id
  * ID द्वारा एकल सेलर फ़ेच करें
  */
-adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: any, res: Response) => {
   try {
     const sellerId = parseInt(req.params.id);
     const sellerResults = await db.query.sellersPgTable.findMany({ 
@@ -165,7 +165,7 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
  * ✅ PATCH /api/admin/vendors/approve/:id
  * एक सेलर को मंज़ूर करें (TRANSACTIONAL & STORE CREATION ADDED)
  */
-adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: any, res: Response) => {
   const sellerId = Number(req.params.id);
   
   try {
@@ -244,7 +244,7 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
   body: z.object({
     reason: z.string().min(1, "Rejection reason is required for rejecting a seller.").optional(),
   }).partial(),
-})), async (req: AuthenticatedRequest, res: Response) => {
+})), async (req: any, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
     const { reason } = req.body; // 🎯 FIX: req.body से 'reason' को एक्सट्रैक्ट किया गया
@@ -300,7 +300,7 @@ adminVendorsRouter.patch(
       isActive: z.union([z.boolean(), z.string().transform(val => val === 'true')]).optional(),
     }).partial(),
   })),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const sellerId = parseInt(req.params.id);
       const updateData = req.body;
@@ -426,7 +426,7 @@ adminVendorsRouter.patch(
 
 // backend/server/routes/adminVendorsRoutes.ts (DELETE route)
 
-adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerIdSchema), async (req: any, res: Response) => {
   const sellerId = parseInt(req.params.id);
   
   try {

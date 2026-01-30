@@ -225,7 +225,7 @@ adminProductsRouter.patch(
   authorize(['admin']),
   upload.single('image'),
   validateRequest(productIdSchema.extend({ body: productUpdateBodySchema })),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const id = Number(req.params.id);
       const updateData = req.body;

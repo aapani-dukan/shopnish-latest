@@ -9,17 +9,25 @@
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "noEmit": false,
-    "types": ["node", "express"],
+    
+    // यह टाइपस्क्रिप्ट को मजबूर करेगा कि वह पुरानी 'types' सेटिंग्स को भूल जाए
+    "types": [], 
+    
+    "typeRoots": [
+      "../node_modules/@types", 
+      "./types"                  
+    ],
     "lib": ["es2022"],
     "outDir": "../dist/server",
     "baseUrl": ".",
     "paths": {
-      "shared/*": ["../shared/*"]
+      "shared/*": ["../../shared/*"]
     }
   },
   "include": [
-"**/*.ts",
-"**/*.d.ts"
-],
+    "**/*.ts",
+    "**/*.d.ts",
+    "../../shared/**/*.ts" 
+  ],
   "exclude": ["node_modules", "dist"]
 }

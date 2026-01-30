@@ -1,0 +1,1 @@
+ALTER TABLE "sellers" ADD COLUMN "is_self_delivery_by_seller" boolean DEFAULT false NOT NULL;

@@ -2,24 +2,17 @@
 
 import { Request, Response, NextFunction } from 'express';
 import { validationResult, checkSchema, Schema } from 'express-validator';
-import { ZodSchema, ZodError } from 'zod'; // ✅ Zod से आयात करें
+import { z, ZodError, ZodType } from 'zod'; // ZodType का उपयोग करें
 
-// ✅ validateRequest फ़ंक्शन को संशोधित करें ताकि यह ZodSchema और express-validator Schema दोनों को स्वीकार कर सके
-export const validateRequest = (schema: Schema | ZodSchema<any>) => {
-  // ZodSchema में 'parse' मेथड होता है। यदि यह मौजूद है, तो यह एक Zod स्कीमा है।
-  if ('parse' in schema && typeof schema.parse === 'function') {
-    const zodSchema = schema as ZodSchema<any>;
-
-    return (req: Request, res: Response, next: NextFunction) => {
+// ✅ 'ZodSchema' की जगह 'ZodType' टाइप का इस्तेमाल करें
+export const validateRequest = (schema: Schema | ZodType<any>) => {
+  
+  // चेक करें कि क्या यह Zod स्कीमा है
+  if (schema instanceof z.ZodType) {
+    return async (req: Request, res: Response, next: NextFunction) => {
       try {
-        // Zod द्वारा req.body, req.params, req.query को वैलिडेट करें
-        // Zod स्कीमा को पूरे req ऑब्जेक्ट पर लागू करने के लिए, स्कीमा को इस प्रकार बनाना होगा:
-        // z.object({
-        //   body: z.object(...),
-        //   params: z.object(...),
-        //   query: z.object(...),
-        // })
-        zodSchema.parse({
+        // 🛑 यहाँ गलती थी: 'ZodSchema.parse' की जगह 'schema.parse' होगा
+        await schema.parse({
           body: req.body,
           params: req.params,
           query: req.query,
@@ -27,13 +20,17 @@ export const validateRequest = (schema: Schema | ZodSchema<any>) => {
         next();
       } catch (error) {
         if (error instanceof ZodError) {
-          // ZodError को express-validator जैसा फॉर्मेट करें
-          const formattedErrors = error.errors.map(err => ({
+          const formattedErrors = error.issues.map(err => ({
             msg: err.message,
-            param: err.path.join('.'), // path को एक स्ट्रिंग के रूप में जॉइन करें
-            location: err.path[0], // 'body', 'params', 'query'
+            // 'body.email' जैसा क्लीन पाथ बनाने के लिए
+            param: err.path.length > 1 ? err.path.slice(1).join('.') : err.path[0],
+            location: err.path[0], 
           }));
-          return res.status(400).json({ errors: formattedErrors });
+
+          return res.status(400).json({ 
+            success: false, 
+            errors: formattedErrors 
+          });
         }
         console.error("Zod validation error:", error);
         return res.status(500).json({ message: "Internal server error during validation." });

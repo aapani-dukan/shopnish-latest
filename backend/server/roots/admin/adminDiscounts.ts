@@ -27,7 +27,10 @@ const couponIdSchema = z.object({
 const createCouponSchema = z.object({
   code: z.string().min(3, "Coupon code must be at least 3 characters.").max(255),
   description: z.string().optional().nullable(),
-  discountType: z.nativeEnum(discountTypeEnum),
+  
+  // ✅ FIX 1: discountType के लिए z.enum और .enumValues का प्रयोग करें
+  discountType: z.enum(discountTypeEnum.enumValues),
+  
   discountValue: z.string().regex(/^\d+(\.\d{1,2})?$/, "Discount value must be a valid decimal number."),
   minOrderValue: z.string().regex(/^\d+(\.\d{1,2})?$/, "Minimum order value must be a valid decimal number.").optional().default("0.00"),
   maxDiscountAmount: z.string().regex(/^\d+(\.\d{1,2})?$/, "Max discount amount must be a valid decimal number.").optional().nullable(),
@@ -36,7 +39,10 @@ const createCouponSchema = z.object({
   usageLimit: z.number().int().min(1, "Usage limit must be at least 1.").optional().nullable(),
   perUserLimit: z.number().int().min(1, "Per user limit must be at least 1.").optional().default(1),
   isActive: z.boolean().optional().default(true),
-  couponScope: z.nativeEnum(couponScopeEnum).optional().default('all_orders'),
+  
+  // ✅ FIX 2: couponScope के लिए भी यही तरीका अपनाएं
+  couponScope: z.enum(couponScopeEnum.enumValues).optional().default('all_orders'),
+  
   sellerId: z.number().int().optional().nullable(),
   productId: z.number().int().optional().nullable(),
   categoryId: z.number().int().optional().nullable(),
@@ -60,7 +66,7 @@ const updateCouponSchema = createCouponSchema.partial().extend({
  * ✅ GET /api/admin/discounts - सभी डिस्काउंट कूपन फ़ेच करें
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDiscountsRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminDiscountsRouter.get('/', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const allCoupons = await db.query.couponsPgTable.findMany({
       with: {
@@ -81,7 +87,7 @@ adminDiscountsRouter.get('/', authorize(['admin']), async (req: AuthenticatedReq
  * ✅ GET /api/admin/discounts/:id - ID द्वारा एकल कूपन फ़ेच करें
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDiscountsRouter.get('/:id', authorize(['admin']), validateRequest(couponIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminDiscountsRouter.get('/:id', authorize(['admin']), validateRequest(couponIdSchema), async (req: any, res: Response) => {
   try {
     const couponId = parseInt(req.params.id);
     const [coupon] = await db.query.couponsPgTable.findMany({
@@ -112,7 +118,7 @@ adminDiscountsRouter.post(
   '/',
   authorize(['admin']),
   validateRequest(z.object({ body: createCouponSchema })),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const couponData = req.body;
 
@@ -164,7 +170,7 @@ adminDiscountsRouter.patch(
   '/:id',
   authorize(['admin']),
   validateRequest(couponIdSchema.extend({ body: updateCouponSchema })),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const couponId = parseInt(req.params.id);
       const updateData = req.body;
@@ -229,7 +235,7 @@ adminDiscountsRouter.patch(
  * ✅ DELETE /api/admin/discounts/:id - डिस्काउंट कूपन को हटाएं
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDiscountsRouter.delete('/:id', authorize(['admin']), validateRequest(couponIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminDiscountsRouter.delete('/:id', authorize(['admin']), validateRequest(couponIdSchema), async (req: any, res: Response) => {
   try {
     const couponId = parseInt(req.params.id);
 

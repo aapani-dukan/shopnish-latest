@@ -32,7 +32,7 @@ const updateDeliveryBoyBodySchema = z.object({
   aadharNumber: z.string().min(1, "Aadhar number is required.").optional(),
   panNumber: z.string().optional().nullable(),
   isActive: z.boolean().optional(), // Admin can activate/deactivate delivery boy
-  approvalStatus: z.nativeEnum(approvalStatusEnum).optional(), // Admin can change approval status directly
+  ApprovalStatus: z.enum(approvalStatusEnum.enumValues).optional(),// Admin can change approval status directly
   rejectionReason: z.string().optional().nullable(), // Admin can set rejection reason
 }).partial(); // All fields are optional for a PATCH request
 
@@ -42,7 +42,7 @@ const updateDeliveryBoyBodySchema = z.object({
  * ✅ GET /api/admin/delivery-boys - सभी डिलीवरी बॉयज़ फ़ेच करें (पेंडिंग, अप्रूव्ड, रिजेक्टेड)
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.get('/', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.get('/', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const allDeliveryBoys = await db.query.deliveryBoys.findMany({
       with: {
@@ -64,7 +64,7 @@ adminDeliveryBoysRouter.get('/', authorize(['admin']), async (req: Authenticated
  * सभी लंबित (pending) डिलीवरी बॉय एप्लिकेशन को फ़ेच करें
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.get('/pending', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.get('/pending', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const pendingApplications = await db.query.deliveryBoys.findMany({
       where: eq(deliveryBoys.approvalStatus, approvalStatusEnum.enumValues[0]), // 'pending'
@@ -85,7 +85,7 @@ adminDeliveryBoysRouter.get('/pending', authorize(['admin']), async (req: Authen
  * सभी स्वीकृत (approved) डिलीवरी बॉय को फ़ेच करें
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.get('/approved', authorize(['admin']), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.get('/approved', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const approvedDeliveryBoys = await db.query.deliveryBoys.findMany({
       where: eq(deliveryBoys.approvalStatus, approvalStatusEnum.enumValues[1]), // 'approved'
@@ -106,7 +106,7 @@ adminDeliveryBoysRouter.get('/approved', authorize(['admin']), async (req: Authe
  * ID द्वारा एकल डिलीवरी बॉय फ़ेच करें
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.get('/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.get('/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = parseInt(req.params.id);
     const [deliveryBoy] = await db.query.deliveryBoys.findMany({
@@ -134,7 +134,7 @@ adminDeliveryBoysRouter.get('/:id', authorize(['admin']), validateRequest(delive
  * एक डिलीवरी बॉय को मंज़ूर करें (मौजूदा लॉजिक का उपयोग करें)
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = Number(req.params.id);
 
@@ -144,10 +144,14 @@ adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequ
     }
 
     const [approved] = await db
-      .update(deliveryBoys)
-      .set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date(), rejectionReason: null }) // 'approved'
-      .where(eq(deliveryBoys.id, deliveryBoyId))
-      .returning();
+  .update(deliveryBoys)
+  .set({ 
+    approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
+    updatedAt: new Date() 
+    // ❌ rejectionReason यहाँ से हटा दें क्योंकि यह स्कीमा में नहीं है
+  })
+  .where(eq(deliveryBoys.id, deliveryBoyId))
+  .returning();
 
     // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
     await db.update(users)
@@ -173,7 +177,7 @@ adminDeliveryBoysRouter.patch('/reject/:id', authorize(['admin']), validateReque
   body: z.object({
     reason: z.string().min(1, "Rejection reason is required for rejecting a delivery boy.").optional(), // Optional, but highly recommended
   }).partial(),
-})), async (req: AuthenticatedRequest, res: Response) => {
+})), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = Number(req.params.id);
     const { reason } = req.body;
@@ -185,7 +189,11 @@ adminDeliveryBoysRouter.patch('/reject/:id', authorize(['admin']), validateReque
 
     const [rejected] = await db
       .update(deliveryBoys)
-      .set({ approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date(), rejectionReason: reason || null }) // 'rejected'
+      .set({ 
+        approvalStatus: approvalStatusEnum.enumValues[2], // 'rejected'
+        updatedAt: new Date() 
+        // ❌ rejectionReason यहाँ से हटा दिया क्योंकि स्कीमा में नहीं है
+      })
       .where(eq(deliveryBoys.id, deliveryBoyId))
       .returning();
 
@@ -219,7 +227,7 @@ adminDeliveryBoysRouter.patch(
       isActive: z.union([z.boolean(), z.string().transform(val => val === 'true')]).optional(),
     }).partial(), // Ensure body fields are optional in the request
   })),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const deliveryBoyId = parseInt(req.params.id);
       const updateData = req.body;
@@ -285,7 +293,7 @@ adminDeliveryBoysRouter.patch(
  * एक डिलीवरी बॉय को हटाएं (एडमिन द्वारा)
  * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.delete('/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: AuthenticatedRequest, res: Response) => {
+adminDeliveryBoysRouter.delete('/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = parseInt(req.params.id);
 

@@ -24,7 +24,7 @@ import {
   // paymentStatusEnum, // ✅ यदि paymentStatusEnum का उपयोग कर रहे हो तो इम्पोर्ट करें
 } from "../../shared/backend/schema"; // ✅ schema फ़ाइल से इम्पोर्ट करें
 import { eq, desc, and, inArray, sql } from "drizzle-orm";
-import { AuthenticatedRequest } from "../middleware/authMiddleware"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
+import { AuthenticatedRequest } from "../middleware/verifyToken"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
 import { getIO } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
 import { json } from "drizzle-orm/pg-core"; // ✅ json को drizzle से इम्पोर्ट करें
 console.log({
@@ -338,13 +338,15 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
         // 1. Create master order
 const [masterOrder] = await tx.insert(orders).values({
-    orderNumber: `ORD-${Date.now()}-${userId}`,
+    // 1. अगर स्कीमा में 'order_number' है, तो वही लिखें। 
+    // 2. Shopnish Premium ID Logic: SN-BND-2026-XXXX
+    orderNumber: `SN-BND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, 
+    
     customerId: userId,
     deliveryAddressId: finalDeliveryAddressId,
-    // FIX APPLIED: Only save the addressLine1 string to the TEXT column
+    
+    // FIX: एड्रेस को स्ट्रिंग बनाकर डालना एकदम सही है (JSON.stringify)
     deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
-    
-    
     deliveryCity: finalCity,
     deliveryState: finalState,
     deliveryPincode: finalPincode,
@@ -364,9 +366,10 @@ const [masterOrder] = await tx.insert(orders).values({
     deliveryInstructions: deliveryInstructions || null,
     createdAt: new Date(),
     updatedAt: new Date(),
-}).returning({ 
+}as any).returning({ 
     id: orders.id, 
     orderNumber: orders.orderNumber, 
+    customerId: orders.customerId,
     total: orders.total, 
     status: orders.status, 
     createdAt: orders.createdAt 
@@ -416,7 +419,7 @@ for (const vItem of validatedItems) {
         itemTotal: vItem.itemTotal,
         createdAt: new Date(),
         updatedAt: new Date(),
-    });
+    }as any);
 }
         
 
@@ -451,7 +454,7 @@ for (const vItem of validatedItems) {
           total: masterOrder.total,
           status: masterOrder.status,
           createdAt: masterOrder.createdAt,
-        });
+        }as any);
         getIO().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
 
         return res.status(201).json({
@@ -592,7 +595,7 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
             if (!groupedBySeller.has(cartItem.sellerId)) {
                 groupedBySeller.set(cartItem.sellerId, []);
             }
-            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product: cartItem.product });
+            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product: cartItem.product as any });
             
             // 🛑 FIX: सुनिश्चित करें कि totalPrice संख्या के रूप में जोड़ा जाए
             masterOrderCalculatedSubtotal += Number(cartItem.totalPrice); 
@@ -624,7 +627,7 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
 
         for (const [sellerId, items] of groupedBySeller.entries()) {
             const store = sellerStoreMap.get(sellerId);
-            const seller = items[0].seller;
+            const seller = (items[0] as any).seller;
 
             if (!store || !store.latitude || !store.longitude || !seller) {
                 throw new Error(`Store or seller details missing for seller ${sellerId}`);
@@ -645,7 +648,7 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
                 storeLat: Number(store.latitude), 
                 storeLng: Number(store.longitude),
                 estimatedTime: 60,
-            });
+            }as any);
         }
 
         // --- फाइनल टोटल चेक ---
@@ -679,7 +682,7 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
             deliveryInstructions: deliveryInstructions || null,
             createdAt: new Date(),
             updatedAt: new Date(),
-        }).returning({ id: orders.id, orderNumber: orders.orderNumber });
+        }as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
         if (!masterOrder) throw new Error('Failed to create master order.');
 
@@ -769,13 +772,13 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
                     productId: item.product.id,
                     productName: item.product.name,
                     productImage: item.product.image,
-                    productPrice: item.priceAtAdded,
+                    productPrice: (item as any).priceAtAdded,
                     productUnit: item.product.unit,
-                    quantity: item.quantity,
-                    itemTotal: item.totalPrice,
+                    quantity: (item as any).quantity,
+                    itemTotal: (item as any).totalPrice,
                     createdAt: new Date(),
                     updatedAt: new Date(),
-                });
+                }as any);
             }
         }
 
@@ -819,13 +822,13 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
                         productId: item.product.id,
                         productName: item.product.name,
                         productImage: item.product.image,
-                        productPrice: item.priceAtAdded,
+                        productPrice: (item as any).priceAtAdded,
                         productUnit: item.product.unit,
-                        quantity: item.quantity,
-                        itemTotal: item.totalPrice,
+                        quantity: (item as any).quantity,
+                        itemTotal: (item as any).totalPrice,
                         createdAt: new Date(),
                         updatedAt: new Date(),
-                    });
+                    }as any);
                 }
             }
         }
@@ -921,22 +924,22 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
 
       // 🟢 FIX 2: मास्टर ऑर्डर के लिए समग्र डिलीवरी स्टेटस निर्धारित करें
       let overallDeliveryStatus = masterOrder.status; 
-      
-      if (uniqueBatches.length > 0) {
-           // यदि कोई भी बैच 'out_for_delivery' है, तो मास्टर स्टेटस 'In Transit' होना चाहिए।
-           if (uniqueBatches.some(b => b.status === 'out_for_delivery')) {
-                overallDeliveryStatus = 'In Transit';
-           } 
-           // यदि सभी बैचेस 'delivered' हैं, तो मास्टर स्टेटस 'Delivered'
-           else if (uniqueBatches.every(b => b.status === 'delivered')) {
-                overallDeliveryStatus = 'Delivered';
-           }
-           // यदि कोई भी बैच पिकअप हो गया है, लेकिन आउट फॉर डिलीवरी नहीं है, तो 'Picked Up'
-           else if (uniqueBatches.some(b => b.status === 'picked_up')) {
-                overallDeliveryStatus = 'Picked Up';
-           }
-      }
-      
+
+if (uniqueBatches.length > 0) {
+    // 1. यदि सभी बैचेस 'delivered' हैं, तो मास्टर स्टेटस 'fulfilled' (मतलब ऑर्डर पूरा हुआ)
+    if (uniqueBatches.every(b => b.status === 'delivered')) {
+        overallDeliveryStatus = 'fulfilled';
+    } 
+    // 2. यदि कोई बैच डिलीवर हो गया है और कुछ अभी भी रास्ते में हैं, तो 'partially_fulfilled'
+    else if (uniqueBatches.some(b => b.status === 'delivered')) {
+        overallDeliveryStatus = 'partially_fulfilled';
+    }
+    // 3. यदि कोई भी बैच 'out_for_delivery' या 'picked_up' है, तो उसे 'confirmed' मानें 
+    // (क्योंकि ये अभी भी प्रोसेस में हैं)
+    else if (uniqueBatches.some(b => b.status === 'out_for_delivery' || b.status === 'picked_up')) {
+        overallDeliveryStatus = 'confirmed';
+    }
+}
 
       // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें (पुरानी मैपिंग बरकरार)
       const subOrdersWithDeliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
@@ -1092,14 +1095,14 @@ export const getOrderTrackingDetails = async (
       const relatedSubOrders = subOrdersList.filter(
         so => so.deliveryBatchId === batch.id
       );
-
+//const sellerName = (subOrdersList[0] as any)?.seller?.businessName || "Shopnish Seller";
       deliveryBatchesSummary.push({
         batchId: batch.id,
         batchStatus: batch.status,
         deliveryBoy: (batch as any).deliveryBoy,
         subOrders: relatedSubOrders.map(so => ({
           subOrderId: so.id,
-          sellerName: so.sellerName || "Seller",
+          SellerName: (so as any).seller?.businessName || (so as any).sellerName || "Shopnish Seller",
           subOrderStatus: so.status,
           isSelfDelivery: so.isSelfDeliveryBySeller,
         })),
@@ -1184,7 +1187,7 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
         });
         const trackingHistory = await db.query.orderTracking.findMany({
   where: eq(orderTracking.masterOrderId, orderId),
-  orderBy: { column: orderTracking.createdAt, order: "desc" },
+  orderBy: [desc(orderTracking.timestamp)],
   limit: 5,
 });
         // यदि masterOrderDetail नहीं मिला
@@ -1202,8 +1205,8 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
 
         // SubOrders data mapping (सही है)
         const detailedSubOrders = (masterOrderDetail.subOrders || []).map(subOrder => {
-            const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
-            const deliveryStatus = subOrder.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : subOrder.status);
+            const deliveryBoy = (subOrder as any)?.deliveryBatch?.deliveryBoy || null;
+            const deliveryStatus = (subOrder as any)?.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : subOrder.status);
             
             return {
                 // ... subOrder fields

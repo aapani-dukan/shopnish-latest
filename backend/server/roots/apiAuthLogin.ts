@@ -1,13 +1,13 @@
 // server/roots/apiAuthLogin.ts
 
 import { Router, Request, Response } from 'express';
-import { db } from '../db.ts';
-import { users, userRoleEnum } from '../../shared/backend/schema.ts';
+import { db } from '../db';
+import { users, userRoleEnum } from '../../shared/backend/schema';
 import { eq } from 'drizzle-orm';
 import bcrypt from 'bcryptjs';
-import { authAdmin } from '../lib/firebaseAdmin.ts';
+import { authAdmin } from '../lib/firebaseAdmin';
 // ✅ authUtils से comparePassword को इम्पोर्ट करें
-import { comparePassword } from '../util/authUtils.ts'; // सुनिश्चित करें कि पाथ सही है
+import { comparePassword } from '../util/authUtils'; // सुनिश्चित करें कि पाथ सही है
 
 const apiAuthLoginRouter = Router();
 
@@ -40,7 +40,7 @@ apiAuthLoginRouter.post("/admin-login", async (req: Request, res: Response) => {
 
     // 4. डेटाबेस से मिले हैशेड पासवर्ड से तुलना करें
     // ✅ comparePassword फ़ंक्शन का उपयोग करें जो हमने authUtils में बनाया था
-    const isPasswordCorrect = await comparePassword(password, adminUser.password);
+    const isPasswordCorrect = await comparePassword(password, adminUser.password??'');
 
     if (!isPasswordCorrect) {
         return res.status(401).json({ error: "Invalid password." });

@@ -176,6 +176,8 @@ export const sellersPgTable = pgTable("sellers", {
   longitude: decimal("longitude", { precision: 10, scale: 7 }).$type<number>(),
   deliveryPincodes: text("delivery_pincodes").array(),
   isDistanceBasedDelivery: boolean("is_distance_based_delivery").default(false),
+  
+isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false).notNull(),
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
