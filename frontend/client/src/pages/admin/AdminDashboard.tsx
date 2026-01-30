@@ -211,10 +211,6 @@ formData.append("productId", linkType === 'product' ? linkValue : "");
   formData.append("categoryId", linkType === 'category' ? linkValue : "");
   const config = {
     items: [{
-      title: bannerType.replace('_', ' ').toUpperCase(),
-      image: "", // Backend handles this
-      // Target decide karega click hone par kya khulega
-      productId: linkType === 'product' ? linkValue : null,
       categoryId: linkType === 'category' ? linkValue : null,
       deeplink: linkType === 'url' ? linkValue : ""
     }]

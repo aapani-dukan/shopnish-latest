@@ -1,16 +1,16 @@
 // server/routes/orderConfirmationRouter.ts
 
 import { Router } from 'express';
-import { db } from '../server/db.ts';
-import { orders, orderItems, products, users } from '../shared/backend/schema.ts';
+import { db } from '../server/db';
+import { orders, orderItems, products, users } from '../shared/backend/schema';
 import { eq } from 'drizzle-orm';
-import { AuthenticatedRequest, requireAuth } from '../server/middleware/authMiddleware.ts';
-
+import {  requireAuth } from '../server/middleware/authMiddleware';
+import { AuthenticatedRequest } from '../server/middleware/verifyToken';
 const router = Router();
 
 // ✅ GET /api/order-confirmation/:orderId
 // यह एंडपॉइंट एक विशिष्ट ऑर्डर आईडी के लिए ऑर्डर और उसके आइटम को लाता है।
-router.get('/:orderId', requireAuth, async (req: AuthenticatedRequest, res) => {
+router.get('/:orderId', requireAuth, async (req: AuthenticatedRequest, res: any) => {
   try {
     console.log(`🔍 [API] Received GET request for order ID: ${req.params.orderId}`);
     const firebaseUid = req.user?.firebaseUid;
@@ -42,7 +42,7 @@ router.get('/:orderId', requireAuth, async (req: AuthenticatedRequest, res) => {
             product: true,
           },
         },
-      },
+      }as any
     });
 
     if (!order || order.customerId !== user.id) {

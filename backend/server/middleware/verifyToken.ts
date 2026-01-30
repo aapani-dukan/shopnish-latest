@@ -1,5 +1,5 @@
 // server/middleware/verifyToken.ts
-import { Request, Response, NextFunction } from 'express';
+import { Request, Response, NextFunction,RequestHandler } from 'express';
 import { authAdmin } from '../lib/firebaseAdmin';
 import { db } from '../db';
 import { users, deliveryBoys } from '../../shared/backend/schema'; 
@@ -21,7 +21,9 @@ export interface AuthenticatedRequest extends Request {
     
   };
 }
-
+export const catchAuth = (fn: (req: AuthenticatedRequest, res: Response, next: NextFunction) => any): RequestHandler => {
+  return fn as unknown as RequestHandler;
+};
 export const verifyToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
 

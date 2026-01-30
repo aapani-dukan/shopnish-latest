@@ -9,7 +9,7 @@ const MSG91_CLEVERTAP_ENDPOINT = "https://api.msg91.com/api/v5/whatsapp/outbound
 
 
 // 🔹 WhatsApp message sender (generic)
-export async function sendWhatsAppMessage(phone: string, message: string) {
+export async function sendWhatsAppMessage(phone: string, message: string,metadata?: any) {
   try {
     // MSG91_WHATSAPP_AUTH_KEY को MSG91_AUTH_KEY_VAR में बदला गया है
     if (!MSG91_AUTH_KEY_VAR) {
@@ -22,7 +22,9 @@ export async function sendWhatsAppMessage(phone: string, message: string) {
       type: "text",
       text: { body: message },
     };
-
+if (metadata) {
+      console.log(`Sending WhatsApp to ${phone} for Order: ${metadata.orderId}`);
+    }
     const headers = {
       authkey: MSG91_AUTH_KEY_VAR, // यहां भी बदला गया
       "Content-Type": "application/json",

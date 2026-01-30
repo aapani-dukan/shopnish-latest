@@ -70,7 +70,7 @@ const deleteDeliveryAreaZodSchema = z.object({
 // ✅ GET: All delivery areas
 adminDeliveryAreasRouter.get(
   '/',
-  verifyToken,
+  verifyToken as any,
   authorize(['admin']),
   async (req, res) => {
     try {
@@ -86,7 +86,7 @@ adminDeliveryAreasRouter.get(
 // ✅ GET: Single delivery area by ID
 adminDeliveryAreasRouter.get(
   '/:id',
-  verifyToken,
+  verifyToken as any,
   authorize(['admin']),
   validateRequest(getDeliveryAreaByIdZodSchema), // ✅ Zod स्कीमा का उपयोग करें (Zod part of validateRequest will handle this)
   async (req, res) => {
@@ -110,7 +110,7 @@ adminDeliveryAreasRouter.get(
 // ✅ POST: Create new delivery area
 adminDeliveryAreasRouter.post(
   '/',
-  verifyToken,
+  verifyToken as any,
   authorize(['admin']),
   validateRequest(createDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {
@@ -133,7 +133,7 @@ adminDeliveryAreasRouter.post(
           deliveryCharge: parseFloat(deliveryCharge), // ✅ String से Number में बदलें
           freeDeliveryAbove: parseFloat(freeDeliveryAbove), // ✅ String से Number में बदलें
           isActive,
-        })
+        }as any) // Type assertion to any to bypass type issues
         .returning();
 
       return res.status(201).json({ message: "Delivery area created successfully.", area: newArea });
@@ -147,7 +147,7 @@ adminDeliveryAreasRouter.post(
 // ✅ PUT: Update delivery area
 adminDeliveryAreasRouter.put(
   '/:id',
-  verifyToken,
+   verifyToken as any,
   authorize(['admin']),
   validateRequest(updateDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {
@@ -181,7 +181,7 @@ adminDeliveryAreasRouter.put(
 // ✅ DELETE: Remove delivery area
 adminDeliveryAreasRouter.delete(
   '/:id',
-  verifyToken,
+  verifyToken as any,
   authorize(['admin']),
   validateRequest(deleteDeliveryAreaZodSchema), // ✅ Zod स्कीमा का उपयोग करें
   async (req, res) => {

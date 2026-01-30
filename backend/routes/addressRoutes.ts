@@ -110,7 +110,7 @@ addressRouter.use(requireAuth);
 // 2. GET /api/addresses/user
 addressRouter.get(
   '/user',
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       // 1. Firebase UID प्राप्त करें
       const firebaseUid = req.user?.uid || req.user?.id; // Firebase UID स्ट्रिंग
@@ -146,7 +146,7 @@ addressRouter.get(
 // 3. POST /api/addresses
 addressRouter.post(
   '/',
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       // 1. Firebase UID प्राप्त करें
       const firebaseUid = req.user?.firebaseUid;
@@ -194,7 +194,7 @@ addressRouter.post(
           userId: userIdNum, // ✅ यह अब संख्या (integer) है!
           latitude: String(latitude), 
           longitude: String(longitude),
-        })
+        }as any) // Type assertion to any to bypass type issues
         .returning();
 
       return res.status(201).json(newAddress);
@@ -207,7 +207,7 @@ addressRouter.post(
 // 4. PUT /api/addresses/:id
 addressRouter.put(
   '/:id',
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       // 🛑 FIX 6: Drizzle ID का उपयोग करें
       const userId = req.user?.id; 
@@ -222,13 +222,15 @@ addressRouter.put(
         return res.status(400).json({ errors: validation.error.issues });
       }
       const updateData = validation.data;
+      const { state, city, pincode, isDefault, latitude, longitude, ...rest } = updateData;
         if (!state || state.length === 0) {
           // स्कीमा कहती है कि state notNull है, लेकिन यदि यह undefined/खाली स्ट्रिंग है, तो यह क्रैश होगा।
           console.error(`[FATAL-DEBUG-3] State is missing or empty. Value: ${state}`);
           return res.status(500).json({ message: 'Internal server error: State field is mandatory.' });
         }
-       if (!addressDetails.city || addressDetails.city.length === 0) {
-          console.error(`[FATAL-DEBUG-4] City is missing or empty. Value: ${addressDetails.city}`);
+        if (!city) return res.status(400).json({ message: 'City field is mandatory.' });
+       if (!updateData.city || updateData.city.length === 0) {
+          console.error(`[FATAL-DEBUG-4] City is missing or empty. Value: ${updateData.city}`);
           return res.status(500).json({ message: 'Internal server error: City field is mandatory.' });
        }
 
@@ -292,7 +294,7 @@ addressRouter.put(
 // 5. DELETE /api/addresses/:id
 addressRouter.delete(
   '/:id',
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       // 🛑 FIX 9: Drizzle ID का उपयोग करें
       const userId = req.user?.id; 

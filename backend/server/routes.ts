@@ -90,9 +90,10 @@ router.post("/register", async (req: Request, res: Response) => {
 // ✅ User Profile
 router.get(
   "/users/me",
-  requireAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
+  requireAuth as any,
+  async (req:any, res: Response) => {
     try {
+      const authReq = req as AuthenticatedRequest;
       const userUuid = req.user?.firebaseUid;
       if (!userUuid) {
         return res.status(401).json({ error: "Not authenticated." });
@@ -145,10 +146,11 @@ deliveryBoyId: deliveryBoyId });
 
 router.get(
   "/:orderId/tracking", // यह URL /api/orders/170/tracking को मैच करेगा
-  requireAuth, // सुनिश्चित करें कि ग्राहक लॉग इन है
-  async (req: AuthenticatedRequest, res: Response) => {
-    const { orderId } = req.params;
-    const customerId = req.user?.firebaseUid;
+  requireAuth as any, // सुनिश्चित करें कि ग्राहक लॉग इन है
+  async (req: any, res: Response) => {
+    const authReq = req as AuthenticatedRequest;
+    const { orderId } = authReq.params;
+    const customerId = authReq.user?.firebaseUid;
 
     if (!customerId) {
       return res.status(401).json({ error: "Authentication required." });
@@ -309,7 +311,7 @@ router.use('/customer', customerRouter);
 router.use("/cart", cartRouter);
 router.use("/orders", orderRoutes);
 router.use("/order-confirmation", orderConfirmationRouter);
-router.use("/sellers", verifyToken, sellerRouter);
+router.use("/sellers", verifyToken as any, sellerRouter);
 
 // ✅ Categories
 // ✅ Categories with Related Shops and Products

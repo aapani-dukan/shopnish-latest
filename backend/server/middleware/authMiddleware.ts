@@ -4,7 +4,7 @@ import { verifyToken, AuthenticatedRequest } from "./verifyToken";
 import { userRoleEnum, deliveryBoys, sellersPgTable, approvalStatusEnum } from "../../shared/backend/schema";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
-
+import { RequestHandler } from 'express';
 // सामान्य प्रमाणीकरण
 export const requireAuth = [
   verifyToken,
@@ -16,7 +16,7 @@ export const requireAuth = [
     }
     next();
   },
-];
+] as any[];
 
 // केवल Admin के लिए
 export const requireAdminAuth = [

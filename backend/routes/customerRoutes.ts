@@ -9,7 +9,7 @@ import { geocodeAddress } from '../services/geocodingService'; // Geocoding Serv
 const customerRouter = Router();
 
 // ✅ GET /api/customer/addresses (सभी डिलीवरी एड्रेस Fetch करें, डिफ़ॉल्ट पहले)
-customerRouter.get('/addresses', verifyToken, async (req: AuthenticatedRequest, res: Response) => {
+customerRouter.get('/addresses', verifyToken as any, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
         if (!userId) {
@@ -34,7 +34,7 @@ customerRouter.get('/addresses', verifyToken, async (req: AuthenticatedRequest, 
 
 
 // ✅ POST /api/customer/addresses (नया डिलीवरी एड्रेस जोड़ें)
-customerRouter.post('/addresses', verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+customerRouter.post('/addresses', verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -92,7 +92,7 @@ customerRouter.post('/addresses', verifyToken, async (req: AuthenticatedRequest,
 });
 
 // ✅ PUT /api/customer/addresses/:id (मौजूदा डिलीवरी एड्रेस को अपडेट करें)
-customerRouter.put('/addresses/:id', verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+customerRouter.put('/addresses/:id', verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     const addressId = parseInt(req.params.id);
@@ -175,7 +175,7 @@ customerRouter.put('/addresses/:id', verifyToken, async (req: AuthenticatedReque
 });
 
 // ✅ PATCH /api/customer/addresses/:id/set-default (किसी पते को डिफ़ॉल्ट के रूप में सेट करें)
-customerRouter.patch('/addresses/:id/set-default', verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+customerRouter.patch('/addresses/:id/set-default', verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     const addressId = parseInt(req.params.id);
@@ -220,7 +220,7 @@ customerRouter.patch('/addresses/:id/set-default', verifyToken, async (req: Auth
 });
 
 // ✅ DELETE /api/customer/addresses/:id (डिलीवरी एड्रेस हटाएं)
-customerRouter.delete('/addresses/:id', verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+customerRouter.delete('/addresses/:id', verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
     try {
         const userId = req.user?.id;
         const addressId = parseInt(req.params.id);

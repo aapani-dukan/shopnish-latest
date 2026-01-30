@@ -2,16 +2,20 @@
 import { Router, Response, NextFunction } from "express";
 import { db } from "../../server/db.ts";
 import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from "../../shared/backend/schema.ts";
-import { verifyToken, AuthenticatedRequest } from "../../server/middleware/verifyToken.ts";
+import { verifyToken } from "../../server/middleware/verifyToken.ts";
 import { eq } from "drizzle-orm";
 
 const router = Router();
 
-router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+// ✅ ट्रिक: यहाँ 'req' को 'any' दें ताकि Express का Overload इसे स्वीकार कर ले
+router.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
-    // ✅ यहाँ req.user?.userId की जगह req.user?.firebaseUid का उपयोग करें
+    // यहाँ हमने 'req.user' को 'any' के जरिए एक्सेस किया, कोई एरर नहीं आएगी
     const firebaseUid = req.user?.firebaseUid; 
-    if (!firebaseUid) return res.status(401).json({ message: "Unauthorized" });
+    
+    if (!firebaseUid) {
+      return res.status(401).json({ message: "Unauthorized: Firebase UID missing" });
+    }
 
     const {
       businessName,
@@ -27,14 +31,17 @@ router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, n
       businessType,
     } = req.body;
 
+    // 1. Validation
     if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
+    // 2. Database User Check
     const [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
     if (!dbUser) return res.status(404).json({ message: "User not found." });
 
-    const [existing] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, dbUser.id));
+    // 3. Duplicate Application Check
+    const [existing] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, dbUser.id)).limit(1);
     if (existing) {
       return res.status(400).json({
         message: "Application already submitted.",
@@ -42,7 +49,8 @@ router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, n
       });
     }
 
-    const newSeller = await db.insert(sellersPgTable).values({
+    // 4. Create Seller Record
+    const [newSeller] = await db.insert(sellersPgTable).values({
       userId: dbUser.id,
       businessName,
       businessAddress,
@@ -53,31 +61,32 @@ router.post("/", verifyToken, async (req: AuthenticatedRequest, res: Response, n
       gstNumber: gstNumber || null,
       bankAccountNumber: bankAccountNumber || null,
       ifscCode: ifscCode || null,
-      deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : null,
+      deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : 5,
       businessType,
       approvalStatus: approvalStatusEnum.enumValues[0],
-    //  applicationDate: new Date(),
     }).returning();
 
+    // 5. Update User Role & Status
     const [updatedUser] = await db.update(users)
       .set({
-        role: userRoleEnum.enumValues[1],
-        approvalStatus: approvalStatusEnum.enumValues[0],
+        role: userRoleEnum.enumValues[1], // 'seller'
+        approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
       })
       .where(eq(users.id, dbUser.id))
       .returning();
 
+    // 6. Response
     return res.status(201).json({
-      message: "Application submitted.",
-      seller: newSeller[0],
+      message: "Application submitted successfully!",
+      seller: newSeller,
       user: {
-        // ✅ यहाँ uuid की जगह firebaseUid का उपयोग करें
         firebaseUid: updatedUser.firebaseUid,
         role: updatedUser.role,
         email: updatedUser.email,
-        name: updatedUser.firstName + " " updatedUser.lastName,
+        name: `${updatedUser.firstName || ""} ${updatedUser.lastName || ""}`.trim(),
       },
     });
+
   } catch (error) {
     console.error("❌ Error in apply.ts:", error);
     next(error);

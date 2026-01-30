@@ -10,20 +10,20 @@ router.get('/master-search', ProductController.searchMasterProducts);
 
 // --- 📦 BULK UPLOAD (New) ---
 // जो आपने शुरू में पूछा था, उसे यहाँ रजिस्टर कर रहे हैं
-router.post('/bulk-products', verifyToken, requireAdminAuth, ProductController.bulkUploadProducts);
+router.post('/bulk-products', verifyToken as any, requireAdminAuth, ProductController.bulkUploadProducts);
 // Customer Endpoints
 router.get('/', ProductController.getAllProducts);
 router.get('/:id', ProductController.getProductById);
 
 // Seller Endpoints
-router.post('/', verifyToken, requireSellerAuth, upload.single('image'), ProductController.createProduct);
-router.put('/:productId', verifyToken, requireSellerAuth, upload.single('image'), ProductController.updateProduct);
-router.delete('/:productId', verifyToken, requireSellerAuth, ProductController.deleteProduct);
-router.get('/seller', verifyToken, requireSellerAuth, ProductController.getSellerProducts);
-router.post("/bulk", verifyToken, bulkCreateProducts);
+router.post('/', verifyToken as any, requireSellerAuth, upload.single('image'), ProductController.createProduct as any);
+router.put('/:productId', verifyToken as any, requireSellerAuth, upload.single('image'), ProductController.updateProduct as any);
+router.delete('/:productId', verifyToken as any, requireSellerAuth, ProductController.deleteProduct as any);
+router.get('/seller', verifyToken as any, requireSellerAuth, ProductController.getSellerProducts as any);
+router.post("/bulk", verifyToken as any, bulkCreateProducts);
 // Admin Endpoints
-router.get('/admin/pending', verifyToken, requireAdminAuth, ProductController.getPendingProducts);
-router.put('/admin/:productId/approve', verifyToken, requireAdminAuth, ProductController.approveProduct);
-router.put('/admin/:productId/reject', verifyToken, requireAdminAuth, ProductController.rejectProduct);
+router.get('/admin/pending', verifyToken as any, requireAdminAuth, ProductController.getPendingProducts);
+router.put('/admin/:productId/approve', verifyToken as any, requireAdminAuth, ProductController.approveProduct);
+router.put('/admin/:productId/reject', verifyToken as any, requireAdminAuth, ProductController.rejectProduct);
 
 export default router;

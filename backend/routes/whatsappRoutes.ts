@@ -2,73 +2,73 @@
 import { Router, Response } from "express";
 import { db } from "../server/db";
 import { orders, users, deliveryAddresses } from "../shared/backend/schema";
-import { eq, and, sql, isNull } from "drizzle-orm"; // sql और isNull इम्पोर्ट करें
+import { eq, and, sql, isNull,isNotNull } from "drizzle-orm"; // sql और isNull इम्पोर्ट करें
 import { requireDeliveryBoyAuth } from "../server/middleware/authMiddleware";
-import { AuthenticatedRequest } from "../server/types";
+import { AuthenticatedRequest } from "../server/middleware/verifyToken";
 import {  sendWhatsAppMessage } from "../server/lib/whatsappHelpers";
 import { generateOTP } from "../server/util/otp";
 const router = Router();
 
 // --- हेल्पर फंक्शन ---
 
-async function getCustomerRecipientInfo(orderId: number) {
+
+  async function getCustomerRecipientInfo(orderId: number) {
   const order = await db.query.orders.findFirst({
     where: eq(orders.id, orderId),
     with: {
-      customer: { columns: { id: true, phone: true, firstName: true, whatsappOptIn: true } }, // firstName का उपयोग करें
-      deliveryAddress: { columns: { id: true, phoneNumber: true, fullName: true } }
+      customer: { 
+        columns: { id: true, phone: true, firstName: true, whatsappOptIn: true } 
+      },
+      deliveryAddress: { 
+        columns: { id: true, phoneNumber: true, fullName: true } 
+      }
     },
     columns: {
       id: true,
-      deliveryBoyId: true,
+     // deliveryBoyId: true, // अगर स्कीमा में है तो रखें, वरना हटा दें
     }
-  });
+  }) as any;
 
   if (!order) return { order: null, recipients: [] };
 
   const recipients: { phone: string; name: string }[] = [];
   const uniquePhones = new Set<string>();
 
-  const customerName = order.customer?.firstName; // firstName का उपयोग करें
-  const customerOptIn = order.customer?.whatsappOptIn ?? true; // डिफ़ॉल्ट रूप से true, यदि null है
+  const customerName = order.customer?.firstName || "ग्राहक";
+  const customerOptIn = order.customer?.whatsappOptIn ?? true;
+  
+  if (!customerOptIn) return { order, recipients: [] };
 
-  // यदि ग्राहक ने WhatsApp मैसेज के लिए ऑप्ट-इन नहीं किया है, तो कोई मैसेज न भेजें
-  if (!customerOptIn) {
-    console.log(`Customer ${order.customer?.id} has opted out of WhatsApp messages.`);
-    return { order, recipients: [] };
-  }
-
+  // 1. डिलीवरी एड्रेस का फ़ोन नंबर (Highest Priority)
   const deliveryAddressPhone = order.deliveryAddress?.phoneNumber;
   const deliveryAddressName = order.deliveryAddress?.fullName;
-  const userProfilePhone = order.customer?.phone;
 
-  // 1. डिलीवरी एड्रेस का फ़ोन नंबर (उच्चतम प्राथमिकता)
-  if (deliveryAddressPhone && !uniquePhones.has(deliveryAddressPhone)) {
+  if (deliveryAddressPhone) {
     recipients.push({
       phone: deliveryAddressPhone,
-      name: deliveryAddressName || customerName || "ग्राहक"
+      name: deliveryAddressName || customerName
     });
     uniquePhones.add(deliveryAddressPhone);
   }
 
-  // 2. यूज़र प्रोफ़ाइल का फ़ोन नंबर (यदि डिलीवरी एड्रेस से अलग हो)
+  // 2. यूज़र प्रोफ़ाइल का फ़ोन नंबर (यदि अलग हो)
+  const userProfilePhone = order.customer?.phone;
   if (userProfilePhone && !uniquePhones.has(userProfilePhone)) {
     recipients.push({
       phone: userProfilePhone,
-      name: customerName || deliveryAddressName || "ग्राहक"
+      name: customerName
     });
     uniquePhones.add(userProfilePhone);
   }
-  
+
   return { order, recipients };
 }
-
 // --- रूट्स ---
 
 /**
  * ✅ Send OTP to Customer (Delivery OTP)
  */
-router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedRequest, res: Response) => {
+router.post('/send-otp', requireDeliveryBoyAuth, async (req: any, res: Response) => {
   try {
     const deliveryBoyId = req.user?.deliveryBoyId;
     const { orderId } = req.body;
@@ -115,7 +115,7 @@ router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedReques
       sentToPhones: recipients.map(r => r.phone),
       failedToPhones: failedPhones,
       otp, 
-    });
+    }as any);
 
   } catch (error: any) {
     console.error("Error /send-otp:", error);
@@ -126,7 +126,7 @@ router.post('/send-otp', requireDeliveryBoyAuth, async (req: AuthenticatedReques
 /**
  * ✅ Send Delivery Thanks Message after delivery
  */
-router.post('/send-delivery-thanks', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/send-delivery-thanks', async (req: any, res: Response) => {
   try {
     const { orderId } = req.body;
     if (!orderId) return res.status(400).json({ message: "Order ID required." });
@@ -171,7 +171,7 @@ router.post('/send-delivery-thanks', async (req: AuthenticatedRequest, res: Resp
 /**
  * ✅ Send Welcome Message on User Login
  */
-router.post('/send-welcome', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/send-welcome', async (req: any, res: Response) => {
   try {
     const { userId } = req.body;
     if (!userId) return res.status(400).json({ message: "User ID required." });
@@ -219,7 +219,7 @@ router.post('/send-welcome', async (req: AuthenticatedRequest, res: Response) =>
  * ✅ Send Weekly Reminder (future)
  * यह रूट एक Cron Job या शेड्यूलर द्वारा ट्रिगर किया जाएगा, सीधे API कॉल द्वारा नहीं।
  */
-router.post('/send-weekly-reminder', async (req: AuthenticatedRequest, res: Response) => {
+router.post('/send-weekly-reminder', async (req: any, res: Response) => {
   try {
     const sevenDaysAgo = sql`now() - interval '7 days'`;
     
@@ -229,7 +229,7 @@ router.post('/send-weekly-reminder', async (req: AuthenticatedRequest, res: Resp
       where: and(
         sql`${users.lastActivityAt} < ${sevenDaysAgo}`, // 7 दिन से अधिक समय से निष्क्रिय
         eq(users.whatsappOptIn, true),                  // ऑप्ट-इन किया हुआ
-        isNull(users.phone).not()                     // फ़ोन नंबर मौजूद है
+        isNotNull(users.phone)                     // फ़ोन नंबर मौजूद है
       ),
       columns: {
         id: true,
@@ -242,7 +242,7 @@ router.post('/send-weekly-reminder', async (req: AuthenticatedRequest, res: Resp
     let sentCount = 0;
     for (const user of inactiveUsers) {
       const msg = `नमस्ते ${user.firstName}, Shopnish में आपका इंतजार है! 🛒 7 दिनों से अधिक समय हो गया है जब आपने खरीदारी की है। नए ऑफर्स देखें!`;
-      const result = await sendWhatsAppMessage(user.phone, msg, { userId: user.id, customerName: user.firstName });
+      const result = await sendWhatsAppMessage(user.phone!, msg, { userId: user.id, customerName: user.firstName });
       
       if (result) {
         sentCount++;

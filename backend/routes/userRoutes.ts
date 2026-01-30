@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
-import { db } from '../server/db.ts';
-import { users } from '../shared/backend/schema.ts';
+import { db } from '../server/db';
+import { users } from '../shared/backend/schema';
 import { eq } from 'drizzle-orm';
-import { authAdmin } from '../server/lib/firebaseAdmin.ts';
+import { authAdmin } from '../server/lib/firebaseAdmin';
 
 const userLoginRouter = Router();
 userLoginRouter.post("/login", async (req: Request, res: Response) => {

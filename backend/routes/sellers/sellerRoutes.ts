@@ -52,7 +52,7 @@ const upload = multer({
 
 // ✅ POST /api/sellers/apply
 // ✅ POST /api/sellers/apply (FINAL FIXED VERSION)
-sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
     const userId = req.user?.id;
@@ -114,8 +114,9 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
                 longitude: String(longitude),
                 deliveryPincodes: [],
                 businessType,
-                approvalStatus: approvalStatusEnum.enumValues[0],
-            })
+                
+            } as any) // Type assertion to any to bypass Drizzle typing issue
+            
             .returning();
         
         // 2. Stores Table Insertion (The missing piece that caused 500 Order Error)
@@ -131,7 +132,7 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
             isActive: false, 
             latitude: String(latitude),
             longitude: String(longitude),
-        });
+        }as any); // Type assertion to any to bypass Drizzle typing issue
 
         // 3. Users Table Update
         const [updatedUser] = await tx
@@ -167,7 +168,7 @@ sellerRouter.post("/apply", verifyToken, async (req: AuthenticatedRequest, res: 
 
 // ✅ GET /api/sellers/me
 
-sellerRouter.get('/me', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+sellerRouter.get('/me', requireSellerAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -250,7 +251,7 @@ const sellerProfileWithRating = sellerProfile as unknown as { rating: number | n
 });
 
 // ✅ GET /api/sellers/orders (अब यह सब-ऑर्डर्स को फेच करेगा)
-sellerRouter.get("/orders", requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+sellerRouter.get("/orders", requireSellerAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
     if (!userId) {
@@ -329,7 +330,7 @@ sellerRouter.post(
   '/categories',
   requireSellerAuth,
   upload.single('image'), // 🚨 यहां multer मिडलवेयर को जोड़ें, 'image' फ्रंटएंड से आने वाले फ़ील्ड का नाम है
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -441,7 +442,7 @@ const validatedCategoryData = categoryDataParsed.data;
 );
 
     // ✅ GET /api/sellers/products
-    sellerRouter.get('/products', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+    sellerRouter.get('/products', requireSellerAuth, async (req: any, res: Response) => {
       try {
         const userId = req.user?.id;
         if (!userId) {
@@ -471,7 +472,7 @@ const validatedCategoryData = categoryDataParsed.data;
 
 // ✅ New: GET /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को फेच करेगा।
-sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.get('/profile/delivery-settings', verifyToken as any,requireSellerAuth , async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
 
@@ -502,7 +503,7 @@ sellerRouter.get('/profile/delivery-settings', verifyToken,requireSellerAuth , a
 });
 
 // ✅ Updated: GET /api/seller/products/:productId/delivery-override
-sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
     const productId = Number(req.params.productId);
@@ -547,7 +548,7 @@ sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, as
 // backend/routes/sellerRoutes.ts में जोड़ें
 
 // ✅ New: GET /api/seller/products/delivery-overview
-sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
 
@@ -583,7 +584,7 @@ sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: A
 });
 
     // ✅ GET /api/sellers/categories (तुम्हारी schema में categories.sellerId नहीं है, यह यहाँ एक संभावित एरर है)
-    sellerRouter.get('/categories', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+    sellerRouter.get('/categories', requireSellerAuth, async (req: any, res: Response) => {
       try {
         const userId = req.user?.id;
         if (!userId) {
@@ -611,7 +612,7 @@ sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: A
 
 
     // ✅ PUT /api/sellers/categories/:id (कैटेगरी अपडेट करें)
-    sellerRouter.put('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+    sellerRouter.put('/categories/:id', requireSellerAuth, async (req: any, res: Response) => {
       try {
         const userId = req.user?.id;
         const categoryId = parseInt(req.params.id);
@@ -679,7 +680,7 @@ sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: A
 
 // ✅ New: PUT /api/seller/profile/delivery-settings
 // यह API सेलर की अपनी ग्लोबल डिलीवरी सेटिंग्स को अपडेट करेगा।
-sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.put('/profile/delivery-settings', verifyToken as any,requireSellerAuth , async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id; // req.user से authenticated user ID प्राप्त करें
     const { isDistanceBasedDelivery, deliveryPincodes, deliveryRadius, latitude, longitude } = req.body;
@@ -743,7 +744,7 @@ sellerRouter.put('/profile/delivery-settings', verifyToken,requireSellerAuth , a
   }
 });
 // ✅ Updated: PUT /api/seller/products/:productId/delivery-override
-sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
   try {
     const userId = req.user?.id;
     const productId = Number(req.params.productId);
@@ -810,7 +811,7 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
 });
 
     // ✅ DELETE /api/sellers/categories/:id (कैटेगरी डिलीट करें)
-    sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: AuthenticatedRequest, res: Response) => {
+    sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: any, res: Response) => {
       try {
         const userId = req.user?.id;
         const categoryId = parseInt(req.params.id);
@@ -867,7 +868,7 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
 // और AuthenticatedRequest, Response, NextFunction, console.log, parseInt आदि पहले ही इंपोर्टेड (imported) हैं।
 
 // ✅ DELETE /api/sellers/products/:productId (उत्पाद डिलीट करें)
-sellerRouter.delete('/products/:productId', verifyToken, requireSellerAuth, async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+sellerRouter.delete('/products/:productId', verifyToken as any, requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
   console.log(`🗑️ [API] Received seller request to delete product ${req.params.productId}.`);
   const userId = req.user?.id; // Authenticated user ID
 
@@ -928,7 +929,7 @@ sellerRouter.post(
   '/products',
   requireSellerAuth,
   upload.single('image'),
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const firebaseUid = req.user?.firebaseUid;
       const userId = req.user?.id;
@@ -1030,7 +1031,7 @@ sellerRouter.post(
 // 📍 PATCH /api/sellers/:id - प्रमाणित सेलर के लिए अपनी प्रोफ़ाइल अपडेट करें
 sellerRouter.patch(
   '/:id',
-  protect, // यूजर को प्रमाणित करें
+  protect as any, // यूजर को प्रमाणित करें
   authorize(['seller']), // केवल 'seller' भूमिका वाले यूजर को अनुमति दें
   // कंट्रोलर में सुरक्षा जांच: सुनिश्चित करें कि सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
   updateMySellerProfile
@@ -1044,7 +1045,7 @@ sellerRouter.patch(
   '/products/:id',
   requireSellerAuth,
   // ⭐ ⭐ ⭐ यहाँ से 'upload.single('image')' को हटा दें ⭐ ⭐ ⭐
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
       const productId = parseInt(req.params.id);
@@ -1173,7 +1174,7 @@ sellerRouter.patch(
 sellerRouter.patch(
   '/sub-orders/:id/status',
   requireSellerAuth,
-  async (req: AuthenticatedRequest, res: Response) => {
+  async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
       const subOrderId = parseInt(req.params.id);
@@ -1270,7 +1271,7 @@ sellerRouter.patch(
           updatedByUserRole: 'seller', // ✅ स्ट्रिंग का उपयोग करें
           timestamp: new Date(),
           message: `Sub-order status updated to '${finalStatusForSubOrder}' by seller.`,
-        });
+        }as any);
 
         // 3. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें
         const relatedSubOrders = await tx.query.subOrders.findMany({
@@ -1324,7 +1325,7 @@ sellerRouter.patch(
             
             // 3. मास्टर ऑर्डर अपडेट करें
             await tx.update(orders)
-              .set({ status: newMasterStatus as any, updatedAt: new Date() }) 
+              .set({ status: newMasterStatus as any, updatedAt: new Date().toISOString() }) 
               .where(eq(orders.id, existingSubOrder.masterOrder.id));
 
             // 4. master order tracking में एंट्री जोड़ें
@@ -1335,7 +1336,7 @@ sellerRouter.patch(
               updatedByUserRole: 'seller', 
               timestamp: new Date(),
               message: `Master order status updated to '${newMasterStatus}' as all sub-orders are ready for delivery/self-delivered.`,
-            });
+            }as any);
             
             // 5. Socket emit करें
             getIO().emit(`master-order:${existingSubOrder.masterOrder.id}:status-updated`, {
@@ -1370,7 +1371,7 @@ sellerRouter.patch(
               updatedByUserRole: 'seller', 
               timestamp: new Date(),
               message: `Delivery batch is now Ready for Claiming (Status: Pending) by seller.`, 
-            });
+            }as any);
             
             // --- ✅ OLD STYLE EMIT, BUT NEW LOGIC ---
             
