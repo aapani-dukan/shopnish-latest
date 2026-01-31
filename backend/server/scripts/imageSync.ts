@@ -1,4 +1,3 @@
-// backend/server/scripts/imageSync.ts
 import { db } from '../db';
 import { products } from '../../shared/backend/schema';
 import { eq, like } from 'drizzle-orm';
@@ -6,6 +5,7 @@ import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 
+// Cloudinary Configuration
 cloudinary.config({
   cloud_name: 'dcah0b2jy',
   api_key: '963456643785286',
@@ -14,9 +14,26 @@ cloudinary.config({
 
 const DUMMY_BASE = 'https://shopnish.com/placeholder.png';
 
+// ✅ DuckDuckGo से फ्री और अनलिमिटेड इमेज सर्च करने का फंक्शन
+async function getDuckDuckGoImages(query: string) {
+  try {
+    const searchUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json`;
+    const res = await axios.get(searchUrl, {
+      headers: {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+      }
+    });
+    // टॉप 5 इमेज लिंक्स निकालें
+    return res.data.results?.map((img: any) => img.image).filter(Boolean).slice(0, 5) || [];
+  } catch (err) {
+    console.error(`❌ DuckDuckGo search failed for: ${query}`);
+    return [];
+  }
+}
+
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
-    const response = await axios.get(imageUrl, { responseType: 'arraybuffer' });
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 8000 });
     const inputBuffer = Buffer.from(response.data);
 
     const processedBuffer = await sharp(inputBuffer)
@@ -32,9 +49,8 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
       const uploadStream = cloudinary.uploader.upload_stream(
         {
           folder: 'shopnish_products',
-          // Suffix adds 'main', 'g1', 'g2' to differentiate files
           public_id: `${productName.replace(/\s+/g, '_').toLowerCase()}_${suffix}_${Date.now()}`,
-          upload_preset: 'shopnish_products'
+          upload_preset: 'shopnish_products' // सुनिश्चित करें कि ये आपके क्लाउडिनरी में बना हो
         },
         (error, result) => {
           if (error) reject(error);
@@ -49,34 +65,26 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
 }
 
 export const syncProductImages = async () => {
-  console.log("🚀 Shopnish High-Class Sync Started (Gallery Mode)...");
+  console.log("🚀 Shopnish High-Class Sync Started (DuckDuckGo Mode)...");
 
   const pendingProducts = await db.select().from(products)
     .where(like(products.image, `%${DUMMY_BASE}%`))
-    .limit(25); // छोटे बैच में करें ताकि टाइमआउट न हो
+    .limit(25); 
 
   console.log(`🔎 Found ${pendingProducts.length} items to fix.`);
 
   for (const prod of pendingProducts) {
     try {
-      console.log(`Searching: ${prod.name}...`);
-      const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(prod.name)}&search_simple=1&action=process&json=1`;
-      const res = await axios.get(offUrl);
+      console.log(`🔎 Searching: ${prod.name}...`);
       
-      if (res.data.products?.length > 0) {
-        // 1. TOP 4 इमेजेस निकालें (1 Main + 3 Gallery)
-        const productData = res.data.products[0];
-        const imageUrls = [
-          productData.image_url,
-          productData.image_front_url,
-          productData.image_ingredients_url,
-          productData.image_nutrition_url
-        ].filter(url => url !== undefined); // सिर्फ valid URLs रखें
+      // ✅ DuckDuckGo से फोटो ढूंढें (अब Dal Makhani भी मिलेगा!)
+      const imageUrls = await getDuckDuckGoImages(prod.name);
 
+      if (imageUrls.length > 0) {
         const uploadedUrls: string[] = [];
 
-        // 2. सब इमेजेस को लूप में प्रोसेस करें
-        for (let i = 0; i < Math.min(imageUrls.length, 4); i++) {
+        // ✅ Top 3 फोटो प्रोसेस करें (Main + 2 Gallery)
+        for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
           const suffix = i === 0 ? 'main' : `gallery_${i}`;
           const url = await processAndUpload(imageUrls[i], prod.name, suffix);
           if (url) uploadedUrls.push(url);
@@ -85,20 +93,25 @@ export const syncProductImages = async () => {
         if (uploadedUrls.length > 0) {
           await db.update(products)
             .set({
-              image: uploadedUrls[0], // पहली इमेज मेन है
-              images: uploadedUrls,    // पूरा एरे गैलरी में
+              image: uploadedUrls[0], // पहली फोटो मेन में
+              images: uploadedUrls,    // सारी फोटो एरे में
               updatedAt: new Date()
             })
             .where(eq(products.id, prod.id));
 
-          console.log(`✅ Success: ${prod.name} (Images: ${uploadedUrls.length})`);
+          console.log(`✅ Success: ${prod.name} (Updated with ${uploadedUrls.length} images)`);
+        } else {
+          console.log(`⚠️ Image found but failed to upload for: ${prod.name}`);
         }
+      } else {
+        console.log(`⚠️ No images found for: ${prod.name}`);
       }
-    } catch (err) {
-      console.log(`❌ Skipping ${prod.name} due to error`);
+    } catch (err: any) {
+      console.log(`❌ Error Processing ${prod.name}:`, err.response?.status || err.message);
     }
     
-    await new Promise(res => setTimeout(res, 1500));
+    // 2 सेकंड का गैप (Anti-spam)
+    await new Promise(res => setTimeout(res, 2000));
   }
-  console.log("🎯 Sync Complete! Gallery and Main images updated.");
+  console.log("🎯 Sync Complete! All products processed.");
 };
