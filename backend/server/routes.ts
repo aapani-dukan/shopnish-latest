@@ -39,6 +39,7 @@ import adminDeliveryAreasRouter from '../routes/adminDeliveryAreasRoutes';
 import customerRouter from '../routes/customerRoutes';
 import layoutRoutes from '../routes/layoutRoutes'; // Check karein path sahi ho
 import { masterProducts } from "../shared/backend/tables";
+import adminSettingsRouter from "../routes/adminSettingRoutes";
 const router = Router();
 
 // ✅ Health Check
@@ -345,6 +346,7 @@ router.use("/delivery", dBoyRouter);
 router.use("/layout", layoutRoutes);
 
 // ✅ Admin Routes
+router.use("/admin", adminSettingsRouter);
 const adminRouter = Router();
 adminRouter.use(requireAdminAuth);
 

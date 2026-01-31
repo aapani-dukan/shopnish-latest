@@ -543,3 +543,11 @@ export const homeLayout = pgTable("home_layout", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
 });
+export const adminSettings = pgTable("admin_settings", {
+  id: serial("id").primaryKey(),
+  defaultDeliveryRadiusKm: decimal("default_delivery_radius_km", { precision: 5, scale: 2 }).default("5.00").$type<number>(),
+  baseDeliveryCharge: decimal("base_delivery_charge", { precision: 10, scale: 2 }).default("20.00").$type<number>(),
+  chargePerKm: decimal("charge_per_km", { precision: 10, scale: 2 }).default("5.00").$type<number>(),
+  freeDeliveryMinOrderValue: decimal("free_delivery_min_order_value", { precision: 10, scale: 2 }).default("500.00").$type<number>(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+});

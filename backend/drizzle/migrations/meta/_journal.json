@@ -120,6 +120,13 @@
       "when": 1769764968277,
       "tag": "0016_normal_black_queen",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "7",
+      "when": 1769859951168,
+      "tag": "0017_military_karen_page",
+      "breakpoints": true
     }
   ]
 }
