@@ -3,11 +3,11 @@ import { db } from '../server/db';
 import { adminSettings, promoCodes } from '../shared/backend/schema'; 
 import { authorize } from '../server/middleware/authorize';
 import { eq } from 'drizzle-orm';
-
+import { verifyToken } from '../server/middleware/verifyToken'; // पाथ चेक कर लें
 const adminSettingsRouter = Router();
 
 // --- Delivery Settings ---
-adminSettingsRouter.get('/settings', authorize(['admin']), async (req, res) => {
+adminSettingsRouter.get('/settings', verifyToken as any, authorize(['admin']), async (req, res) => {
   try {
     const result = await db.select().from(adminSettings).limit(1);
     let settings = result[0];
