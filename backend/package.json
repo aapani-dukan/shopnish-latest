@@ -40,6 +40,7 @@
             "firebase-admin": "^13.4.0",
             "gauge": "^5.0.2",
             "glob": "^11.0.3",
+            "google-img-scrap": "^1.1.6",
             "helmet": "^7.1.0",
             "inflight": "^1.0.6",
             "jsonwebtoken": "^9.0.2",

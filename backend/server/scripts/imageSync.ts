@@ -4,8 +4,8 @@ import { eq, like } from 'drizzle-orm';
 import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
+import { GOOGLE_IMG_SCRAP } from 'google-img-scrap'; // ✅ नई लाइब्रेरी
 
-// Cloudinary Configuration
 cloudinary.config({
   cloud_name: 'dcah0b2jy',
   api_key: '963456643785286',
@@ -14,104 +14,88 @@ cloudinary.config({
 
 const DUMMY_BASE = 'https://shopnish.com/placeholder.png';
 
-// ✅ DuckDuckGo से फ्री और अनलिमिटेड इमेज सर्च करने का फंक्शन
-async function getDuckDuckGoImages(query: string) {
+// ✅ LAYER 2: Google Image Scraper
+async function getGoogleImages(query: string) {
   try {
-    const searchUrl = `https://duckduckgo.com/i.js?q=${encodeURIComponent(query)}&o=json`;
-    const res = await axios.get(searchUrl, {
-      headers: {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
-      }
+    const res = await GOOGLE_IMG_SCRAP({
+      search: query,
+      limit: 5,
+      
     });
-    // टॉप 5 इमेज लिंक्स निकालें
-    return res.data.results?.map((img: any) => img.image).filter(Boolean).slice(0, 5) || [];
+    // 'url' प्रॉपर्टी से असली इमेज लिंक्स निकालें
+    return res.result.map(img => img.url).filter(Boolean);
   } catch (err) {
-    console.error(`❌ DuckDuckGo search failed for: ${query}`);
+    console.error(`❌ Google Scraping failed for: ${query}`);
     return [];
   }
 }
 
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
-    const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 8000 });
-    const inputBuffer = Buffer.from(response.data);
-
-    const processedBuffer = await sharp(inputBuffer)
-      .resize(800, 800, {
-        fit: 'contain',
-        background: { r: 255, g: 255, b: 255, alpha: 1 }
-      })
-      .flatten({ background: { r: 255, g: 255, b: 255 } })
+    const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 12000 });
+    const processedBuffer = await sharp(Buffer.from(response.data))
+      .resize(800, 800, { fit: 'contain', background: '#ffffff' })
+      .flatten({ background: '#ffffff' })
       .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
     return new Promise<string>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'shopnish_products',
-          public_id: `${productName.replace(/\s+/g, '_').toLowerCase()}_${suffix}_${Date.now()}`,
-          upload_preset: 'shopnish_products' // सुनिश्चित करें कि ये आपके क्लाउडिनरी में बना हो
-        },
-        (error, result) => {
-          if (error) reject(error);
-          else resolve(result?.secure_url || "");
-        }
+        { folder: 'shopnish_products', public_id: `${productName.replace(/\s+/g, '_').toLowerCase()}_${suffix}_${Date.now()}` },
+        (error, result) => { if (error) reject(error); else resolve(result?.secure_url || ""); }
       );
       uploadStream.end(processedBuffer);
     });
-  } catch (error) {
-    return null;
-  }
+  } catch (error) { return null; }
 }
 
 export const syncProductImages = async () => {
-  console.log("🚀 Shopnish High-Class Sync Started (DuckDuckGo Mode)...");
+  console.log("🚀 Shopnish Multi-Layer Sync Started (OFF + Google Scrap)...");
 
   const pendingProducts = await db.select().from(products)
     .where(like(products.image, `%${DUMMY_BASE}%`))
-    .limit(25); 
-
-  console.log(`🔎 Found ${pendingProducts.length} items to fix.`);
+    .limit(15); 
 
   for (const prod of pendingProducts) {
+    let finalImageUrls: string[] = [];
+    console.log(`🔎 Processing: ${prod.name}`);
+
     try {
-      console.log(`🔎 Searching: ${prod.name}...`);
+      // --- LAYER 1: Open Food Facts ---
+      const offUrl = `https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(prod.name)}&search_simple=1&action=process&json=1`;
+      const offRes = await axios.get(offUrl);
       
-      // ✅ DuckDuckGo से फोटो ढूंढें (अब Dal Makhani भी मिलेगा!)
-      const imageUrls = await getDuckDuckGoImages(prod.name);
+      if (offRes.data.products?.length > 0) {
+        const p = offRes.data.products[0];
+        finalImageUrls = [p.image_url, p.image_front_url].filter(Boolean);
+      }
 
-      if (imageUrls.length > 0) {
+      // --- LAYER 2: Google Scraper Fallback ---
+      if (finalImageUrls.length === 0) {
+        console.log(`🔄 Layer 1 empty. Using Google Scrap for: ${prod.name}`);
+        finalImageUrls = await getGoogleImages(prod.name);
+      }
+
+      // --- Process & Update ---
+      if (finalImageUrls.length > 0) {
         const uploadedUrls: string[] = [];
-
-        // ✅ Top 3 फोटो प्रोसेस करें (Main + 2 Gallery)
-        for (let i = 0; i < Math.min(imageUrls.length, 3); i++) {
-          const suffix = i === 0 ? 'main' : `gallery_${i}`;
-          const url = await processAndUpload(imageUrls[i], prod.name, suffix);
+        for (let i = 0; i < Math.min(finalImageUrls.length, 3); i++) {
+          const url = await processAndUpload(finalImageUrls[i], prod.name, i === 0 ? 'main' : `gallery_${i}`);
           if (url) uploadedUrls.push(url);
         }
 
         if (uploadedUrls.length > 0) {
-          await db.update(products)
-            .set({
-              image: uploadedUrls[0], // पहली फोटो मेन में
-              images: uploadedUrls,    // सारी फोटो एरे में
-              updatedAt: new Date()
-            })
-            .where(eq(products.id, prod.id));
-
-          console.log(`✅ Success: ${prod.name} (Updated with ${uploadedUrls.length} images)`);
-        } else {
-          console.log(`⚠️ Image found but failed to upload for: ${prod.name}`);
+          await db.update(products).set({
+            image: uploadedUrls[0],
+            images: uploadedUrls,
+            updatedAt: new Date()
+          }).where(eq(products.id, prod.id));
+          console.log(`✅ Success: ${prod.name}`);
         }
-      } else {
-        console.log(`⚠️ No images found for: ${prod.name}`);
       }
-    } catch (err: any) {
-      console.log(`❌ Error Processing ${prod.name}:`, err.response?.status || err.message);
-    }
-    
-    // 2 सेकंड का गैप (Anti-spam)
-    await new Promise(res => setTimeout(res, 2000));
+    } catch (err) { console.error(`❌ Error with ${prod.name}`); }
+
+    await new Promise(res => setTimeout(res, 3000));
   }
-  console.log("🎯 Sync Complete! All products processed.");
+  console.log("🎯 Batch Sync Complete!");
 };
