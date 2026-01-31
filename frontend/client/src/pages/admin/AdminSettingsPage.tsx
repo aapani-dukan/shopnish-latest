@@ -13,7 +13,7 @@ import { Badge } from '../../components/ui/badge';
 import { Truck, Globe, Percent, Plus, Loader2, AlertCircle } from 'lucide-react'; // Added icons
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"; // Assuming you have this component
-
+import { Image, Wand2 } from 'lucide-react';
 // -------------------- Interfaces --------------------
 
 interface AdminSettings {
@@ -60,7 +60,17 @@ const usePromocodes = () => useQuery<Promocode[], Error>({
   queryKey: ['promocodes'],
   queryFn: () => apiRequest('GET', '/api/admin/promocodes'),
 });
-
+const useSyncProductImages = () => {
+  return useMutation({
+    mutationFn: () => apiRequest('POST', '/api/admin/products/sync-images'), // API पाथ चेक कर लेना
+    onSuccess: (data: any) => {
+      alert(data.message || 'Image sync started in background!');
+    },
+    onError: (error: Error) => {
+      alert(`Error: ${error.message}`);
+    }
+  });
+};
 // -------------------- Component --------------------
 
 export default function AdminSettingsPage() {
@@ -90,7 +100,7 @@ export default function AdminSettingsPage() {
   // State for Promo Code Modals (Future implementation)
   const [isAddPromoModalOpen, setIsAddPromoModalOpen] = useState(false);
   const [editingPromoId, setEditingPromoId] = useState<number | null>(null);
-
+const { mutate: syncImages, isPending: isSyncingImages } = useSyncProductImages();
 
   // --- Effects ---
   React.useEffect(() => {
@@ -229,7 +239,45 @@ export default function AdminSettingsPage() {
           </form>
         </CardContent>
       </Card>
-
+<Card className="border-orange-200 bg-orange-50/30">
+        <CardHeader>
+          <CardTitle className="flex items-center space-x-2 text-orange-700">
+            <Wand2 className="w-5 h-5" />
+            <span>Catalog & Maintenance Tools</span>
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+            <div className="space-y-1">
+              <h4 className="font-semibold text-gray-800">Smart Image Discovery</h4>
+              <p className="text-sm text-gray-600 max-w-md">
+                यह टूल आपके पूरे कैटलॉग को स्कैन करेगा और जहाँ 'Dummy' इमेजेस हैं, उन्हें इंटरनेट से असली HD इमेजेस से बदल देगा।
+              </p>
+              <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-100">
+                AI Powered Search
+              </Badge>
+            </div>
+            
+            <Button 
+              variant="default" 
+              className="bg-orange-600 hover:bg-orange-700 h-12 px-6"
+              onClick={() => {
+                if(confirm("क्या आप इमेज सिंकिंग शुरू करना चाहते हैं? इसमें कुछ मिनट लग सकते हैं।")) {
+                  syncImages();
+                }
+              }}
+              disabled={isSyncingImages}
+            >
+              {isSyncingImages ? (
+                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+              ) : (
+                <Image className="mr-2 h-5 w-5" />
+              )}
+              {isSyncingImages ? 'Syncing...' : 'Update All Dummy Images'}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       {/* ------------------- 2. PROMO CODE / DISCOUNT MANAGEMENT ------------------- */}
       <Card>
         <CardHeader>

@@ -15,7 +15,7 @@ import { z } from 'zod';
 import multer from 'multer';
 import { uploadImage } from '../../cloudStorage';
 import { v4 as uuidv4 } from "uuid";
-
+import { syncProductImages } from '../../scripts/imageSync';
 // ❗ memoryStorage because file.buffer is required
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -140,7 +140,23 @@ adminProductsRouter.get(
   }
 );
 
+adminProductsRouter.post('/sync-images', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    // ⚠️ हम इसे await नहीं करेंगे ताकि API तुरंत रिस्पॉन्स दे दे
+    // और स्क्रिप्ट बैकग्राउंड में अपना काम करती रहे।
+    syncProductImages()
+      .then(() => console.log("✅ Background Sync Complete"))
+      .catch((err) => console.error("❌ Background Sync Error:", err));
 
+    return res.json({ 
+      success: true, 
+      message: "इमेज सिंकिंग बैकग्राउंड में शुरू हो गई है। आप अपना काम जारी रख सकते हैं।" 
+    });
+  } catch (err) {
+    console.error("❌ Error starting image sync:", err);
+    return res.status(500).json({ error: "सिंकिंग शुरू करने में विफल।" });
+  }
+});
 // ----------------------------------------------------------------------
 // APPROVE PRODUCT
 // ----------------------------------------------------------------------
