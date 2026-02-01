@@ -5,14 +5,14 @@
 import React, { useState, useEffect } from "react"; 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useParams, useNavigate } from "react-router-dom"; 
-import { toast as useToastHook } from "../../hooks/use-toast"; 
+//import { toast as useToastHook } from "../../hooks/use-toast"; 
 import { Button } from "../../components/ui/button";
 import { Input } from "../../components/ui/input";
 import { Label } from "../../components/ui/label";
 import { Textarea } from "../../components/ui/textarea"; 
 import { Loader2, ArrowLeft } from "lucide-react"; 
 import { apiRequest } from "../../lib/queryClient"; 
-
+import { useToast } from "../../hooks/use-toast"; // 'useToast' को सीधा इम्पोर्ट करें
 // Interfaces
 interface Seller { 
   id: number;
@@ -31,7 +31,7 @@ interface Seller {
 const AdminVendorDetailsPage: React.FC = () => { 
   const { id } = useParams<{ id: string }>(); 
   const sellerId = Number(id);
-  const { toast } = useToastHook(); 
+  const { toast } = useToast();
   const queryClient = useQueryClient();
   const navigate = useNavigate();
 
@@ -79,12 +79,13 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminpendingvendors"] }); 
       queryClient.invalidateQueries({ queryKey: ["adminapprovedvendors"] }); 
       // Success toast with JSX content wrapper
-      toast({
-        title: <div className="text-white font-bold">विक्रेता स्वीकृत</div>,
-        description: <div className="text-white/90">विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।</div>,
-        variant: "success",
-        className: "bg-green-600",
-      });
+      // ✅ सही तरीका (Plain Text)
+toast({
+  title: "विक्रेता स्वीकृत", // 👈 <div> हटा दिया
+  description: "विक्रेता को सफलतापूर्वक स्वीकृत किया गया है।", 
+  variant: "default", // 'success' की जगह 'default' रखें अगर एरर आए
+  className: "bg-green-600 text-white", // स्टाइल के लिए className का उपयोग करें
+});
     },
     onError: (err) => {
       toast({
@@ -107,20 +108,20 @@ const AdminVendorDetailsPage: React.FC = () => {
       setRejectionReason("");
       // Success toast with JSX content wrapper
       toast({
-        title: <div className="text-white font-bold">विक्रेता अस्वीकृत</div>,
-        description: <div className="text-white/90">विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।</div>,
+        title: "विक्रेता अस्वीकृत",
+        description: "विक्रेता को सफलतापूर्वक अस्वीकृत किया गया है।",
         variant: "destructive",
-        className: "bg-red-600",
+        className: "bg-red-600 text-white",
       });
     },
     onError: (err) => {
       const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को अस्वीकृत करने में विफल।";
       // Error toast with JSX content wrapper and explicit red background
       toast({
-        title: <div className="text-white font-bold">❌ अस्वीकृति विफल</div>,
-        description: <div className="text-white/90">{errorMessage}</div>,
+        title: "❌ अस्वीकृति विफल",
+        description: errorMessage,
         variant: "destructive",
-        className: "bg-red-700",
+        className: "bg-red-700 text-white",
       });
     },
   });
@@ -134,10 +135,10 @@ const AdminVendorDetailsPage: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ["adminSellerDetails", sellerId] });
       // Success toast with JSX content wrapper
       toast({
-        title: <div className="text-white font-bold">विक्रेता सेटिंग्स अपडेटेड</div>,
-        description: <div className="text-white/90">विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।</div>,
-        variant: "success",
-        className: "bg-green-600",
+        title: "विक्रेता सेटिंग्स अपडेटेड",
+        description: "विक्रेता की सेटिंग्स सफलतापूर्वक अपडेट की गई हैं।",
+        variant: "default",
+        className: "bg-green-600 text-white",
       });
     },
     onError: (err) => {
@@ -160,10 +161,10 @@ const AdminVendorDetailsPage: React.FC = () => {
       
       // Success toast for deletion
       toast({
-        title: <div className="text-white font-bold">🗑️ विक्रेता हटाया गया</div>,
-        description: <div className="text-white/90">विक्रेता रिकॉर्ड डेटाबेस से सफलतापूर्वक हटा दिया गया है।</div>,
+        title: "🗑️ विक्रेता हटाया गया",
+        description: "विक्रेता रिकॉर्ड डेटाबेस से सफलतापूर्वक हटा दिया गया है।",
         variant: "destructive", 
-        className: "bg-red-700",
+        className: "bg-red-700 text-white",
       });
       
       // Navigate back to the list page
@@ -173,10 +174,10 @@ const AdminVendorDetailsPage: React.FC = () => {
       const errorMessage = (err as any).response?.data?.message || err.message || "विक्रेता को हटाने में विफल।";
       // Error toast 
       toast({
-        title: <div className="text-white font-bold">❌ डिलीट विफल</div>,
-        description: <div className="text-white/90">{errorMessage}</div>,
+        title: "❌ डिलीट विफल",
+        description: errorMessage,
         variant: "destructive",
-        className: "bg-red-700",
+        className: "bg-red-700 text-white",
       });
     },
   });

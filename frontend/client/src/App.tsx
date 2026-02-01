@@ -1,13 +1,13 @@
 
 // client/src/App.tsx..
-import React, { useState } from "react";
-import { Routes, Route, Outlet } from "react-router-dom";
+import { useState } from "react";
+import { Routes, Route } from "react-router-dom";
 
 // Layouts and components
 import Header from "./components/header";
 import CartModal from "./components/cart-modal";
 import AdminLayout from "@/components/AdminLayout";
-import { LocationProvider } from "./context/LocationContext";
+//import { LocationProvider } from "./context/LocationContext";
 import SellerDashboardLayout from "./components/layout/SellerDashboardLayout"; 
 
 
@@ -54,6 +54,8 @@ import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; // 
 import SellerAddProductPage from "./pages/SellerAddProductPage"; // आपके द्वारा प्रदान किए गए पाथ के अनुसार
 import SellerEditProductPage from "./pages/SellerEditProductPage"; 
 import OrderDetailsPage from "./pages/order-details/[id].tsx";
+import AdminVendorsPage from "./pages/admin/AdminVendorsPage.tsx";
+import AdminDeliveryAreasPage from "./pages/admin/AdminDeliveryAreasPage.tsx";
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
@@ -111,21 +113,25 @@ function App() {
             <Route path="/delivery-apply" element={<DeliveryApplyPage />} />
           </Route>
 
-          {/* ADMIN ROUTES (Requires Admin Guard and AdminLayout) */}
-          {/* AdminGuard एक लेआउट कंपोनेंट की तरह काम करेगा जो चिल्ड्रेन को प्रोटेक्ट करेगा */}
-          <Route element={<AdminGuard />}> 
-            {/* AdminLayout यहां AdminGuard के अंदर नेस्टेड है */}
-            <Route path="/admin" element={<AdminLayout />}>
-              <Route index element={<AdminDashboard />} />
-              <Route path="dashboard" element={<AdminDashboard />} />
-              <Route path="orders" element={<AdminOrderDashboard />} />
-              <Route path="settings" element={<AdminSettingsPage />} />
-              <Route path="vendors/:id" element={<AdminVendorDetailsPage />} />
-              <Route path="products/:id" element={<AdminProductDetailsPage />} />
-              <Route path="categories" element={<CategoriesManagement />} />
-              {/* अन्य एडमिन रूट्स यहां जोड़ें */}
-            </Route>
-          </Route>
+         {/* ADMIN ROUTES - सब कुछ एक ही Guard और Layout के अंदर सुरक्षित रखें */}
+<Route element={<AdminGuard />}> 
+  <Route path="/admin" element={<AdminLayout />}>
+    {/* बेस एडमिन रूट्स */}
+    <Route index element={<AdminDashboard />} />
+    <Route path="dashboard" element={<AdminDashboard />} />
+    <Route path="orders" element={<AdminOrderDashboard />} />
+    <Route path="settings" element={<AdminSettingsPage />} />
+    
+    {/* ✅ Pincode Management रूट्स (अब ये सुरक्षित हैं) */}
+    <Route path="vendors" element={<AdminVendorsPage />} />
+    <Route path="delivery-areas" element={<AdminDeliveryAreasPage />} />
+    
+    {/* Details वाले रूट्स */}
+    <Route path="vendors/:id" element={<AdminVendorDetailsPage />} />
+    <Route path="products/:id" element={<AdminProductDetailsPage />} />
+    <Route path="categories" element={<CategoriesManagement />} />
+  </Route>
+</Route>
           
           {/* 404 CATCH-ALL ROUTE (हमेशा अंत में होना चाहिए) */}
           <Route path="*" element={<NotFound />} />
