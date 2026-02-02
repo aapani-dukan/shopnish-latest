@@ -17,7 +17,7 @@ import { Image, Wand2 } from 'lucide-react';
 // -------------------- Interfaces --------------------
 
 interface AdminSettings {
-  defaultDeliveryRadiusKm: number;
+  defaultDeliveryRadius: number;
   baseDeliveryCharge: number;
   chargePerKm: number;
   freeDeliveryMinOrderValue: number;
@@ -175,11 +175,11 @@ const { mutate: syncImages, isPending: isSyncingImages } = useSyncProductImages(
           <form onSubmit={handleSettingsSubmit} className="space-y-4">
             {/* Default Delivery Radius (भूगोल) */}
             <div>
-              <Label htmlFor="defaultDeliveryRadiusKm">Default Delivery Radius (in KM)</Label>
+              <Label htmlFor="defaultDeliveryRadius">Default Delivery Radius (in KM)</Label>
               <Input
-                id="defaultDeliveryRadiusKm"
+                id="defaultDeliveryRadius"
                 type="number"
-                value={formData.defaultDeliveryRadiusKm?.toString() || ''}
+                value={formData.defaultDeliveryRadius?.toString() || ''}
                 onChange={handleSettingsChange}
                 placeholder="e.g., 5"
                 min="1"
@@ -343,7 +343,7 @@ const { mutate: syncImages, isPending: isSyncingImages } = useSyncProductImages(
                     <Globe className="w-4 h-4 mr-2" />
                     Manage Vendor Pincodes
                 </Button>
-                <Button variant="secondary" className="flex items-center" onClick={() => navigate('/admin/products')}>
+                <Button variant="secondary" className="flex items-center" onClick={() => navigate('/admin/delivery-areas')}>
                     <Globe className="w-4 h-4 mr-2" />
                     Manage Product Pincodes
                 </Button>
