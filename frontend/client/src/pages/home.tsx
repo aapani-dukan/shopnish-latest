@@ -65,12 +65,21 @@ export default function Home() {
 
   // Sync state with URL
   useEffect(() => {
-    const params = new URLSearchParams(routerLocation.search);
+    const params = new URLSearchParams({
+  pincode: String(currentLocation?.pincode),
+  lat: String(currentLocation?.latitude),
+  lng: String(currentLocation?.longitude),
+});
     setSelectedCategory(params.get('category') ? parseInt(params.get('category')!) : null);
     setSearchQuery(params.get('search') || "");
   }, [routerLocation.search]);
 
-  const isLocationReady = !loadingLocation && !!currentLocation?.pincode;
+  // अब यह चेक करेगा कि Pincode के साथ-साथ Lat/Lng भी होने चाहिए
+const isLocationReady = 
+  !loadingLocation && 
+  !!currentLocation?.pincode && 
+  !!currentLocation?.latitude && 
+  !!currentLocation?.longitude;
 
   // --- 1. Queries ---
   const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({

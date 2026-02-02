@@ -22,7 +22,9 @@ export interface ProcessedLocation extends LatLng {
   pincode: string;
   inServiceArea: boolean;
   deliveryCharges?: number | null;
-  
+  latitude?: number | string;  // ये दोनों लाइनें जोड़ दें
+  longitude?: number | string;
+
   // Drizzle/Address Schema fields:
   id?: number; 
   addressLine1?: string;
