@@ -22,10 +22,13 @@ interface Seller {
   rejectionReason: string | null; 
   approvedAt: string | null; 
   // New fields for settings
-  deliveryRadiusKm?: number; 
+  deliveryRadius?: number; 
   deliveryPincodes?: string[]; 
   baseDeliveryCharge?: number; 
   chargePerKm?: number; 
+  city?: string;
+  pincode?: string;
+  deliveryPhone?: string;
 }
 
 const AdminVendorDetailsPage: React.FC = () => { 
@@ -203,10 +206,38 @@ toast({
   };
 
   const handleUpdateSettings = (e: React.FormEvent) => {
-    e.preventDefault();
-    updateSellerSettingsMutation.mutate(sellerData);
+  e.preventDefault();
+
+  // 1. सिर्फ वो डेटा निकालें जो डेटाबेस अपडेट के लिए ज़रूरी है
+  // फालतू की चीज़ें जैसे user, createdAt, id हटा दें
+  const { 
+    deliveryRadius, 
+    deliveryPincodes, 
+    baseDeliveryCharge, 
+    chargePerKm,
+    businessName,
+    city,
+    pincode
+  } = sellerData;
+
+  // 2. एक साफ़ ऑब्जेक्ट बनाएँ (जो बैकएंड मांग रहा है)
+  const cleanData = {
+    deliveryRadius: deliveryRadius, // हम Km वाले को ही असली Radius मान रहे हैं
+    deliveryPincodes,
+    deliveryCharge: baseDeliveryCharge,
+    chargePerKm,
+    businessName,
+    city,
+    pincode
   };
 
+  // 3. जो अनडिफाइंड हैं उन्हें डिलीट करें ताकि एरर न आए
+  Object.keys(cleanData).forEach(key => 
+    (cleanData[key as keyof typeof cleanData] === undefined || cleanData[key as keyof typeof cleanData] === null) && delete cleanData[key as keyof typeof cleanData]
+  );
+
+  updateSellerSettingsMutation.mutate(cleanData);
+};
   const handleDelete = () => {
     if (window.confirm("क्या आप इस विक्रेता को स्थायी रूप से हटाना चाहते हैं? यह कार्रवाई अपरिवर्तनीय है।")) {
         deleteMutation.mutate(sellerId);
@@ -318,11 +349,11 @@ toast({
           <h2 className="text-xl font-semibold mb-4 text-gray-700">डिलीवरी और शुल्क सेटिंग्स</h2>
           <form onSubmit={handleUpdateSettings} className="space-y-4">
             <div>
-              <Label htmlFor="deliveryRadiusKm">डिलीवरी रेडियस (KM में)</Label>
+              <Label htmlFor="deliveryRadius">डिलीवरी रेडियस (KM में)</Label>
               <Input
-                id="deliveryRadiusKm"
+                id="deliveryRadius"
                 type="number"
-                value={sellerData.deliveryRadiusKm ?? ''}
+                value={sellerData.deliveryRadius ?? ''}
                 onChange={handleInputChange}
                 placeholder="उदा. 10"
                 min="0"
