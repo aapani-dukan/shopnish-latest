@@ -1,37 +1,38 @@
-import { useState, useEffect } from "react"; 
+import { useState, useEffect, useMemo } from "react"; 
 import { useQuery } from "@tanstack/react-query"; 
-import { useLocation as useRouterLocation, Link } from "react-router-dom"; 
-import { useLocation } from '../context/LocationContext'; 
-import { Filter, ArrowRight, ShieldIcon, Loader2 } from "lucide-react"; 
+import { useLocation as useRouterLocation, Link, useNavigate } from "react-router-dom"; 
+import { 
+  Filter, ArrowRight, ShieldIcon, Loader2, Sparkles, 
+  ShoppingBag, MapPin, Search, ChevronRight 
+} from "lucide-react"; 
+
+// UI Components
 import { Button } from "@/components/ui/button"; 
 import { Card, CardContent } from "@/components/ui/card";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import ProductCard from "@/components/product-card"; 
-import type { Product } from "@/components/product-card"; // Component se hi type liya hai
 import Footer from "@/components/footer"; 
-import axios from 'axios';
-import { useAuth } from '@/hooks/useAuth'; 
 import LocationDisplay from '@/components/LocationDisplay'; 
+import { useLocation as useGeoLocation } from '../context/LocationContext'; 
+import { useAuth } from '@/hooks/useAuth'; 
+import axios from 'axios';
 
-// --- Helper function ---
-function getErrorMessage(error: unknown): string {
-  if (error instanceof Error) return error.message;
-  if (typeof error === 'string') return error;
-  if (axios.isAxiosError(error)) return error.response?.data?.message || error.message;
-  return "An unexpected error occurred.";
-}
+// Swiper for Banners
+import { Swiper, SwiperSlide } from 'swiper/react';
+import { Pagination, Autoplay } from 'swiper/modules';
+import 'swiper/css';
+import 'swiper/css/pagination';
 
+// --- Types ---
 interface Category {
   id: number;
   name: string;
-  slug: string;
-  description: string | null;
   image: string | null;
+  icon?: string;
 }
 
-// Layout Interface for Banners
 interface LayoutSection {
   id: number;
   displayName: string;
@@ -41,291 +42,313 @@ interface LayoutSection {
       title?: string;
       image?: string;
       deeplink?: string;
+      productId?: string;
+      categoryId?: string;
     }[];
   };
 }
 
 export default function Home() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const routerLocation = useRouterLocation();
+  const { currentLocation, loadingLocation } = useGeoLocation();
+
+  // URL Params & States
   const urlParams = new URLSearchParams(routerLocation.search);
-  const categoryParam = urlParams.get('category');
-  const searchParam = urlParams.get('search');
-
-  const { 
-    currentLocation, 
-    loadingLocation, 
-    error: locationError
-  } = useLocation();
-
   const [selectedCategory, setSelectedCategory] = useState<number | null>(
-    categoryParam ? parseInt(categoryParam) : null
+    urlParams.get('category') ? parseInt(urlParams.get('category')!) : null
   );
-  const [searchQuery, setSearchQuery] = useState(searchParam || "");
-  const [priceFilter, setPriceFilter] = useState<string[]>([]);
+  const [searchQuery, setSearchQuery] = useState(urlParams.get('search') || "");
   const [sortBy, setSortBy] = useState("best-match");
+  const [priceFilter, setPriceFilter] = useState<string[]>([]);
 
+  // Sync state with URL
   useEffect(() => {
-    const currentUrlParams = new URLSearchParams(routerLocation.search);
-    const newCategoryParam = currentUrlParams.get('category');
-    const newSearchParam = currentUrlParams.get('search');
-    setSelectedCategory(newCategoryParam ? parseInt(newCategoryParam) : null);
-    setSearchQuery(newSearchParam || "");
+    const params = new URLSearchParams(routerLocation.search);
+    setSelectedCategory(params.get('category') ? parseInt(params.get('category')!) : null);
+    setSearchQuery(params.get('search') || "");
   }, [routerLocation.search]);
-
-  // --- 1. Categories fetching ---
-  const { data: categories = [], isLoading: categoriesLoading, error: categoriesError } = useQuery<Category[]>({
-    queryKey: ['categories'], 
-    queryFn: async () => {
-      const response = await axios.get('/api/categories');
-      return response.data;
-    },
-  });
 
   const isLocationReady = !loadingLocation && !!currentLocation?.pincode;
 
-  // --- 2. Home Layout (Banners) - Pincode filtered ---
+  // --- 1. Queries ---
+  const { data: categories = [], isLoading: categoriesLoading } = useQuery<Category[]>({
+    queryKey: ['categories'], 
+    queryFn: async () => (await axios.get('/api/categories')).data,
+  });
+
+  const { data: productsData, isLoading: productsLoading } = useQuery({
+    queryKey: ['products-all', selectedCategory, searchQuery, currentLocation?.pincode, sortBy],
+    queryFn: async () => {
+      const params = new URLSearchParams({
+        pincode: String(currentLocation?.pincode || ""),
+        lat: String((currentLocation as any)?.latitude || ""),
+        lng: String((currentLocation as any)?.longitude || ""),
+      });
+      if (selectedCategory) params.append('categoryId', String(selectedCategory));
+      if (searchQuery) params.append('search', searchQuery);
+      if (sortBy) params.append('sortBy', sortBy);
+
+      const res = await axios.get(`/api/products?${params.toString()}`);
+      return Array.isArray(res.data) ? { products: res.data } : res.data;
+    },
+    enabled: isLocationReady,
+  });
+
   const { data: layoutSections = [], isLoading: layoutLoading } = useQuery<LayoutSection[]>({
     queryKey: ['layout', currentLocation?.pincode],
-    queryFn: async () => {
-      const response = await axios.get(`/api/layout/public?pincode=${currentLocation?.pincode || ""}`);
-      return response.data;
-    },
+    queryFn: async () => (await axios.get(`/api/layout/public?pincode=${currentLocation?.pincode}`)).data,
     enabled: isLocationReady,
   });
-
-  // --- 3. Products Query -
-  // --- 3. Products Query ---
-  const { data: productsData, isLoading: productsLoading, error: productsError } = useQuery({
-    queryKey: ['products', selectedCategory, searchQuery, currentLocation?.pincode, sortBy],
-    queryFn: async () => {
-      // Sabhi values ko pehle hi string mein convert kar lete hain
-      const pin = String(currentLocation?.pincode || "");
-      const latitude = String(currentLocation?.lat || "");
-      const longitude = String(currentLocation?.lng || "");
-
-      const params = new URLSearchParams({
-        pincode: pin,
-        lat: latitude,
-        lng: longitude,
-      });
-
-      if (selectedCategory) {
-        params.append('categoryId', String(selectedCategory)); 
-      }
-      if (searchQuery) {
-        params.append('search', searchQuery);
-      }
-      if (sortBy) {
-        params.append('sortBy', sortBy);
-      }
-
-      const response = await axios.get(`/api/products?${params.toString()}`);
-      return Array.isArray(response.data) ? { products: response.data } : response.data;
-    },
-    enabled: isLocationReady,
-  });
-
-  // --- 4. Featured Products Query ---
-   const { data: featuredProductsData, isLoading: featuredProductsLoading, error: featuredProductsError } = useQuery({
-  // Query tab tak trigger nahi hogi jab tak pincode nahi mil jata
-  queryKey: ['featuredProducts', currentLocation?.pincode],
-  queryFn: async () => {
-    const loc = currentLocation as any;
-    
-    // Yahan hum empty string hi bhej rahe hain (Bina hardcode kiye)
-    const params = new URLSearchParams({
-      pincode: loc?.pincode?.toString() || "",
-      featured: 'true',
-      lat: loc?.latitude?.toString() || "",
-      lng: loc?.longitude?.toString() || "",
-    });
-
-    const response = await axios.get(`/api/products?${params.toString()}`);
-    return Array.isArray(response.data) ? { products: response.data } : response.data;
-  },
-  // 🚀 SABSE IMPORTANT LINE: 
-  // Request tabhi jayegi jab pincode aur latitude dono available honge. 
-  // Isse 400 error aana band ho jayegi!
-  enabled: !!currentLocation?.pincode && !!(currentLocation as any)?.latitude,
-});
 
   const products = productsData?.products || [];
-  const featuredProducts = featuredProductsData?.products || [];
 
+  // --- 2. Filtering Logic ---
+  const filteredProducts = useMemo(() => {
+    if (priceFilter.length === 0) return products;
+    return products.filter((p: any) => {
+      const price = Number(p.price);
+      return priceFilter.some(range => {
+        if (range === "under-250") return price < 250;
+        if (range === "250-500") return price >= 250 && price < 500;
+        if (range === "500-1000") return price >= 500 && price < 1000;
+        if (range === "over-5000") return price >= 5000;
+        return true;
+      });
+    });
+  }, [products, priceFilter]);
+
+  // --- 3. Dynamic Section Building (Mobile App Sync) ---
+  const homeSections = useMemo(() => {
+    if (!isLocationReady || searchQuery || selectedCategory) return [];
+    const list = [];
+
+    // Hero Banner
+    const hero = layoutSections.find(s => s.sectionType === 'HERO_BANNER' || s.sectionType === 'main_banner');
+    if (hero) list.push({ type: 'HERO', data: hero });
+
+    // Featured/Trending
+    if (products.length > 0) {
+      list.push({ type: 'TRENDING', items: products.slice(0, 10) });
+    }
+
+    // Category Strips + Ad Injection
+    const specialAd = layoutSections.find(s => s.sectionType === 'category_special');
+    let visibleCatCount = 0;
+
+    categories.forEach((cat) => {
+      const catProds = products.filter((p: any) => String(p.categoryId) === String(cat.id));
+      if (catProds.length > 0) {
+        visibleCatCount++;
+        list.push({ type: 'STRIP', category: cat, items: catProds.slice(0, 5) });
+        if (visibleCatCount === 2 && specialAd) list.push({ type: 'AD', data: specialAd });
+      }
+    });
+
+    return list;
+  }, [layoutSections, products, categories, isLocationReady, searchQuery, selectedCategory]);
+
+  // --- 4. Navigation Helpers ---
+  const handleBannerPress = (item: any) => {
+    if (item?.productId) navigate(`/product/${item.productId}`);
+    else if (item?.categoryId) setSelectedCategory(Number(item.categoryId));
+    else if (item?.deeplink) window.open(item.deeplink, '_blank');
+  };
+
+  const handlePriceChange = (range: string, checked: boolean) => {
+    setPriceFilter(prev => checked ? [...prev, range] : prev.filter(r => r !== range));
+  };
+
+  // --- 5. Conditional Renders ---
   if (loadingLocation || categoriesLoading) {
-    return (
-      <div className="min-h-screen bg-neutral-50 p-8 flex items-center justify-center">
-        <Loader2 className="animate-spin text-primary h-10 w-10" />
-      </div>
-    );
+    return <div className="h-screen flex items-center justify-center bg-white"><Loader2 className="animate-spin text-primary h-12 w-12" /></div>;
   }
 
   if (!isLocationReady) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-gray-700 bg-neutral-50 p-4 text-center">
-        <div className="bg-white p-10 rounded-2xl shadow-lg max-w-md border border-gray-100">
-          <div className="bg-orange-100 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-6">
-            <Filter className="text-orange-600 h-8 w-8" />
-          </div>
-          <h2 className="text-2xl font-bold mb-3 text-neutral-900">डिलीवरी लोकेशन सेट करें</h2>
-          <p className="text-gray-500 mb-8">आस-पास के स्टोर और प्रोडक्ट्स देखने के लिए पिनकोड वाला पता चुनें।</p>
-          <LocationDisplay /> 
-        </div>
+      <div className="min-h-screen flex items-center justify-center bg-slate-50 p-6">
+        <Card className="max-w-md w-full p-10 text-center shadow-2xl rounded-[3rem] border-none bg-white">
+          <MapPin className="text-primary/20 h-20 w-20 mx-auto mb-6" />
+          <h2 className="text-2xl font-black mb-2 text-slate-900">Set Delivery Location</h2>
+          <p className="text-slate-500 mb-8 font-medium">Please select your location to find shops and amazing deals nearby.</p>
+          <LocationDisplay />
+        </Card>
       </div>
     );
   }
-// --- Error Handling Block ---
-  if (productsError || featuredProductsError || locationError || categoriesError) {
-    const errMsg = getErrorMessage(productsError || featuredProductsError || locationError || categoriesError);
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center text-red-600 p-6">
-        <div className="text-center p-8 bg-white rounded-lg shadow-sm border border-red-100 max-w-lg">
-          <p className="text-lg font-medium mb-4">कंटेंट लोड करने में त्रुटि हुई</p>
-          <p className="text-sm text-gray-500 mb-6">{errMsg}</p>
-          <div className="flex gap-4 justify-center">
-            <Button variant="outline" onClick={() => window.location.reload()}>पुनः प्रयास करें</Button>
-            <LocationDisplay />
-          </div>
-        </div>
-      </div>
-    );
-  }
-  const currentProductPool = searchQuery || selectedCategory ? products : featuredProducts;
-
-  const filteredProducts = currentProductPool.filter((product: Product) => {
-    if (priceFilter.length === 0) return true;
-    const price = Number(product.price);
-    return priceFilter.some(range => {
-      switch (range) {
-        case "under-250": return price < 250;
-        case "250-500": return price >= 250 && price < 500;
-        case "500-1000": return price >= 500 && price < 1000;
-        case "1000-5000": return price >= 1000 && price < 5000;
-        case "over-5000": return price >= 5000;
-        default: return true;
-      }
-    });
-  });
-
-  const handlePriceFilterChange = (range: string, checked: boolean) => {
-    if (checked) setPriceFilter(prev => [...prev, range]);
-    else setPriceFilter(prev => prev.filter(r => r !== range));
-  };
 
   return (
-    <div className="min-h-screen bg-neutral-50">
-      {user?.isAdmin && (
-        <div className="absolute top-4 right-4 z-50">
-          <Button asChild><Link to="/admin-login"><ShieldIcon className="mr-2 h-4 w-4" /> एडimin लॉगिन</Link></Button>
+    <div className="min-h-screen bg-[#f8fafc]">
+      {user?.role === 'admin' && (
+        <div className="fixed top-6 right-6 z-[60]">
+          <Button asChild className="rounded-full shadow-2xl bg-black hover:bg-slate-800 transition-all font-bold">
+            <Link to="/admin"><ShieldIcon className="mr-2 h-4 w-4" /> Admin Access</Link>
+          </Button>
         </div>
       )}
-      
-      {/* 🚀 Dynamic Hero/Banner Section */}
-      {!selectedCategory && !searchQuery && (
-        <section className="bg-white pb-10">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-6">
-            {layoutLoading ? (
-              <Skeleton className="h-[300px] md:h-[450px] w-full rounded-2xl" />
-            ) : layoutSections.length > 0 ? (
-              layoutSections
-                .filter(s => s.sectionType === 'main_banner' || s.sectionType === 'HERO_BANNER')
-                .map((banner) => (
-                  <div key={banner.id} className="relative rounded-2xl overflow-hidden shadow-xl group">
-                    <img 
-                      src={banner.config.items[0]?.image || "https://images.unsplash.com/photo-1556742049-0cfed4f6a45d"} 
-                      className="w-full h-[300px] md:h-[450px] object-cover transition-transform duration-700 group-hover:scale-105"
-                      alt={banner.displayName}
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-t from-black/60 to-transparent flex flex-col justify-end p-8 md:p-16">
-                      <h2 className="text-3xl md:text-5xl font-bold text-white mb-4">
-                        {banner.config.items[0]?.title || banner.displayName}
-                      </h2>
-                      <Button asChild className="w-fit bg-primary hover:bg-primary/90 text-white font-bold">
-                        <Link to={banner.config.items[0]?.deeplink || "#"}>Shop Now <ArrowRight className="ml-2 h-5 w-5" /></Link>
-                      </Button>
+
+      {/* 🟠 Premium Sticky Header */}
+      <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100 shadow-sm">
+        <div className="max-w-7xl mx-auto px-4 h-20 flex items-center gap-6">
+          <Link to="/" className="text-2xl font-black text-primary tracking-tighter" onClick={() => {setSelectedCategory(null); setSearchQuery("");}}>
+            SHOPNISH
+          </Link>
+          <div onClick={() => navigate('/search')} className="flex-1 flex items-center bg-slate-100 rounded-2xl px-5 py-3.5 cursor-pointer hover:bg-slate-200 transition-all border border-transparent hover:border-slate-200">
+            <Search className="text-slate-400" size={18} />
+            <span className="ml-3 text-slate-500 font-bold hidden md:inline">Find premium items in Bundi...</span>
+          </div>
+          <Button variant="ghost" className="relative p-3 bg-slate-50 rounded-2xl border border-slate-100 shadow-sm" onClick={() => navigate('/cart')}>
+            <ShoppingBag size={22} className="text-slate-700" />
+            <span className="absolute -top-1 -right-1 bg-primary text-white text-[10px] font-black h-5 w-5 rounded-full flex items-center justify-center border-2 border-white">0</span>
+          </Button>
+        </div>
+        
+        {/* Category Scroller Logic */}
+        <div className="max-w-7xl mx-auto px-4 py-3 flex gap-8 overflow-x-auto no-scrollbar border-t border-slate-50">
+           {categories.map((cat) => (
+             <button 
+               key={cat.id} 
+               onClick={() => setSelectedCategory(cat.id)} 
+               className={`flex items-center gap-2 min-w-fit transition-all duration-300 ${selectedCategory === cat.id ? 'scale-110' : 'opacity-70'}`}
+             >
+                <span className="text-xl">{cat.icon || '📦'}</span>
+                <span className={`text-sm font-black ${selectedCategory === cat.id ? 'text-primary' : 'text-slate-600'}`}>{cat.name}</span>
+             </button>
+           ))}
+        </div>
+      </header>
+
+      <main className="max-w-7xl mx-auto px-4 pb-24">
+        {(!selectedCategory && !searchQuery) ? (
+          /* 🔵 HOME MODE (Dynamic Sections) */
+          <div className="space-y-16">
+            {homeSections.map((section: any, idx) => {
+              switch (section.type) {
+                case 'HERO':
+                  return (
+                    <div key={idx} className="pt-8">
+                      {layoutLoading ? (
+        <Skeleton className="h-[300px] md:h-[500px] w-full rounded-[3rem]" />
+      ) : (
+                      <Swiper modules={[Pagination, Autoplay]} pagination={{ clickable: true }} autoplay={{ delay: 5000 }} className="rounded-[3rem] shadow-2xl h-[300px] md:h-[500px]">
+                        {section.data.config.items.map((item: any, i: number) => (
+                          <SwiperSlide key={i} onClick={() => handleBannerPress(item)}>
+                            <div className="relative w-full h-full cursor-pointer overflow-hidden">
+                              <img src={item.image} className="w-full h-full object-cover" alt="" />
+                              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-transparent flex flex-col justify-center p-12 md:p-24">
+                                <h2 className="text-4xl md:text-7xl font-black text-white mb-6 leading-tight max-w-2xl">{item.title}</h2>
+                                <Button className="w-fit rounded-full px-12 py-8 text-xl bg-primary font-black shadow-lg hover:scale-105 transition-transform">Explore Now<ArrowRight className="ml-2 h-6 w-6" /></Button>
+                              </div>
+                            </div>
+                          </SwiperSlide>
+                        ))}
+                      </Swiper>
+      )}
+                    </div>
+                  );
+
+                case 'TRENDING':
+                  return (
+                    <section key={idx}>
+                      <div className="flex justify-between items-end mb-8">
+                        <div>
+                          <h3 className="text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2">
+                            <Sparkles className="text-amber-400 fill-amber-400" /> Trending Nearby
+                          </h3>
+                          <p className="text-slate-500 font-bold">The most loved items in your area right now</p>
+                        </div>
+                        <Button variant="ghost" className="text-primary font-black group">See All <ChevronRight className="ml-1 group-hover:translate-x-1 transition-transform"/></Button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                        {section.items.map((p: any) => <ProductCard key={p.id} product={p} />)}
+                      </div>
+                    </section>
+                  );
+
+                case 'STRIP':
+                  return (
+                    <section key={idx} className="pt-12 border-t border-slate-100">
+                      <div className="flex justify-between items-center mb-8">
+                        <div className="flex items-center gap-4">
+                          <div className="w-12 h-12 rounded-2xl bg-white shadow-sm flex items-center justify-center text-2xl">{section.category.icon || '🛍️'}</div>
+                          <h3 className="text-2xl font-black text-slate-900">{section.category.name}</h3>
+                        </div>
+                        <Button onClick={() => setSelectedCategory(section.category.id)} variant="outline" className="rounded-2xl border-2 font-black px-8">View Collection</Button>
+                      </div>
+                      <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-6">
+                        {section.items.map((p: any) => <ProductCard key={p.id} product={p} />)}
+                      </div>
+                    </section>
+                  );
+
+                case 'AD':
+                  return (
+                    <div key={idx} className="rounded-[2.5rem] overflow-hidden shadow-xl h-44 md:h-60">
+                      <Swiper autoplay={{ delay: 6000 }} modules={[Autoplay]} className="h-full">
+                        {section.data.config.items.map((ad: any, i: number) => (
+                          <SwiperSlide key={i} onClick={() => handleBannerPress(ad)}>
+                            <img src={ad.image} className="w-full h-full object-cover" alt="Promotion" />
+                          </SwiperSlide>
+                        ))}
+                      </Swiper>
+                    </div>
+                  );
+                default: return null;
+              }
+            })}
+          </div>
+        ) : (
+          /* 🟢 SEARCH/CATEGORY MODE (Sidebar Filter Enabled) */
+          <div className="pt-12 flex flex-col lg:flex-row gap-12">
+            <aside className="lg:w-64 shrink-0">
+              <Card className="rounded-[2.5rem] border-none shadow-sm bg-white overflow-hidden sticky top-32">
+                <CardContent className="p-8">
+                  <h4 className="font-black text-slate-900 mb-8 flex items-center gap-2"><Filter size={18} className="text-primary" /> Filters</h4>
+                  <div className="space-y-8">
+                    <div>
+                      <h5 className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Price Range</h5>
+                      {['under-250', '250-500', '500-1000', 'over-5000'].map(range => (
+                        <div key={range} className="flex items-center gap-3 mb-3">
+                          <Checkbox id={range} checked={priceFilter.includes(range)} onCheckedChange={(c) => handlePriceChange(range, c as boolean)} />
+                          <label htmlFor={range} className="text-sm font-bold text-slate-600 capitalize cursor-pointer">{range.replace('-', ' ')}</label>
+                        </div>
+                      ))}
                     </div>
                   </div>
-                ))
-            ) : (
-              // Fallback Banner if no banners found
-              <div className="bg-orange-500 rounded-2xl h-[300px] flex items-center justify-center text-white">
-                <h2 className="text-2xl font-bold">Welcome to Shopnish</h2>
-              </div>
-            )}
-          </div>
-        </section>
-      )}
-
-      {/* Categories Grid */}
-      {!selectedCategory && !searchQuery && (
-        <section className="py-12 bg-white border-y border-neutral-100">
-          <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-            <h3 className="text-2xl font-bold text-neutral-900 mb-8">Shop by Category</h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-8 gap-4">
-              {categories.map((category) => (
-                <div key={category.id} className="text-center cursor-pointer group" onClick={() => setSelectedCategory(category.id)}>
-                  <div className="w-20 h-20 mx-auto rounded-full bg-neutral-100 overflow-hidden mb-3 border-2 border-transparent group-hover:border-primary transition-all">
-                    <img src={category.image || ''} alt={category.name} className="w-full h-full object-cover" />
-                  </div>
-                  <p className="text-sm font-medium text-neutral-700 group-hover:text-primary">{category.name}</p>
-                </div>
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
-
-      <main id="products-section" className="py-12">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex flex-col lg:flex-row gap-8">
-            {/* Filter Sidebar */}
-            <aside className="lg:w-64 space-y-6">
-              <Card><CardContent className="p-6">
-                <h4 className="font-bold mb-4 flex items-center"><Filter className="mr-2 h-4 w-4" /> Filters</h4>
-                <div className="space-y-4">
-                  <div>
-                    <h5 className="text-sm font-semibold mb-2">Price Range</h5>
-                    {['under-250', '250-500', '500-1000', '1000-5000', 'over-5000'].map(id => (
-                      <div key={id} className="flex items-center space-x-2 mb-1">
-                        <Checkbox id={id} checked={priceFilter.includes(id)} onCheckedChange={(c) => handlePriceFilterChange(id, c as boolean)} />
-                        <label htmlFor={id} className="text-xs">{id.replace('-', ' ')}</label>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </CardContent></Card>
+                </CardContent>
+              </Card>
             </aside>
 
-            {/* Products Grid */}
             <div className="flex-1">
-              <div className="flex justify-between items-center mb-6">
-                <h3 className="text-xl font-bold">
-                  {searchQuery ? `Results for "${searchQuery}"` : selectedCategory ? 'Category Items' : 'Recommended For You'}
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+                <h3 className="text-3xl font-black text-slate-900">
+                  {searchQuery ? `Search: ${searchQuery}` : categories.find(c => c.id === selectedCategory)?.name || 'Collection'}
                 </h3>
                 <Select value={sortBy} onValueChange={setSortBy}>
-                  <SelectTrigger className="w-40"><SelectValue placeholder="Sort" /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="best-match">Best Match</SelectItem>
-                    <SelectItem value="price-low">Price: Low to High</SelectItem>
-                  </SelectContent>
+                  <SelectTrigger className="w-48 rounded-xl border-slate-200 font-bold bg-white"><SelectValue placeholder="Sort" /></SelectTrigger>
+                  <SelectContent className="rounded-xl font-bold"><SelectItem value="best-match">Best Match</SelectItem><SelectItem value="price-low">Price: Low to High</SelectItem></SelectContent>
                 </Select>
               </div>
 
-             {(productsLoading || featuredProductsLoading) ? ( 
+              {productsLoading ? (
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                  {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-64 w-full" />)}
+                  {[...Array(8)].map((_, i) => <Skeleton key={i} className="h-80 w-full rounded-[2.5rem]" />)}
+                </div>
+              ) : filteredProducts.length > 0 ? (
+                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
+                  {filteredProducts.map((p: any) => <ProductCard key={p.id} product={p} />)}
                 </div>
               ) : (
-                <div className="grid grid-cols-2 lg:grid-cols-4 gap-6">
-                  {filteredProducts.map((product: Product) => (
-                    <ProductCard key={product.id} product={product} />
-                  ))}
+                <div className="text-center py-24 bg-white rounded-[3rem] border-2 border-dashed border-slate-100">
+                  <ShoppingBag className="mx-auto h-20 w-20 text-slate-100 mb-6" />
+                  <h4 className="text-2xl font-black text-slate-900 mb-2">No Items Found</h4>
+                  <p className="text-slate-500 font-medium">Try adjusting your filters or search keywords.</p>
                 </div>
               )}
             </div>
           </div>
-        </div>
+        )}
       </main>
       <Footer />
     </div>
