@@ -65,6 +65,13 @@ export default function AdminDeliveryAreasPage() {
             <Label htmlFor="deliveryCharge">Delivery Charge (₹)</Label>
             <Input placeholder="Charge (₹)" type="number" value={newArea.deliveryCharge} onChange={e => setNewArea({...newArea, deliveryCharge: e.target.value})} />
             <Label htmlFor="freeDeliveryAbove">Free Delivery Above (₹)</Label>
+            <Input 
+      id="freeAbove"
+      type="number" 
+      placeholder="e.g. 500" 
+      value={newArea.freeDeliveryAbove} 
+      onChange={e => setNewArea({...newArea, freeDeliveryAbove: e.target.value})} 
+    />
             <Button onClick={() => addMutation.mutate(newArea)} disabled={addMutation.isPending}>
               {addMutation.isPending ? <Loader2 className="animate-spin" /> : <Plus size={18} />} Add
             </Button>
