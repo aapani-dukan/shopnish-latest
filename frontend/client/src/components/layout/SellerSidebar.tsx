@@ -2,7 +2,7 @@
 
 import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Package, ShoppingCart, Settings, User, TrendingUp, FileText, MoreVertical } from 'lucide-react';
+import { Package, ShoppingCart, Settings, User, TrendingUp, FileText,IndianRupee  } from 'lucide-react';
 
 import {
   Sidebar,
@@ -16,7 +16,7 @@ import {
   useSidebar
 } from '../ui/sidebar';
 
-import { Button } from '../ui/button';
+//import { Button } from '../ui/button';
 
 const SellerSidebar: React.FC = () => {
   const location = useLocation();
@@ -85,6 +85,7 @@ const SellerSidebar: React.FC = () => {
           <MenuItem to="/seller-dashboard" icon={TrendingUp} label="Dashboard" />
           <MenuItem to="/seller-dashboard/products" icon={Package} label="Products" />
           <MenuItem to="/seller-dashboard/orders" icon={ShoppingCart} label="Orders" />
+          <MenuItem to="/seller-dashboard/wallet" icon={IndianRupee} label="Wallet" />
           <MenuItem to="/seller-dashboard/profile/edit" icon={User} label="Profile" />
           <MenuItem to="/seller-dashboard/delivery-settings" icon={Settings} label="Delivery Settings" />
           <MenuItem to="/seller-dashboard/apply" icon={FileText} label="Application Status" />

@@ -2,63 +2,53 @@
 
 import { Router, Request, Response } from 'express';
 import { db } from '../db';
-import { users, userRoleEnum } from '../../shared/backend/schema';
+import { users } from '../../shared/backend/schema';
 import { eq } from 'drizzle-orm';
-import bcrypt from 'bcryptjs';
 import { authAdmin } from '../lib/firebaseAdmin';
-// ✅ authUtils से comparePassword को इम्पोर्ट करें
-import { comparePassword } from '../util/authUtils'; // सुनिश्चित करें कि पाथ सही है
+import { comparePassword } from '../util/authUtils'; 
 
 const apiAuthLoginRouter = Router();
 
 apiAuthLoginRouter.post("/admin-login", async (req: Request, res: Response) => {
-    const { email, password } = req.body; // ✅ अब email भी body से आएगा
+    const { email, password } = req.body; 
     
-    // 1. सुनिश्चित करें कि ईमेल और पासवर्ड दोनों मौजूद हैं
     if (!email || !password) {
         return res.status(400).json({ error: "Email and Password are required." });
     }
     
-    // 2. डेटाबेस से एडमिन यूजर को ईमेल द्वारा ढूंढें
-    // मान लें कि एडमिन का ईमेल 'admin@shopnish.com' है
+    // 1. ईमेल द्वारा यूजर ढूंढें
     const [adminUser] = await db
         .select()
         .from(users)
-        .where(eq(users.email, email)) // ✅ यूजर को ईमेल द्वारा खोजें
+        .where(eq(users.email, email))
         .limit(1);
 
     if (!adminUser) {
-        // यदि यूजर इस ईमेल से नहीं मिलता
         return res.status(401).json({ error: "Invalid credentials." });
     }
 
-    // 3. जांचें कि यूजर वास्तव में एक एडमिन है
-    // userRoleEnum.enumValues[2] की जगह सीधे user.role === 'admin' का उपयोग करें
-    if (adminUser.role !== 'admin') { 
+    // 2. 🔥 HIGH-CLASS CHANGE: सीधा isAdmin चेक करें
+    // अब 'role' कॉलम पर निर्भर रहने की ज़रूरत नहीं
+    if (!adminUser.isAdmin) { 
         return res.status(403).json({ error: "Access denied: Not an administrator." });
     }
 
-    // 4. डेटाबेस से मिले हैशेड पासवर्ड से तुलना करें
-    // ✅ comparePassword फ़ंक्शन का उपयोग करें जो हमने authUtils में बनाया था
-    const isPasswordCorrect = await comparePassword(password, adminUser.password??'');
+    // 3. पासवर्ड चेक करें
+    const isPasswordCorrect = await comparePassword(password, adminUser.password ?? '');
 
     if (!isPasswordCorrect) {
         return res.status(401).json({ error: "Invalid password." });
     }
     
-    // यदि adminUser.firebaseUid undefined है, तो यह गड़बड़ कर सकता है।
-    // सुनिश्चित करें कि डेटाबेस में adminUser का firebaseUid सही है।
     if (!adminUser.firebaseUid) {
-        console.error("❌ Admin user found but firebaseUid is missing in DB for email:", adminUser.email);
-        return res.status(500).json({ error: "Admin Firebase UID missing in database." });
+        console.error("❌ Admin firebaseUid missing for:", adminUser.email);
+        return res.status(500).json({ error: "Admin account setup incomplete (UID missing)." });
     }
 
     try {
-        // ✅ Custom token create (जैसा कि आपका कोड करता है)
         const customToken = await authAdmin.createCustomToken(adminUser.firebaseUid);
-        console.log("✅ Admin custom token created.");
 
-        const expiresIn = 60 * 60 * 24 * 5 * 1000; // 5 दिन
+        const expiresIn = 60 * 60 * 24 * 5 * 1000; 
 
         res.cookie('__session', customToken, {
             maxAge: expiresIn,
@@ -67,14 +57,19 @@ apiAuthLoginRouter.post("/admin-login", async (req: Request, res: Response) => {
             sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         });
 
+        // ✅ Response में user का पूरा डेटा भेजें (Virtual Role के साथ ताकि Frontend खुश रहे)
         return res.status(200).json({
             message: "Admin login successful.",
-            customToken // तुम इसे क्लाइंट को भेज रहे हो, फिर क्लाइंट को इसे Firebase ID Token में एक्सचेंज करना होगा।
+            customToken,
+            user: {
+                ...adminUser,
+                role: 'admin' // पुरानी एडमिन वेबसाइट के डैशबोर्ड को खुश रखने के लिए
+            }
         });
 
     } catch (error: any) {
-        console.error("❌ Admin login error during token creation:", error);
-        return res.status(500).json({ error: "Internal server error during token creation." });
+        console.error("❌ Admin login error:", error);
+        return res.status(500).json({ error: "Internal server error." });
     }
 });
 

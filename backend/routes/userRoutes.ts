@@ -5,6 +5,7 @@ import { eq } from 'drizzle-orm';
 import { authAdmin } from '../server/lib/firebaseAdmin';
 
 const userLoginRouter = Router();
+
 userLoginRouter.post("/login", async (req: Request, res: Response) => {
     const { idToken } = req.body;
 
@@ -16,44 +17,67 @@ userLoginRouter.post("/login", async (req: Request, res: Response) => {
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         const firebaseUid = decodedToken.uid;
         
-        // ✅ Badlav: Email aur Phone dono ko handle karein
         const email = decodedToken.email || null; 
-        const phone = decodedToken.phone_number || null; // 👈 Phone OTP ke liye zaroori
+        const phone = decodedToken.phone_number || null; 
         const name = decodedToken.name || ""; 
 
         // 1️⃣ DB में user search
         let user = await db.query.users.findFirst({
             where: eq(users.firebaseUid, firebaseUid),
-            with: { sellerProfile: true },
+            with: { sellerProfile: true }, // Seller App के लिए ज़रूरी
         });
 
-        // 2️⃣ अगर user नहीं है → नया बनाओ (Zomato-style Auto Registration)
+        // 2️⃣ अगर user नहीं है → नया बनाओ
         if (!user) {
             console.log("🆕 Creating new user with UID:", firebaseUid);
             const nameParts = name.split(' ');
-            const firstName = nameParts[0] || 'User'; // Default name agar name khali ho
+            const firstName = nameParts[0] || 'User';
             const lastName = nameParts.slice(1).join(' ') || ''; 
-const [newUser] = await db.insert(users).values({
-    firebaseUid,
-    // ✅ Agar email null hai, toh ye empty string ("") bhejega. 
-    // Isse Database ka 'NOT NULL' constraint break nahi hoga.
-    email: email || "", 
-    phone: phone || "", // Phone number save hoga
-    firstName: firstName || "User",
-    lastName: lastName || "",
-    role: "customer",
-    password: '', 
-    address: '',
-    city: '',
-    pincode: '',
-    
-}).returning();
 
-console.log("✅ नया उपयोगकर्ता (Phone/Email) डेटाबेस में जोड़ा गया। ID:", newUser.id);
-user = newUser as any;
+            const [newUser] = await db.insert(users).values({
+                firebaseUid,
+                email: email || "", 
+                phone: phone || "", 
+                firstName: firstName || "User",
+                lastName: lastName || "",
+                // ✅ नए सिस्टम के डिफ़ॉल्ट्स
+                isCustomer: true,
+                isSeller: false,
+                isDelivery: false,
+                isAdmin: false,
+                sellerApprovalStatus: "N/A", 
+                deliveryApprovalStatus: "N/A",
+                role: "customer", // पुरानी ऐप्स की खुशी के लिए
+                password: '', 
+                address: '',
+                city: '',
+                pincode: '',
+            }).returning();
+
+            user = newUser as any;
         }
 
-        // 3️⃣ Session Cookie Logic (Aapka purana logic ekdum sahi hai)
+        // 3️⃣ 🔥 MAGIC LOGIC: Virtual Role Mapping (For Compatibility)
+        // यह हिस्सा पुरानी ऐप्स और वेबसाइट को वही 'role' देगा जो वो ढूंढ रहे हैं
+        // 1️⃣ पहले चेक करें कि यूजर मिला भी है या नहीं
+if (!user) {
+    return res.status(404).json({ error: "User not found" });
+}
+
+// 1️⃣ पक्का करें कि यूजर मौजूद है (TypeScript Error Fix)
+        if (!user) {
+            return res.status(404).json({ error: "User not found" });
+        }
+
+        // 2️⃣ Virtual Role Mapping (Compatibility Logic)
+        const userWithRole = {
+            ...user,
+            role: user.isAdmin ? 'admin' : 
+                  user.isSeller ? 'seller' : 
+                  user.isDelivery ? 'delivery-boy' : 'customer'
+        };
+
+        // 3️⃣ Session Cookie Logic (जवाब भेजने से पहले कुकी सेट करें)
         const expiresIn = 60 * 60 * 24 * 5 * 1000;
         const sessionCookie = await authAdmin.createSessionCookie(idToken, { expiresIn });
 
@@ -66,14 +90,15 @@ user = newUser as any;
             sameSite: isProduction ? 'none' : 'lax',
         });
 
+        // 4️⃣ फाइनल रिस्पॉन्स (सिर्फ एक बार)
+        console.log(`✅ User Logged In: ${userWithRole.firstName} as ${userWithRole.role}`);
+
         return res.status(200).json({
             message: "उपयोगकर्ता लॉगिन सफल",
-            user,
+            user: userWithRole, 
         });
-
     } catch (error: any) {
         console.error("❌ उपयोगकर्ता लॉगिन त्रुटि:", error);
-        // संभावित Firebase Auth एरर कोड को अधिक विशिष्ट प्रतिक्रियाओं के लिए हैंडल करें
         if (error.code === 'auth/id-token-expired') {
             return res.status(401).json({ error: "ID Token expired. Please re-authenticate." });
         }

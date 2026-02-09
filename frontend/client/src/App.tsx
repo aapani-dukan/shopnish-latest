@@ -56,6 +56,10 @@ import SellerEditProductPage from "./pages/SellerEditProductPage";
 import OrderDetailsPage from "./pages/order-details/[id].tsx";
 import AdminVendorsPage from "./pages/admin/AdminVendorsPage.tsx";
 import AdminDeliveryAreasPage from "./pages/admin/AdminDeliveryAreasPage.tsx";
+import AdminWalletManager from './pages/admin/WalletManagement';
+import DeliveryWallet from './components/delivery/DeliveryWallet';
+import SellerWallet from './components/seller/SellerWallet';
+import DeliveryLayout from './components/layout/DeliveryLayout';
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 
@@ -105,14 +109,18 @@ function App() {
               <Route path="products/add" element={<SellerAddProductPage />} />
               <Route path="products/edit/:productId" element={<SellerEditProductPage />} />
               <Route path="orders" element={<SellerOrdersPage />} /> 
+              <Route path="wallet" element={<SellerWallet />} />
             </Route>
 
             
             {/* Delivery Person Routes */}
-            <Route path="/delivery" element={<DeliveryDashboard />} />
-            <Route path="/delivery-apply" element={<DeliveryApplyPage />} />
-          </Route>
-
+            <Route path="/delivery" element={<DeliveryLayout />}>
+              <Route index element={<DeliveryDashboard />} />
+              <Route path="dashboard" element={<DeliveryDashboard />} />
+              <Route path="apply" element={<DeliveryApplyPage />} />
+              <Route path="wallet" element={<DeliveryWallet />} />
+            </Route>
+           </Route>
          {/* ADMIN ROUTES - सब कुछ एक ही Guard और Layout के अंदर सुरक्षित रखें */}
 <Route element={<AdminGuard />}> 
   <Route path="/admin" element={<AdminLayout />}>
@@ -121,7 +129,7 @@ function App() {
     <Route path="dashboard" element={<AdminDashboard />} />
     <Route path="orders" element={<AdminOrderDashboard />} />
     <Route path="settings" element={<AdminSettingsPage />} />
-    
+    <Route path="wallets" element={<AdminWalletManager />} />
     {/* ✅ Pincode Management रूट्स (अब ये सुरक्षित हैं) */}
     <Route path="vendors" element={<AdminVendorsPage />} />
     <Route path="delivery-areas" element={<AdminDeliveryAreasPage />} />

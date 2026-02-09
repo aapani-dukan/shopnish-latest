@@ -27,23 +27,36 @@ export const protect = async (req: any, res: Response, next: NextFunction) => {
         }).returning();
       }
 
+       // ✅ यूजर का रोल और स्टेटस निकालें
+      const userRole = dbUser.role || 'customer';
+
       authReq.user = {
         id: dbUser.id,
         firebaseUid: decodedToken.uid,
         email: dbUser.email || null,
-        name: dbUser.firstName ? `${dbUser.firstName} ${dbUser.lastName}` : "Customer",
-        role: dbUser.role as any,
+        name: dbUser.firstName ? `${dbUser.firstName} ${dbUser.lastName || ''}`.trim() : "User",
+        role: userRole as any,
         approvalStatus: dbUser.approvalStatus as any,
+        
+        // 🚀 TypeScript की डिमांड पूरी करने के लिए बूलियन फ्लैग्स जोड़ें
+        isAdmin: userRole === 'admin' || !!dbUser.isAdmin,
+        isSeller: userRole === 'seller' || !!dbUser.isSeller,
+        isDelivery: (userRole as string) === 'delivery-boy' || !!dbUser.isDelivery,
+        
+        // 📦 IDs को सुरक्षित तरीके से सेट करें
+        sellerId: (dbUser as any).sellerId || undefined,
+        deliveryBoyId: (dbUser as any).deliveryBoyId || undefined,
       };
+
       next();
     } catch (error: any) {
+      console.error("Auth Middleware Error:", error);
       return res.status(401).json({ message: 'Invalid token' });
     }
   } else {
     return res.status(401).json({ message: 'No token provided' });
   }
 };
-
 // ✅ 2. AUTHORIZE Middleware (Combined version)
 export const authorize = (allowedRoles: string[]): RequestHandler => {
   return async (req: any, res: Response, next: NextFunction) => {

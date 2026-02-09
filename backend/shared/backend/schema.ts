@@ -3,7 +3,7 @@ import {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
-  subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,masterOrderStatusEnum, subOrderStatusEnum,
+  subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,wallets,walletTransactions,masterOrderStatusEnum, subOrderStatusEnum,
   paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum
 } from './tables';
 
@@ -163,7 +163,7 @@ export {
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
-  subOrders, deliveryBatches, couponsPgTable, adminSettings,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
+  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
 productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
@@ -186,7 +186,7 @@ export const schema = {
   // Tables
   users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,
+  services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,walletTransactions,wallets,homeLayout,adminSettings,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,
   
   // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,

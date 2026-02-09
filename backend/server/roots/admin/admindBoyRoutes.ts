@@ -129,11 +129,7 @@ adminDeliveryBoysRouter.get('/:id', authorize(['admin']), validateRequest(delive
 });
 
 
-/**
- * ✅ PATCH /api/admin/delivery-boys/approve/:id
- * एक डिलीवरी बॉय को मंज़ूर करें (मौजूदा लॉजिक का उपयोग करें)
- * (Authorization handled by `authorize(['admin'])`)
- */
+// ✅ PATCH /api/admin/delivery-boys/approve/:id
 adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = Number(req.params.id);
@@ -143,24 +139,34 @@ adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequ
       return res.status(404).json({ message: 'Delivery boy not found.' });
     }
 
-    const [approved] = await db
-  .update(deliveryBoys)
-  .set({ 
-    approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
-    updatedAt: new Date() 
-    // ❌ rejectionReason यहाँ से हटा दें क्योंकि यह स्कीमा में नहीं है
-  })
-  .where(eq(deliveryBoys.id, deliveryBoyId))
-  .returning();
+    // 🔥 TRANSACTION START: दोनों टेबल्स को सिंक में रखें
+    const finalApprovedDBoy = await db.transaction(async (tx) => {
+        // 1. DeliveryBoys टेबल अपडेट करें
+        const [approved] = await tx
+          .update(deliveryBoys)
+          .set({ 
+            approvalStatus: 'approved',
+            updatedAt: new Date() 
+          })
+          .where(eq(deliveryBoys.id, deliveryBoyId))
+          .returning();
 
-    // संबंधित यूज़र की भूमिका (role) और अप्रूवल स्टेटस दोनों को अपडेट करें
-    await db.update(users)
-      .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'delivery_boy', 'approved'
-      .where(eq(users.id, deliveryBoy.userId));
+        // 2. 🔥 MULTI-ROLE FIX: User को Delivery Boy का एक्सेस दें (कस्टमर रोल छीने बिना)
+        await tx.update(users)
+          .set({ 
+            isDelivery: true,               // अब वह डिलीवरी कर सकता है
+            deliveryApprovalStatus: 'approved',
+            // role: 'delivery-boy',        // Compatibility के लिए
+            updatedAt: new Date() 
+          })
+          .where(eq(users.id, deliveryBoy.userId));
+
+        return approved;
+    });
 
     res.status(200).json({
       message: 'Delivery boy approved successfully.',
-      deliveryBoy: approved,
+      deliveryBoy: finalApprovedDBoy,
     });
   } catch (error: any) {
     console.error('Failed to approve delivery boy:', error);
@@ -170,49 +176,35 @@ adminDeliveryBoysRouter.patch('/approve/:id', authorize(['admin']), validateRequ
 
 /**
  * ✅ PATCH /api/admin/delivery-boys/reject/:id
- * एक डिलीवरी बॉय को अस्वीकार करें (मौजूदा लॉजिक का उपयोग करें और कारण स्वीकार करें)
- * (Authorization handled by `authorize(['admin'])`)
  */
-adminDeliveryBoysRouter.patch('/reject/:id', authorize(['admin']), validateRequest(deliveryBoyIdSchema.extend({
-  body: z.object({
-    reason: z.string().min(1, "Rejection reason is required for rejecting a delivery boy.").optional(), // Optional, but highly recommended
-  }).partial(),
-})), async (req: any, res: Response) => {
+adminDeliveryBoysRouter.patch('/reject/:id', authorize(['admin']), async (req: any, res: Response) => {
   try {
     const deliveryBoyId = Number(req.params.id);
-    const { reason } = req.body;
 
     const [deliveryBoy] = await db.select().from(deliveryBoys).where(eq(deliveryBoys.id, deliveryBoyId));
-    if (!deliveryBoy) {
-      return res.status(404).json({ message: 'Delivery boy not found.' });
-    }
+    if (!deliveryBoy) return res.status(404).json({ message: 'Delivery boy not found.' });
 
-    const [rejected] = await db
-      .update(deliveryBoys)
-      .set({ 
-        approvalStatus: approvalStatusEnum.enumValues[2], // 'rejected'
-        updatedAt: new Date() 
-        // ❌ rejectionReason यहाँ से हटा दिया क्योंकि स्कीमा में नहीं है
-      })
-      .where(eq(deliveryBoys.id, deliveryBoyId))
-      .returning();
+    const finalRejectedDBoy = await db.transaction(async (tx) => {
+        const [rejected] = await tx.update(deliveryBoys).set({ 
+            approvalStatus: 'rejected',
+            updatedAt: new Date() 
+        }).where(eq(deliveryBoys.id, deliveryBoyId)).returning();
 
-    // संबंधित यूज़र का अप्रूवल स्टेटस 'rejected' और भूमिका 'customer' पर अपडेट करें
-    await db.update(users)
-      .set({ approvalStatus: approvalStatusEnum.enumValues[2], role: userRoleEnum.enumValues[3], updatedAt: new Date() }) // 'rejected', 'customer'
-      .where(eq(users.id, deliveryBoy.userId));
+        // 🔥 MULTI-ROLE FIX: एक्सेस छीन लें, पर बंदा Customer बना रहेगा
+        await tx.update(users).set({ 
+            isDelivery: false, 
+            deliveryApprovalStatus: 'rejected',
+            updatedAt: new Date() 
+        }).where(eq(users.id, deliveryBoy.userId));
 
-    res.status(200).json({
-      message: 'Delivery boy rejected successfully.',
-      deliveryBoy: rejected,
+        return rejected;
     });
-  } catch (error: any) {
-    console.error('Failed to reject delivery boy:', error);
-    res.status(500).json({ message: 'Failed to reject delivery boy.' });
+
+    res.status(200).json({ message: 'Delivery boy rejected.', deliveryBoy: finalRejectedDBoy });
+  } catch (error) {
+    res.status(500).json({ message: 'Failed to reject.' });
   }
 });
-
-
 /**
  * ✅ PATCH /api/admin/delivery-boys/:id
  * एक मौजूदा डिलीवरी बॉय के विवरण को अपडेट करें (एडमिन द्वारा)

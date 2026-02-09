@@ -1,40 +1,41 @@
-// shared/types/user.ts
 import { z } from "zod";
-import { userRoleEnum, approvalStatusEnum } from '../backend/schema.ts';
+import { userRoleEnum, approvalStatusEnum } from '../backend/schema';
 
-// सामान्य User interface
+// ✅ Role और Status के Types को इन्फर करें
+export type UserRole = z.infer<typeof userRoleEnum>;
+export type ApprovalStatus = z.infer<typeof approvalStatusEnum>;
+
+// सामान्य User interface (Frontend/Auth के लिए)
 export interface User {
-  // Firebase UID
   firebaseUid: string;
-
-  // Firebase ID Token
   idToken: string;
-
-  // ✅ Badlav: Email ab optional hai, aur Phone Number add kiya hai
-  email?: string | null;       // Phone login wale users ka email starting mein nahi hoga
-  phoneNumber?: string | null;  // OTP login ke liye
-  
+  email?: string | null;
+  phoneNumber?: string | null;
   name?: string | null;
+  role: UserRole;
 
-  role: z.infer<typeof userRoleEnum>;
-
-  // Optional: Seller-specific details
+  // Seller-specific details
   seller?: {
-    approvalStatus: z.infer<typeof approvalStatusEnum>;
+    approvalStatus: ApprovalStatus;
   } | null;
 }
 
-// AuthenticatedUser interface
+// ✅ AuthenticatedUser interface (Backend Middleware और Global State के लिए)
 export interface AuthenticatedUser {
   id: number;                     // DB user ID
   firebaseUid: string;            // Firebase UID
-  
-  // ✅ Badlav: Yahan bhi email aur phone ko optional/nullable rakhein
   email?: string | null;
   phoneNumber?: string | null;
-  
   name?: string | null;
-  role: z.infer<typeof userRoleEnum>;
-  approvalStatus: z.infer<typeof approvalStatusEnum>;
-  deliveryBoyId?: number;         
+  role: UserRole;
+  approvalStatus: ApprovalStatus;
+
+  // 🚀 Flags: ये बार-बार होने वाले Comparison एरर्स को खत्म कर देंगे
+  isAdmin: boolean;
+  isSeller: boolean;
+  isDelivery: boolean;
+
+  // 📦 ID References: जो बाद में वॉलेट और ऑर्डर मैनेजमेंट में काम आएंगे
+  sellerId?: number | null;         
+  deliveryBoyId?: number | null;         
 }

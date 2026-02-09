@@ -51,7 +51,7 @@ const upload = multer({
 
 
 // ✅ POST /api/sellers/apply
-// ✅ POST /api/sellers/apply (FINAL FIXED VERSION)
+// ✅ POST /api/sellers/apply (MULTI-ROLE & ERROR-FREE VERSION)
 sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
@@ -60,21 +60,12 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
     if (!firebaseUid || !userId) return res.status(401).json({ message: "Unauthorized" });
 
     const {
-      businessName,
-      businessAddress,
-      businessPhone,
-      description,
-      city,
-      pincode,
-      gstNumber,
-      bankAccountNumber,
-      ifscCode,
-      businessType,
-      latitude,
-      longitude, 
+      businessName, businessAddress, businessPhone, description,
+      city, pincode, gstNumber, bankAccountNumber, ifscCode,
+      businessType, latitude, longitude, 
     } = req.body;
 
-    // ✅ VALIDATION: Lat/Lng सहित सभी आवश्यक फ़ील्ड्स की जाँच करें
+    // ✅ VALIDATION
     if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType || !latitude || !longitude) {
       return res.status(400).json({ message: "Missing required fields." });
     }
@@ -91,10 +82,10 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
       });
     }
 
-    // 🛑 FIX 1: सभी डेटाबेस ऑपरेशनों को एक Transaction में लपेटें (Wrap all DB operations in a Transaction)
-    const newSellerTransaction = await db.transaction(async (tx) => {
+    // 🛑 FIX: Transaction result को एक अलग 'result' वेरिएबल में स्टोर करें
+    const result: any = await db.transaction(async (tx) => {
 
-        // 1. Sellers Table Insertion (अब tx का उपयोग करें)
+        // 1. Sellers Table Insertion
         const [sellerEntry] = await tx
             .insert(sellersPgTable)
             .values({
@@ -114,15 +105,12 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
                 longitude: String(longitude),
                 deliveryPincodes: [],
                 businessType,
-                
-            } as any) // Type assertion to any to bypass Drizzle typing issue
-            
+            } as any)
             .returning();
         
-        // 2. Stores Table Insertion (The missing piece that caused 500 Order Error)
-        // 🛑 FIX 2: sellerEntry.id का उपयोग करें (जो अब ट्रांज़ैक्शन के अंदर परिभाषित है)
+        // 2. Stores Table Insertion
         await tx.insert(stores).values({
-            sellerId: sellerEntry.id, // ✅ Seller ID का उपयोग करें
+            sellerId: sellerEntry.id,
             storeName: businessName,
             storeType: businessType,
             address: businessAddress,
@@ -132,14 +120,16 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
             isActive: false, 
             latitude: String(latitude),
             longitude: String(longitude),
-        }as any); // Type assertion to any to bypass Drizzle typing issue
+        } as any);
 
-        // 3. Users Table Update
+        // 3. Users Table Update (Multi-Role Logic)
         const [updatedUser] = await tx
             .update(users)
             .set({
-                role: userRoleEnum.enumValues[1],
-                approvalStatus: approvalStatusEnum.enumValues[0],
+                // role: 'customer', // कस्टमर ही रहने दें
+                isSeller: false,   // अभी अप्रूव नहीं हुआ है
+                sellerApprovalStatus: 'pending', 
+                updatedAt: new Date(),
             })
             .where(eq(users.id, userId))
             .returning();
@@ -147,16 +137,17 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
         return { sellerEntry, updatedUser };
     });
 
-    // 4. Response
+    // 4. Final Response using the 'result' variable
     return res.status(201).json({
-      message: "Application submitted.",
-      seller: newSellerTransaction.sellerEntry, // ✅ ट्रांज़ैक्शन ऑब्जेक्ट से सही डेटा प्राप्त करें
+      message: "Application submitted successfully.",
+      seller: result.sellerEntry, 
       user: {
-        firebaseUid: newSellerTransaction.updatedUser.firebaseUid,
-        role: newSellerTransaction.updatedUser.role,
-        email: newSellerTransaction.updatedUser.email,
-        firstName: newSellerTransaction.updatedUser.firstName,
-        lastName: newSellerTransaction.updatedUser.lastName,
+        firebaseUid: result.updatedUser.firebaseUid,
+        isSeller: result.updatedUser.isSeller,
+        sellerApprovalStatus: result.updatedUser.sellerApprovalStatus,
+        email: result.updatedUser.email,
+        firstName: result.updatedUser.firstName,
+        lastName: result.updatedUser.lastName,
       },
     });
   } catch (error: any) {
@@ -164,8 +155,6 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
     next(error);
   }
 });
-
-
 // ✅ GET /api/sellers/me
 
 sellerRouter.get('/me', requireSellerAuth, async (req: any, res: Response) => {
@@ -235,14 +224,16 @@ const sellerProfileWithRating = sellerProfile as unknown as { rating: number | n
     // }
 
     // 3. सेलर प्रोफाइल में मेट्रिक्स जोड़ें
-    const responseProfile = {
-      ...sellerProfile,
-      totalOrders: totalOrders || 0,
-      totalProducts: totalProducts || 0,
-      totalRevenue: parseFloat(Number(totalRevenue).toFixed(2)), // `toFixed` अब संख्या पर सुरक्षित रूप से कॉल किया जा सकता है
-      averageRating: calculatedAverageRating // या averageRatingFromProfile, जो भी आप उपयोग करना चाहते हैं
-    };
-
+    // 3. Response के अंत में यूजर का करंट स्टेटस भी भेजें
+const responseProfile = {
+  ...sellerProfile,
+  totalOrders: totalOrders || 0,
+  totalProducts: totalProducts || 0,
+  totalRevenue: parseFloat(Number(totalRevenue).toFixed(2)),
+  averageRating: calculatedAverageRating,
+  // ✅ एडिशनल: फ्रंटएंड को बताने के लिए कि यह सेलर मोड में है
+  isSellerActive: true 
+};
     return res.status(200).json(responseProfile);
   } catch (error: any) {
     console.error('❌ Error in GET /api/sellers/me:', error);
@@ -326,121 +317,77 @@ sellerRouter.get("/orders", requireSellerAuth, async (req: any, res: Response) =
 });
 
 
+// ✅ POST /api/sellers/categories (Clean & Multi-role compatible)
 sellerRouter.post(
   '/categories',
-  requireSellerAuth,
-  upload.single('image'), // 🚨 यहां multer मिडलवेयर को जोड़ें, 'image' फ्रंटएंड से आने वाले फ़ील्ड का नाम है
+  requireSellerAuth, // यह मिडलवेयर अब isSeller: true चेक करता है
+  upload.single('image'),
   async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized.' });
-      }
-
       const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
+      
       if (!sellerProfile) {
-        return res.status(404).json({ error: 'Seller profile not found. Complete seller registration.' });
+        return res.status(404).json({ error: 'Seller profile not found.' });
       }
       const sellerId = sellerProfile.id;
 
-      // Multer अब req.body को पॉप्युलेट करेगा और फ़ाइल को req.file में रखेगा
       const { name, slug, description, isActive } = req.body;
-      const imageFile = req.file; // अपलोड की गई इमेज फ़ाइल (अगर कोई है)
+      const imageFile = req.file;
 
-      // ✅ Zod वैलिडेशन का उपयोग करें
       const categoryDataParsed = await categoryFormInputSchema.safeParseAsync({
         name,
         slug,
         description,
-        isActive: isActive === 'true' || isActive === true, // FormData से boolean string के रूप में आता है
+        isActive: isActive === 'true' || isActive === true,
       });
 
-      
+      // ✅ Validation Error Handling (No FS cleanup needed for MemoryStorage)
+      if (!categoryDataParsed.success) {
+        return res.status(400).json({ 
+            message: "Invalid category data.", 
+            errors: categoryDataParsed.error.flatten().fieldErrors 
+        });
+      }
 
-      // ✅ सुनिश्चित करें कि इमेज अपलोड के लिए है
       if (!imageFile) {
         return res.status(400).json({ error: 'Category image is required.' });
       }
-// sellerRoutes.ts (वह फ़ंक्शन जहाँ Zod Validation विफल होता है)
 
-if (!categoryDataParsed.success) {
-    console.error("Zod Validation Error:", categoryDataParsed.error);
-    
-    // ✅ FIX: `upload.storage` और `multer.diskStorage` को हटाकर 
-    // सीधे `req.file` और `fs` का उपयोग करके साफ़ करें।
-    
-    // यह मानकर कि आपने 'fs' (file system) को इम्पोर्ट किया है।
-    // import fs from 'fs'; 
-    
-    // यदि कोई फ़ाइल अपलोड की गई है और वह फ़ाइल डिस्क पर मौजूद है, तो उसे साफ़ करें।
-    // हम मान लेते हैं कि अगर `req.file` मौजूद है, तो यह diskStorage द्वारा बनाया गया है।
-    if (req.file && req.file.path) { 
-        try {
-            // यदि आप dest: 'uploads/' का उपयोग कर रहे हैं
-            // fs.unlinkSync(req.file.path); 
-            // सुनिश्चित करें कि आप यहाँ fs.unlink का उपयोग कर रहे हैं और इसे try...catch में रखें।
-            console.log(`🧹 Cleaned up temporary file: ${req.file.path}`);
-        } catch (cleanupError) {
-            console.error("❌ Failed to clean up file:", cleanupError);
-        }
-    }
-    
-    // त्रुटि के साथ बाहर निकलें
-    return res.status(400).json({ 
-        message: "Invalid product data provided.", 
-        errors: categoryDataParsed.error.flatten().fieldErrors 
-    });
-}
-
-      // ✅ इमेज को क्लाउड स्टोरेज पर अपलोड करें
-      // `uploadImage` फंक्शन आपके `cloudStorage.ts` में परिभाषित होना चाहिए
-      // यह फ़ंक्शन `req.file` (जो एक Buffer है) और एक फ़ाइल नाम/पाथ लेता है।
       const fileName = `categories/${sellerId}/${uuidv4()}-${imageFile.originalname}`;
       const imageUrl = await uploadImage(imageFile.buffer, fileName, imageFile.mimetype);
-const validatedCategoryData = categoryDataParsed.data;
-      // सुनिश्चित करें कि इस सेलर के लिए समान नाम वाली कोई कैटेगरी पहले से मौजूद न हो
+      const validatedCategoryData = categoryDataParsed.data;
+
+      // Duplicate Check
       const [existingCategory] = await db.select()
         .from(categories)
         .where(and(eq(categories.name, validatedCategoryData.name), eq(categories.sellerId, sellerId)));
 
       if (existingCategory) {
-        // इमेज को डिलीट करें क्योंकि कैटेगरी नहीं बन पाई
-        await deleteImage(fileName); // यदि deleteImage फंक्शन है
-        return res.status(409).json({ error: 'Category with this name already exists for this seller.' });
+        await deleteImage(fileName);
+        return res.status(409).json({ error: 'Category already exists.' });
       }
 
-      // DB में insert करना
       const [newCategory] = await db.insert(categories)
         .values({
           sellerId: sellerId,
           name: validatedCategoryData.name,
           slug: validatedCategoryData.slug,
           description: validatedCategoryData.description,
-          image: imageUrl, // क्लाउड स्टोरेज से मिला URL
+          image: imageUrl,
           isActive: validatedCategoryData.isActive,
         })
         .returning();
 
-      if (!newCategory) {
-        // अगर DB में इंसर्ट फेल हुआ तो अपलोड की गई इमेज को डिलीट करें
-        await deleteImage(fileName);
-        return res.status(500).json({ error: 'Failed to create category.' });
-      }
-
       getIO().emit("category:created", newCategory);
-
-      return res.status(201).json(newCategory); // ✅ 201 Created
+      return res.status(201).json(newCategory);
 
     } catch (error: any) {
       console.error('Error in creating category:', error);
-      if (error instanceof multer.MulterError) {
-        return res.status(400).json({ error: error.message });
-      }
       return res.status(500).json({ error: error.message || 'Internal Server Error.' });
     }
   }
 );
-
     // ✅ GET /api/sellers/products
     sellerRouter.get('/products', requireSellerAuth, async (req: any, res: Response) => {
       try {
@@ -925,30 +872,33 @@ sellerRouter.delete('/products/:productId', verifyToken as any, requireSellerAut
 });
 
 // ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं)
+// ✅ POST /api/sellers/products (FINAL UPDATED VERSION)
 sellerRouter.post(
   '/products',
   requireSellerAuth,
   upload.single('image'),
   async (req: any, res: Response) => {
     try {
-      const firebaseUid = req.user?.firebaseUid;
       const userId = req.user?.id;
+      const firebaseUid = req.user?.firebaseUid;
 
       if (!firebaseUid || !userId) {
         return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
       }
 
+      // 1. सेलर प्रोफाइल निकालें (ताकि डिफ़ॉल्ट सेटिंग्स ले सकें)
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
         .where(eq(sellersPgTable.userId, userId));
 
       if (!sellerProfile) {
-        return res.status(404).json({ error: 'Seller profile not found. Please complete your seller registration.' });
+        return res.status(404).json({ error: 'Seller profile not found. Please complete registration.' });
       }
 
       const sellerId = sellerProfile.id;
 
+      // 2. Request Body से डेटा निकालें
       const {
         name,
         description,
@@ -959,48 +909,50 @@ sellerRouter.post(
         brand,
         minOrderQty,
         maxOrderQty,
-        estimatedDeliveryTime
+        estimatedDeliveryTime // यूजर द्वारा भेजा गया टाइम
       } = req.body;
 
       const file = req.file;
 
+      // 3. Basic Validation
       if (!name || !price || !categoryId || !stock || !file) {
         return res.status(400).json({ error: 'Missing required fields or image.' });
       }
 
+      // 4. Data Parsing & Safety
       const parsedCategoryId = parseInt(categoryId as string);
       const parsedStock = parseInt(stock as string);
       const parsedPrice = parseFloat(price as string);
-      const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : undefined;
-      const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : undefined;
+      const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : 1;
+      const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : null;
 
       if (isNaN(parsedCategoryId) || isNaN(parsedStock) || isNaN(parsedPrice)) {
-        return res.status(400).json({ error: 'Invalid data provided for categoryId, price, or stock.' });
+        return res.status(400).json({ error: 'Invalid numbers provided for price, stock, or category.' });
       }
 
-      // ✅ FIXED: no existingProduct here
+      // 5. 🔥 "High-Class" Delivery Time Logic
+      // प्राथमिकता: 1. Product specific time > 2. Seller's global time > 3. Default '1-2 hours'
+      const finalDeliveryTime = estimatedDeliveryTime?.trim() || 
+                               (sellerProfile as any).estimatedDeliveryTime || 
+                               '1-2 hours';
+
+      // 6. Image Upload to Cloud
       let imageUrl = "";
-
-      // Upload the new image
       if (file) {
-        const buffer = file.buffer;
-
-        imageUrl = await uploadImage(
-          buffer,
-          `products/${sellerId}/${uuidv4()}-${file.originalname}`,
-          file.mimetype
-        );
+        const fileName = `products/${sellerId}/${uuidv4()}-${file.originalname}`;
+        imageUrl = await uploadImage(file.buffer, fileName, file.mimetype);
 
         if (!imageUrl) {
-          return res.status(500).json({ error: "Failed to upload product image." });
+          return res.status(500).json({ error: "Cloud upload failed." });
         }
       }
 
-      const newProduct = await db
+      // 7. Database Insertion
+      const [newProduct] = await db
         .insert(products)
         .values({
-          name,
-          description,
+          name: name.trim(),
+          description: description || null,
           price: parsedPrice,
           categoryId: parsedCategoryId,
           stock: parsedStock,
@@ -1009,55 +961,72 @@ sellerRouter.post(
           unit: unit || 'piece',
           brand: brand || null,
           minOrderQty: parsedMinOrderQty,
-          maxOrderQty: parsedMaxOrderQty,
-          estimatedDeliveryTime: estimatedDeliveryTime || '1-2 hours',
-          approvalStatus: approvalStatusEnum.enumValues[0],
+          maxOrderQty: parsedMaxOrderQty as any,
+          estimatedDeliveryTime: finalDeliveryTime, // ✅ Updated Dynamic Value
+          approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
+          isActive: true, // डिफ़ॉल्ट रूप से एक्टिव
+          createdAt: new Date(),
+          updatedAt: new Date(),
         })
         .returning();
 
-      getIO().emit("product:created", newProduct[0]);
+      // 8. Real-time Notification
+      getIO().emit("product:created", {
+        message: "New product waiting for approval",
+        product: newProduct
+      });
 
-      return res.status(201).json(newProduct[0]);
+      return res.status(201).json(newProduct);
 
     } catch (error: any) {
       console.error('❌ Error in POST /api/sellers/products:', error);
-      return res.status(500).json({ error: 'Failed to create product.' });
+      return res.status(500).json({ error: 'Internal Server Error while creating product.' });
     }
   }
 );
-    
 
-
-// 📍 PATCH /api/sellers/:id - प्रमाणित सेलर के लिए अपनी प्रोफ़ाइल अपडेट करें
+// 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
 sellerRouter.patch(
   '/:id',
-  protect as any, // यूजर को प्रमाणित करें
-  authorize(['seller']), // केवल 'seller' भूमिका वाले यूजर को अनुमति दें
-  // कंट्रोलर में सुरक्षा जांच: सुनिश्चित करें कि सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
-  updateMySellerProfile
+  requireSellerAuth, // ✅ अब यह isSeller: true चेक करेगा, पुराने authorize(['seller']) की ज़रूरत नहीं
+  async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
+      const paramsId = parseInt(req.params.id);
+
+      // 🛑 Security Check: सुनिश्चित करें कि सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
+      const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
+
+      if (!sellerProfile || sellerProfile.id !== paramsId) {
+        return res.status(403).json({ error: "Unauthorized: You can only update your own profile." });
+      }
+
+      // कंट्रोलर कॉल करें या यहीं अपडेट लॉजिक लिखें
+      return updateMySellerProfile(req, res,next);
+    } catch (error) {
+      console.error("❌ Error in Seller Profile Patch:", error);
+      next(error);
+    }
+  }
 );
 
-
-
-
-    // ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें)
+// ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें - Updated Logic)
 sellerRouter.patch(
   '/products/:id',
   requireSellerAuth,
-  // ⭐ ⭐ ⭐ यहाँ से 'upload.single('image')' को हटा दें ⭐ ⭐ ⭐
   async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
       const productId = parseInt(req.params.id);
 
-      if (!userId) {
-        return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
-      }
-      if (isNaN(productId)) {
-        return res.status(400).json({ error: 'Invalid product ID.' });
+      if (!userId || isNaN(productId)) {
+        return res.status(400).json({ error: 'Invalid User or Product ID.' });
       }
 
-      // ✅ Seller Profile Check
+      // 1. Seller Profile Check (Get internal Seller ID)
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
@@ -1067,13 +1036,11 @@ sellerRouter.patch(
         return res.status(404).json({ error: 'Seller profile not found.' });
       }
 
-      const sellerId = sellerProfile.id;
-
-      // ✅ Product Ownership Check
+      // 2. Product Ownership Check
       const [existingProduct] = await db
         .select()
         .from(products)
-        .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
+        .where(and(eq(products.id, productId), eq(products.sellerId, sellerProfile.id)));
 
       if (!existingProduct) {
         return res.status(403).json({ error: 'Not authorized to update this product.' });
@@ -1090,63 +1057,42 @@ sellerRouter.patch(
         minOrderQty,
         maxOrderQty,
         estimatedDeliveryTime,
-        imageUrl: newImageUrlFromClient // ⭐ क्लाइंट से इमेज का URL प्राप्त करें
+        imageUrl: newImageUrlFromClient 
       } = req.body;
 
-      // ⭐ Multer के बिना, `req.file` मौजूद नहीं होगा।
-      // const file = req.file; // <--- इसकी अब आवश्यकता नहीं है
+      // 🌟 Image Update & Cleanup Logic (Permanent Storage Management)
+      let finalImageUrl = existingProduct.image;
 
-      // 🌟 START: Image Update Logic
-      let finalImageUrl = existingProduct.image; // डिफ़ॉल्ट रूप से मौजूदा इमेज URL
-
-      // यदि क्लाइंट ने एक नया इमेज URL भेजा है
       if (newImageUrlFromClient !== undefined && newImageUrlFromClient !== existingProduct.image) {
-        try {
-          // पुरानी इमेज को क्लाउड स्टोरेज से हटाने का प्रयास करें (यदि मौजूद हो)
-          if (existingProduct.image) {
-            console.log(`[INFO] Attempting to delete old cloud image: ${existingProduct.image}`);
-            await deleteImage(existingProduct.image).catch(err => {
-              console.warn(`⚠️ Could not delete old cloud image ${existingProduct.image}:`, err.message);
-            });
-          }
-          finalImageUrl = newImageUrlFromClient; // नए URL को अपडेट के लिए उपयोग करें
-        } catch (imageDeleteError: any) {
-          console.error("❌ Error during old image deletion process:", imageDeleteError);
-          // यदि पुरानी इमेज हटाने में विफल रहता है, तो भी हम नई इमेज URL के साथ आगे बढ़ सकते हैं
-          finalImageUrl = newImageUrlFromClient;
+        // अगर नई इमेज आई है या इमेज हटाई गई है, तो पुरानी वाली क्लाउड से डिलीट करें
+        if (existingProduct.image) {
+          console.log(`[CLEANUP] Deleting old image: ${existingProduct.image}`);
+          await deleteImage(existingProduct.image).catch(err => 
+            console.warn(`⚠️ Cloud delete failed for ${existingProduct.image}:`, err.message)
+          );
         }
-      } else if (newImageUrlFromClient === null || newImageUrlFromClient === '') { // मान लें कि क्लाइंट इमेज हटाना चाहता है
-          if (existingProduct.image) {
-               console.log(`[INFO] Client requested to clear image. Attempting to delete old cloud image: ${existingProduct.image}`);
-               await deleteImage(existingProduct.image).catch(err => {
-                   console.warn(`⚠️ Could not delete old cloud image ${existingProduct.image} during clear request:`, err.message);
-               });
-          }
-          finalImageUrl = ''; // इमेज URL को null पर सेट करें
+        finalImageUrl = newImageUrlFromClient; // ये null, empty string या नया URL हो सकता है
       }
-      // 🌟 END: Image Update Logic
 
-
-      // ✏️ Build update payload
+      // ✏️ Build Clean Update Payload
       const updatePayload: any = {
         updatedAt: new Date(),
+        image: finalImageUrl
       };
 
-      if (name !== undefined) updatePayload.name = name;
+      // सिर्फ वही चीजें अपडेट करें जो क्लाइंट ने भेजी हैं
+      if (name !== undefined) updatePayload.name = name.trim();
       if (description !== undefined) updatePayload.description = description;
-      if (price !== undefined) updatePayload.price = parseFloat(price);
-      if (categoryId !== undefined) updatePayload.categoryId = parseInt(categoryId);
-      if (stock !== undefined) updatePayload.stock = parseInt(stock);
+      if (price !== undefined) updatePayload.price = parseFloat(String(price));
+      if (categoryId !== undefined) updatePayload.categoryId = parseInt(String(categoryId));
+      if (stock !== undefined) updatePayload.stock = parseInt(String(stock));
       if (unit !== undefined) updatePayload.unit = unit;
       if (brand !== undefined) updatePayload.brand = brand;
-      if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(minOrderQty);
-      if (maxOrderQty !== undefined) updatePayload.maxOrderQty = parseInt(maxOrderQty);
+      if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(String(minOrderQty));
+      if (maxOrderQty !== undefined) updatePayload.maxOrderQty = maxOrderQty ? parseInt(String(maxOrderQty)) : null;
       if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
-      
-      // ⭐ अपडेटेड इमेज URL को पेलोड में जोड़ें
-      updatePayload.image = finalImageUrl;
 
-      // ✅ Update DB
+      // ✅ Update Database
       const [updatedProduct] = await db
         .update(products)
         .set(updatePayload)
@@ -1154,21 +1100,20 @@ sellerRouter.patch(
         .returning();
 
       if (!updatedProduct) {
-        return res.status(404).json({ error: 'Product not found or no changes made.' });
+        return res.status(404).json({ error: 'Update failed or no changes detected.' });
       }
 
-      // 🔊 Emit update event
-      // getIO().emit("product:updated", updatedProduct); // यदि आप Socket.IO का उपयोग कर रहे हैं
+      // 🔊 Real-time Sync (Socket.io)
+      getIO().emit("product:updated", updatedProduct);
 
       return res.status(200).json(updatedProduct);
 
     } catch (error: any) {
-      console.error("❌ PATCH /api/sellers/products/:id error:", error);
-      return res.status(500).json({ message: "Failed to update product.", error: error.message });
+      console.error("❌ PATCH Product Error:", error);
+      return res.status(500).json({ message: "Internal server error during update." });
     }
   }
 );
-
     // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
     // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
 sellerRouter.patch(

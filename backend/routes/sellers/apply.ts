@@ -66,26 +66,30 @@ router.post("/apply", verifyToken as any, async (req: any, res: Response, next: 
       approvalStatus: approvalStatusEnum.enumValues[0],
     }).returning();
 
-    // 5. Update User Role & Status
-    const [updatedUser] = await db.update(users)
-      .set({
-        role: userRoleEnum.enumValues[1], // 'seller'
-        approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
-      })
-      .where(eq(users.id, dbUser.id))
-      .returning();
+    // 5. Update User Role & Status (Boolean Logic)
+const [updatedUser] = await db.update(users)
+  .set({
+    // ✅ 'role' को 'customer' ही रहने दें ताकि वो शॉपिंग कर सके
+    // ✅ बस सेलर बनने की रिक्वेस्ट को इन कॉलम्स में ट्रैक करें:
+    isSeller: false, // अभी अप्रूव नहीं हुआ है
+    sellerApprovalStatus: 'pending', // स्टेटस पेंडिंग कर दिया
+    updatedAt: new Date(),
+  })
+  .where(eq(users.id, dbUser.id))
+  .returning();
 
-    // 6. Response
-    return res.status(201).json({
-      message: "Application submitted successfully!",
-      seller: newSeller,
-      user: {
-        firebaseUid: updatedUser.firebaseUid,
-        role: updatedUser.role,
-        email: updatedUser.email,
-        name: `${updatedUser.firstName || ""} ${updatedUser.lastName || ""}`.trim(),
-      },
-    });
+// 6. Response
+return res.status(201).json({
+  message: "Application submitted successfully!",
+  seller: newSeller,
+  user: {
+    firebaseUid: updatedUser.firebaseUid,
+    isSeller: updatedUser.isSeller,
+    sellerApprovalStatus: updatedUser.sellerApprovalStatus,
+    email: updatedUser.email,
+    name: `${updatedUser.firstName || ""} ${updatedUser.lastName || ""}`.trim(),
+  },
+});
 
   } catch (error) {
     console.error("❌ Error in apply.ts:", error);

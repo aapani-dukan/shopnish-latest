@@ -1,0 +1,1 @@
+ALTER TABLE "admin_settings" ADD COLUMN "platform_commission_rate" numeric(5, 2) DEFAULT '10.00';

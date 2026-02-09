@@ -1,0 +1,1 @@
+ALTER TABLE "delivery_boys" ADD COLUMN "is_online" boolean DEFAULT false NOT NULL;

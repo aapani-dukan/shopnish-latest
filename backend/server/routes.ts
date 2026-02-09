@@ -40,6 +40,8 @@ import customerRouter from '../routes/customerRoutes';
 import layoutRoutes from '../routes/layoutRoutes'; // Check karein path sahi ho
 import { masterProducts } from "../shared/backend/tables";
 import adminSettingsRouter from "../routes/adminSettingRoutes";
+import walletRoutes from '../routes/walletRoutes';
+
 const router = Router();
 
 // ✅ Health Check
@@ -89,55 +91,43 @@ router.post("/register", async (req: Request, res: Response) => {
 });
 
 // ✅ User Profile
+// ✅ User Profile (Updated for Multi-Role)
 router.get(
   "/users/me",
   requireAuth as any,
-  async (req:any, res: Response) => {
+  async (req: any, res: Response) => {
     try {
-      const authReq = req as AuthenticatedRequest;
       const userUuid = req.user?.firebaseUid;
-      if (!userUuid) {
-        return res.status(401).json({ error: "Not authenticated." });
-      }
+      if (!userUuid) return res.status(401).json({ error: "Not authenticated." });
 
-      let [user] = await db
-        .select()
-        .from(users)
-        .where(eq(users.firebaseUid, userUuid));
+      let [user] = await db.select().from(users).where(eq(users.firebaseUid, userUuid));
+      if (!user) return res.status(404).json({ error: "User not found." });
 
-      if (!user) {
-        return res.status(404).json({ error: "User not found." });
-      }
+      // 🔥 Virtual Role Mapping: पुरानी ऐप्स के लिए 'role' यहाँ जनरेट हो रहा है
+      const virtualRole = user.isAdmin ? 'admin' : 
+                          user.isSeller ? 'seller' : 
+                          user.isDelivery ? 'delivery-boy' : 'customer';
 
-      let sellerInfo;
-      if (user.role === "seller") {
-        const [record] = await db
-          .select({
-            id: sellersPgTable.id,
-            userId: sellersPgTable.userId,
-            businessName: sellersPgTable.businessName,
-            approvalStatus: sellersPgTable.approvalStatus,
-            rejectionReason: sellersPgTable.rejectionReason,
-          })
-          .from(sellersPgTable)
-          .where(eq(sellersPgTable.userId, user.id));
+      const userWithRole = { ...user, role: virtualRole };
 
+      let sellerInfo = null;
+      // अब 'user.isSeller' चेक करना ज़्यादा सुरक्षित है
+      if (user.isSeller) {
+        const [record] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, user.id));
         if (record) sellerInfo = record;
       }
-    // ✅ FIX: यहाँ deliveryBoyId को fetch करें और रिस्पॉन्स में जोड़ें
-      let deliveryBoyId = null;
-      if (user.role === "delivery-boy") { // केवल तभी fetch करें जब रोल delivery-boy हो
-        const [deliveryBoyRecord] = await db
-          .select({ id: deliveryBoys.id }) // deliveryBoysPgTable से deliveryBoy की ID fetch करें
-          .from(deliveryBoys)
-          .where(eq(deliveryBoys.userId, user.id)); // user.id से मैच करें
 
-        if (deliveryBoyRecord) {
-          deliveryBoyId = deliveryBoyRecord.id;
-        }
+      let deliveryBoyId = null;
+      if (user.isDelivery) {
+        const [dboy] = await db.select({ id: deliveryBoys.id }).from(deliveryBoys).where(eq(deliveryBoys.userId, user.id));
+        if (dboy) deliveryBoyId = dboy.id;
       }
-      res.status(200).json({ ...user, sellerProfile: sellerInfo || null ,
-deliveryBoyId: deliveryBoyId });
+
+      res.status(200).json({ 
+        ...userWithRole, 
+        sellerProfile: sellerInfo,
+        deliveryBoyId 
+      });
     } catch (error: any) {
       console.error(error);
       res.status(500).json({ error: "Internal error." });
@@ -344,6 +334,7 @@ router.use("/addresses",addressRouter);
 router.use("/delivery", dBoyRouter);
 // ✅ Home Layout (Banners, Ads, Unique Sections)
 router.use("/layout", layoutRoutes);
+router.use("/wallet", walletRoutes); // वॉलेट राउट्स जोड़ें
 
 // ✅ Admin Routes
 router.use("/admin", adminSettingsRouter);

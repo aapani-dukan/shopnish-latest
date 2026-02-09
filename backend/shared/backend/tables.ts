@@ -1,6 +1,6 @@
 // backend/src/shared/backend/tables.ts
 
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum, unique, varchar} from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum, unique, varchar,index,doublePrecision} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 
@@ -55,23 +55,28 @@ export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_s
 // 1. users - किसी को संदर्भित नहीं करता
 export const users = pgTable("users", {
   id: serial("id").primaryKey(),
-  firebaseUid: text("firebase_uid").unique(), // Isse primary pehchaan banayein
-  
-  // ✅ Badlav: .notNull() hata diya, ab email optional hai
+  firebaseUid: text("firebase_uid").unique(),
   email: text("email").unique(), 
-  
-  // ✅ Badlav: .notNull() hata diya, OTP mein password nahi chahiye
   password: text("password"), 
-  
-  // ✅ Badlav: Inhe bhi optional (?) karein kyunki naya user sirf phone dega
   firstName: text("first_name"),
   lastName: text("last_name"),
-  
-  // ✅ Badlav: .notNull() rehne dein, lekin unique() zaroor karein
   phone: text("phone").unique(), 
   
+  // 1. ✅ OLD ROLE (Compatibility के लिए इसे अभी रहने दें)
   role: userRoleEnum("role").notNull().default("customer"),
-  approvalStatus: approvalStatusEnum("approval_status").notNull().default("approved"),
+
+  // 2. ✅ NEW MULTI-ROLE SYSTEM (High-Class & Scalable)
+  isCustomer: boolean("is_customer").default(true),
+  isSeller: boolean("is_seller").default(false),
+  isDelivery: boolean("is_delivery").default(false),
+  isAdmin: boolean("is_admin").default(false),
+
+  // 3. ✅ APPROVAL STATUSES (हर रोल के लिए अलग)
+  // कस्टमर को अप्रूवल नहीं चाहिए, लेकिन सेलर और डिलीवरी बॉय को चाहिए होगा
+  approvalStatus: approvalStatusEnum("approval_status").notNull().default("approved"), // Common Status
+  sellerApprovalStatus: text("seller_approval_status").default("N/A"), 
+  deliveryApprovalStatus: text("delivery_approval_status").default("N/A"),
+
   address: text("address"),
   city: text("city"),
   pincode: text("pincode"),
@@ -199,6 +204,7 @@ export const deliveryBoys = pgTable("delivery_boys", {
   licenseNumber: text("license_number"),
   aadharNumber: text("aadhar_number"),
   isAvailable: boolean("is_available").default(true),
+  isOnline: boolean('is_online').default(false).notNull(),
   currentLat: decimal("current_lat", { precision: 10, scale: 8 }),
   currentLng: decimal("current_lng", { precision: 11, scale: 8 }),
   rating: decimal("rating", { precision: 3, scale: 2 })
@@ -354,6 +360,7 @@ export const deliveryBatches = pgTable("delivery_batches", {
     deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
+    deliveredAt: timestamp('delivered_at'),
 });
 
 // 14. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
@@ -547,7 +554,73 @@ export const adminSettings = pgTable("admin_settings", {
   id: serial("id").primaryKey(),
   defaultDeliveryRadiusKm: decimal("default_delivery_radius_km", { precision: 5, scale: 2 }).default("5.00").$type<number>(),
   baseDeliveryCharge: decimal("base_delivery_charge", { precision: 10, scale: 2 }).default("20.00").$type<number>(),
+  platformCommissionRate: decimal("platform_commission_rate", { precision: 5, scale: 2 }).default("10.00").$type<number>(),
   chargePerKm: decimal("charge_per_km", { precision: 10, scale: 2 }).default("5.00").$type<number>(),
   freeDeliveryMinOrderValue: decimal("free_delivery_min_order_value", { precision: 10, scale: 2 }).default("500.00").$type<number>(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+});
+/**
+ * 💰 WALLETS TABLE
+ * यह टेबल सेलर और डिलीवरी बॉय दोनों का करंट बैलेंस होल्ड करेगी।
+ */
+export const wallets = pgTable('wallets', {
+  id: serial('id').primaryKey(),
+  
+  // किसका वॉलेट है? (User Table से लिंक)
+  userId: integer('user_id').references(() => users.id).notNull(),
+  
+  // 'seller' या 'delivery-boy' (इससे पहचान होगी कि वॉलेट किसका है)
+  userType: varchar('user_type', { length: 20 }).notNull(), 
+  
+  // मुख्य बैलेंस जो निकाला जा सकता है
+  balance: doublePrecision('balance').default(0).notNull(),
+  
+  // वो पैसा जो अभी तक 'Clear' नहीं हुआ (जैसे ऑर्डर तो डिलीवर हो गया पर रिटर्न पीरियड अभी बाकी है)
+  pendingAmount: doublePrecision('pending_amount').default(0).notNull(),
+  
+  // सुरक्षा के लिए: पिछली ट्रांजैक्शन की ID (Fraud रोकने के लिए)
+  lastTransactionId: integer('last_transaction_id'),
+
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+}, (table) => {
+  return {
+    // एक यूजर का सिर्फ एक ही प्रकार का वॉलेट हो सकता है (जैसे एक सेलर का एक ही वॉलेट)
+    userTypeIdx: unique().on(table.userId, table.userType),
+  };
+});
+
+/**
+ * 📜 WALLET TRANSACTIONS TABLE
+ * पैसों के आने-जाने का 100% सटीक रिकॉर्ड।
+ */
+export const walletTransactions = pgTable('wallet_transactions', {
+  id: serial('id').primaryKey(),
+  walletId: integer('wallet_id').references(() => wallets.id).notNull(),
+  
+  amount: doublePrecision('amount').notNull(),
+  
+  // 'credit' (आया) या 'debit' (गया)
+  type: varchar('type', { length: 10 }).notNull(), 
+  
+  // पैसा क्यों आया/गया? (order_earning, delivery_fee, payout, refund_deduction, penalty)
+  purpose: varchar('purpose', { length: 50 }).notNull(),
+  
+  // संबंधित ऑर्डर या बैच का रेफरेंस (Audit के लिए)
+  referenceId: varchar('reference_id', { length: 100 }), 
+  
+  // ट्रांजैक्शन का स्टेटस
+  status: varchar('status', { length: 20 }).default('completed').notNull(), // pending, completed, failed
+  
+  // क्लोजिंग बैलेंस (ट्रांजैक्शन के बाद वॉलेट में कितने पैसे बचे - यह सबसे ज़रूरी है ऑडिट के लिए)
+  closingBalance: doublePrecision('closing_balance').notNull(),
+  
+  description: text('description'), // "Order #1021 के लिए डिलीवरी फीस"
+  
+  createdAt: timestamp('created_at').defaultNow().notNull(),
+}, (table) => {
+  return {
+    walletIdx: index('wallet_id_idx').on(table.walletId),
+    purposeIdx: index('purpose_idx').on(table.purpose),
+  };
 });

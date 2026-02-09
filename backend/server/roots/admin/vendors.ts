@@ -160,77 +160,36 @@ adminVendorsRouter.get('/:id', authorize(['admin']), validateRequest(sellerIdSch
   }
 });
 
-// -------------------------------------------------------------------------
-/**
- * ✅ PATCH /api/admin/vendors/approve/:id
- * एक सेलर को मंज़ूर करें (TRANSACTIONAL & STORE CREATION ADDED)
- */
+// ✅ PATCH /api/admin/vendors/approve/:id (Multi-Role Update)
 adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(sellerIdSchema), async (req: any, res: Response) => {
   const sellerId = Number(req.params.id);
   
   try {
-    // 1. Fetch seller safely (outside transaction for initial check)
     const sellerResults = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
     const seller = sellerResults[0]; 
-    
-    if (!seller) {
-      return res.status(404).json({ message: "Seller not found." });
-    }
+    if (!seller) return res.status(404).json({ message: "Seller not found." });
 
-    // 2. Start Transaction
     const finalApprovedSeller = await db.transaction(async (tx) => {
-        // 2a. Update Seller status
-        const approvedResults = await tx
-          .update(sellersPgTable)
-          .set({
-            approvalStatus: approvalStatusEnum.enumValues[1], // 'approved'
+        // A. Update Sellers Table
+        const [approved] = await tx.update(sellersPgTable).set({
+            approvalStatus: 'approved',
             approvedAt: new Date(),
             updatedAt: new Date(),
-            rejectionReason: null
-          })
-          .where(eq(sellersPgTable.id, sellerId))
-          .returning();
+        }).where(eq(sellersPgTable.id, sellerId)).returning();
 
-        const approved = approvedResults[0]; 
+        // B. 🔥 MULTI-ROLE FIX: यूजर को सेलर का एक्सेस दें बिना उसका कस्टमर रोल छीने
+        await tx.update(users).set({ 
+            isSeller: true, // अब वह सेलर बन गया
+            sellerApprovalStatus: 'approved',
+            role: 'seller', // इसकी अब ज़रूरत नहीं, पर पुरानी ऐप्स के लिए रख सकते हैं
+            updatedAt: new Date() 
+        }).where(eq(users.id, seller.userId));
 
-        if (!approved) {
-             throw new Error("Failed to update seller status.");
-        }
-
-        // 2b. Update User role and approval status
-        await tx.update(users)
-          .set({ role: userRoleEnum.enumValues[1], approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() }) // 'seller', 'approved'
-          .where(eq(users.id, seller.userId));
-
-        // 2c. Check and create default Store Entry
-       // const existingStore = await tx.query.stores.findFirst({
-          //  where: eq(stores.sellerId, sellerId),
-     //   });
-
-     //   if (!existingStore) {
-          //  console.log(`Creating default store for newly approved Seller ID: ${sellerId}`);
-            // NOT NULL fields must be provided based on your schema
-         //   await tx.insert(stores).values({
-             //   sellerId: sellerId,
-            //    storeName: seller.businessName || `Store ${sellerId}`, 
-          //      storeType: 'General Goods', 
-              //  address: seller.businessAddress || 'Pending Setup: Address', 
-              //  city: seller.city || 'Pending Setup: City', 
-             //   pincode: seller.pincode || '000000', 
-             //   phone: seller.businessPhone || '0000000000', 
-            //});
-      //  }
-        
         return approved;
     });
     
-    // 3. Success Response
-    res.status(200).json({
-      message: 'Seller approved and store created successfully.',
-      seller: finalApprovedSeller,
-    });
+    res.status(200).json({ message: 'Seller approved successfully.', seller: finalApprovedSeller });
   } catch (error: any) {
-    console.error('❌ Failed to approve seller (Transaction Failed):', error);
     res.status(500).json({ message: error.message || 'Failed to approve seller.' });
   }
 });
@@ -240,14 +199,15 @@ adminVendorsRouter.patch("/approve/:id", authorize(['admin']), validateRequest(s
  * ✅ PATCH /api/admin/vendors/reject/:id
  * एक सेलर को अस्वीकार करें
  */
-adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(sellerIdSchema.extend({
-  body: z.object({
-    reason: z.string().min(1, "Rejection reason is required for rejecting a seller.").optional(),
-  }).partial(),
-})), async (req: any, res: Response) => {
+// ✅ PATCH /api/admin/vendors/reject/:id
+/**
+ * ✅ PATCH /api/admin/vendors/reject/:id
+ * एक सेलर को अस्वीकार करें (Transaction added to fix 'tx' error)
+ */
+adminVendorsRouter.patch("/reject/:id", authorize(['admin']), async (req: any, res: Response) => {
   try {
     const sellerId = Number(req.params.id);
-    const { reason } = req.body; // 🎯 FIX: req.body से 'reason' को एक्सट्रैक्ट किया गया
+    const { reason } = req.body;
 
     const sellerResults = await db.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId));
     const seller = sellerResults[0]; 
@@ -255,23 +215,30 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
       return res.status(404).json({ message: "Seller not found." });
     }
 
-    const rejectedResults = await db
-      .update(sellersPgTable)
-      .set({
-        approvalStatus: approvalStatusEnum.enumValues[2], // 'rejected'
-        updatedAt: new Date(),
-        rejectionReason: reason || null
-      })
-      .where(eq(sellersPgTable.id, sellerId))
-      .returning();
-    const rejected = rejectedResults[0]; 
+    // 🔥 Fix: db.transaction के अंदर सारा काम करें
+    const rejected = await db.transaction(async (tx) => {
+        // 1. Seller table अपडेट करें
+        const [rejectedRes] = await tx
+          .update(sellersPgTable)
+          .set({
+            approvalStatus: 'rejected',
+            updatedAt: new Date(),
+            rejectionReason: reason || null
+          })
+          .where(eq(sellersPgTable.id, sellerId))
+          .returning();
 
+        // 2. User table में Multi-Role लॉजिक (isSeller: false)
+        await tx.update(users)
+          .set({ 
+            isSeller: false,               // अब वह सेलर नहीं रहा
+            sellerApprovalStatus: 'rejected', 
+            updatedAt: new Date() 
+          })
+          .where(eq(users.id, seller.userId));
 
-    await db.update(users)
-      .set({ approvalStatus: approvalStatusEnum.enumValues[2], role: userRoleEnum.enumValues[3], updatedAt: new Date() })
-      .where(eq(users.id, seller.userId));
-
-    // ************ IMPORTANT: IF YOU ARE UPDATING FIREBASE CUSTOM CLAIMS, ADD THAT LOGIC HERE ************
+        return rejectedRes;
+    });
 
     res.status(200).json({
       message: 'Seller rejected successfully.',
@@ -282,7 +249,6 @@ adminVendorsRouter.patch("/reject/:id", authorize(['admin']), validateRequest(se
     res.status(500).json({ message: 'Failed to reject seller.' });
   }
 });
-
 // -------------------------------------------------------------------------
 /**
  * ✅ PATCH /api/admin/vendors/:id
@@ -461,10 +427,13 @@ adminVendorsRouter.delete('/:id', authorize(['admin']), validateRequest(sellerId
         const deletedSeller = deletedSellerResults[0]; 
 
         // 4. User Role को 'customer' पर वापस सेट करें
-        await tx.update(users)
-            .set({ role: userRoleEnum.enumValues[3], approvalStatus: approvalStatusEnum.enumValues[2], updatedAt: new Date() })
-            .where(eq(users.id, sellerToDelete.userId)); 
-            
+       // 🔥 MULTI-ROLE DELETE FIX: 
+// सिर्फ सेलर का डेटा हटाओ, यूजर को 'customer' के रूप में सुरक्षित रहने दो।
+await tx.update(users).set({ 
+    isSeller: false, 
+    sellerApprovalStatus: 'N/A', // वापस N/A कर दिया
+    updatedAt: new Date() 
+}).where(eq(users.id, sellerToDelete.userId));
         return deletedSeller;
     });
 

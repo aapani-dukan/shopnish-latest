@@ -1,11 +1,11 @@
 // server/middleware/authMiddleware.ts
 import { Response, NextFunction } from "express";
 import { verifyToken, AuthenticatedRequest } from "./verifyToken";
-import { userRoleEnum, deliveryBoys, sellersPgTable, approvalStatusEnum } from "../../shared/backend/schema";
+import { deliveryBoys, sellersPgTable } from "../../shared/backend/schema";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
-import { RequestHandler } from 'express';
-// सामान्य प्रमाणीकरण
+
+// 1️⃣ सामान्य प्रमाणीकरण (No Change needed here)
 export const requireAuth = [
   verifyToken,
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -18,83 +18,65 @@ export const requireAuth = [
   },
 ] as any[];
 
-// केवल Admin के लिए
+// 2️⃣ केवल Admin के लिए (Updated for Boolean Logic)
 export const requireAdminAuth = [
   ...requireAuth,
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    // 1. पहले चेक करें कि user मौजूद है या नहीं (Safety First)
-    if (!req.user) {
-      return res.status(401).json({
-        message: "Unauthorized: User not found.",
-      });
-    }
+    if (!req.user) return res.status(401).json({ message: "User not found." });
 
-    // 2. अब Role चेक करें
-    // userRoleEnum.enumValues[2] 'admin' है, यह पक्का करने के लिए सीधा चेक भी लगा सकते हैं
-    if (req.user.role !== userRoleEnum.enumValues[2]) {
+    // ✅ नया तरीका: सीधा isAdmin चेक करें
+    if (!req.user.isAdmin) {
       return res.status(403).json({
         message: "Forbidden: Admin access required.",
       });
     }
-
     next();
   },
 ];
-// केवल Seller के लिए
+
+// 3️⃣ केवल Seller के लिए (Updated for Multi-Role)
 export const requireSellerAuth = [
   ...requireAuth,
-  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => { // ✅ async जोड़ें
-    if (req.user?.role !== userRoleEnum.enumValues[1]) {
-      // ✅ seller
+  async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+    if (!req.user) return res.status(401).json({ message: "Not authorized." });
+
+    // ✅ नया तरीका: isSeller चेक करें
+    if (!req.user.isSeller) {
       return res.status(403).json({
         message: "Forbidden: Seller access required.",
       });
     }
-if (!req.user) {
-  return res.status(401).json({ message: "Not authorized, no user found" });
-}
+
     const userId = req.user.id;
     
-    // 1. Postgres User ID का उपयोग करके Seller ID और Approval Status खोजें।
+    // DB से प्रोफाइल और अप्रूवल चेक करें
     const sellerProfile = await db.query.sellersPgTable.findFirst({
         where: eq(sellersPgTable.userId, userId),
     });
 
-    // 2. Seller मौजूद है और स्वीकृत है इसकी जाँच करें
-    // मान लें कि 'approved' आपके approvalStatusEnum का दूसरा (index 1) या कोई अन्य मान है।
-    const approvedStatus = approvalStatusEnum.enumValues[1]; // उदाहरण के लिए 'approved'
-    
-    if (!sellerProfile || sellerProfile.approvalStatus !== approvedStatus) {
+    // ✅ अब status सीधा "approved" स्ट्रिंग से चेक करें (ज्यादा सुरक्षित)
+    if (!sellerProfile || sellerProfile.approvalStatus !== "approved") {
          return res.status(403).json({ 
-             message: "Seller authentication failed. Profile not found or not approved." 
+             message: "Seller account not approved or not found." 
          });
     }
     
-    // 3. ✅ sellerId को req.user में जोड़ें
     req.user.sellerId = sellerProfile.id; 
-    
     next();
   },
 ];
 
-
-// केवल Delivery Boy के लिए
-
-// ✅ केवल Delivery Boy के लिए (सुधारित)
+// 4️⃣ केवल Delivery Boy के लिए (Updated)
 export const requireDeliveryBoyAuth = [
   ...requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-    console.log("🔍 [requireDeliveryBoyAuth] User:", req.user);
+    if (!req.user) return res.status(401).json({ message: "Not authorized." });
 
-    if (!req.user || req.user.role !== userRoleEnum.enumValues[3]) {
-      // ✅ delivery-boy
+    // ✅ नया तरीका: isDelivery चेक करें
+    if (!req.user.isDelivery) {
       return res.status(403).json({ message: "Forbidden: Not a delivery boy." });
     }
 
-    // ❌ यह लाइन गलत थी: req.user.sellerId = sellerProfile.id;
-    // इसे हटा दें, यह Delivery Boy middleware में नहीं होना चाहिए
-
-    // DB से deliveryBoy record fetch करें
     const deliveryBoy = await db.query.deliveryBoys.findFirst({
       where: and(
         eq(deliveryBoys.userId, req.user.id),
@@ -104,13 +86,11 @@ export const requireDeliveryBoyAuth = [
 
     if (!deliveryBoy) {
       return res.status(403).json({
-        message: "Forbidden: Delivery boy not approved or not found.",
+        message: "Forbidden: Delivery boy profile not approved.",
       });
     }
 
-    // req.user में deliveryBoyId attach करें
     req.user.deliveryBoyId = deliveryBoy.id;
-
     next();
   },
 ];
