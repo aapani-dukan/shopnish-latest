@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Wallet, ArrowUpCircle, ArrowDownCircle, Search, CheckCircle, RefreshCcw } from 'lucide-react';
+import { auth } from '../../lib/firebase';
 interface WalletData {
   walletId: number;
   userId: number;
@@ -15,18 +16,43 @@ const AdminWalletManager = () => {
   const [loading, setLoading] = useState(true);
 
   // 1. डेटा लोड करना
-  const fetchWallets = async () => {
-    try {
-      const response = await fetch('/api/wallet/admin/all-wallets');
-      const data = await response.json();
-      setWallets(data);
-    } catch (error) {
-      console.error("Error fetching wallets:", error);
-    } finally {
-      setLoading(false);
+ 
+const fetchWallets = async () => {
+  setLoading(true);
+  try {
+    // 🚨 Firebase से ताज़ा टोकन प्राप्त करें
+    const user = auth.currentUser;
+    if (!user) {
+      console.error("Admin not logged in");
+      return;
     }
-  };
+    
+    // यह फ़ंक्शन JWT टोकन निकालता है
+    const token = await user.getIdToken(); 
 
+    const response = await fetch('/api/wallet/admin/all-wallets', {
+      headers: {
+        'Authorization': `Bearer ${token}`, // ✅ Firebase Token यहाँ जा रहा है
+        'Content-Type': 'application/json'
+      }
+    });
+
+    const data = await response.json();
+
+    // 🚨 Array Check (ताकि .filter वाला एरर न आए)
+    if (Array.isArray(data)) {
+      setWallets(data);
+    } else {
+      console.error("API Error Response:", data);
+      setWallets([]); 
+    }
+  } catch (error) {
+    console.error("Error fetching wallets:", error);
+    setWallets([]);
+  } finally {
+    setLoading(false);
+  }
+};
   useEffect(() => {
     fetchWallets();
   }, []);
@@ -38,19 +64,25 @@ const AdminWalletManager = () => {
     if (!note) return;
 
     try {
-      const res = await fetch('/api/wallet/admin/settle-cash', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ targetUserId: userId, amount, note })
-      });
-      if (res.ok) {
-        alert("Settlement Successful!");
-        fetchWallets(); // लिस्ट रिफ्रेश करें
-      }
-    } catch (error) {
-      alert("Settlement failed!");
+    const token = await auth.currentUser?.getIdToken(); // ✅ Get fresh token
+    
+    const res = await fetch('/api/wallet/admin/settle-cash', {
+      method: 'POST',
+      headers: { 
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}` 
+      },
+      body: JSON.stringify({ targetUserId: userId, amount, note })
+    });
+    
+    if (res.ok) {
+      alert("Settlement Successful!");
+      fetchWallets();
     }
-  };
+  } catch (error) {
+    alert("Settlement failed!");
+  }
+};
 
   const filteredWallets = wallets.filter(w => 
     w.userName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
