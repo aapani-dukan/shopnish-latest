@@ -984,7 +984,44 @@ sellerRouter.post(
     }
   }
 );
+// 📍 PATCH /api/sellers/toggle-status - स्टोर को ऑनलाइन/ऑफलाइन करें
+sellerRouter.patch(
+  '/toggle-status',
+  requireSellerAuth,
+  async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id;
 
+      // 1. पहले टोकन वाले userId से सेलर प्रोफाइल ढूंढें
+      const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
+
+      if (!sellerProfile) {
+        return res.status(404).json({ success: false, error: "Seller profile not found." });
+      }
+
+      // 2. अब 'stores' टेबल में इस सेलर का स्टोर अपडेट करें (isActive कॉलम)
+      // फ्रंटएंड से req.body.is_open आ रहा है, उसे isActive में सेट करें
+      await db.update(stores)
+        .set({ 
+          isActive: req.body.is_open, // 'stores' टेबल का सही कॉलम
+          updatedAt: new Date() 
+        })
+        .where(eq(stores.sellerId, sellerProfile.id));
+
+      return res.status(200).json({ 
+        success: true, 
+        message: req.body.is_open ? "Dukaan ab live hai! 🚀" : "Dukaan band kar di gayi hai.",
+        isActive: req.body.is_open 
+      });
+    } catch (error) {
+      console.error("❌ Toggle Status Error:", error);
+      next(error);
+    }
+  }
+);
 // 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
 sellerRouter.patch(
   '/:id',
