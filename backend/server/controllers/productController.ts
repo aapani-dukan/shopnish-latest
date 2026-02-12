@@ -513,6 +513,33 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     next(error); 
   }
 };
+
+export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const pending = await db.query.products.findMany({
+      where: eq(products.approvalStatus, approvalStatusEnum.enumValues[0]),
+      with: { category: true, seller: true },
+      orderBy: [desc(products.createdAt)],
+    });
+    res.status(200).json(pending);
+  } catch (error) { next(error); }
+};
+
+export const approveProduct = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() })
+      .where(eq(products.id, Number(req.params.productId))).returning();
+    res.status(200).json({ message: "Approved", product: updated });
+  } catch (error) { next(error); }
+};
+
+export const rejectProduct = async (req: Request, res: Response, next: NextFunction) => {
+  try {
+    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[2], rejectionReason: req.body.reason, updatedAt: new Date() })
+      .where(eq(products.id, Number(req.params.productId))).returning();
+    res.status(200).json({ message: "Rejected", product: updated });
+  } catch (error) { next(error); }
+};
 export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const productId = Number(req.params.id);
@@ -540,30 +567,4 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
     console.error("❌ getProductById Error:", error);
     next(error); 
   }
-};
-export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const pending = await db.query.products.findMany({
-      where: eq(products.approvalStatus, approvalStatusEnum.enumValues[0]),
-      with: { category: true, seller: true },
-      orderBy: [desc(products.createdAt)],
-    });
-    res.status(200).json(pending);
-  } catch (error) { next(error); }
-};
-
-export const approveProduct = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() })
-      .where(eq(products.id, Number(req.params.productId))).returning();
-    res.status(200).json({ message: "Approved", product: updated });
-  } catch (error) { next(error); }
-};
-
-export const rejectProduct = async (req: Request, res: Response, next: NextFunction) => {
-  try {
-    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[2], rejectionReason: req.body.reason, updatedAt: new Date() })
-      .where(eq(products.id, Number(req.params.productId))).returning();
-    res.status(200).json({ message: "Rejected", product: updated });
-  } catch (error) { next(error); }
 };
