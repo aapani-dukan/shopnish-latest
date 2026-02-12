@@ -373,35 +373,34 @@ export const deleteProduct = async (req: AuthenticatedRequest, res: Response, ne
 export const getSellerProducts = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const userId = req.user?.id;
   
-  // 1. सुरक्षा: अगर userId ही नहीं है
-  if (!userId) return res.status(401).json({ message: "User not authenticated" });
+  if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
 
   try {
-    // 2. सेलर प्रोफाइल निकालें
+    // 1. सेलर प्रोफाइल ढूँढें
     const [sellerProfile] = await db
       .select()
       .from(sellersPgTable)
       .where(eq(sellersPgTable.userId, userId));
 
-    // 3. 🚨 फिक्स: अगर प्रोफाइल नहीं मिली तो एरर रोकें
-    if (!sellerProfile) {
-      console.log("⚠️ No seller profile found for user:", userId);
-      return res.status(200).json({ message: "No profile, no products.", products: [] });
+    // 2. सुरक्षा चेक: अगर प्रोफाइल नहीं है तो खाली प्रोडक्ट्स भेजें
+    if (!sellerProfile || isNaN(Number(sellerProfile.id))) {
+      console.warn(`⚠️ No valid seller profile for User: ${userId}`);
+      return res.status(200).json({ 
+        message: "No products found (Profile missing).", 
+        products: [] 
+      });
     }
 
-    // 4. अब क्वेरी करें (पक्का करें कि ID नंबर है)
+    // 3. सुरक्षित क्वेरी
     const sellerProducts = await db.query.products.findMany({
-      where: eq(products.sellerId, Number(sellerProfile.id)), // Number() में रैप करना सुरक्षित है
+      where: eq(products.sellerId, Number(sellerProfile.id)),
       with: { category: true },
       orderBy: [desc(products.createdAt)],
     });
 
-    // 5. फॉर्मेट करके भेजें
-    const formattedProducts = sellerProducts.map(p => formatProductWithOffers(p));
-    
     res.status(200).json({ 
       message: "Seller products fetched.", 
-      products: formattedProducts 
+      products: sellerProducts.map(p => formatProductWithOffers(p)) 
     });
 
   } catch (error) { 
@@ -409,7 +408,6 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
     next(error); 
   }
 };
-
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { 
@@ -517,15 +515,32 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
 };
 export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
   try {
+    const productId = Number(req.params.id);
+
+    // 🛡️ सुरक्षा: अगर ID नंबर नहीं है (NaN), तो डेटाबेस क्वेरी न करें
+    if (isNaN(productId)) {
+      console.error("❌ Invalid Product ID received:", req.params.id);
+      return res.status(400).json({ message: "Invalid product identifier." });
+    }
+
     const product = await db.query.products.findFirst({
-      where: and(eq(products.id, Number(req.params.id)), eq(products.isActive, true), eq(products.approvalStatus, approvalStatusEnum.enumValues[1])),
+      where: and(
+        eq(products.id, productId), 
+        eq(products.isActive, true), 
+        eq(products.approvalStatus, approvalStatusEnum.enumValues[1])
+      ),
       with: { category: true, seller: { with: { user: true } } }
     });
-    if (!product) return res.status(404).json({ message: "Product not found." });
-    res.status(200).json(formatProductWithOffers(product));
-  } catch (error) { next(error); }
-};
 
+    if (!product) return res.status(404).json({ message: "Product not found." });
+    
+    res.status(200).json(formatProductWithOffers(product));
+
+  } catch (error) { 
+    console.error("❌ getProductById Error:", error);
+    next(error); 
+  }
+};
 export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pending = await db.query.products.findMany({
