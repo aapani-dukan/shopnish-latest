@@ -221,7 +221,7 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
       description: productData.description || null,
       price: String(productData.price),
       stock: Number(productData.stock),
-      categoryId: Number(productData.categoryId),
+      categoryId: productData.categoryId ? Number(productData.categoryId) : null,
       image: productData.image || null, // Cloudinary URL यहाँ आएगा
       
       // --- Advanced Info (जो आपने दी थी) ---
@@ -372,15 +372,42 @@ export const deleteProduct = async (req: AuthenticatedRequest, res: Response, ne
 
 export const getSellerProducts = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const userId = req.user?.id;
+  
+  // 1. सुरक्षा: अगर userId ही नहीं है
+  if (!userId) return res.status(401).json({ message: "User not authenticated" });
+
   try {
-    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId!));
+    // 2. सेलर प्रोफाइल निकालें
+    const [sellerProfile] = await db
+      .select()
+      .from(sellersPgTable)
+      .where(eq(sellersPgTable.userId, userId));
+
+    // 3. 🚨 फिक्स: अगर प्रोफाइल नहीं मिली तो एरर रोकें
+    if (!sellerProfile) {
+      console.log("⚠️ No seller profile found for user:", userId);
+      return res.status(200).json({ message: "No profile, no products.", products: [] });
+    }
+
+    // 4. अब क्वेरी करें (पक्का करें कि ID नंबर है)
     const sellerProducts = await db.query.products.findMany({
-      where: eq(products.sellerId, sellerProfile.id),
+      where: eq(products.sellerId, Number(sellerProfile.id)), // Number() में रैप करना सुरक्षित है
       with: { category: true },
       orderBy: [desc(products.createdAt)],
     });
-    res.status(200).json({ message: "Seller products fetched.", products: sellerProducts.map(p => formatProductWithOffers(p)) });
-  } catch (error) { next(error); }
+
+    // 5. फॉर्मेट करके भेजें
+    const formattedProducts = sellerProducts.map(p => formatProductWithOffers(p));
+    
+    res.status(200).json({ 
+      message: "Seller products fetched.", 
+      products: formattedProducts 
+    });
+
+  } catch (error) { 
+    console.error("❌ getSellerProducts Error:", error);
+    next(error); 
+  }
 };
 
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
