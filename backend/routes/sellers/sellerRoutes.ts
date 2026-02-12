@@ -1022,6 +1022,47 @@ sellerRouter.patch(
     }
   }
 );
+// 📍 GET /api/sellers/dashboard-stats - डैशबोर्ड का डेटा
+sellerRouter.get(
+  '/dashboard-stats',
+  requireSellerAuth,
+  async (req: any, res: Response) => {
+    try {
+      const userId = req.user?.id;
+
+      // 1. सेलर ढूंढें
+      const [seller] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
+
+      if (!seller) {
+        return res.status(404).json({ message: "Seller profile not found" });
+      }
+
+      // 2. स्टोर से status (isActive) लाएं
+      const [store] = await db
+        .select()
+        .from(stores)
+        .where(eq(stores.sellerId, seller.id));
+
+      // 3. अभी के लिए डमी डेटा भेजें (बाद में इसे रियल ऑर्डर्स से बदलेंगे)
+      return res.status(200).json({
+        id: seller.id,
+        businessName: seller.businessName,
+        todaySales: 0,
+        pendingOrders: 0,
+        activeProducts: 0,
+        newReviews: 0,
+        isOpen: store?.isActive ?? false, // ✅ यही टॉगल की वैल्यू दिखाएगा
+        recentOrders: []
+      });
+    } catch (error) {
+      console.error("Dashboard Stats Error:", error);
+      res.status(500).json({ message: "Internal Server Error" });
+    }
+  }
+);
 // 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
 sellerRouter.patch(
   '/:id',
