@@ -83,6 +83,7 @@ export const users = pgTable("users", {
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"), // Default null rahega
   whatsappOptIn: boolean("whatsapp_opt_in").default(true),
   welcomeMessageSent: boolean("welcome_message_sent").default(false),
   lastActivityAt: timestamp("last_activity_at").defaultNow(),
@@ -102,6 +103,7 @@ export const categories = pgTable("categories", {
   isActive: boolean("is_active").default(true),
   sortOrder: integer("sort_order").default(0),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+  deletedAt: timestamp("deleted_at"), // Default null rahega
 });
 
 // 3. deliveryAreas - किसी को संदर्भित नहीं करता
@@ -188,6 +190,7 @@ isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false).not
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"), // Default null rahega
 });
 
 // 8. deliveryBoys - users को संदर्भित करता है
@@ -245,6 +248,7 @@ export const stores = pgTable("stores", {
   longitude: decimal("longitude", { precision: 10, scale: 7 }).$type<number>(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  deletedAt: timestamp("deleted_at"), // Default null rahega
 });
 
 
@@ -283,13 +287,21 @@ export const products = pgTable("products", {
   productDeliveryPincodes: text("product_delivery_pincodes").array().$type<string[]>(),
   productDeliveryRadiusKM: integer("product_delivery_radius_km").$type<number>(),
   estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'),
-  
+  //other
+  sku: varchar("sku", { length: 50 }), // Seller's own SKU
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0.00"), // GST 5, 12, 18%
+  hsnCode: text("hsn_code"), // Essential for legal invoices
+  isReturnable: boolean("is_returnable").default(false),
+  returnPeriodDays: integer("return_period_days").default(0),
+  version: integer("version").default(1).notNull(),
+  deletedAt: timestamp("deleted_at"),
   // Status & Timestamps
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+  
 });
 
 // 12. serviceProviders - users, services को संदर्भित करता है
@@ -477,6 +489,8 @@ export const orderTracking = pgTable("order_tracking", {
     updatedByRole: text("updated_by_role"),
   notes: text("notes"),
   message: text("message"),
+  messageHindi: text("message_hindi"), // Customer convenience
+  visualStatus: text("visual_status"), // For UI icons: 'placed', 'preparing', 'shipped'
 });
 
 // 21. couponsPgTable - sellersPgTable, products, categories को संदर्भित करता है
@@ -623,4 +637,22 @@ export const walletTransactions = pgTable('wallet_transactions', {
     walletIdx: index('wallet_id_idx').on(table.walletId),
     purposeIdx: index('purpose_idx').on(table.purpose),
   };
+});
+export const productHistory = pgTable("product_history", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").references(() => products.id, { onDelete: 'cascade' }),
+  oldPrice: decimal("old_price", { precision: 10, scale: 2 }),
+  newPrice: decimal("new_price", { precision: 10, scale: 2 }),
+  changedBy: integer("changed_by").references(() => users.id),
+  changeReason: text("change_reason"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+export const notifications = pgTable("notifications", {
+  id: serial("id").primaryKey(),
+  userId: integer("user_id").notNull(), // Notification kis seller ke liye hai
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  type: text("type").default("LOW_STOCK"), 
+  isRead: boolean("is_read").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
 });

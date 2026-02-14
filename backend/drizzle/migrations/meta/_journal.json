@@ -162,6 +162,20 @@
       "when": 1770664900159,
       "tag": "0022_same_living_lightning",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771077653839,
+      "tag": "0023_red_ken_ellis",
+      "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771089030911,
+      "tag": "0024_wild_spacker_dave",
+      "breakpoints": true
     }
   ]
 }

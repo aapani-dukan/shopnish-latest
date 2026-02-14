@@ -7,12 +7,13 @@ import {
   sellersPgTable,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
 import { formatProductWithOffers } from '../../shared/productHelpers';
 import fs from 'fs';
+import {ProductService} from '../../services/productService'
 // =========================================================================
 // Helper Functions (Validation) - 100% Exact as per your original file
 // =========================================================================
@@ -307,15 +308,14 @@ export const bulkCreateProducts = async (req: any, res: Response) => {
   }
 };
 export const updateProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log(`🔄 [API] Received request to update product ${req.params.productId}.`);
   const userId = req.user?.id;
   const productId = Number(req.params.productId);
+  
   try {
     const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId!));
     if (!sellerProfile) return res.status(404).json({ message: "Seller profile not found." });
 
-    // backend/server/controllers/productController.ts -> updateProduct method
-const updateData = req.body;
+    const updateData = req.body;
 if (req.file) {
   try {
     // 1. Purani image delete karne ka logic (Jo aapki original file mein tha)
@@ -350,9 +350,11 @@ if (req.file) {
     const validationErrors = validateProductInput(updateData, true);
     if (validationErrors.length > 0) return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
 
-    const [updatedProduct] = await db.update(products).set({ ...updateData, updatedAt: new Date() })
-      .where(and(eq(products.id, productId), eq(products.sellerId, sellerProfile.id)))
-      .returning();
+    // 🔥 Calling the High-Class Service
+    const updatedProduct = await ProductService.updateProduct(productId, sellerProfile.id, updateData);
+    if (updatedProduct.stock !== undefined) {
+  await ProductService.checkLowStockAndNotify(updatedProduct.id, updatedProduct.stock, sellerProfile.id);
+}
 
     res.status(200).json({ message: "Product updated successfully.", product: updatedProduct });
   } catch (error) { next(error); }
@@ -361,28 +363,33 @@ if (req.file) {
 export const deleteProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const productId = Number(req.params.productId);
   const userId = req.user?.id;
+  
   try {
     const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId!));
-    const [existing] = await db.select({ image: products.image }).from(products).where(and(eq(products.id, productId), eq(products.sellerId, sellerProfile.id)));
-    if (existing?.image) await deleteImage(existing.image);
-    await db.delete(products).where(and(eq(products.id, productId), eq(products.sellerId, sellerProfile.id)));
-    res.status(200).json({ message: "Product deleted successfully." });
+    
+    // Purani file udayein (optional, par soft delete mein log images rehne dete hain audit ke liye)
+    // Ab hum delete nahi, soft-delete karenge
+    await ProductService.softDelete(productId, sellerProfile.id);
+    
+    res.status(200).json({ message: "Product moved to bin (Soft Deleted)." });
   } catch (error) { next(error); }
 };
 
 export const getSellerProducts = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const userId = req.user?.id;
+  // Query se check karein ki kya user trash/deleted items dekhna chahta hai
+  const showDeleted = req.query.trash === 'true'; 
   
   if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
 
   try {
-    // 1. सेलर प्रोफाइल ढूँढें
+    // 1. सेलर प्रोफाइल ढूँढें (Yahan sirf seller table ki conditions aayengi)
     const [sellerProfile] = await db
       .select()
       .from(sellersPgTable)
       .where(eq(sellersPgTable.userId, userId));
 
-    // 2. सुरक्षा चेक: अगर प्रोफाइल नहीं है तो खाली प्रोडक्ट्स भेजें
+    // 2. सुरक्षा चेक
     if (!sellerProfile || isNaN(Number(sellerProfile.id))) {
       console.warn(`⚠️ No valid seller profile for User: ${userId}`);
       return res.status(200).json({ 
@@ -391,15 +398,19 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
       });
     }
 
-    // 3. सुरक्षित क्वेरी
+    // 3. सुरक्षित और "Soft-Delete Aware" क्वेरी
     const sellerProducts = await db.query.products.findMany({
-      where: eq(products.sellerId, Number(sellerProfile.id)),
+      where: and(
+        eq(products.sellerId, Number(sellerProfile.id)),
+        // Agar trash dekhna hai toh isNotNull, varna isNull
+        showDeleted ? isNotNull(products.deletedAt) : isNull(products.deletedAt)
+      ),
       with: { category: true },
       orderBy: [desc(products.createdAt)],
     });
 
     res.status(200).json({ 
-      message: "Seller products fetched.", 
+      message: showDeleted ? "Trash items fetched." : "Active seller products fetched.", 
       products: sellerProducts.map(p => formatProductWithOffers(p)) 
     });
 
@@ -425,10 +436,12 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     const effectiveLat = parseFloat(lat?.toString() || customerLat?.toString() || "");
     const effectiveLng = parseFloat(lng?.toString() || customerLng?.toString() || "");
 
-    // 2. Base Conditions (Approved & Active)
-    const whereClauses = [
+    // 2. Base Conditions (Approved, Active & NOT Deleted)
+    // ✅ High-Class Sudhar: isNull(products.deletedAt) ko yahan base filter mein dala hai
+    const whereClauses: any[] = [
       eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
-      eq(products.isActive, true)
+      eq(products.isActive, true),
+      isNull(products.deletedAt) 
     ];
 
     // 3. ✅ SMART FILTERING LOGIC
@@ -442,7 +455,7 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
         return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai." });
       }
 
-      // अपने एरिया (Bundi vs Kota) के सेलर्स ढूंढें
+      // अपने एरिया (Bundi vs Kota) के सेलers ढूंढें
       const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
       const deliverableSellerIds: number[] = [];
       const distanceCheckPromises: Promise<void>[] = [];
@@ -477,9 +490,8 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     // 4. Extra Filters (जैसे कैटेगरी, सर्च, प्राइस)
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
     if (search) {
-  // ilike का मतलब है "Insensitive Like" - यह H और h में फर्क नहीं करेगा
-  whereClauses.push(ilike(products.name, `%${search}%`));
-}
+      whereClauses.push(ilike(products.name, `%${search}%`));
+    }
     if (minPrice) whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
     if (maxPrice) whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
 
@@ -490,7 +502,9 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     else orderBy.push(desc(products.createdAt));
 
     // 6. Execute Queries
-    const [totalCount] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
+    // ✅ Yahan and(...whereClauses) se sare filters ek sath apply hote hain
+    const [totalCountResult] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
+    const totalCount = Number(totalCountResult?.count || 0);
     
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
@@ -503,8 +517,8 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     res.status(200).json({
       page: pageNum,
       limit: limitNum,
-      total: totalCount?.count || 0,
-      totalPages: Math.ceil((totalCount?.count || 0) / limitNum),
+      total: totalCount,
+      totalPages: Math.ceil(totalCount / limitNum),
       products: productList.map(p => formatProductWithOffers(p)),
     });
 
@@ -513,7 +527,6 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     next(error); 
   }
 };
-
 export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pending = await db.query.products.findMany({

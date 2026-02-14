@@ -23,7 +23,7 @@ import {
   // paymentMethodEnum, // ✅ यदि paymentMethodEnum का उपयोग कर रहे हो तो इम्पोर्ट करें
   // paymentStatusEnum, // ✅ यदि paymentStatusEnum का उपयोग कर रहे हो तो इम्पोर्ट करें
 } from "../../shared/backend/schema"; // ✅ schema फ़ाइल से इम्पोर्ट करें
-import { eq, desc, and, inArray, sql } from "drizzle-orm";
+import { eq, desc, and, inArray, sql,isNull } from "drizzle-orm";
 import { AuthenticatedRequest } from "../middleware/verifyToken"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
 import { getIO } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
 import { json } from "drizzle-orm/pg-core"; // ✅ json को drizzle से इम्पोर्ट करें
@@ -34,7 +34,7 @@ console.log({
   deliveryBatches,
   deliveryBoys,
 });
-
+import { ProductService } from "../../services/productService";
 // --- सहायक कार्य (Helper Functions) ---
 
 // ध्यान दें: यह Haversine फ़ॉर्मूला के लिए एक सरल प्लेसहोल्डर है।
@@ -401,28 +401,61 @@ if (!masterOrder) throw new Error('Failed to create master order.');
 
         if (!subOrder) throw new Error('Failed to create sub-order.');
 
-        // 3. Insert order items (all validatedItems)
+      // 3. Insert order items & Update Inventory
 for (const vItem of validatedItems) {
+    // A. Item Insert Karein
     await tx.insert(orderItems).values({
-        // 🛑 FIX: order_id, seller_id, और user_id को स्पष्ट रूप से पास करें
         subOrderId: subOrder.id,
-        orderId: masterOrder.id, // <--- नया! मास्टर ऑर्डर ID
-        sellerId: sellerId,       // <--- नया! विक्रेता ID
-        userId: userId,           // <--- नया! ग्राहक ID
-        
+        orderId: masterOrder.id,
+        sellerId: sellerId,
+        userId: userId,
         productId: vItem.productId,
         productName: vItem.product.name,
         productImage: vItem.product.image,
         productPrice: vItem.unitPrice,
         productUnit: vItem.product.unit,
-        quantity: vItem.quantity,
+        quantity: vItem.quantity, // <--- Dynamic Quantity
         itemTotal: vItem.itemTotal,
         createdAt: new Date(),
         updatedAt: new Date(),
-    }as any);
-}
-        
+    } as any);
 
+    // B. Inventory Update (Loop ke andar taaki har item ka stock kam ho)
+    const [updatedProduct] = await tx
+      .update(products)
+      .set({ 
+        stock: sql`${products.stock} - ${vItem.quantity}`, // <--- Dynamic Quantity Minus
+        updatedAt: new Date() 
+      })
+      .where(
+        and(
+          eq(products.id, vItem.productId),
+          sql`${products.stock} >= ${vItem.quantity}`, // Stock check
+          isNull(products.deletedAt) // Soft delete check
+        )
+      )
+      .returning({
+        id: products.id,
+        stock: products.stock,
+        sellerId: products.sellerId,
+        name: products.name
+      });
+
+    // C. Validation Check
+    if (!updatedProduct) {
+      throw new Error(`Maaf kijiye, ${vItem.product.name} ka paryapt stock nahi hai.`);
+    }
+
+    // D. Trigger Low Stock Alert (Background Task)
+   // ✅ Check karein ki variables null nahi hain
+if (updatedProduct && updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
+    ProductService.checkLowStockAndNotify(
+      updatedProduct.id, 
+      updatedProduct.stock as number, // Force cast to number
+      updatedProduct.sellerId as number
+    ).catch(err => console.error("Low Stock Alert Error:", err));
+  }
+}
         // 4. Delivery batching if not self-delivery
         if (!isSelfDelivery) {
        //   const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
@@ -762,25 +795,56 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
 
             if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
 
-            // 3. Order Items बनाएं (Self-Delivery)
-            for (const item of subOrderData.items) {
-                await tx.insert(orderItems).values({
-                    subOrderId: subOrder.id,
-                    orderId: masterOrder.id, 
-                    sellerId: subOrderData.sellerId,
-                    userId: userId,
-                    productId: item.product.id,
-                    productName: item.product.name,
-                    productImage: item.product.image,
-                    productPrice: (item as any).priceAtAdded,
-                    productUnit: item.product.unit,
-                    quantity: (item as any).quantity,
-                    itemTotal: (item as any).totalPrice,
-                    createdAt: new Date(),
-                    updatedAt: new Date(),
-                }as any);
-            }
-        }
+          // ... existing code ...
+// 3. Order Items बनाएं (Self-Delivery)
+for (const item of subOrderData.items) {
+    // 🛑 HIGH-CLASS ADDITION: Update Inventory First
+    const [updatedProduct] = await tx
+        .update(products)
+        .set({ 
+            stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+            updatedAt: new Date() 
+        })
+        .where(
+            and(
+                eq(products.id, item.product.id),
+                sql`${products.stock} >= ${Number((item as any).quantity)}`, // Stock Check
+                isNull(products.deletedAt) // Soft Delete Check
+            )
+        )
+        .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId, name: products.name });
+
+    if (!updatedProduct) {
+        throw new Error(`Maaf kijiye, ${item.product.name} ka paryapt stock nahi hai.`);
+    }
+
+    // 🔥 Trigger Low Stock Alert
+    if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
+        ProductService.checkLowStockAndNotify(
+            updatedProduct.id, 
+            updatedProduct.stock as number, 
+            updatedProduct.sellerId as number
+        ).catch(err => console.error("Low Stock Alert Error:", err));
+    }
+
+    // Now insert the order item
+    await tx.insert(orderItems).values({
+        subOrderId: subOrder.id,
+        orderId: masterOrder.id, 
+        sellerId: subOrderData.sellerId,
+        userId: userId,
+        productId: item.product.id,
+        productName: item.product.name,
+        productImage: item.product.image,
+        productPrice: (item as any).priceAtAdded,
+        productUnit: item.product.unit,
+        quantity: (item as any).quantity,
+        itemTotal: (item as any).totalPrice,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    } as any);
+}
+}
 
         // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
         for (const batch of batchesToCreate) {
@@ -813,7 +877,34 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
 
             // c) Order Items बनाएं (Non-Self-Delivery)
             for (const subOrderData of batch.subOrdersData) {
-                for (const item of subOrderData.items) {
+             // ... c) Order Items बनाएं (Non-Self-Delivery) loop ke andar ...
+for (const item of subOrderData.items) {
+    // 🛑 HIGH-CLASS ADDITION: Update Inventory
+    const [updatedProduct] = await tx
+        .update(products)
+        .set({ 
+            stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+            updatedAt: new Date() 
+        })
+        .where(
+            and(
+                eq(products.id, item.product.id),
+                sql`${products.stock} >= ${Number((item as any).quantity)}`,
+                isNull(products.deletedAt)
+            )
+        )
+        .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId });
+
+    if (!updatedProduct) {
+        throw new Error(`Maaf kijiye, ${item.product.name} out of stock ho gaya hai.`);
+    }
+
+    // 🔥 Alert
+    if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
+        ProductService.checkLowStockAndNotify(updatedProduct.id, updatedProduct.stock, updatedProduct.sellerId).catch(e => {});
+    }
+
+   
                     await tx.insert(orderItems).values({
                         subOrderId: subOrderData.subOrderId,
                         orderId: masterOrder.id, 

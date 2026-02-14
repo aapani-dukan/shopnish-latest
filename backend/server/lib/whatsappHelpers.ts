@@ -79,3 +79,9 @@ Shopnish पर इस हफ्ते के धमाकेदार ऑफ़
 
   return sendWhatsAppMessage(phone, message);
 }
+// 🔹 Specialized message: Low Stock Alert for Sellers
+export async function sendLowStockWhatsAppAlert(phone: string, productName: string, currentStock: number) {
+  const message = `⚠️ *Shopnish Inventory Alert* ⚠️\n\nनमस्ते! आपका प्रोडक्ट *${productName}* खत्म होने वाला है।\n\n📉 अभी सिर्फ *${currentStock}* स्टॉक बचा है।\n\nकृपया जल्द ही स्टॉक अपडेट करें ताकि आपकी सेल न रुके! 🛍️`;
+  
+  return sendWhatsAppMessage(phone, message);
+}
