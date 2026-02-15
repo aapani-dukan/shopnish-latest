@@ -185,6 +185,7 @@ export const sellersPgTable = pgTable("sellers", {
   isDistanceBasedDelivery: boolean("is_distance_based_delivery").default(false),
   
 isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false).notNull(),
+isOpen: boolean("is_open").default(false).notNull(),
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),

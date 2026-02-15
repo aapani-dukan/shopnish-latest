@@ -1,0 +1,1 @@
+ALTER TABLE "sellers" ADD COLUMN "is_open" boolean DEFAULT false NOT NULL;
