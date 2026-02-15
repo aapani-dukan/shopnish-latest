@@ -35,6 +35,7 @@ console.log({
   deliveryBoys,
 });
 import { ProductService } from "../../services/productService";
+import { sendNotification } from '../../services/notificationService';
 // --- सहायक कार्य (Helper Functions) ---
 
 // ध्यान दें: यह Haversine फ़ॉर्मूला के लिए एक सरल प्लेसहोल्डर है।
@@ -259,7 +260,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
      const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
     
     // Server-side transaction
-    await db.transaction(async (tx) => {
+   const result=await db.transaction(async (tx) => {
       try {
         // Handle delivery address (stores new address in `deliveryAddresses` table and returns details)
         const {
@@ -456,64 +457,99 @@ if (updatedProduct && updatedProduct.stock !== null && updatedProduct.sellerId !
     ).catch(err => console.error("Low Stock Alert Error:", err));
   }
 }
-        // 4. Delivery batching if not self-delivery
+
+// 4. Delivery batching if not self-delivery
         if (!isSelfDelivery) {
-       //   const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
+            const [deliveryBatch] = await tx.insert(deliveryBatches).values({
+                masterOrderId: masterOrder.id,
+                deliveryBoyId: null,
+                customerDeliveryAddressId: finalDeliveryAddressId,
+                status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+                estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), 
+                deliveryOtp: null,
+                deliveryOtpSentAt: null,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning({ id: deliveryBatches.id });
 
-          const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-            masterOrderId: masterOrder.id,
-            deliveryBoyId: null,
-            customerDeliveryAddressId: finalDeliveryAddressId,
-            status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
-            estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), // dummy: 1 hour
-            deliveryOtp: null,//Math.floor(1000 + Math.random() * 9000).toString(),
-            deliveryOtpSentAt: null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-          }).returning({ id: deliveryBatches.id });
-
-          await tx.update(subOrders)
-            .set({
-              deliveryBatchId: deliveryBatch.id,
-            })
-            .where(eq(subOrders.id, subOrder.id));
+            await tx.update(subOrders)
+                .set({ deliveryBatchId: deliveryBatch.id })
+                .where(eq(subOrders.id, subOrder.id));
         }
 
-        // Emit events
-        getIO().emit("new-order", {
-          orderId: masterOrder.id,
-          orderNumber: masterOrder.orderNumber,
-          customerId: masterOrder.customerId,
-          total: masterOrder.total,
-          status: masterOrder.status,
-          createdAt: masterOrder.createdAt,
-        }as any);
-        getIO().emit(`user:${userId}`, { type: 'order-placed', order: masterOrder, subOrder: subOrder });
+        // 🛑 FIX: subOrder par depend rehne ki bajaye seedha 'sellerId' use karein 
+        // jo function ke input arguments mein pehle se available hai.
+        const [sellerUser] = await tx
+            .select({ fcmToken: users.fcmToken })
+            .from(users)
+            .where(eq(users.id, sellerId)) // sellerId seedha input se liya
+            .limit(1);
 
-        return res.status(201).json({
-          message: "Order placed successfully!",
-          orderId: masterOrder.id,
-          orderNumber: masterOrder.orderNumber,
-          data: masterOrder,
-        });
+        // ✅ Sab kuch return karein
+        return { 
+            masterOrder, 
+            subOrder, 
+            sellerToken: sellerUser?.fcmToken || null 
+        };
 
       } catch (error: any) {
-        console.error("❌ Error placing buy now order (transaction rolled back):", error);
-        const errMsg = error?.message || "Failed to place order.";
-        if (errMsg && (errMsg.includes("Invalid") || errMsg.includes("required") || errMsg.includes("does not match"))) {
-          return res.status(400).json({ message: errMsg });
-        }
-        return res.status(500).json({ message: errMsg });
+        console.error("❌ Error placing buy now order:", error);
+        throw error; 
       }
     }); // end transaction
 
+    // 🔥 TRING TRING LOGIC
+    const finalResult = result as any;
+
+    if (finalResult?.sellerToken) {
+      try {
+        // Notification fire (Non-blocking)
+        sendNotification(
+          finalResult.sellerToken,
+          "Naya Order Aaya Hai! 🔥",
+          `Order #${finalResult.masterOrder.orderNumber} mila hai. ₹${finalResult.masterOrder.total} ka dhandha!`,
+          { 
+            orderId: String(finalResult.masterOrder.id), 
+            type: "NEW_ORDER" 
+          }
+        ).catch(e => console.error("🔔 [FCM Error]:", e));
+      } catch (notifyErr) {
+        console.error("⚠️ Notification failed:", notifyErr);
+      }
+    }
+
+    // 🌐 Socket.io Events
+    const io = getIO();
+    io.emit("new-order", {
+      orderId: finalResult.masterOrder.id,
+      orderNumber: finalResult.masterOrder.orderNumber,
+      customerId: finalResult.masterOrder.customerId,
+      total: finalResult.masterOrder.total,
+      status: finalResult.masterOrder.status,
+      createdAt: finalResult.masterOrder.createdAt,
+    });
+
+    io.emit(`user:${userId}`, { 
+      type: 'order-placed', 
+      order: finalResult.masterOrder, 
+      subOrder: finalResult.subOrder 
+    });
+
+    // ✅ Success Response
+    return res.status(201).json({
+      message: "Order placed successfully!",
+      orderId: finalResult.masterOrder.id,
+      orderNumber: finalResult.masterOrder.orderNumber,
+      data: finalResult.masterOrder,
+    });
+
   } catch (err: any) {
     console.error("❌ Unexpected error in placeOrderBuyNow:", err);
-    return res.status(500).json({ message: err?.message || "Internal server error." });
+    return res.status(500).json({ 
+      message: err?.message || "Internal server error code: POBN-500" 
+    });
   }
 };
-
-
 /**
  * handles placing an order from the user's cart.
  */
@@ -924,7 +960,7 @@ for (const item of subOrderData.items) {
             }
         }
 
-        // 4. कार्ट को खाली करें
+         // 4. कार्ट को खाली करें
         await tx.delete(cartItems).where(eq(cartItems.userId, userId));
         console.log("✅ Cart items deleted from cartItems table.");
         
@@ -932,19 +968,57 @@ for (const item of subOrderData.items) {
         
     }); // end transaction
     
-    // 🛑 FIX: ट्रांज़ैक्शन के परिणाम को असाइन करें
-    transactionResult = result;
+    // 🛑 Transaction result ko result variable se assign karein
+     transactionResult = result;
 
     if (!transactionResult || !transactionResult.masterOrder) {
         return res.status(500).json({ message: "Failed to place order due to an unknown transaction error." });
     }
-    
-    // Socket.io इवेंट को अब यहाँ emit करें
+
+    // 🛑 [TRING TRING LOGIC] - High Class Notification Flow
+    // Ise try-catch mein rakha hai taaki agar galti se notification fail ho, toh Order placement na ruke
+    try {
+        const uniqueSellerIds = Array.from(new Set(transactionResult.tempSubOrders.map(ts => ts.sellerId)));
+        
+        if (uniqueSellerIds.length > 0) {
+            const sellersWithTokens = await db.query.users.findMany({
+                where: inArray(users.id, uniqueSellerIds),
+                columns: { id: true, fcmToken: true }
+            });
+
+            // Har seller ko individually notify karein
+            sellersWithTokens.forEach(sellerUser => {
+                if (sellerUser.fcmToken) {
+                    sendNotification(
+                        sellerUser.fcmToken,
+                        "Naya Order Mila Hai! 🛍️",
+                        `Aapki dukaan par ek naya order #${transactionResult.masterOrder.orderNumber} aaya hai.`,
+                        { 
+                            type: 'NEW_ORDER', 
+                            masterOrderId: transactionResult.masterOrder.id.toString() 
+                        }
+                    ).catch(e => console.error(`[FCM Error] Seller: ${sellerUser.id}`, e));
+                }
+            });
+        }
+    } catch (notificationError) {
+        console.error("🔔 Notification Trigger Error (Non-Critical):", notificationError);
+    }
+
+    // ✅ Socket.io Events
     getIO().emit("new-master-order", {
       masterOrder: transactionResult.masterOrder,
-      subOrders: transactionResult.tempSubOrders.map(ts => ({ sellerId: ts.sellerId, subtotal: ts.subtotal, isSelfDelivery: ts.isSelfDelivery })),
+      subOrders: transactionResult.tempSubOrders.map(ts => ({ 
+          sellerId: ts.sellerId, 
+          subtotal: ts.subtotal, 
+          isSelfDelivery: ts.isSelfDelivery 
+      })),
     });
-    getIO().emit(`user:${userId}`, { type: 'master-order-placed', masterOrder: transactionResult.masterOrder });
+
+    getIO().emit(`user:${userId}`, { 
+        type: 'master-order-placed', 
+        masterOrder: transactionResult.masterOrder 
+    });
 
     return res.status(201).json({
         message: "Orders placed successfully!",
@@ -953,14 +1027,11 @@ for (const item of subOrderData.items) {
         data: transactionResult.masterOrder,
     });
 
-
   } catch (err: any) {
     console.error("❌ Unexpected error in placeOrderFromCart:", err);
-    // सुनिश्चित करें कि यहां से 500 एरर वापस हो
     return res.status(500).json({ message: err?.message || "Internal server error." });
   }
-};
-              
+};    
         
 
 /**

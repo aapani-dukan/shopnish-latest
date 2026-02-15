@@ -76,7 +76,7 @@ export const users = pgTable("users", {
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("approved"), // Common Status
   sellerApprovalStatus: text("seller_approval_status").default("N/A"), 
   deliveryApprovalStatus: text("delivery_approval_status").default("N/A"),
-
+fcmToken: text('fcm_token'),
   address: text("address"),
   city: text("city"),
   pincode: text("pincode"),
