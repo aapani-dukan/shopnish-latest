@@ -1,15 +1,12 @@
-import { db } from '../server/db'; // आपका DB कनेक्शन
+import { db } from '../server/db';
 import { wallets, walletTransactions } from '../shared/backend/schema';
-import { eq, and, sql } from 'drizzle-orm';
+import { eq, and, desc } from 'drizzle-orm';
 
 export const WalletService = {
   
   /**
-   * 💰 पैसे क्रेडिट करने का मास्टर फंक्शन (Internal Use)
-   */
-  /**
-   * 💰 पैसे क्रेडिट करने का मास्टर फंक्शन
-   * @param externalTx - (Optional) अगर हम इसे किसी और ट्रांजेक्शन के अंदर चला रहे हैं
+   * 💰 MASTER FUNCTION: Direct Balance Update
+   * Use for: Payouts, Delivery Boy Earnings, Admin Adjustments
    */
   async addMoney(
     userId: number, 
@@ -18,13 +15,10 @@ export const WalletService = {
     purpose: string, 
     referenceId: string, 
     description: string,
-    externalTx?: any // 👈 यह नया पैरामीटर है
+    externalTx?: any
   ) {
-    // अगर बाहर से tx आ रहा है तो उसे यूज़ करो, वरना db.transaction बनाओ
-    const transactionManager = externalTx || db;
-
     const logic = async (tx: any) => {
-      // 1. वॉलेट ढूंढें या अगर नहीं है तो बनाएं
+      // 1. Wallet dhundein ya banayein
       let [wallet] = await tx.select().from(wallets).where(
         and(eq(wallets.userId, userId), eq(wallets.userType, userType))
       );
@@ -34,12 +28,13 @@ export const WalletService = {
           userId,
           userType,
           balance: 0,
+          pendingAmount: 0
         }).returning();
       }
 
-      const newBalance = (wallet.balance || 0) + amount;
+      const newBalance = (Number(wallet.balance) || 0) + amount;
 
-      // 2. वॉलेट बैलेंस अपडेट करें
+      // 2. Main Balance update karein
       await tx.update(wallets)
         .set({ 
           balance: newBalance,
@@ -47,11 +42,11 @@ export const WalletService = {
         })
         .where(eq(wallets.id, wallet.id));
 
-      // 3. ट्रांजेक्शन हिस्ट्री में रिकॉर्ड डालें
+      // 3. Transaction History (Status: Completed)
       await tx.insert(walletTransactions).values({
         walletId: wallet.id,
         amount,
-        type: 'credit',
+        type: amount > 0 ? 'credit' : 'debit',
         purpose,
         referenceId,
         closingBalance: newBalance,
@@ -62,13 +57,85 @@ export const WalletService = {
       return { success: true, newBalance };
     };
 
-    // अगर externalTx मौजूद है, तो सीधे लॉजिक चलाओ, वरना ट्रांजेक्शन रैपर में चलाओ
     return externalTx ? logic(externalTx) : await db.transaction(logic);
   },
+
   /**
-   * 🚚 डिलीवरी बॉय की कमाई क्रेडिट करें
+   * ⏳ PENDING MONEY: Temporary Hold Logic
+   * Use for: Seller Order Earnings (Holding period for returns)
    */
-  async creditDeliveryBoyEarnings(deliveryBoyId: number, userId: number, batchId: number, fee: number) {
+  async addPendingMoney(
+    userId: number, 
+    userType: 'seller', 
+    amount: number, 
+    purpose: string, 
+    referenceId: string, 
+    description: string,
+    externalTx?: any
+  ) {
+    const logic = async (tx: any) => {
+      let [wallet] = await tx.select().from(wallets).where(
+        and(eq(wallets.userId, userId), eq(wallets.userType, userType))
+      );
+
+      if (!wallet) {
+        [wallet] = await tx.insert(wallets).values({ 
+          userId, 
+          userType, 
+          balance: 0, 
+          pendingAmount: 0 
+        }).returning();
+      }
+
+      // Main Balance ko nahi, Pending Amount ko badhayein
+      const newPending = (Number(wallet.pendingAmount) || 0) + amount;
+
+      await tx.update(wallets)
+        .set({ 
+          pendingAmount: newPending,
+          updatedAt: new Date()
+        })
+        .where(eq(wallets.id, wallet.id));
+
+      // Transaction Record (Status: Pending)
+      await tx.insert(walletTransactions).values({
+        walletId: wallet.id,
+        amount,
+        type: 'credit',
+        purpose,
+        referenceId,
+        closingBalance: Number(wallet.balance), // Balance wahi rahega
+        description: description + " (Pending Verification)",
+        status: 'pending' 
+      });
+
+      return { success: true, pendingAmount: newPending };
+    };
+
+    return externalTx ? logic(externalTx) : await db.transaction(logic);
+  },
+
+  /**
+   * 🏪 SELLER EARNINGS: Commission kaat kar pending mein dalna
+   */
+  async creditSellerEarnings(userId: number, orderId: number, totalAmount: number, commissionRate: number) {
+    const commission = (totalAmount * commissionRate) / 100;
+    const finalEarnings = totalAmount - commission;
+
+    return await this.addPendingMoney(
+      userId, 
+      'seller', 
+      finalEarnings, 
+      'order_earning', 
+      `order_${orderId}`, 
+      `Earnings for Order #${orderId} (${commissionRate}% commission deducted)`
+    );
+  },
+
+  /**
+   * 🚚 DELIVERY BOY EARNINGS: Direct credit
+   */
+  async creditDeliveryBoyEarnings(userId: number, batchId: number, fee: number) {
     return await this.addMoney(
       userId, 
       'delivery-boy', 
@@ -76,23 +143,6 @@ export const WalletService = {
       'delivery_fee', 
       `batch_${batchId}`, 
       `Earnings for delivery batch #${batchId}`
-    );
-  },
-
-  /**
-   * 🏪 सेलर की कमाई क्रेडिट करें (कमीशन काटकर)
-   */
-  async creditSellerEarnings(sellerId: number, userId: number, orderId: number, totalAmount: number, commissionRate: number) {
-    const commission = (totalAmount * commissionRate) / 100;
-    const finalEarnings = totalAmount - commission;
-
-    return await this.addMoney(
-      userId, 
-      'seller', 
-      finalEarnings, 
-      'order_earning', 
-      `order_${orderId}`, 
-      `Earnings for Order #${orderId} (Commission ${commissionRate}% deducted)`
     );
   }
 };
