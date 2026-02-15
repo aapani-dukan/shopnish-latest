@@ -30,24 +30,27 @@ router.get('/my-wallet', requireAuth, async (req: any, res: Response) => {
     }
 
     // 2. पिछली 10 ट्रांजैक्शन निकालें (Latest first)
+    // 2. ट्रांजैक्शन हिस्ट्री निकालें
     const history = await db.select().from(walletTransactions)
       .where(eq(walletTransactions.walletId, wallet.id))
       .orderBy(desc(walletTransactions.createdAt))
-      .limit(10);
+      .limit(15); // थोडा ज्यादा डेटा ताकि स्क्रीन भरी दिखे
 
-    // 3. रिस्पॉन्स भेजें
+    // 3. रिस्पॉन्स भेजें (Frontend के लिए एकदम रेडी JSON)
     res.json({
       balance: Number(wallet.balance),
+      pendingAmount: Number(wallet.pendingAmount || 0), // 🔥 ये अब फ्रंटेंड में यूज़ होगा
       currency: "INR",
       lastUpdated: wallet.updatedAt,
       transactions: history.map(t => ({
         id: t.id,
         amount: Number(t.amount),
-        type: t.type, // 'credit' or 'debit'
-        purpose: t.purpose, // 'order_earning', 'delivery_fee', etc.
+        type: t.type, 
+        purpose: t.purpose,
         description: t.description,
         status: t.status,
-        date: t.createdAt
+        date: t.createdAt,
+        closingBalance: Number(t.closingBalance) // ऑडिट के लिए
       }))
     });
 
@@ -104,39 +107,5 @@ router.post('/admin/settle-cash', requireAuth, async (req: any, res: Response) =
     res.status(500).json({ error: 'Settlement failed' });
   }
 });
-// GET: /api/wallet/my-wallet
-// यह रूट सेलर और डिलीवरी बॉय दोनों के लिए काम करेगा
-router.get('/my-wallet', requireAuth, async (req: any, res: any) => {
-  const userId = req.user.id;
-  const userType = req.user.role; // 'seller' या 'delivery-boy'
 
-  try {
-    // 1. वॉलेट बैलेंस निकालें
-    const [userWallet] = await db.select()
-      .from(wallets)
-      .where(
-        and(eq(wallets.userId, userId), eq(wallets.userType, userType))
-      );
-
-    if (!userWallet) {
-      return res.json({ balance: 0, transactions: [] });
-    }
-
-    // 2. ताज़ा 10 ट्रांजैक्शन निकालें
-    const history = await db.select()
-      .from(walletTransactions)
-      .where(eq(walletTransactions.walletId, userWallet.id))
-      .orderBy(desc(walletTransactions.createdAt))
-      .limit(10);
-
-    res.json({
-      balance: userWallet.balance,
-      transactions: history
-    });
-
-  } catch (error) {
-    console.error("Wallet Fetch Error:", error);
-    res.status(500).json({ error: 'Failed to fetch wallet data' });
-  }
-});
 export default router;
