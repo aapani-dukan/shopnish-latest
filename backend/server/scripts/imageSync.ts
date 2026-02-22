@@ -66,7 +66,7 @@ export const syncMasterTableOnly = async () => {
       like(masterProducts.image, `%freeiconspng%`),
       like(masterProducts.image, `%no-image%`)
     ))
-    .limit(10); 
+    .limit(20); 
 
   console.log(`📦 Found ${items.length} Master items to search on Google.`);
 
