@@ -12,7 +12,8 @@ cloudinary.config({
   api_secret: 'GX3ZZi6a1dW25NkJSmQ6667OZrU'
 });
 
-const DUMMY_BASE = 'https://shopnish.com/placeholder.png';
+// ✅ Purana base hata kar hum broad keywords use karenge
+const DUMMY_KEYWORD = 'placehold'; 
 
 async function getGoogleImages(query: string) {
   try {
@@ -52,15 +53,24 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
 export const syncProductImages = async () => {
   console.log("🚀 Shopnish Master-Level Sync Started...");
 
-  // --- STEP 1: Master Table Update ---
+  // --- STEP 1: Master Table Fix ---
+  // ✅ Broadened query to catch placehold.co, freeiconspng, etc.
   const pendingMasterItems = await db.select().from(masterProducts)
-    .where(like(masterProducts.image, `%${DUMMY_BASE}%`))
-    .limit(15); 
+    .where(or(
+      like(masterProducts.image, `%${DUMMY_KEYWORD}%`),
+      like(masterProducts.image, `%placeholder%`),
+      like(masterProducts.image, `%freeiconspng%`)
+    ))
+    .limit(10); 
+
+  console.log(`📦 Found ${pendingMasterItems.length} Master items to update.`);
 
   for (const masterProd of pendingMasterItems) {
     let finalUrls: string[] = [];
     try {
+      console.log(`🔎 Scraping Master: ${masterProd.name}`);
       const offRes = await axios.get(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(masterProd.name)}&search_simple=1&action=process&json=1`);
+      
       if (offRes.data.products?.length > 0) {
         finalUrls = [offRes.data.products[0].image_url].filter(Boolean);
       }
@@ -73,12 +83,10 @@ export const syncProductImages = async () => {
         const uploadedUrl = await processAndUpload(finalUrls[0], masterProd.name, 'master');
         
         if (uploadedUrl) {
-          // ✅ FIX: 'updatedAt' hata diya kyunki schema mein nahi hai
           await db.update(masterProducts)
             .set({ image: uploadedUrl }) 
             .where(eq(masterProducts.id, masterProd.id));
 
-          // ✅ Sellers ki table sync karein (Yahan 'updatedAt' hai toh rehne diya)
           await db.update(products)
             .set({ image: uploadedUrl, updatedAt: new Date() })
             .where(eq(products.masterProductId, masterProd.id));
@@ -87,16 +95,20 @@ export const syncProductImages = async () => {
         }
       }
     } catch (err) { console.error(`❌ Error with ${masterProd.name}`); }
-    await new Promise(res => setTimeout(res, 2000));
+    await new Promise(res => setTimeout(res, 3000)); // Google block na kare isliye 3s gap
   }
 
-  // --- STEP 2: Manual Products Fix (Dal Makhani/Camera Fix) ---
+  // --- STEP 2: Manual Products Fix ---
   const pendingManualProducts = await db.select().from(products)
     .where(or(
-        like(products.image, `%${DUMMY_BASE}%`),
-        like(products.image, `%freeiconspng%`) 
+        like(products.image, `%${DUMMY_KEYWORD}%`),
+        like(products.image, `%placeholder%`),
+        like(products.image, `%freeiconspng%`),
+        like(products.image, `%no-image%`)
     ))
     .limit(10);
+
+  console.log(`📦 Found ${pendingManualProducts.length} Manual items to update.`);
 
   for (const prod of pendingManualProducts) {
     if (prod.masterProductId) continue; 
@@ -113,5 +125,5 @@ export const syncProductImages = async () => {
     }
   }
 
-  console.log("🎯 Sync Process Finished!");
+  console.log("🎯 All Sync Process Finished!");
 };
