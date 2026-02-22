@@ -161,15 +161,15 @@ adminProductsRouter.post('/sync-master', authorize(['admin']), async (req: any, 
 adminProductsRouter.post('/sync-manual', authorize(['admin']), async (req: any, res: Response) => {
   try {
     syncManualProductsOnly()
-      .then(() => console.log("✅ Manual Sync Background Complete"))
-      .catch((err) => console.error("❌ Manual Sync Error:", err));
+      .then(() => console.log("✅ seller product Sync Background Complete"))
+      .catch((err) => console.error("❌ seller product Sync Error:", err));
 
     return res.json({ 
       success: true, 
-      message: "Manual products syncing background mein shuru ho gayi hai." 
+      message: "Seller products syncing background mein shuru ho gayi hai." 
     });
   } catch (err) {
-    return res.status(500).json({ error: "Manual sync shuru karne mein vifal." });
+    return res.status(500).json({ error: "Seller product sync shuru karne mein vifal." });
   }
 });
 

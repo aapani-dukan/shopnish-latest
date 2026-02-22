@@ -1,6 +1,6 @@
 import { db } from '../db';
 import { products, masterProducts } from '../../shared/backend/schema'; 
-import { eq, like, or, and, isNull } from 'drizzle-orm';
+import { eq, like, or, and, isNull,isNotNull } from 'drizzle-orm';
 import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
@@ -56,95 +56,92 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
   } catch (error) { return null; }
 }
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
-// Isse Master Table update hogi + Product Table ki main image sync hogi
+// --- 1. MASTER SYNC (Ab ye sirf Master Table chamkayega) ---
 export const syncMasterTableOnly = async () => {
-  console.log("🚀 Starting MASTER ONLY Sync...");
+  console.log("🚀 Deep Syncing Master Catalog...");
   const items = await db.select().from(masterProducts)
     .where(or(
-      like(masterProducts.image, `%${DUMMY_KEYWORD}%`),
+      like(masterProducts.image, `%placehold%`),
       like(masterProducts.image, `%placeholder%`),
-      like(masterProducts.image, `%freeiconspng%`)
+      like(masterProducts.image, `%freeiconspng%`),
+      like(masterProducts.image, `%no-image%`)
     ))
-    .limit(10);
+    .limit(10); 
+
+  console.log(`📦 Found ${items.length} Master items to search on Google.`);
 
   for (const item of items) {
-    console.log(`🔎 Scraping Master: ${item.name}`);
-    const urls = await getGoogleImages(item.name);
-    if (urls.length > 0) {
-      const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
-      if (cloudinaryUrl) {
-        await db.update(masterProducts).set({ image: cloudinaryUrl }).where(eq(masterProducts.id, item.id));
-        await db.update(products).set({ image: cloudinaryUrl }).where(eq(products.masterProductId, item.id));
-        console.log(`✅ Master Updated: ${item.name}`);
+    try {
+      console.log(`🔎 Scraping HD Image for Master: ${item.name}`);
+      const urls = await getGoogleImages(item.name);
+      
+      if (urls.length > 0) {
+        // SafeName fix ke sath upload
+        const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
+        if (cloudinaryUrl) {
+          await db.update(masterProducts)
+            .set({ image: cloudinaryUrl })
+            .where(eq(masterProducts.id, item.id));
+          console.log(`✅ Master Table Updated: ${item.name}`);
+        }
       }
+    } catch (err) {
+      console.error(`❌ Error with ${item.name}`);
     }
-    await new Promise(r => setTimeout(r, 2000));
+    // 4 second gap taaki Google block na kare
+    await new Promise(r => setTimeout(r, 4000));
   }
+  console.log("🎯 Master Sync Batch Finished!");
 };
 
-// --- BUTTON 2: MANUAL PRODUCT SYNC ---
-// Isse sirf wo products sync honge jo Master Table mein NAHI hain (No Master ID)
+// --- 2. MANUAL SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
 export const syncManualProductsOnly = async () => {
-  console.log("🚀 Starting MANUAL ONLY Sync...");
+  console.log("🚀 Fast Transfer Started: Copying Master links to Products...");
   
-  const items = await db.select().from(products)
+  const dummyProducts = await db.select().from(products)
     .where(and(
-      // 🚩 Hum check karenge ki Master ID null ho AUR image dummy ho
-      isNull(products.masterProductId), 
+      isNotNull(products.masterProductId),
       or(
-        like(products.image, `%${DUMMY_KEYWORD}%`),
-        like(products.image, `%freeiconspng%`),
-        like(products.image, `%no-image%`),
         like(products.image, `%placehold%`),
-        like(products.image, `%placeholder%`)
+        like(products.image, `%no-image%`),
+        like(products.image, `%freeiconspng%`),
+        eq(products.image, ''),
+        isNull(products.image)
       )
     ))
-    .limit(10); // 🚩 Load kam karne ke liye 5 hi rakhein
+    .limit(100); // Scraping nahi hai, isliye limit 100 rakhi hai
 
-  console.log(`📦 Database found ${items.length} manual items.`);
+  console.log(`📦 Found ${dummyProducts.length} dummy products to fix via Master Table.`);
 
-  for (const item of items) {
-    console.log(`👉 Now processing: ${item.name} (ID: ${item.id})`);
+  let updatedCount = 0;
 
-    try {
-      // 1. Image Search
-      const sourceUrls = await getGoogleImages(item.name);
-      console.log(`🔎 Google found ${sourceUrls.length} images for ${item.name}`);
+  for (const prod of dummyProducts) {
+    // Master table se is product ki photo check karo
+    const [masterData] = await db.select({ image: masterProducts.image })
+      .from(masterProducts)
+      .where(eq(masterProducts.id, prod.masterProductId!));
 
-      if (sourceUrls.length === 0) {
-        console.log(`⚠️ No images found for ${item.name}, skipping...`);
-        continue;
-      }
-
-      // 2. Upload Process
-      console.log(`☁️ Uploading to Cloudinary...`);
-      const cloudinaryUrl = await processAndUpload(sourceUrls[0], item.name, 'manual_main');
-
-      if (cloudinaryUrl) {
-        // 3. Database Update
-        await db.update(products)
-          .set({ 
-            image: cloudinaryUrl, 
-            updatedAt: new Date() 
-          })
-          .where(eq(products.id, item.id));
-        
-        console.log(`✅ SUCCESSFULLY UPDATED: ${item.name}`);
-      } else {
-        console.log(`❌ Cloudinary upload failed for ${item.name}`);
-      }
-
-    } catch (err: any) {
-      console.error(`❌ Error in loop for ${item.name}:`, err.message);
+    // Agar Master table mein asli photo mil gayi (dummy nahi hai), toh copy karo
+    if (masterData?.image && 
+        !masterData.image.includes('placehold') && 
+        !masterData.image.includes('no-image') &&
+        !masterData.image.includes('freeiconspng')) {
+      
+      await db.update(products)
+        .set({ 
+          image: masterData.image, 
+          updatedAt: new Date() 
+        })
+        .where(eq(products.id, prod.id));
+      
+      updatedCount++;
+      console.log(`⚡ Fast Fixed: ${prod.name}`);
     }
-
-    // 🚩 5 second ka gap taaki Render crash na ho
-    console.log("⏳ Waiting 5 seconds for next item...");
-    await new Promise(r => setTimeout(r, 5000));
   }
-  
-  console.log("🎯 ALL MANUAL ITEMS PROCESSED!");
+  console.log(`🎯 Fast Transfer Complete! Total ${updatedCount} products updated.`);
 };
+
+
 
 // --- BUTTON 3: GALLERY SYNC ---
 // Isse keval Product Table ka 'images' column update hoga (Extra photos)

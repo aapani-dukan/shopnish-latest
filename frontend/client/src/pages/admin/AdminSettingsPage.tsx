@@ -275,16 +275,16 @@ export default function AdminSettingsPage() {
         </Button>
       </div>
 
-      {/* 2. MANUAL SYNC */}
+      {/* 2. SELLER PRODUCT SYNC */}
       <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm">
-        <h5 className="text-xs font-bold text-emerald-700 flex items-center gap-1"><PackageSearch className="w-3 h-3" /> 2. MANUAL SYNC</h5>
-        <p className="text-[10px] text-gray-500">लोकल प्रोडक्ट्स (जैसे Dal Makhani) को अपडेट करें।</p>
+        <h5 className="text-xs font-bold text-emerald-700 flex items-center gap-1"><PackageSearch className="w-3 h-3" /> 2. SELLER PRODUCTS SYNC</h5>
+        <p className="text-[10px] text-gray-500">सेलर्स के प्रोडक्ट्स  को अपडेट करें।</p>
         <Button 
           disabled={syncActions.manual.isPending} 
-          onClick={() => confirm("Manual Sync शुरू करें?") && syncActions.manual.mutate()} 
+          onClick={() => confirm("Seller Products Sync शुरू करें?") && syncActions.manual.mutate()} 
           className="bg-emerald-600 hover:bg-emerald-700"
         >
-          {syncActions.manual.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <><Image className="w-4 h-4 mr-2"/> Sync Manual</>}
+          {syncActions.manual.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <><Image className="w-4 h-4 mr-2"/> Sync Seller Products</>}
         </Button>
       </div>
 
