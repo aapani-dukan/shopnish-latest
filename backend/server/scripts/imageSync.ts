@@ -12,7 +12,6 @@ cloudinary.config({
   api_secret: 'GX3ZZi6a1dW25NkJSmQ6667OZrU'
 });
 
-// ✅ Purana base hata kar hum broad keywords use karenge
 const DUMMY_KEYWORD = 'placehold'; 
 
 async function getGoogleImages(query: string) {
@@ -51,10 +50,9 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
 }
 
 export const syncProductImages = async () => {
-  console.log("🚀 Shopnish Master-Level Sync Started...");
+  console.log("🚀 Shopnish High-Class Sync Started...");
 
-  // --- STEP 1: Master Table Fix ---
-  // ✅ Broadened query to catch placehold.co, freeiconspng, etc.
+  // --- STEP 1: Master Table & Product Gallery Sync ---
   const pendingMasterItems = await db.select().from(masterProducts)
     .where(or(
       like(masterProducts.image, `%${DUMMY_KEYWORD}%`),
@@ -63,67 +61,74 @@ export const syncProductImages = async () => {
     ))
     .limit(10); 
 
-  console.log(`📦 Found ${pendingMasterItems.length} Master items to update.`);
+  console.log(`📦 Found ${pendingMasterItems.length} Master items.`);
 
   for (const masterProd of pendingMasterItems) {
-    let finalUrls: string[] = [];
     try {
-      console.log(`🔎 Scraping Master: ${masterProd.name}`);
-      const offRes = await axios.get(`https://world.openfoodfacts.org/cgi/search.pl?search_terms=${encodeURIComponent(masterProd.name)}&search_simple=1&action=process&json=1`);
-      
-      if (offRes.data.products?.length > 0) {
-        finalUrls = [offRes.data.products[0].image_url].filter(Boolean);
-      }
+      console.log(`🔎 Processing: ${masterProd.name}`);
+      let sourceUrls = await getGoogleImages(masterProd.name);
 
-      if (finalUrls.length === 0) {
-        finalUrls = await getGoogleImages(masterProd.name);
-      }
-
-      if (finalUrls.length > 0) {
-        const uploadedUrl = await processAndUpload(finalUrls[0], masterProd.name, 'master');
+      if (sourceUrls.length > 0) {
+        const uploadedGallery: string[] = [];
         
-        if (uploadedUrl) {
+        // Top 3 photos ko Cloudinary pe bhejo Gallery ke liye
+        for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
+          const url = await processAndUpload(sourceUrls[i], masterProd.name, i === 0 ? 'main' : `gallery_${i}`);
+          if (url) uploadedGallery.push(url);
+        }
+
+        if (uploadedGallery.length > 0) {
+          // 1. Master Table: Sirf pehli photo (Kyunki isme gallery column nahi hai)
           await db.update(masterProducts)
-            .set({ image: uploadedUrl }) 
+            .set({ image: uploadedGallery[0] }) 
             .where(eq(masterProducts.id, masterProd.id));
 
+          // 2. Product Table: Main Image + Images Gallery dono!
           await db.update(products)
-            .set({ image: uploadedUrl, updatedAt: new Date() })
+            .set({ 
+              image: uploadedGallery[0], 
+              images: uploadedGallery, // ✅ Yahan extra images save hongi
+              updatedAt: new Date() 
+            })
             .where(eq(products.masterProductId, masterProd.id));
 
-          console.log(`✅ Master Sync OK: ${masterProd.name}`);
+          console.log(`✅ Fully Synced (Gallery Included): ${masterProd.name}`);
         }
       }
     } catch (err) { console.error(`❌ Error with ${masterProd.name}`); }
-    await new Promise(res => setTimeout(res, 3000)); // Google block na kare isliye 3s gap
+    await new Promise(res => setTimeout(res, 3000));
   }
 
-  // --- STEP 2: Manual Products Fix ---
-  const pendingManualProducts = await db.select().from(products)
+  // --- STEP 2: Manual Items Fix (No Master) ---
+  const pendingManual = await db.select().from(products)
     .where(or(
         like(products.image, `%${DUMMY_KEYWORD}%`),
-        like(products.image, `%placeholder%`),
-        like(products.image, `%freeiconspng%`),
-        like(products.image, `%no-image%`)
+        like(products.image, `%freeiconspng%`)
     ))
     .limit(10);
 
-  console.log(`📦 Found ${pendingManualProducts.length} Manual items to update.`);
-
-  for (const prod of pendingManualProducts) {
+  for (const prod of pendingManual) {
     if (prod.masterProductId) continue; 
 
-    let finalUrls = await getGoogleImages(prod.name);
-    if (finalUrls.length > 0) {
-      const uploadedUrl = await processAndUpload(finalUrls[0], prod.name, 'manual');
-      if (uploadedUrl) {
+    let sourceUrls = await getGoogleImages(prod.name);
+    if (sourceUrls.length > 0) {
+      const uploadedGallery: string[] = [];
+      for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
+        const url = await processAndUpload(sourceUrls[i], prod.name, `manual_${i}`);
+        if (url) uploadedGallery.push(url);
+      }
+      
+      if (uploadedGallery.length > 0) {
         await db.update(products)
-          .set({ image: uploadedUrl, updatedAt: new Date() })
+          .set({ 
+            image: uploadedGallery[0], 
+            images: uploadedGallery, // ✅ Gallery updated
+            updatedAt: new Date() 
+          })
           .where(eq(products.id, prod.id));
-        console.log(`✅ Manual Fix OK: ${prod.name}`);
+        console.log(`✅ Manual Fix with Gallery: ${prod.name}`);
       }
     }
   }
-
   console.log("🎯 All Sync Process Finished!");
 };
