@@ -15,7 +15,9 @@ import { z } from 'zod';
 import multer from 'multer';
 import { uploadImage } from '../../cloudStorage';
 import { v4 as uuidv4 } from "uuid";
-import { syncProductImages } from '../../scripts/imageSync';
+import {syncMasterTableOnly, 
+  syncManualProductsOnly, 
+  syncProductGalleriesOnly } from '../../scripts/imageSync';
 // ❗ memoryStorage because file.buffer is required
 const upload = multer({ storage: multer.memoryStorage() });
 
@@ -139,22 +141,51 @@ adminProductsRouter.get(
     }
   }
 );
-
-adminProductsRouter.post('/sync-images', authorize(['admin']), async (req: any, res: Response) => {
+// 1. Master Product Sync Route (Master Table + Product Table Main Image)
+adminProductsRouter.post('/sync-master', authorize(['admin']), async (req: any, res: Response) => {
   try {
-    // ⚠️ हम इसे await नहीं करेंगे ताकि API तुरंत रिस्पॉन्स दे दे
-    // और स्क्रिप्ट बैकग्राउंड में अपना काम करती रहे।
-    syncProductImages()
-      .then(() => console.log("✅ Background Sync Complete"))
-      .catch((err) => console.error("❌ Background Sync Error:", err));
+    syncMasterTableOnly()
+      .then(() => console.log("✅ Master Sync Background Complete"))
+      .catch((err) => console.error("❌ Master Sync Error:", err));
 
     return res.json({ 
       success: true, 
-      message: "इमेज सिंकिंग बैकग्राउंड में शुरू हो गई है। आप अपना काम जारी रख सकते हैं।" 
+      message: "Master products syncing background mein shuru ho gayi hai." 
     });
   } catch (err) {
-    console.error("❌ Error starting image sync:", err);
-    return res.status(500).json({ error: "सिंकिंग शुरू करने में विफल।" });
+    return res.status(500).json({ error: "Master sync shuru karne mein vifal." });
+  }
+});
+
+// 2. Manual Product Sync Route (Non-Master Items like Dal Makhani)
+adminProductsRouter.post('/sync-manual', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    syncManualProductsOnly()
+      .then(() => console.log("✅ Manual Sync Background Complete"))
+      .catch((err) => console.error("❌ Manual Sync Error:", err));
+
+    return res.json({ 
+      success: true, 
+      message: "Manual products syncing background mein shuru ho gayi hai." 
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Manual sync shuru karne mein vifal." });
+  }
+});
+
+// 3. Gallery Sync Route (Keval images column bharne ke liye)
+adminProductsRouter.post('/sync-gallery', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    syncProductGalleriesOnly()
+      .then(() => console.log("✅ Gallery Sync Background Complete"))
+      .catch((err) => console.error("❌ Gallery Sync Error:", err));
+
+    return res.json({ 
+      success: true, 
+      message: "Galleries sync background mein shuru ho gayi hai." 
+    });
+  } catch (err) {
+    return res.status(500).json({ error: "Gallery sync shuru karne mein vifal." });
   }
 });
 // ----------------------------------------------------------------------

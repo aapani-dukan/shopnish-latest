@@ -10,7 +10,7 @@ import { Button } from '../../components/ui/button';
 import { Input } from '../../components/ui/input';
 import { Label } from '../../components/ui/label';
 import { Badge } from '../../components/ui/badge';
-import { Truck, Globe, Percent, Plus, Loader2, AlertCircle } from 'lucide-react'; // Added icons
+import { Truck, Globe, Percent, Plus, Loader2, AlertCircle,Layers,PackageSearch,ImageIcon } from 'lucide-react'; // Added icons
 import { useNavigate } from 'react-router-dom';
 import { Alert, AlertDescription, AlertTitle } from "../../components/ui/alert"; // Assuming you have this component
 import { Image, Wand2 } from 'lucide-react';
@@ -60,16 +60,25 @@ const usePromocodes = () => useQuery<Promocode[], Error>({
   queryKey: ['promocodes'],
   queryFn: () => apiRequest('GET', '/api/admin/promocodes'),
 });
-const useSyncProductImages = () => {
-  return useMutation({
-    mutationFn: () => apiRequest('POST', '/api/admin/products/sync-images'), // API पाथ चेक कर लेना
-    onSuccess: (data: any) => {
-      alert(data.message || 'Image sync started in background!');
-    },
-    onError: (error: Error) => {
-      alert(`Error: ${error.message}`);
-    }
-  });
+// ✅ Purane useSyncProductImages ki jagah ye 3 mutations daalein
+const useSyncActions = () => {
+  return {
+    master: useMutation({
+      mutationFn: () => apiRequest('POST', '/api/admin/products/sync-master'),
+      onSuccess: (data: any) => alert(data.message || 'Master sync started!'),
+      onError: (error: Error) => alert(`Master Sync Error: ${error.message}`)
+    }),
+    manual: useMutation({
+      mutationFn: () => apiRequest('POST', '/api/admin/products/sync-manual'),
+      onSuccess: (data: any) => alert(data.message || 'Manual sync started!'),
+      onError: (error: Error) => alert(`Manual Sync Error: ${error.message}`)
+    }),
+    gallery: useMutation({
+      mutationFn: () => apiRequest('POST', '/api/admin/products/sync-gallery'),
+      onSuccess: (data: any) => alert(data.message || 'Gallery sync started!'),
+      onError: (error: Error) => alert(`Gallery Sync Error: ${error.message}`)
+    })
+  };
 };
 // -------------------- Component --------------------
 
@@ -100,8 +109,7 @@ export default function AdminSettingsPage() {
   // State for Promo Code Modals (Future implementation)
   const [isAddPromoModalOpen, setIsAddPromoModalOpen] = useState(false);
   const [editingPromoId, setEditingPromoId] = useState<number | null>(null);
-const { mutate: syncImages, isPending: isSyncingImages } = useSyncProductImages();
-
+  const syncActions = useSyncActions();
   // --- Effects ---
   React.useEffect(() => {
     if (settings) {
@@ -240,44 +248,61 @@ const { mutate: syncImages, isPending: isSyncingImages } = useSyncProductImages(
         </CardContent>
       </Card>
 <Card className="border-orange-200 bg-orange-50/30">
-        <CardHeader>
-          <CardTitle className="flex items-center space-x-2 text-orange-700">
-            <Wand2 className="w-5 h-5" />
-            <span>Catalog & Maintenance Tools</span>
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-            <div className="space-y-1">
-              <h4 className="font-semibold text-gray-800">Smart Image Discovery</h4>
-              <p className="text-sm text-gray-600 max-w-md">
-                यह टूल आपके पूरे कैटलॉग को स्कैन करेगा और जहाँ 'Dummy' इमेजेस हैं, उन्हें इंटरनेट से असली HD इमेजेस से बदल देगा।
-              </p>
-              <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-100">
-                AI Powered Search
-              </Badge>
-            </div>
-            
-            <Button 
-              variant="default" 
-              className="bg-orange-600 hover:bg-orange-700 h-12 px-6"
-              onClick={() => {
-                if(confirm("क्या आप इमेज सिंकिंग शुरू करना चाहते हैं? इसमें कुछ मिनट लग सकते हैं।")) {
-                  syncImages();
-                }
-              }}
-              disabled={isSyncingImages}
-            >
-              {isSyncingImages ? (
-                <Loader2 className="mr-2 h-5 w-5 animate-spin" />
-              ) : (
-                <Image className="mr-2 h-5 w-5" />
-              )}
-              {isSyncingImages ? 'Syncing...' : 'Update All Dummy Images'}
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+  <CardHeader>
+    <CardTitle className="flex items-center space-x-2 text-orange-700">
+      <Wand2 className="w-5 h-5" />
+      <span>Smart Catalog Sync Control</span>
+    </CardTitle>
+  </CardHeader>
+  <CardContent className="space-y-6">
+    <div className="space-y-1 border-b border-orange-100 pb-4">
+      <h4 className="font-semibold text-gray-800">Smart Image Discovery Center</h4>
+      <p className="text-sm text-gray-600">Placeholder इमेजेस को असली HD फोटोज से बदलें।</p>
+      <Badge variant="outline" className="text-orange-600 border-orange-200 bg-orange-100">AI Powered Search</Badge>
+    </div>
+
+    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* 1. MASTER SYNC */}
+      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm">
+        <h5 className="text-xs font-bold text-indigo-700 flex items-center gap-1"><Layers className="w-3 h-3" /> 1. MASTER SYNC</h5>
+        <p className="text-[10px] text-gray-500">मेन कैटलॉग के ब्रांडेड प्रोडक्ट्स को अपडेट करें।</p>
+        <Button 
+          disabled={syncActions.master.isPending} 
+          onClick={() => confirm("Master Sync शुरू करें?") && syncActions.master.mutate()} 
+          className="bg-indigo-700 hover:bg-indigo-800"
+        >
+          {syncActions.master.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <><Image className="w-4 h-4 mr-2"/> Sync Master</>}
+        </Button>
+      </div>
+
+      {/* 2. MANUAL SYNC */}
+      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm">
+        <h5 className="text-xs font-bold text-emerald-700 flex items-center gap-1"><PackageSearch className="w-3 h-3" /> 2. MANUAL SYNC</h5>
+        <p className="text-[10px] text-gray-500">लोकल प्रोडक्ट्स (जैसे Dal Makhani) को अपडेट करें।</p>
+        <Button 
+          disabled={syncActions.manual.isPending} 
+          onClick={() => confirm("Manual Sync शुरू करें?") && syncActions.manual.mutate()} 
+          className="bg-emerald-600 hover:bg-emerald-700"
+        >
+          {syncActions.manual.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <><Image className="w-4 h-4 mr-2"/> Sync Manual</>}
+        </Button>
+      </div>
+
+      {/* 3. GALLERY SYNC */}
+      <div className="flex flex-col gap-3 p-4 border rounded-xl bg-white shadow-sm">
+        <h5 className="text-xs font-bold text-orange-700 flex items-center gap-1"><ImageIcon className="w-3 h-3" /> 3. GALLERY SYNC</h5>
+        <p className="text-[10px] text-gray-500">प्रोडक्ट्स के अंदर 2-3 एक्स्ट्रा HD फोटोज भरें।</p>
+        <Button 
+          disabled={syncActions.gallery.isPending} 
+          onClick={() => confirm("Gallery Sync शुरू करें?") && syncActions.gallery.mutate()} 
+          className="bg-orange-600 hover:bg-orange-700"
+        >
+          {syncActions.gallery.isPending ? <Loader2 className="animate-spin h-4 w-4" /> : <><Image className="w-4 h-4 mr-2"/> Sync Gallery</>}
+        </Button>
+      </div>
+    </div>
+  </CardContent>
+</Card>
       {/* ------------------- 2. PROMO CODE / DISCOUNT MANAGEMENT ------------------- */}
       <Card>
         <CardHeader>

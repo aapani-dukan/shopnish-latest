@@ -1,25 +1,25 @@
 import { db } from '../db';
 import { products, masterProducts } from '../../shared/backend/schema'; 
-import { eq, like, or } from 'drizzle-orm';
+import { eq, like, or, and, isNull } from 'drizzle-orm';
 import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import { GOOGLE_IMG_SCRAP } from 'google-img-scrap';
 
+// Cloudinary Configuration
 cloudinary.config({
   cloud_name: 'dcah0b2jy',
   api_key: '963456643785286',
   api_secret: 'GX3ZZi6a1dW25NkJSmQ6667OZrU'
 });
 
-const DUMMY_KEYWORD = 'placehold'; 
+const DUMMY_KEYWORD = 'placehold';
+
+// --- HELPER FUNCTIONS (RE-USABLE) ---
 
 async function getGoogleImages(query: string) {
   try {
-    const res = await GOOGLE_IMG_SCRAP({
-      search: query,
-      limit: 5,
-    });
+    const res = await GOOGLE_IMG_SCRAP({ search: query, limit: 5 });
     return res.result.map(img => img.url).filter(Boolean);
   } catch (err) {
     console.error(`❌ Google Scraping failed for: ${query}`);
@@ -49,86 +49,84 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
   } catch (error) { return null; }
 }
 
-export const syncProductImages = async () => {
-  console.log("🚀 Shopnish High-Class Sync Started...");
-
-  // --- STEP 1: Master Table & Product Gallery Sync ---
-  const pendingMasterItems = await db.select().from(masterProducts)
+// --- BUTTON 1: MASTER PRODUCT SYNC ---
+// Isse Master Table update hogi + Product Table ki main image sync hogi
+export const syncMasterTableOnly = async () => {
+  console.log("🚀 Starting MASTER ONLY Sync...");
+  const items = await db.select().from(masterProducts)
     .where(or(
       like(masterProducts.image, `%${DUMMY_KEYWORD}%`),
       like(masterProducts.image, `%placeholder%`),
       like(masterProducts.image, `%freeiconspng%`)
     ))
-    .limit(10); 
+    .limit(10);
 
-  console.log(`📦 Found ${pendingMasterItems.length} Master items.`);
-
-  for (const masterProd of pendingMasterItems) {
-    try {
-      console.log(`🔎 Processing: ${masterProd.name}`);
-      let sourceUrls = await getGoogleImages(masterProd.name);
-
-      if (sourceUrls.length > 0) {
-        const uploadedGallery: string[] = [];
-        
-        // Top 3 photos ko Cloudinary pe bhejo Gallery ke liye
-        for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
-          const url = await processAndUpload(sourceUrls[i], masterProd.name, i === 0 ? 'main' : `gallery_${i}`);
-          if (url) uploadedGallery.push(url);
-        }
-
-        if (uploadedGallery.length > 0) {
-          // 1. Master Table: Sirf pehli photo (Kyunki isme gallery column nahi hai)
-          await db.update(masterProducts)
-            .set({ image: uploadedGallery[0] }) 
-            .where(eq(masterProducts.id, masterProd.id));
-
-          // 2. Product Table: Main Image + Images Gallery dono!
-          await db.update(products)
-            .set({ 
-              image: uploadedGallery[0], 
-              images: uploadedGallery, // ✅ Yahan extra images save hongi
-              updatedAt: new Date() 
-            })
-            .where(eq(products.masterProductId, masterProd.id));
-
-          console.log(`✅ Fully Synced (Gallery Included): ${masterProd.name}`);
-        }
+  for (const item of items) {
+    console.log(`🔎 Scraping Master: ${item.name}`);
+    const urls = await getGoogleImages(item.name);
+    if (urls.length > 0) {
+      const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
+      if (cloudinaryUrl) {
+        await db.update(masterProducts).set({ image: cloudinaryUrl }).where(eq(masterProducts.id, item.id));
+        await db.update(products).set({ image: cloudinaryUrl }).where(eq(products.masterProductId, item.id));
+        console.log(`✅ Master Updated: ${item.name}`);
       }
-    } catch (err) { console.error(`❌ Error with ${masterProd.name}`); }
-    await new Promise(res => setTimeout(res, 3000));
+    }
+    await new Promise(r => setTimeout(r, 2000));
   }
+};
 
-  // --- STEP 2: Manual Items Fix (No Master) ---
-  const pendingManual = await db.select().from(products)
-    .where(or(
+// --- BUTTON 2: MANUAL PRODUCT SYNC ---
+// Isse sirf wo products sync honge jo Master Table mein NAHI hain (No Master ID)
+export const syncManualProductsOnly = async () => {
+  console.log("🚀 Starting MANUAL ONLY Sync...");
+  const items = await db.select().from(products)
+    .where(and(
+      isNull(products.masterProductId),
+      or(
         like(products.image, `%${DUMMY_KEYWORD}%`),
         like(products.image, `%freeiconspng%`)
+      )
     ))
     .limit(10);
 
-  for (const prod of pendingManual) {
-    if (prod.masterProductId) continue; 
-
-    let sourceUrls = await getGoogleImages(prod.name);
-    if (sourceUrls.length > 0) {
-      const uploadedGallery: string[] = [];
-      for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
-        const url = await processAndUpload(sourceUrls[i], prod.name, `manual_${i}`);
-        if (url) uploadedGallery.push(url);
-      }
-      
-      if (uploadedGallery.length > 0) {
-        await db.update(products)
-          .set({ 
-            image: uploadedGallery[0], 
-            images: uploadedGallery, // ✅ Gallery updated
-            updatedAt: new Date() 
-          })
-          .where(eq(products.id, prod.id));
-        console.log(`✅ Manual Fix with Gallery: ${prod.name}`);
+  for (const item of items) {
+    console.log(`🔎 Scraping Manual: ${item.name}`);
+    const urls = await getGoogleImages(item.name);
+    if (urls.length > 0) {
+      const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'manual');
+      if (cloudinaryUrl) {
+        await db.update(products).set({ image: cloudinaryUrl, updatedAt: new Date() }).where(eq(products.id, item.id));
+        console.log(`✅ Manual Updated: ${item.name}`);
       }
     }
+    await new Promise(r => setTimeout(r, 2000));
   }
-  console.log("🎯 All Sync Process Finished!");
+};
+
+// --- BUTTON 3: GALLERY SYNC ---
+// Isse keval Product Table ka 'images' column update hoga (Extra photos)
+export const syncProductGalleriesOnly = async () => {
+  console.log("🚀 Filling Product Galleries...");
+  // Wo products jinki gallery khali hai ya dummy hai
+  const items = await db.select().from(products)
+    .where(or(isNull(products.images), eq(products.images, [])))
+    .limit(10);
+
+  for (const item of items) {
+    console.log(`📸 Generating Gallery for: ${item.name}`);
+    const sourceUrls = await getGoogleImages(item.name);
+    if (sourceUrls.length > 0) {
+      const galleryUrls: string[] = [];
+      for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
+        const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
+        if (url) galleryUrls.push(url);
+      }
+      if (galleryUrls.length > 0) {
+        await db.update(products).set({ images: galleryUrls }).where(eq(products.id, item.id));
+        console.log(`✅ Gallery Fixed: ${item.name}`);
+      }
+    }
+    await new Promise(r => setTimeout(r, 2000));
+  }
 };
