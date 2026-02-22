@@ -36,11 +36,18 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
       .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
+    // 🚀 SPECIAL CHARACTERS FIX (Like '&', '%', etc.)
+    // Hum sirf letters, numbers aur underscore hi rehne denge
+    const safeName = productName
+      .replace(/[^\w\s]/gi, '') // Sabhi special characters hata do
+      .replace(/\s+/g, '_')     // Spaces ko underscore bana do
+      .toLowerCase();
+
     return new Promise<string>((resolve, reject) => {
       const uploadStream = cloudinary.uploader.upload_stream(
         { 
           folder: 'shopnish_products', 
-          public_id: `${productName.replace(/\s+/g, '_').toLowerCase()}_${suffix}_${Date.now()}` 
+          public_id: `${safeName}_${suffix}_${Date.now()}` 
         },
         (error, result) => { if (error) reject(error); else resolve(result?.secure_url || ""); }
       );
@@ -48,7 +55,6 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
     });
   } catch (error) { return null; }
 }
-
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
 // Isse Master Table update hogi + Product Table ki main image sync hogi
 export const syncMasterTableOnly = async () => {
@@ -80,28 +86,62 @@ export const syncMasterTableOnly = async () => {
 // Isse sirf wo products sync honge jo Master Table mein NAHI hain (No Master ID)
 export const syncManualProductsOnly = async () => {
   console.log("🚀 Starting MANUAL ONLY Sync...");
+  
   const items = await db.select().from(products)
     .where(and(
-      isNull(products.masterProductId),
+      // 🚩 Hum check karenge ki Master ID null ho AUR image dummy ho
+      isNull(products.masterProductId), 
       or(
         like(products.image, `%${DUMMY_KEYWORD}%`),
-        like(products.image, `%freeiconspng%`)
+        like(products.image, `%freeiconspng%`),
+        like(products.image, `%placeholder%`)
       )
     ))
-    .limit(10);
+    .limit(10); // 🚩 Load kam karne ke liye 5 hi rakhein
+
+  console.log(`📦 Database found ${items.length} manual items.`);
 
   for (const item of items) {
-    console.log(`🔎 Scraping Manual: ${item.name}`);
-    const urls = await getGoogleImages(item.name);
-    if (urls.length > 0) {
-      const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'manual');
-      if (cloudinaryUrl) {
-        await db.update(products).set({ image: cloudinaryUrl, updatedAt: new Date() }).where(eq(products.id, item.id));
-        console.log(`✅ Manual Updated: ${item.name}`);
+    console.log(`👉 Now processing: ${item.name} (ID: ${item.id})`);
+
+    try {
+      // 1. Image Search
+      const sourceUrls = await getGoogleImages(item.name);
+      console.log(`🔎 Google found ${sourceUrls.length} images for ${item.name}`);
+
+      if (sourceUrls.length === 0) {
+        console.log(`⚠️ No images found for ${item.name}, skipping...`);
+        continue;
       }
+
+      // 2. Upload Process
+      console.log(`☁️ Uploading to Cloudinary...`);
+      const cloudinaryUrl = await processAndUpload(sourceUrls[0], item.name, 'manual_main');
+
+      if (cloudinaryUrl) {
+        // 3. Database Update
+        await db.update(products)
+          .set({ 
+            image: cloudinaryUrl, 
+            updatedAt: new Date() 
+          })
+          .where(eq(products.id, item.id));
+        
+        console.log(`✅ SUCCESSFULLY UPDATED: ${item.name}`);
+      } else {
+        console.log(`❌ Cloudinary upload failed for ${item.name}`);
+      }
+
+    } catch (err: any) {
+      console.error(`❌ Error in loop for ${item.name}:`, err.message);
     }
-    await new Promise(r => setTimeout(r, 2000));
+
+    // 🚩 5 second ka gap taaki Render crash na ho
+    console.log("⏳ Waiting 5 seconds for next item...");
+    await new Promise(r => setTimeout(r, 5000));
   }
+  
+  console.log("🎯 ALL MANUAL ITEMS PROCESSED!");
 };
 
 // --- BUTTON 3: GALLERY SYNC ---
