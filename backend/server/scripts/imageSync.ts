@@ -94,6 +94,8 @@ export const syncManualProductsOnly = async () => {
       or(
         like(products.image, `%${DUMMY_KEYWORD}%`),
         like(products.image, `%freeiconspng%`),
+        like(products.image, `%no-image%`),
+        like(products.image, `%placehold%`),
         like(products.image, `%placeholder%`)
       )
     ))
