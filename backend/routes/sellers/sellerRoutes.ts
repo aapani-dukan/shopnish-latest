@@ -985,14 +985,22 @@ sellerRouter.post(
   }
 );
 // 📍 PATCH /api/sellers/toggle-status - स्टोर को ऑनलाइन/ऑफलाइन करें
+// 📍 PATCH /api/sellers/toggle-status
 sellerRouter.patch(
   '/toggle-status',
   requireSellerAuth,
   async (req: any, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
+      
+      const status = req.body.isOpen !== undefined ? req.body.isOpen : req.body.is_open;
+      const isSelfDelivery = req.body.isSelfDeliveryBySeller; // 🆕 Yeh line add karein
 
-      // 1. पहले टोकन वाले userId से सेलर प्रोफाइल ढूंढें
+      // Check karein ki dono mein se kam se kam ek cheez toh update ho rahi ho
+      if (status === undefined && isSelfDelivery === undefined) {
+        return res.status(400).json({ success: false, error: "No update data provided." });
+      }
+
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
@@ -1002,20 +1010,31 @@ sellerRouter.patch(
         return res.status(404).json({ success: false, error: "Seller profile not found." });
       }
 
-      // 2. अब 'stores' टेबल में इस सेलर का स्टोर अपडेट करें (isActive कॉलम)
-      // फ्रंटएंड से req.body.is_open आ रहा है, उसे isActive में सेट करें
-      await db.update(stores)
-        .set({ 
-          isActive: req.body.is_open, // 'stores' टेबल का सही कॉलम
-          updatedAt: new Date() 
-        })
-        .where(eq(stores.sellerId, sellerProfile.id));
+      // --- Sellers Table Update ---
+      const sellerUpdateData: any = { updatedAt: new Date() };
+      if (status !== undefined) sellerUpdateData.isOpen = status;
+      if (isSelfDelivery !== undefined) sellerUpdateData.isSelfDeliveryBySeller = isSelfDelivery; // 🆕 Yeh line add karein
+
+      await db.update(sellersPgTable)
+        .set(sellerUpdateData) // 🆕 UpdateData use karein
+        .where(eq(sellersPgTable.id, sellerProfile.id));
+
+      // --- Stores Table Update ---
+      if (status !== undefined) {
+        await db.update(stores)
+          .set({ isActive: status, updatedAt: new Date() })
+          .where(eq(stores.sellerId, sellerProfile.id));
+      }
 
       return res.status(200).json({ 
         success: true, 
-        message: req.body.is_open ? "Dukaan ab live hai! 🚀" : "Dukaan band kar di gayi hai.",
-        isActive: req.body.is_open 
+        message: "Status updated successfully",
+        data: { 
+          isOpen: status,
+          isSelfDeliveryBySeller: isSelfDelivery // 🆕 Response mein bhi bhej dein
+        } 
       });
+     
     } catch (error) {
       console.error("❌ Toggle Status Error:", error);
       next(error);
@@ -1047,16 +1066,17 @@ sellerRouter.get(
         .where(eq(stores.sellerId, seller.id));
 
       // 3. अभी के लिए डमी डेटा भेजें (बाद में इसे रियल ऑर्डर्स से बदलेंगे)
-      return res.status(200).json({
-        id: seller.id,
-        businessName: seller.businessName,
-        todaySales: 0,
-        pendingOrders: 0,
-        activeProducts: 0,
-        newReviews: 0,
-        isOpen: store?.isActive ?? false, // ✅ यही टॉगल की वैल्यू दिखाएगा
-        recentOrders: []
-      });
+     return res.status(200).json({
+  id: seller.id,
+  businessName: seller.businessName,
+  todaySales: 0,
+  pendingOrders: 0,
+  activeProducts: 0,
+  newReviews: 0,
+  // store?.isActive ki jagah seller.isOpen use karein (Consistency ke liye)
+  isOpen: seller.isOpen ?? false, 
+  recentOrders: []
+});
     } catch (error) {
       console.error("Dashboard Stats Error:", error);
       res.status(500).json({ message: "Internal Server Error" });

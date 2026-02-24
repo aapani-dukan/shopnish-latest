@@ -94,7 +94,7 @@ export const syncMasterTableOnly = async () => {
   console.log("🎯 Master Sync Batch Finished!");
 };
 
-// --- 2. MANUAL SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
+// --- 2. seller product SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
 export const syncManualProductsOnly = async () => {
   console.log("🚀 Fast Transfer Started: Copying Master links to Products...");
   

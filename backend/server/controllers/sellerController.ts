@@ -96,26 +96,7 @@ const salesResult = await db.select({
     });
 });
 
-// 2️⃣ Toggle Seller Status (Online/Offline) & Self Delivery
-export const toggleSellerStatus = asyncHandler(async (req: Request, res: Response) => {
-    const sellerId = (req as any).user?.sellerId;
-    const { isOpen, isSelfDeliveryBySeller } = req.body;
 
-    const updateData: any = { updatedAt: new Date() };
-    if (isOpen !== undefined) updateData.isOpen = isOpen;
-    if (isSelfDeliveryBySeller !== undefined) updateData.isSelfDeliveryBySeller = isSelfDeliveryBySeller;
-
-    const [updated] = await db.update(sellersPgTable)
-        .set(updateData)
-        .where(eq(sellersPgTable.id, sellerId))
-        .returning();
-
-    return res.status(200).json({ 
-        success: true, 
-        message: "Status updated successfully", 
-        data: updated 
-    });
-});
 
 // 3️⃣ Get Seller Profile
 export const getMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
