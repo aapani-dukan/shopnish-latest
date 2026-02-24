@@ -1065,16 +1065,16 @@ sellerRouter.get(
         .from(stores)
         .where(eq(stores.sellerId, seller.id));
 
-      // 3. अभी के लिए डमी डेटा भेजें (बाद में इसे रियल ऑर्डर्स से बदलेंगे)
-     return res.status(200).json({
+    return res.status(200).json({
   id: seller.id,
   businessName: seller.businessName,
   todaySales: 0,
   pendingOrders: 0,
   activeProducts: 0,
   newReviews: 0,
-  // store?.isActive ki jagah seller.isOpen use karein (Consistency ke liye)
   isOpen: seller.isOpen ?? false, 
+  // 🆕 Yeh line zaroor add karein:
+  isSelfDeliveryBySeller: seller.isSelfDeliveryBySeller ?? false, 
   recentOrders: []
 });
     } catch (error) {
