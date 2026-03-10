@@ -1083,6 +1083,35 @@ sellerRouter.get(
     }
   }
 );
+// 📍 Naya Route: PATCH /api/sellers/profile/me
+// Isme ID ki zaroorat nahi hai, backend khud user dhoond lega
+sellerRouter.patch(
+  '/profile/me', 
+  requireSellerAuth, 
+  async (req: any, res: Response, next: NextFunction) => {
+    try {
+      const userId = req.user?.id; // Token se milne wali User ID (35)
+      
+      // Database se asli Seller Profile nikaalo
+      const [sellerProfile] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.userId, userId));
+
+      if (!sellerProfile) {
+        return res.status(404).json({ error: "Seller profile not found." });
+      }
+
+      // 🚩 Hum ID ko backend mein hi inject kar rahe hain
+      req.params.id = String(sellerProfile.id); 
+      
+      // Ab seedha wahi update logic call karein
+      return updateMySellerProfile(req, res, next);
+    } catch (error) {
+      next(error);
+    }
+  }
+);
 // 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
 sellerRouter.patch(
   '/:id',
