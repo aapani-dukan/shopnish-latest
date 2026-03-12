@@ -17,12 +17,14 @@ const sellerUpdateSchema = z.object({
   businessAddress: z.string().min(10).max(200).optional(),
   city: z.string().min(2).max(50).optional(),
   pincode: z.string().regex(/^\d{6}$/, "Invalid Pincode").optional(),
+  deliveryPincodes: z.array(z.string()).optional(),
   businessPhone: z.string().regex(/^\d{10}$/, "Invalid Phone Number").optional(),
   isSelfDeliveryBySeller: z.boolean().optional(), // 🔥 New: Self Delivery Toggle
   isOpen: z.boolean().optional(), // 🔥 New: Store Status Toggle
   gstNumber: z.string().max(15).optional().nullable(),
   bankAccountNumber: z.string().regex(/^\d{9,18}$/).optional().nullable(),
   ifscCode: z.string().regex(/^[a-zA-Z]{4}0[a-zA-Z0-9]{6}$/).optional().nullable(),
+  isDistanceBasedDelivery: z.boolean().optional(),
   deliveryRadius: z.number().int().min(1).max(100).optional().nullable(),
   latitude: z.union([z.number(), z.string()]).optional().nullable(),
   longitude: z.union([z.number(), z.string()]).optional().nullable(),
