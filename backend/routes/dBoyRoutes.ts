@@ -17,7 +17,7 @@ import {
   userRoleEnum,
   adminSettings,
 } from '../shared/backend/schema';
-import { eq, and, not, desc, asc, inArray, isNull } from 'drizzle-orm';
+import { eq, and, or, not, desc, asc, inArray, isNull } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
@@ -52,9 +52,12 @@ router.post('/register', async (req: Request, res: Response) => {
     const registrationResult = await db.transaction(async (tx) => {
       
       // A. चेक करें कि यूजर पहले से है या नहीं
-      let user = await tx.query.users.findFirst({ 
-        where: eq(users.email, email) 
-      });
+     let user = await tx.query.users.findFirst({ 
+  where: or(
+    eq(users.email, email), 
+    eq(users.firebaseUid, firebaseUid)
+  ) 
+}); 
 
       if (user) {
         // चेक करें कहीं यह पहले से Delivery Boy तो नहीं?
