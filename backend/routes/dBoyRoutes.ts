@@ -51,42 +51,42 @@ router.post('/register', async (req: Request, res: Response) => {
     // 2. Transaction शुरू करें (Data Safety के लिए)
    const registrationResult = await db.transaction(async (tx) => {
   
-  // A. User check/upsert (Email YA FirebaseUid dono se check karein)
+  // 1. Sabse pehle dhoondo: Kya ye banda kisi bhi tarah se system mein hai?
   let user = await tx.query.users.findFirst({ 
-    where: or(eq(users.email, email), eq(users.firebaseUid, firebaseUid)) 
+    where: or(
+      eq(users.email, email),      // Web/Gmail se login
+      eq(users.phone, phone),      // Mobile/OTP se login
+      eq(users.firebaseUid, firebaseUid) // Kisi bhi session se login
+    ) 
   });
 
   if (user) {
-    // 1. Existing User Update (Multi-Role Support)
+    // ✅ CASE: Purana user mil gaya! (Account Linking)
+    // Agar mobile se email missing tha ya web se phone missing tha, toh dono ko MERGE kar do.
     await tx.update(users)
       .set({
-        // Purane roles ko touch nahi karenge, sirf delivery add karenge
-        isDelivery: true, 
-        deliveryApprovalStatus: 'pending', // Naya status system use karein
-        role: 'delivery-boy', // Compatibility ke liye primary role update karein
-        firstName: user.firstName || firstName,
-        lastName: user.lastName || lastName,
-        phone: phone,
+        isDelivery: true,
+        role: 'delivery-boy',
+        deliveryApprovalStatus: 'pending',
+        // Dono fields ko fill karein taaki account link ho jaye
+        email: user.email || email, 
+        phone: user.phone || phone,
+        firebaseUid: firebaseUid, // Latest session UID update karein
         updatedAt: new Date(),
       })
       .where(eq(users.id, user.id));
   } else {
-    // 2. Naya User Insert karein
+    // ✅ CASE: Ekdum naya user
     const [newUser] = await tx.insert(users).values({
       firebaseUid,
       email,
-      firstName,
-      lastName,
       phone,
       role: 'delivery-boy',
-      isCustomer: true,  // Default customer toh hoga hi
-      isDelivery: true,  // Ab delivery partner bhi ban raha hai
+      isDelivery: true,
       deliveryApprovalStatus: 'pending',
-      updatedAt: new Date(),
     }).returning();
     user = newUser;
   }
-
   // B. Delivery Boys table mein Entry/Update (UPSERT)
   const existingDB = await tx.query.deliveryBoys.findFirst({
     where: eq(deliveryBoys.userId, user.id)
