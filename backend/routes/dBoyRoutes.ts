@@ -49,66 +49,77 @@ router.post('/register', async (req: Request, res: Response) => {
     const lastName = fullName.split(' ').slice(1).join(' ') || null;
 
     // 2. Transaction शुरू करें (Data Safety के लिए)
-    const registrationResult = await db.transaction(async (tx) => {
-      
-      // A. चेक करें कि यूजर पहले से है या नहीं
-     let user = await tx.query.users.findFirst({ 
-  where: or(
-    eq(users.email, email), 
-    eq(users.firebaseUid, firebaseUid)
-  ) 
-}); 
+   const registrationResult = await db.transaction(async (tx) => {
+  
+  // A. User check/upsert (Email YA FirebaseUid dono se check karein)
+  let user = await tx.query.users.findFirst({ 
+    where: or(eq(users.email, email), eq(users.firebaseUid, firebaseUid)) 
+  });
 
-      if (user) {
-        // चेक करें कहीं यह पहले से Delivery Boy तो नहीं?
-        const existingDB = await tx.query.deliveryBoys.findFirst({ 
-          where: eq(deliveryBoys.userId, user.id) 
-        });
-        
-        if (existingDB) {
-           throw new Error("ALREADY_REGISTERED");
-        }
+  if (user) {
+    // 1. Existing User Update (Multi-Role Support)
+    await tx.update(users)
+      .set({
+        // Purane roles ko touch nahi karenge, sirf delivery add karenge
+        isDelivery: true, 
+        deliveryApprovalStatus: 'pending', // Naya status system use karein
+        role: 'delivery-boy', // Compatibility ke liye primary role update karein
+        firstName: user.firstName || firstName,
+        lastName: user.lastName || lastName,
+        phone: phone,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+  } else {
+    // 2. Naya User Insert karein
+    const [newUser] = await tx.insert(users).values({
+      firebaseUid,
+      email,
+      firstName,
+      lastName,
+      phone,
+      role: 'delivery-boy',
+      isCustomer: true,  // Default customer toh hoga hi
+      isDelivery: true,  // Ab delivery partner bhi ban raha hai
+      deliveryApprovalStatus: 'pending',
+      updatedAt: new Date(),
+    }).returning();
+    user = newUser;
+  }
 
-        // मौजूदा यूजर को अपडेट करें (Role & Phone)
-        await tx.update(users)
-          .set({
-            role: 'delivery-boy', // Enum के हिसाब से 'delivery_boy' सुनिश्चित करें
-            approvalStatus: 'pending',
-            firstName: user.firstName || firstName,
-            lastName: user.lastName || lastName,
-            phone: user.phone || phone,
-          })
-          .where(eq(users.id, user.id));
-      } else {
-        // नया यूजर बनाएं
-        const [newUser] = await tx.insert(users).values({
-          firebaseUid,
-          email,
-          firstName,
-          lastName,
-          phone,
-          role: 'delivery-boy',
-          approvalStatus: 'pending',
-        }).returning();
-        user = newUser;
-      }
+  // B. Delivery Boys table mein Entry/Update (UPSERT)
+  const existingDB = await tx.query.deliveryBoys.findFirst({
+    where: eq(deliveryBoys.userId, user.id)
+  });
 
-      // B. Delivery Boys टेबल में एंट्री करें
-      const [newDB] = await tx.insert(deliveryBoys).values({
-        userId: user.id,
-        firebaseUid,
-        email,
+  if (existingDB) {
+    const [updatedDB] = await tx.update(deliveryBoys)
+      .set({
         name: fullName,
         phone,
         vehicleType,
-        approvalStatus: 'pending',
-        isOnline: false, // डिफ़ॉल्ट ऑफलाइन
-        createdAt: new Date(),
+        approvalStatus: 'pending', 
         updatedAt: new Date(),
-      }).returning();
-
-      return newDB;
-    });
+      })
+      .where(eq(deliveryBoys.id, existingDB.id))
+      .returning();
+    return updatedDB;
+  } else {
+    const [newDB] = await tx.insert(deliveryBoys).values({
+      userId: user.id,
+      firebaseUid,
+      email,
+      name: fullName,
+      phone,
+      vehicleType,
+      approvalStatus: 'pending',
+      isOnline: false,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+    return newDB;
+  }
+});
 
     // 3. Success Response & Notifications
     if (!registrationResult) {
