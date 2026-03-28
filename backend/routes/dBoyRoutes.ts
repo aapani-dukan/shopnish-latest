@@ -34,92 +34,112 @@ const router = Router();
  * /api/delivery-boys/register
  */
 /**
- * ✅ Delivery Boy Registration (Final Permanent Solution)
- */
+ **/
+// ✅ Delivery Boy Registration (Final Permanent Solution)
 router.post('/register', async (req: Request, res: Response) => {
   try {
-    const { email, firebaseUid, fullName, phone, vehicleType } = req.body;
+    const { email, firebaseUid, fullName, phone, vehicleType, vehicleNumber } = req.body;
     
-    // 1. Basic Validation
+    // 1. ✅ Basic Validation
     if (!email || !firebaseUid || !fullName || !phone || !vehicleType) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    const firstName = fullName.split(' ')[0] || null;
-    const lastName = fullName.split(' ').slice(1).join(' ') || null;
+    const firstName = fullName.split(' ')[0] || "";
+    const lastName = fullName.split(' ').slice(1).join(' ') || "";
 
-    // 2. Transaction शुरू करें (Data Safety के लिए)
-   const registrationResult = await db.transaction(async (tx) => {
-  
-  // 1. Sabse pehle dhoondo: Kya ye banda kisi bhi tarah se system mein hai?
-  let user = await tx.query.users.findFirst({ 
-    where: or(
-      eq(users.email, email),      // Web/Gmail se login
-      eq(users.phone, phone),      // Mobile/OTP se login
-      eq(users.firebaseUid, firebaseUid) // Kisi bhi session se login
-    ) 
-  });
+    // 2. ✅ Database Transaction (Seller Pattern)
+    const registrationResult = await db.transaction(async (tx) => {
+      
+      // A. Account Linking Logic: Pehle check karein banda system mein hai ya nahi
+      // Check by: Email OR Phone OR FirebaseUID
+      let user = await tx.query.users.findFirst({ 
+        where: or(
+          eq(users.email, email),
+          eq(users.phone, phone),
+          eq(users.firebaseUid, firebaseUid)
+        ) 
+      });
 
-  if (user) {
-    // ✅ CASE: Purana user mil gaya! (Account Linking)
-    // Agar mobile se email missing tha ya web se phone missing tha, toh dono ko MERGE kar do.
-    await tx.update(users)
-      .set({
-        isDelivery: true,
-        role: 'delivery-boy',
-        deliveryApprovalStatus: 'pending',
-        // Dono fields ko fill karein taaki account link ho jaye
-        email: user.email || email, 
-        phone: user.phone || phone,
-        firebaseUid: firebaseUid, // Latest session UID update karein
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, user.id));
-  } else {
-    // ✅ CASE: Ekdum naya user
-    const [newUser] = await tx.insert(users).values({
-      firebaseUid,
-      email,
-      phone,
-      role: 'delivery-boy',
-      isDelivery: true,
-      deliveryApprovalStatus: 'pending',
-    }).returning();
-    user = newUser;
-  }
-  // B. Delivery Boys table mein Entry/Update (UPSERT)
-  const existingDB = await tx.query.deliveryBoys.findFirst({
-    where: eq(deliveryBoys.userId, user.id)
-  });
+      if (user) {
+        // 🛑 Critical Check: Kahin ye phone number kisi DUSRE user ke paas toh nahi?
+        // Agar user mil gaya par uska ID match nahi ho raha (duplicate phone issue fix)
+        if (user.phone === phone && user.firebaseUid !== firebaseUid && user.email !== email) {
+           // Agar mismatch hai, toh user.id 31 vs 35 wala error yahi ruk jayega
+           throw new Error("PHONE_ALREADY_EXISTS_ON_OTHER_ACCOUNT");
+        }
 
-  if (existingDB) {
-    const [updatedDB] = await tx.update(deliveryBoys)
-      .set({
-        name: fullName,
-        phone,
-        vehicleType,
-        approvalStatus: 'pending', 
-        updatedAt: new Date(),
-      })
-      .where(eq(deliveryBoys.id, existingDB.id))
-      .returning();
-    return updatedDB;
-  } else {
-    const [newDB] = await tx.insert(deliveryBoys).values({
-      userId: user.id,
-      firebaseUid,
-      email,
-      name: fullName,
-      phone,
-      vehicleType,
-      approvalStatus: 'pending',
-      isOnline: false,
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
-    return newDB;
-  }
-});
+        // Existing User Update (Multi-role: Customer/Seller access disturb nahi hoga)
+        await tx.update(users)
+          .set({
+            isDelivery: true, 
+            deliveryApprovalStatus: 'pending',
+            role: 'delivery-boy', // Primary role compatibility
+            // Sync missing data (Linking Mobile & Web)
+            email: user.email || email,
+            phone: user.phone || phone,
+            firstName: user.firstName || firstName,
+            lastName: user.lastName || lastName,
+            firebaseUid: firebaseUid, 
+            updatedAt: new Date(),
+          })
+          .where(eq(users.id, user.id));
+      } else {
+        // Ekdum Naya User (Zero Data)
+        const [newUser] = await tx.insert(users).values({
+          firebaseUid,
+          email,
+          phone,
+          firstName,
+          lastName,
+          role: 'delivery-boy',
+          isCustomer: true, // Default customer access
+          isDelivery: true,
+          deliveryApprovalStatus: 'pending',
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }).returning();
+        user = newUser;
+      }
+
+      // B. Delivery Boys Table Entry (UPSERT Style)
+      // Isse "Duplicate Key" error kabhi nahi aayega
+      const existingDB = await tx.query.deliveryBoys.findFirst({
+        where: eq(deliveryBoys.userId, user.id)
+      });
+
+      if (existingDB) {
+        // Re-application / Update
+        const [updatedDB] = await tx.update(deliveryBoys)
+          .set({
+            name: fullName,
+            phone,
+            vehicleType,
+            vehicleNumber: vehicleNumber || existingDB.vehicleNumber,
+            approvalStatus: 'pending', 
+            updatedAt: new Date(),
+          })
+          .where(eq(deliveryBoys.id, existingDB.id))
+          .returning();
+        return updatedDB;
+      } else {
+        // Fresh Entry in Delivery Table
+        const [newDB] = await tx.insert(deliveryBoys).values({
+          userId: user.id,
+          firebaseUid,
+          email,
+          name: fullName,
+          phone,
+          vehicleType,
+          vehicleNumber: vehicleNumber || null,
+          approvalStatus: 'pending',
+          isOnline: false,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        }).returning();
+        return newDB;
+      }
+    });
 
     // 3. Success Response & Notifications
     if (!registrationResult) {
