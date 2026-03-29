@@ -36,135 +36,75 @@ const router = Router();
 /**
  **/
 // ✅ Delivery Boy Registration (The Ultimate Dual-Merge Solution)
-// ✅ Delivery Boy Registration (The Ultimate Dual-Merge Solution)
-router.post('/register', async (req: Request, res: Response) => {
+// ✅ Simplified Delivery Boy Registration
+router.post('/register', verifyToken as any, async (req: any, res: Response) => {
   try {
-    const { email, firebaseUid, fullName, phone, vehicleType, vehicleNumber } = req.body;
-    
-    // 1. ✅ Strict Validation
-    if (!email || !firebaseUid || !fullName || !phone || !vehicleType) {
-      return res.status(400).json({ message: "Missing required fields (Email, UID, Name, Phone, Vehicle)." });
+    const { vehicleType, vehicleNumber, fullName } = req.body;
+    const currentUserId = req.user?.id; // MiddleWare se synced ID mil gayi
+    const firebaseUid = req.user?.firebaseUid;
+
+    // 1. ✅ Basic Validation
+    if (!currentUserId || !vehicleType || !fullName) {
+      return res.status(400).json({ message: "Bhai, Name aur Vehicle details zaroori hain." });
     }
 
-    const firstName = fullName.split(' ')[0] || "";
-    const lastName = fullName.split(' ').slice(1).join(' ') || "";
-
-    // --- 🔍 STEP 1: SMART SEARCH (Email OR Phone OR UID) ---
-    // Hum teeno cheezon se check karenge taaki koi bhi purana account miss na ho
-    const existingUser = await db.query.users.findFirst({
-      where: or(
-        eq(users.email, email),
-        eq(users.phone, phone),
-        eq(users.firebaseUid, firebaseUid)
-      )
-    });
-
-    let currentUserId: number;
-
-    if (existingUser) {
-      // ✅ CASE: MERGE DATA (Account pehle se hai)
-      console.log(`🔄 Syncing: Merging into Existing User ID: ${existingUser.id}`);
+    // 2. 🚀 DATABASE TRANSACTION (Ek hi baar mein sab update)
+    const result = await db.transaction(async (tx) => {
       
-      const [updatedUser] = await db.update(users).set({
-        email: email, 
-        phone: phone,
-        firebaseUid: firebaseUid, // Naya UID link kar rahe hain agar badla ho toh
-        isDelivery: true, 
-        deliveryApprovalStatus: 'pending',
-        // Hum role 'delivery-boy' tabhi karenge jab admin approve karega, 
-        // par abhi ke liye metadata update kar dete hain
-        firstName: existingUser.firstName || firstName,
-        lastName: existingUser.lastName || lastName,
-        updatedAt: new Date(),
-      })
-      .where(eq(users.id, existingUser.id))
-      .returning();
+      // A. Check if user is already in delivery_boys table
+      let [existingDB] = await tx.select().from(deliveryBoys).where(eq(deliveryBoys.userId, currentUserId));
 
-      currentUserId = updatedUser.id;
-    } else {
-      // 🆕 CASE: FRESH INSERT (Bilkul naya user)
-      console.log("🆕 Creating fresh User entry");
-      const [newUser] = await db.insert(users).values({
-        firebaseUid,
-        email,
-        phone,
-        firstName,
-        lastName,
-        role: 'customer', // Default role
-        isCustomer: true,
-        isDelivery: true,
-        deliveryApprovalStatus: 'pending',
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }).returning();
-      
-      currentUserId = newUser.id;
-    }
-
-    // 2. ✅ DATABASE TRANSACTION (For Delivery Specific Tables)
-    const registrationResult = await db.transaction(async (tx) => {
-      
-      // A. Check if entry already exists in delivery_boys table
-      const existingDB = await tx.query.deliveryBoys.findFirst({
-        where: eq(deliveryBoys.userId, currentUserId)
-      });
+      let deliveryEntry;
 
       if (existingDB) {
-        // Purani entry update karo (Re-apply logic)
-        const [updatedDB] = await tx.update(deliveryBoys)
-          .set({
-            name: fullName,
-            phone: phone,
-            email: email,
-            vehicleType,
-            vehicleNumber: vehicleNumber || existingDB.vehicleNumber,
-            approvalStatus: 'pending', 
-            updatedAt: new Date(),
-          })
-          .where(eq(deliveryBoys.id, existingDB.id))
-          .returning();
-        return updatedDB;
+        // Purani entry update karo (Re-apply)
+        [deliveryEntry] = await tx.update(deliveryBoys).set({
+          name: fullName,
+          vehicleType,
+          vehicleNumber: vehicleNumber || existingDB.vehicleNumber,
+          approvalStatus: 'pending', 
+          updatedAt: new Date(),
+        })
+        .where(eq(deliveryBoys.id, existingDB.id))
+        .returning();
       } else {
-        // Ekdum nayi entry delivery table mein
-        const [newDB] = await tx.insert(deliveryBoys).values({
+        // Nayi entry delivery table mein
+        [deliveryEntry] = await tx.insert(deliveryBoys).values({
           userId: currentUserId,
           firebaseUid,
-          email,
           name: fullName,
-          phone,
+          phone: req.user.phone || "", // User table se uthaya
+          email: req.user.email || "", // User table se uthaya
           vehicleType,
           vehicleNumber: vehicleNumber || null,
           approvalStatus: 'pending',
           isOnline: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
         }).returning();
-        return newDB;
       }
+
+      // B. Main Users table mein status update karo
+      await tx.update(users).set({
+        isDelivery: true,
+        deliveryApprovalStatus: 'pending',
+        updatedAt: new Date(),
+      }).where(eq(users.id, currentUserId));
+
+      return deliveryEntry;
     });
 
-    // 3. ✅ ADMIN NOTIFICATION & RESPONSE
-    if (registrationResult) {
-      // Real-time update for Admin Dashboard
-      getIO().emit("admin:update", { 
-        type: "delivery-boy-register", 
-        data: registrationResult 
-      });
+    // 3. ✅ Response & Admin Socket
+    if (result) {
+      getIO().emit("admin:update", { type: "delivery-boy-register", data: result });
 
       return res.status(201).json({
-        message: "Application submitted successfully. Accounts synced!",
-        deliveryBoy: registrationResult
+        message: "Delivery application submitted successfully!",
+        deliveryBoy: result
       });
     }
 
-    throw new Error("Transaction failed: Profile could not be saved.");
-
   } catch (error: any) {
-    console.error("❌ Final DeliveryBoy registration error:", error);
-    return res.status(500).json({ 
-      message: "Internal server error", 
-      error: error.message 
-    });
+    console.error("❌ Delivery Registration Error:", error);
+    return res.status(500).json({ message: "Server error", error: error.message });
   }
 });
 // ---

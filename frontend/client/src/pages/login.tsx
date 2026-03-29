@@ -1,50 +1,75 @@
-// client/src/pages/login.tsx
 "use client";
 
-import React, { useState } from "react";
+import { useState, useEffect } from "react"; // ✅ React import zaroori hai
 import { useNavigate } from "react-router-dom";
-import { useAuth } from "@/hooks/useAuth"; // ✅ useAuth हुक को इंपोर्ट करें
+import { useAuth } from "@/hooks/useAuth"; 
 import { Button } from "@/components/ui/button";
 import GoogleIcon from "@/components/ui/GoogleIcon";
+import { PhoneSyncModal } from "@/components/auth/PhoneSyncModal"; 
 
 export default function LoginPage() {
-  const { signIn, isLoadingAuth, isAuthenticated, error } = useAuth(); // ✅ useAuth हुक का उपयोग करें
+  const { signIn, isAuthenticated, isLoadingAuth } = useAuth();
   const navigate = useNavigate();
+  
+  const [showPhoneModal, setShowPhoneModal] = useState(false);
+  const [tempUserData, setTempUserData] = useState<any>(null);
 
   const handleGoogleSignIn = async () => {
-    // isLoadingAuth के कारण `loading` स्टेट की जरूरत नहीं है, क्योंकि हुक इसे संभालता है
     try {
-      // ✅ सीधे useAuth से signIn फ़ंक्शन को कॉल करें
-      const fbUser = await signIn();
+      // ✅ Tip: Login shuru hone par modal state reset karein
+      setShowPhoneModal(false); 
       
-      if (fbUser) {
-        // हुक अब Backend कॉल को संभालेगा, इसलिए हमें यहाँ कुछ नहीं करना है
-        // हुक के useEffect में नेविगेशन होगा
+      const response = await signIn(); 
+      
+      if (response?.needsPhone) {
+        setTempUserData(response.tempData);
+        setShowPhoneModal(true);
       }
-
+      // Note: Agar response.user milta hai toh useAuth ka internal state 
+      // isAuthenticated ko true kar dega aur useEffect navigate kar dega.
     } catch (err) {
-      console.error("Google Sign-In Error:", err);
-      // useAuth हुक एरर को संभालता है, इसलिए यहाँ `alert` की जरूरत नहीं है
+      console.error("Login Error:", err);
     }
   };
 
-  // ✅ जबisAuthenticated true हो तो नेविगेट करें
-  React.useEffect(() => {
-    if (isAuthenticated) {
+  useEffect(() => {
+    if (isAuthenticated && !showPhoneModal) {
       navigate("/");
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, navigate, showPhoneModal]);
 
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100">
-      <div className="p-8 bg-white rounded-lg shadow-md text-center">
-        <h1 className="text-2xl font-bold mb-4">Welcome</h1>
-        <p className="mb-6 text-gray-600">Sign in to continue</p>
-        <Button onClick={handleGoogleSignIn} disabled={isLoadingAuth} className="w-full">
-          <GoogleIcon className="mr-2" />
-          {isLoadingAuth ? "Signing in..." : "Login with Google"}
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4">
+      <div className="p-8 bg-white rounded-xl shadow-lg text-center max-w-md w-full">
+        <h1 className="text-3xl font-extrabold mb-2 text-gray-800">Shopnish</h1>
+        <p className="mb-8 text-gray-500 text-sm">Apne business ko digital banayein</p>
+        
+        <Button 
+          onClick={handleGoogleSignIn} 
+          disabled={isLoadingAuth || showPhoneModal} // ✅ Modal khula ho tab bhi button disable rakhein
+          className="w-full py-6 text-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
+        >
+          {/* ✅ Icon ki sizing aur margin ekdum perfect hai ab */}
+          <GoogleIcon className="mr-3 w-6 h-6" />
+          {isLoadingAuth ? "Checking account..." : "Continue with Google"}
         </Button>
+        
+        <p className="mt-6 text-xs text-gray-400">
+          By continuing, you agree to our Terms and Privacy Policy.
+        </p>
       </div>
+
+      {showPhoneModal && (
+        <PhoneSyncModal 
+          isOpen={showPhoneModal}
+          tempData={tempUserData}
+          onSuccess={(_user) => {
+            setShowPhoneModal(false);
+            // ✅ Yahan ensure karein ki navigation tabhi ho jab state update ho jaye
+            setTimeout(() => navigate("/"), 100); 
+          }}
+        />
+      )}
     </div>
   );
 }

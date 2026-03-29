@@ -178,64 +178,83 @@ router.get(
 
 });
 
-// ✅ Initial Login Route: नए उपयोगकर्ताओं के लिए
+// 1. ✅ Initial Login: Check if Email exists or needs Phone
 router.post("/auth/initial-login", async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
-    if (!idToken) {
-      return res.status(400).json({ message: "Firebase ID token is required." });
-    }
+    if (!idToken) return res.status(400).json({ message: "Token is required." });
 
-    // Firebase टोकन को सत्यापित करें
     const decodedToken = await authAdmin.verifyIdToken(idToken);
-    
-    // डिकोडेड टोकन से आवश्यक डेटा निकालें
-    const userUuid = decodedToken.uid;
-    const email = decodedToken.email;
-    const fullName = decodedToken.name;
+    const { uid: firebaseUid, email, name: fullName } = decodedToken;
 
-    // यदि नाम मौजूद है, तो उसे firstName और lastName में विभाजित करें
-    const [firstName, ...lastNameParts] = fullName ? fullName.split(' ') : ['', ''];
-    const lastName = lastNameParts.join(' ');
-    
-    // डेटाबेस में उपयोगकर्ता की जाँच करें
-    let [user] = await db
-      .select()
-      .from(users)
-      .where(eq(users.firebaseUid, userUuid));
+    // 🔍 Step A: Pehle EMAIL se check karein (Kyuki humne decide kiya hai Email mil gaya matlab user purana hai)
+    let [user] = await db.select().from(users).where(eq(users.email, email || ""));
 
-    // यदि उपयोगकर्ता नहीं मिलता, तो नया बनाएँ
-    if (!user) {
-      console.log("New user detected. Creating profile for Firebase UID:", userUuid);
-      
-      const [newUser] = await db.insert(users).values({
-        firebaseUid: userUuid,
-        email: email,
-        password: 'GOOGLE_AUTH_USER', 
-        firstName: firstName,        
-        lastName: lastName,          
-        phone: '',                   
-        address: '',                 
-        city: '',                    
-        pincode: '',                  
-        role: 'customer',
-        approvalStatus: 'approved'
-      }).returning();
-
-      user = newUser;
+    if (user) {
+      // ✅ User mil gaya! Iska matlab iska phone pehle se link ho chuka hai.
+      // Bas Firebase UID sync kar do agar badli ho toh.
+      if (user.firebaseUid !== firebaseUid) {
+        await db.update(users).set({ firebaseUid }).where(eq(users.id, user.id));
+      }
+      return res.status(200).json({ user, needsPhone: false });
     }
-    
-    // सफलतापूर्वक बनाए गए/पाए गए उपयोगकर्ता को लौटाएँ
-    res.status(200).json({
-        user: {
-            ...user,
-            idToken: idToken // फ्रंटएंड के लिए टोकन जोड़ें
-        }
+
+    // ❌ User nahi mila: Iska matlab ya toh Naya hai ya Mobile App (Phone-only) wala user hai.
+    // Hum naya user abhi nahi banayenge, pehle phone maangenge.
+    return res.status(200).json({ 
+      needsPhone: true, 
+      tempData: { firebaseUid, email, fullName } 
     });
 
-  } catch (error) {
+  } catch (error: any) {
     console.error("❌ Initial login failed:", error);
-    res.status(401).json({ message: "Authentication failed. Please try again." });
+    res.status(401).json({ message: "Authentication failed." });
+  }
+});
+
+// 2. ✅ New Route: Sync Phone (The Master Sync Logic)
+router.post("/auth/sync-phone", async (req: Request, res: Response) => {
+  try {
+    const { firebaseUid, email, phone, fullName } = req.body;
+
+    if (!phone) return res.status(400).json({ message: "Phone number is required." });
+
+    // 🔍 Step B: PHONE se check karein (Kya ye Mobile App wala user hai?)
+    let [existingUserByPhone] = await db.select().from(users).where(eq(users.phone, phone));
+
+    if (existingUserByPhone) {
+      // 🔄 MERGE: Mobile user mil gaya, ab usme Email aur UID link kar do
+      console.log(`🔄 Merging Phone ID ${existingUserByPhone.id} with Email ${email}`);
+      const [updatedUser] = await db.update(users).set({
+        email: email,
+        firebaseUid: firebaseUid,
+        updatedAt: new Date(),
+      }).where(eq(users.id, existingUserByPhone.id)).returning();
+
+      return res.status(200).json({ user: updatedUser, message: "Accounts merged successfully!" });
+    }
+
+    // 🆕 NEW USER: Na Email mila na Phone, toh bilkul naya entry karo
+    console.log("🆕 Creating brand new user with Phone and Email");
+    const [firstName, ...lastNameParts] = fullName ? fullName.split(' ') : ['User', ''];
+    
+    const [newUser] = await db.insert(users).values({
+      firebaseUid,
+      email,
+      phone,
+      firstName,
+      lastName: lastNameParts.join(' '),
+      role: 'customer',
+      approvalStatus: 'approved',
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
+
+    return res.status(201).json({ user: newUser });
+
+  } catch (error: any) {
+    console.error("❌ Sync phone failed:", error);
+    res.status(500).json({ message: "Internal server error during sync." });
   }
 });
 

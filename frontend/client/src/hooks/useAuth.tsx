@@ -43,19 +43,33 @@ deliveryBoyId?: number | null;
   idToken?: string;
   isAdmin: boolean;
 }
+// ✅ Ye interface add karein
+interface AuthResponse {
+  needsPhone?: boolean; // '?' matlab ye optional hai
+  tempData?: {
+    firebaseUid: string;
+    email: string;
+    fullName: string;
+  };
+  user?: User | null;
+  error?: any;
+}
 
+// Aur signIn function ka type aise set karein:
+// signIn: () => Promise<AuthResponse>;
 interface AuthContextType {
   user: User | null;
  isLoadingAuth : boolean;
   isAuthenticated: boolean;
   isAdmin: boolean;
   error: AuthError | null;
-  clearError: () => void;
-  signIn: (usePopup?: boolean) => Promise<FirebaseUser | null>; // Google Auth
+ signIn: (usePopup?: boolean) => Promise<AuthResponse | null>;
+  signInWithEmailAndPassword: (email: string, password: string) => Promise<AuthResponse | null>; clearError: () => void;
+ 
   signOut: () => Promise<void>;
   refetchUser: () => void;
   backendLogin: (email: string, password: string) => Promise<User>; // Delivery/Backend-only login
-  signInWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUser | null>;
+  
   signUpWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUser | null>;
   // 🚀 New: Password reset function
   resetPassword: (email: string) => Promise<void>;
@@ -76,154 +90,173 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     setAuthError(null);
   }, []);
 
-  const fetchAndSyncBackendUser = useCallback(async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
-    setIsLoadingAuth(true);
-    let dbUserData = null;
+  
     // status <--- यह 'status' variable यहाँ से हटा दें, यह एक mistake है
-
-    const idTokenResult = await fbUser.getIdTokenResult(forceRefreshIdToken);
-    const idToken = idTokenResult.token;
-    const isAdminFromFirebase = idTokenResult.claims.admin === true; // Firebase claim
-
+// ✅ 1. fetchAndSyncBackendUser: The Heart of Plan 3
+const fetchAndSyncBackendUser = useCallback(
+  async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
+    setIsLoadingAuth(true);
+    setAuthError(null);
+    let dbUserData = null;
+let isAdminFromFirebase = false;
     try {
-      const res = await apiRequest("GET", "/api/users/me"); // ✅ camelCase
-      dbUserData = res.user || res;
-      console.log("✅ Backend user data fetched:", dbUserData);
-    } catch (e: any) {
-      if (e.status === 404) {
-        console.warn("User not found on backend. Attempting initial login.");
-        try {
-          const res = await apiRequest("POST", "/api/auth/initial-login", {
-            idToken,
-          });
-          dbUserData = res.user;
-          console.log("✅ New user profile created via initial login.");
-        } catch (initialLoginError: any) { // ✅ camelCase
-          console.error("❌ Initial login failed:", initialLoginError);
-          setAuthError(initialLoginError);
-          setUser(null);
-          setIsAuthenticated(false);
-          setIsAdmin(false);
-          setIsLoadingAuth(false);
-          return;
-        }
-      } else {
-        console.error("❌ Failed to fetch backend user data:", e);
-        setAuthError(e);
-        setUser(null);
-        setIsAuthenticated(false);
-        setIsAdmin(false);
-        setIsLoadingAuth(false);
-        return;
-      }
-    }
+      const idTokenResult = await fbUser.getIdTokenResult(forceRefreshIdToken);
+      const idToken = idTokenResult.token;
+      const isAdminFromFirebase = idTokenResult.claims.admin === true;
 
-    if (dbUserData) {
-        const newUserData: User = { // ✅ camelCase
+      // STEP A: Pehle check karein ki kya user exist karta hai (/me call)
+      try {
+        const res = await apiRequest("GET", "/api/users/me");
+        dbUserData = res.user || res;
+        
+        // Agar user mil gaya aur uska phone bhi hai, toh login success
+        if (dbUserData && dbUserData.phone) {
+          const newUserData: User = {
             uid: fbUser.uid,
             id: dbUserData.id,
             email: fbUser.email || dbUserData.email,
-            name: fbUser.displayName || dbUserData.name, // ✅ displayName
+            name: fbUser.displayName || dbUserData.name,
             role: dbUserData.role || "customer",
             idToken,
-            sellerProfile: dbUserData.sellerProfile || null, // ✅ camelCase
-            deliveryBoyId: dbUserData.deliveryBoyId || null, // ✅ camelCase
-            isAdmin: isAdminFromFirebase, // Use Firebase claim for isAdmin
-        };
+            sellerProfile: dbUserData.sellerProfile || null,
+            deliveryBoyId: dbUserData.deliveryBoyId || null,
+            isAdmin: isAdminFromFirebase,
+          };
 
-        // 🚀 Add this console.log for debugging
-        console.log("AuthContext: newUserData after fetch:", newUserData); 
-
-        // ✅ FIXED: Add user.isAdmin to comparison and set isAdmin correctly
-        if (!user || user.uid !== newUserData.uid || user.idToken !== newUserData.idToken || user.role !== newUserData.role || user.isAdmin !== newUserData.isAdmin) {
-            setUser(newUserData);
-            setIsAuthenticated(true);
-            setIsAdmin(newUserData.isAdmin); // ✅ Set isAdmin from newUserData.isAdmin (which uses Firebase claim)
+          setUser(newUserData);
+          setIsAuthenticated(true);
+          setIsAdmin(newUserData.isAdmin);
+          setIsLoadingAuth(false);
+          return { needsPhone: false, user: newUserData };
         }
+      } catch (e: any) {
+        // Agar 404 hai, matlab user database mein nahi hai
+        console.warn("User profile not found or phone missing.");
+      }
+
+      // STEP B: Agar user nahi mila ya phone missing hai, toh initial-login hit karein
+      console.log("Attempting initial-login to check phone status...");
+      const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
+
+      // Agar backend bole ki phone chahiye (needsPhone: true)
+      if (res.needsPhone) {
+        setIsLoadingAuth(false);
+        setIsAuthenticated(false); // Abhi dashboard mat bhejo
+        return { 
+          needsPhone: true, 
+          tempData: { ...res.tempData, fullName: fbUser.displayName } 
+        };
+      }
+
+      // Agar backend ne user de diya (Already linked)
+      dbUserData = res.user;
+
+    } catch (err: any) {
+      console.error("❌ Auth Sync Error:", err);
+      setAuthError(err);
+      setIsLoadingAuth(false);
+      return { error: err };
+    }
+
+    // FINAL STEP: User Data finalize karein (Agar phone linked tha)
+    if (dbUserData) {
+      const finalUser: User = {
+        uid: fbUser.uid,
+        id: dbUserData.id,
+        email: fbUser.email || dbUserData.email,
+        name: fbUser.displayName || dbUserData.name,
+        role: dbUserData.role || "customer",
+        idToken: await fbUser.getIdToken(),
+        sellerProfile: dbUserData.sellerProfile || null,
+        deliveryBoyId: dbUserData.deliveryBoyId || null,
+        isAdmin: dbUserData.isAdmin || isAdminFromFirebase || false,
+      };
+      setUser(finalUser);
+      setIsAuthenticated(true);
+      setIsLoadingAuth(false);
+      return { needsPhone: false, user: finalUser };
     }
 
     setIsLoadingAuth(false);
-  }, [user]); // 'user' dependency
+  },
+  [user]
+);
 
-// ... (onAuthStateChanged useEffect) ...
-  useEffect(() => {
-  const checkRedirectResult = async () => {
+// ✅ 2. Google Sign-In Handler
+const signIn = useCallback(
+  async (usePopup: boolean = false): Promise<AuthResponse | null> => {
+    setIsLoadingAuth(true);
+    setAuthError(null);
     try {
-      await firebaseHandleRedirectResult();
-    } catch (error) {
-      console.error("Error handling redirect result:", error);
+      const fbUser = await firebaseSignInWithGoogle(usePopup);
+      if (fbUser) {
+        // Backend se pucho: "Bhai, iska phone linked hai kya?"
+       const result = await fetchAndSyncBackendUser(fbUser);
+        return result as AuthResponse;
+      }
+      return null;
+    } catch (err: any) {
+      setAuthError(err as AuthError);
+      setIsLoadingAuth(false);
+      throw err;
     }
+  },
+  [fetchAndSyncBackendUser]
+);
+
+// ✅ 3. Email/Password Sign-In Handler
+const signInWithEmailAndPassword = useCallback(
+  async (email: string, password: string): Promise<any> => {
+    setIsLoadingAuth(true);
+    setAuthError(null);
+    try {
+      const fbUser = await firebaseSignInWithEmail(email, password);
+      if (fbUser) {
+        return await fetchAndSyncBackendUser(fbUser);
+      }
+      return null;
+    } catch (err: any) {
+      setAuthError(err as AuthError);
+      setIsLoadingAuth(false);
+      throw err;
+    }
+  },
+  [fetchAndSyncBackendUser]
+);
+
+// ✅ 4. onAuthStateChanged (The Guard)
+useEffect(() => {
+  const checkRedirectResult = async () => {
+    try { await firebaseHandleRedirectResult(); } catch (e) { console.error(e); }
   };
   checkRedirectResult();
 
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-  console.log("onAuthStateChanged triggered. fbUser:", fbUser ? fbUser.email : "null");
+    if (fbUser) {
+      if (!fbUser.email) return;
 
-  if (fbUser) {
-    // ✅ यहाँ guard डालो:
-    if (!fbUser.email) {
-      console.warn("⚠️ Firebase user has no email, skipping fetch.");
-      return;
-    }
-
-    // ✅ अब fetch तभी चलेगा जब email confirm हो और uid नया हो
-    if (!user || user.uid !== fbUser.uid) {
-      await fetchAndSyncBackendUser(fbUser, true);
+      // Agar user login hai par hamare context mein data nahi hai
+      if (!user || user.uid !== fbUser.uid) {
+        // Check karein ki kya ye user authenticated hone layak hai (Phone check)
+        const res = await fetchAndSyncBackendUser(fbUser, true);
+        
+        // 🔥 AGAR PHONE MISSING HAI: Toh handle manually (don't auto-redirect)
+        if (res?.needsPhone) {
+          console.log("OnAuthStateChanged: User needs phone sync.");
+          // Iska matlab login.tsx apna modal dikhayega
+        }
+      }
     } else {
+      setUser(null);
+      setIsAuthenticated(false);
+      setIsAdmin(false);
+      queryClient.clear();
       setIsLoadingAuth(false);
     }
-  } else {
-    console.warn("❌ No Firebase user. Clearing state.");
-    setUser(null);
-    setIsAuthenticated(false);
-    setIsAdmin(false);
-    queryClient.clear();
-    setIsLoadingAuth(false);
-  }
-});
+  });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient]);
-
-  const signIn = useCallback(
-    async (usePopup: boolean = false): Promise<FirebaseUser | null> => {
-      setIsLoadingAuth(true);
-      setAuthError(null);
-      try {
-        const fbUser = await firebaseSignInWithGoogle(usePopup);
-        if (fbUser) {
-          await fetchAndSyncBackendUser(fbUser);
-        }
-        return fbUser;
-      } catch (err: any) {
-        setAuthError(err as AuthError);
-        setIsLoadingAuth(false);
-        throw err;
-      }
-    },
-    [fetchAndSyncBackendUser]
-  );
-  
-  // --- Email/Password Sign In Handler (No change) ---
-  const signInWithEmailAndPassword = useCallback(
-    async (email: string, password: string): Promise<FirebaseUser | null> => {
-      setIsLoadingAuth(true);
-      setAuthError(null);
-      try {
-        const fbUser = await firebaseSignInWithEmail(email, password);
-        if (fbUser) {
-          await fetchAndSyncBackendUser(fbUser);
-        }
-        return fbUser;
-      } catch (err: any) {
-        setAuthError(err as AuthError);
-        setIsLoadingAuth(false);
-        throw err;
-      }
-    },
-    [fetchAndSyncBackendUser]
-  );
-  
+}, [fetchAndSyncBackendUser, queryClient, user]);
   // --- Email/Password Sign Up Handler (No change) ---
   const signUpWithEmailAndPassword = useCallback(
     async (email: string, password: string): Promise<FirebaseUser | null> => {
@@ -300,11 +333,13 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
           throw new Error("Invalid user data received from backend.");
         const newUserData: User = {
           id: backendUser.id,
+          uid: backendUser.firebaseUid || "",
           email: backendUser.email,
           name: backendUser.name,
           role: backendUser.role,
           sellerProfile: backendUser.sellerProfile || null,
 deliveryBoyId: backendUser.deliveryBoyId || null, 
+isAdmin: backendUser.role === "admin",
         };
         setUser(newUserData);
         setIsAuthenticated(true);

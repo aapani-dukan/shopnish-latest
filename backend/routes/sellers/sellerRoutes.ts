@@ -50,56 +50,37 @@ const upload = multer({
 });
 
 
-// ✅ POST /api/sellers/apply
+// ✅ POST /api/sellers/apply (Simplified & Clean)
 sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
-    let currentUserId = req.user?.id; // Jo login hai (Current ID)
+    const currentUserId = req.user?.id; // Ab ye ID hamesha sahi aur synced hogi
 
     if (!firebaseUid || !currentUserId) return res.status(401).json({ message: "Unauthorized" });
 
     const {
-      businessName, businessAddress, businessPhone, email, // Email aur Phone dono form se le rahe hain
+      businessName, businessAddress, businessPhone, email, 
       city, pincode, gstNumber, businessType, latitude, longitude, description, 
       bankAccountNumber, ifscCode
     } = req.body;
 
-    // --- 🔍 STEP 1: DUAL-CHECK SEARCH ---
-    // Hum dhoondenge ki kya koi AISE user hai jiske paas ye Email ya Phone pehle se hai
-    // Lekin wo hamari current login ID nahi honi chahiye
-    const existingUser = await db.query.users.findFirst({
-      where: and(
-        or(eq(users.email, email), eq(users.phone, businessPhone)),
-        ne(users.id, currentUserId) // Hum doosre accounts dhoond rahe hain
-      )
+    // --- 🔍 STEP 1: Sirf ye check karo ki kahin ye banda PEHLE SE SELLER toh nahi hai? ---
+    const existingSeller = await db.query.sellersPgTable.findFirst({
+      where: eq(sellersPgTable.userId, currentUserId)
     });
 
-    // --- 🔄 STEP 2: SMART MERGE ---
-    if (existingUser) {
-      console.log(`🔄 Merging Temporary ID ${currentUserId} into Existing Master ID ${existingUser.id}`);
-      
-      // Purani (Master) ID ko update karein naye data ke saath
-      await db.update(users).set({
-        email: email, 
-        phone: businessPhone,
-        firebaseUid: firebaseUid, // Firebase UID hamesha latest wala link karein
-      }).where(eq(users.id, existingUser.id));
-
-      // Jo temporary login ID abhi bani thi, use delete kar dein (Data duplication khatam)
-      await db.delete(users).where(eq(users.id, currentUserId));
-
-      // Ab aage ka poora seller registration isi Master ID par hoga
-      currentUserId = existingUser.id;
+    if (existingSeller) {
+      return res.status(400).json({ message: "Bhai, aapne pehle hi apply kar diya hai!" });
     }
 
-    // 🛑 FIX: Transaction result को एक अलग 'result' वेरिएबल में स्टोर करें
+    // --- 🚀 STEP 2: TRANSACTION (Sellers + Stores + User Update) ---
     const result: any = await db.transaction(async (tx) => {
 
-        // 1. Sellers Table Insertion
+        // 1. Sellers Table mein entry
         const [sellerEntry] = await tx
             .insert(sellersPgTable)
             .values({
-                userId: currentUserId, // अब currentUserId में merged ID होगी (या original ID अगर merge नहीं हुआ)
+                userId: currentUserId,
                 businessName,
                 businessAddress,
                 businessPhone,
@@ -109,37 +90,35 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
                 gstNumber: gstNumber || null,
                 bankAccountNumber: bankAccountNumber || null,
                 ifscCode: ifscCode || null,
-                deliveryRadius: null,
-                isDistanceBasedDelivery: false,
                 latitude: String(latitude), 
                 longitude: String(longitude),
-                deliveryPincodes: [],
                 businessType,
             } as any)
             .returning();
         
-        // 2. Stores Table Insertion
+        // 2. Store Table mein entry
         await tx.insert(stores).values({
             sellerId: sellerEntry.id,
             storeName: businessName,
             storeType: businessType,
             address: businessAddress,
-            city: city,
-            pincode: pincode,
+            city,
+            pincode,
             phone: businessPhone,
-            isActive: false, 
+            isActive: false, // Jab tak admin approve na kare
             latitude: String(latitude),
             longitude: String(longitude),
         } as any);
 
-        // 3. Users Table Update (Multi-Role Logic)
-       const [updatedUser] = await tx
+        // 3. User Table Update (Role update)
+        const [updatedUser] = await tx
             .update(users)
             .set({
-                email: email,
-                phone: businessPhone,
-                isSeller: false,
+                // Note: Email aur Phone wahi rakhein jo login ke waqt sync hue the
+                // Agar user badalna chahta hai toh yahan update kar sakte hain
+                isSeller: true, // Iska request submit ho gaya
                 sellerApprovalStatus: 'pending', 
+                updatedAt: new Date(),
             })
             .where(eq(users.id, currentUserId))
             .returning();
@@ -148,7 +127,7 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
     });
 
     return res.status(201).json({
-      message: "Application submitted successfully and accounts synced!",
+      message: "Application submitted successfully!",
       seller: result.sellerEntry, 
       user: result.updatedUser
     });

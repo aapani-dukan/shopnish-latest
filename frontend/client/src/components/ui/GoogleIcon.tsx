@@ -1,12 +1,14 @@
 // Client/src/components/ui/GoogleIcon.tsx
 import React from 'react';
-
-const GoogleIcon: React.FC = () => (
+interface IconProps {
+  className?: string;
+}
+const GoogleIcon: React.FC<IconProps> = ({ className }) => (
   <svg
     width="20" // या जो भी साइज़ आप चाहते हैं
     height="20" // या जो भी साइज़ आप चाहते हैं
     viewBox="0 0 24 24"
-    className="mr-3" // या इसे कॉम्पोनेंट प्रॉप के रूप में पास करें
+    className={className}
   >
     <path
       fill="#4285F4"
