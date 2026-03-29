@@ -24,7 +24,7 @@ import {
 } from '../../shared/backend/schema';
 import { requireSellerAuth } from '../../server/middleware/authMiddleware';
 import { AuthenticatedRequest, verifyToken } from '../../server/middleware/verifyToken';
-import { eq, desc, and, ne, exists, inArray, sql,count, sum, avg } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
+import {or, eq, desc, and, ne, exists, inArray, sql,count, sum, avg } from 'drizzle-orm'; // ✅ inArray इम्पोर्ट करें
 import multer from 'multer';
 import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
@@ -51,35 +51,45 @@ const upload = multer({
 
 
 // ✅ POST /api/sellers/apply
-// ✅ POST /api/sellers/apply (MULTI-ROLE & ERROR-FREE VERSION)
 sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
-    const userId = req.user?.id;
+    let currentUserId = req.user?.id; // Jo login hai (Current ID)
 
-    if (!firebaseUid || !userId) return res.status(401).json({ message: "Unauthorized" });
+    if (!firebaseUid || !currentUserId) return res.status(401).json({ message: "Unauthorized" });
 
     const {
-      businessName, businessAddress, businessPhone, description,
-      city, pincode, gstNumber, bankAccountNumber, ifscCode,
-      businessType, latitude, longitude, 
+      businessName, businessAddress, businessPhone, email, // Email aur Phone dono form se le rahe hain
+      city, pincode, gstNumber, businessType, latitude, longitude, description, 
+      bankAccountNumber, ifscCode
     } = req.body;
 
-    // ✅ VALIDATION
-    if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType || !latitude || !longitude) {
-      return res.status(400).json({ message: "Missing required fields." });
-    }
+    // --- 🔍 STEP 1: DUAL-CHECK SEARCH ---
+    // Hum dhoondenge ki kya koi AISE user hai jiske paas ye Email ya Phone pehle se hai
+    // Lekin wo hamari current login ID nahi honi chahiye
+    const existingUser = await db.query.users.findFirst({
+      where: and(
+        or(eq(users.email, email), eq(users.phone, businessPhone)),
+        ne(users.id, currentUserId) // Hum doosre accounts dhoond rahe hain
+      )
+    });
 
-    const [existing] = await db
-      .select()
-      .from(sellersPgTable)
-      .where(eq(sellersPgTable.userId, userId));
+    // --- 🔄 STEP 2: SMART MERGE ---
+    if (existingUser) {
+      console.log(`🔄 Merging Temporary ID ${currentUserId} into Existing Master ID ${existingUser.id}`);
+      
+      // Purani (Master) ID ko update karein naye data ke saath
+      await db.update(users).set({
+        email: email, 
+        phone: businessPhone,
+        firebaseUid: firebaseUid, // Firebase UID hamesha latest wala link karein
+      }).where(eq(users.id, existingUser.id));
 
-    if (existing) {
-      return res.status(400).json({
-        message: "Application already submitted.",
-        status: existing.approvalStatus,
-      });
+      // Jo temporary login ID abhi bani thi, use delete kar dein (Data duplication khatam)
+      await db.delete(users).where(eq(users.id, currentUserId));
+
+      // Ab aage ka poora seller registration isi Master ID par hoga
+      currentUserId = existingUser.id;
     }
 
     // 🛑 FIX: Transaction result को एक अलग 'result' वेरिएबल में स्टोर करें
@@ -89,7 +99,7 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
         const [sellerEntry] = await tx
             .insert(sellersPgTable)
             .values({
-                userId,
+                userId: currentUserId, // अब currentUserId में merged ID होगी (या original ID अगर merge नहीं हुआ)
                 businessName,
                 businessAddress,
                 businessPhone,
@@ -123,33 +133,26 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
         } as any);
 
         // 3. Users Table Update (Multi-Role Logic)
-        const [updatedUser] = await tx
+       const [updatedUser] = await tx
             .update(users)
             .set({
-                // role: 'customer', // कस्टमर ही रहने दें
-                isSeller: false,   // अभी अप्रूव नहीं हुआ है
+                email: email,
+                phone: businessPhone,
+                isSeller: false,
                 sellerApprovalStatus: 'pending', 
-                updatedAt: new Date(),
             })
-            .where(eq(users.id, userId))
+            .where(eq(users.id, currentUserId))
             .returning();
             
         return { sellerEntry, updatedUser };
     });
 
-    // 4. Final Response using the 'result' variable
     return res.status(201).json({
-      message: "Application submitted successfully.",
+      message: "Application submitted successfully and accounts synced!",
       seller: result.sellerEntry, 
-      user: {
-        firebaseUid: result.updatedUser.firebaseUid,
-        isSeller: result.updatedUser.isSeller,
-        sellerApprovalStatus: result.updatedUser.sellerApprovalStatus,
-        email: result.updatedUser.email,
-        firstName: result.updatedUser.firstName,
-        lastName: result.updatedUser.lastName,
-      },
+      user: result.updatedUser
     });
+
   } catch (error: any) {
     console.error("❌ Error in POST /api/sellers/apply:", error);
     next(error);

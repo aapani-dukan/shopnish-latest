@@ -35,85 +35,87 @@ const router = Router();
  */
 /**
  **/
-// ✅ Delivery Boy Registration (Final Permanent Solution)
+// ✅ Delivery Boy Registration (The Ultimate Dual-Merge Solution)
+// ✅ Delivery Boy Registration (The Ultimate Dual-Merge Solution)
 router.post('/register', async (req: Request, res: Response) => {
   try {
     const { email, firebaseUid, fullName, phone, vehicleType, vehicleNumber } = req.body;
     
-    // 1. ✅ Basic Validation
+    // 1. ✅ Strict Validation
     if (!email || !firebaseUid || !fullName || !phone || !vehicleType) {
-      return res.status(400).json({ message: "Missing required fields." });
+      return res.status(400).json({ message: "Missing required fields (Email, UID, Name, Phone, Vehicle)." });
     }
 
     const firstName = fullName.split(' ')[0] || "";
     const lastName = fullName.split(' ').slice(1).join(' ') || "";
 
-    // 2. ✅ Database Transaction (Seller Pattern)
+    // --- 🔍 STEP 1: SMART SEARCH (Email OR Phone OR UID) ---
+    // Hum teeno cheezon se check karenge taaki koi bhi purana account miss na ho
+    const existingUser = await db.query.users.findFirst({
+      where: or(
+        eq(users.email, email),
+        eq(users.phone, phone),
+        eq(users.firebaseUid, firebaseUid)
+      )
+    });
+
+    let currentUserId: number;
+
+    if (existingUser) {
+      // ✅ CASE: MERGE DATA (Account pehle se hai)
+      console.log(`🔄 Syncing: Merging into Existing User ID: ${existingUser.id}`);
+      
+      const [updatedUser] = await db.update(users).set({
+        email: email, 
+        phone: phone,
+        firebaseUid: firebaseUid, // Naya UID link kar rahe hain agar badla ho toh
+        isDelivery: true, 
+        deliveryApprovalStatus: 'pending',
+        // Hum role 'delivery-boy' tabhi karenge jab admin approve karega, 
+        // par abhi ke liye metadata update kar dete hain
+        firstName: existingUser.firstName || firstName,
+        lastName: existingUser.lastName || lastName,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, existingUser.id))
+      .returning();
+
+      currentUserId = updatedUser.id;
+    } else {
+      // 🆕 CASE: FRESH INSERT (Bilkul naya user)
+      console.log("🆕 Creating fresh User entry");
+      const [newUser] = await db.insert(users).values({
+        firebaseUid,
+        email,
+        phone,
+        firstName,
+        lastName,
+        role: 'customer', // Default role
+        isCustomer: true,
+        isDelivery: true,
+        deliveryApprovalStatus: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+      
+      currentUserId = newUser.id;
+    }
+
+    // 2. ✅ DATABASE TRANSACTION (For Delivery Specific Tables)
     const registrationResult = await db.transaction(async (tx) => {
       
-      // A. Account Linking Logic: Pehle check karein banda system mein hai ya nahi
-      // Check by: Email OR Phone OR FirebaseUID
-      let user = await tx.query.users.findFirst({ 
-        where: or(
-          eq(users.email, email),
-          eq(users.phone, phone),
-          eq(users.firebaseUid, firebaseUid)
-        ) 
-      });
-
-      if (user) {
-        // 🛑 Critical Check: Kahin ye phone number kisi DUSRE user ke paas toh nahi?
-        // Agar user mil gaya par uska ID match nahi ho raha (duplicate phone issue fix)
-        if (user.phone === phone && user.firebaseUid !== firebaseUid && user.email !== email) {
-           // Agar mismatch hai, toh user.id 31 vs 35 wala error yahi ruk jayega
-           throw new Error("PHONE_ALREADY_EXISTS_ON_OTHER_ACCOUNT");
-        }
-
-        // Existing User Update (Multi-role: Customer/Seller access disturb nahi hoga)
-        await tx.update(users)
-          .set({
-            isDelivery: true, 
-            deliveryApprovalStatus: 'pending',
-            role: 'delivery-boy', // Primary role compatibility
-            // Sync missing data (Linking Mobile & Web)
-            email: user.email || email,
-            phone: user.phone || phone,
-            firstName: user.firstName || firstName,
-            lastName: user.lastName || lastName,
-            firebaseUid: firebaseUid, 
-            updatedAt: new Date(),
-          })
-          .where(eq(users.id, user.id));
-      } else {
-        // Ekdum Naya User (Zero Data)
-        const [newUser] = await tx.insert(users).values({
-          firebaseUid,
-          email,
-          phone,
-          firstName,
-          lastName,
-          role: 'delivery-boy',
-          isCustomer: true, // Default customer access
-          isDelivery: true,
-          deliveryApprovalStatus: 'pending',
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        }).returning();
-        user = newUser;
-      }
-
-      // B. Delivery Boys Table Entry (UPSERT Style)
-      // Isse "Duplicate Key" error kabhi nahi aayega
+      // A. Check if entry already exists in delivery_boys table
       const existingDB = await tx.query.deliveryBoys.findFirst({
-        where: eq(deliveryBoys.userId, user.id)
+        where: eq(deliveryBoys.userId, currentUserId)
       });
 
       if (existingDB) {
-        // Re-application / Update
+        // Purani entry update karo (Re-apply logic)
         const [updatedDB] = await tx.update(deliveryBoys)
           .set({
             name: fullName,
-            phone,
+            phone: phone,
+            email: email,
             vehicleType,
             vehicleNumber: vehicleNumber || existingDB.vehicleNumber,
             approvalStatus: 'pending', 
@@ -123,9 +125,9 @@ router.post('/register', async (req: Request, res: Response) => {
           .returning();
         return updatedDB;
       } else {
-        // Fresh Entry in Delivery Table
+        // Ekdum nayi entry delivery table mein
         const [newDB] = await tx.insert(deliveryBoys).values({
-          userId: user.id,
+          userId: currentUserId,
           firebaseUid,
           email,
           name: fullName,
@@ -141,33 +143,28 @@ router.post('/register', async (req: Request, res: Response) => {
       }
     });
 
-    // 3. Success Response & Notifications
-    if (!registrationResult) {
-      return res.status(500).json({ message: "Registration failed at the last step." });
+    // 3. ✅ ADMIN NOTIFICATION & RESPONSE
+    if (registrationResult) {
+      // Real-time update for Admin Dashboard
+      getIO().emit("admin:update", { 
+        type: "delivery-boy-register", 
+        data: registrationResult 
+      });
+
+      return res.status(201).json({
+        message: "Application submitted successfully. Accounts synced!",
+        deliveryBoy: registrationResult
+      });
     }
 
-    // एडमिन को रियल-टाइम सूचना भेजें
-    getIO().emit("admin:update", { 
-      type: "delivery-boy-register", 
-      data: registrationResult 
-    });
-
-    // प्रोफेशनल टच: WhatsApp नोटिफिकेशन (Optional but Recommended)
-    // await sendWhatsAppMessage(phone, `Welcome ${fullName}! Your delivery partner application is under review.`);
-
-    return res.status(201).json({
-      message: "Application submitted successfully.",
-      deliveryBoy: registrationResult
-    });
+    throw new Error("Transaction failed: Profile could not be saved.");
 
   } catch (error: any) {
-    console.error("❌ DeliveryBoy registration error:", error);
-    
-    if (error.message === "ALREADY_REGISTERED") {
-      return res.status(409).json({ message: "You are already registered as a delivery partner." });
-    }
-    
-    return res.status(500).json({ message: "Internal server error: " + error.message });
+    console.error("❌ Final DeliveryBoy registration error:", error);
+    return res.status(500).json({ 
+      message: "Internal server error", 
+      error: error.message 
+    });
   }
 });
 // ---
