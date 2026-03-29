@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import {
@@ -37,6 +37,7 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 // 📦 Form Validation Schema
 const sellerFormSchema = z.object({
   businessName: z.string().min(3).max(100),
+  
   description: z.string().min(10).max(500),
   businessAddress: z.string().min(10).max(200),
   city: z.string().min(2).max(50),
@@ -78,6 +79,7 @@ function useRegisterSeller(onClose: () => void, resetForm: () => void) {
         ...formData,
         firebaseUid: user.uid,
         email: user.email,
+        phone: formData.businessPhone,
         name: user.name,
       };
 
@@ -86,7 +88,7 @@ function useRegisterSeller(onClose: () => void, resetForm: () => void) {
           "POST",
           "/api/sellers/apply",
           payload,
-          user.idToken
+          
         );
         return response;
       } catch (error: any) {
@@ -133,9 +135,9 @@ export default function SellerOnboardingDialog({
       businessType: "grocery",
       description: "",
       businessAddress: "",
+      businessPhone: "",
       city: "",
       pincode: "",
-      businessPhone: "",
       gstNumber: "",
       bankAccountNumber: "",
       ifscCode: "",
@@ -294,12 +296,21 @@ export default function SellerOnboardingDialog({
                     <FormLabel>{label}</FormLabel>
                     <FormControl>
                       {type === "textarea" ? (
-                        <Textarea {...field} />
+                       <Textarea 
+  {...field} 
+  value={field.value ?? ""} />
                       ) : (
-                        <Input
-                          {...field}
-                          type={type === "number" ? "number" : "text"}
-                        />
+                       <Input
+  {...field}
+  // Null ko khali string ('') mein badal deta hai
+  value={field.value ?? ""} 
+  type={type === "number" ? "number" : "text"}
+  // Number fields ke liye extra safety (optional par achha hai)
+  onChange={(e) => {
+    const val = e.target.value;
+    field.onChange(type === "number" ? (val === "" ? "" : Number(val)) : val);
+  }}
+/>
                       )}
                     </FormControl>
                     <FormMessage />
