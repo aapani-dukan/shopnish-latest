@@ -183,7 +183,7 @@ const fetchAndSyncBackendUser = useCallback(
 
     setIsLoadingAuth(false);
   },
-  [user]
+  []
 );
 // ✅ 2. Google Sign-In Handler
 const signIn = useCallback(
