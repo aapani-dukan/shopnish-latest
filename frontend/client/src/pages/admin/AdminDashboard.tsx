@@ -4,11 +4,12 @@
 
 import React, { useState, useEffect } from "react"; 
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query"; 
-import { toast } from "../../hooks/use-toast";
+import { useToast } from "../../hooks/use-toast";
 import { Button } from "../../components/ui/button"; 
 import { Check, X, Loader2, Pencil, Upload } from "lucide-react";
 import api from "../../lib/api"; // ✅ api - assuming this is your Axios instance
 import { useSocket } from "../../hooks/useSocket"; 
+import { useAuth } from "../../hooks/useAuth";
 import { useNavigate } from "react-router-dom"; 
 import AdminSettingsPage from "./AdminSettingsPage"; 
 import AdminOrderDashboard from "./AdminOrderDashboard"; 
@@ -48,8 +49,11 @@ interface LayoutElement {
 const AdminDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("pending-vendors");
-  const { socket } = useSocket();
+  const { user, isAuthenticated, isLoadingAuth } = useAuth(); 
+  const { toast } = useToast();
   const navigate = useNavigate();
+  const { socket } = useSocket();
+  
 const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerType, setBannerType] = useState("main_banner");
   // अपनी स्टेट को ऐसे बदलें:
@@ -57,8 +61,38 @@ const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none"
   const [linkValue, setLinkValue] = useState<string>(""); // Product ID, Category ID, or URL based on linkType
 
   const [targetPincodes, setTargetPincodes] = useState<string>(""); // Comma separated pincodes ke liye
+ // ✅ 2. 🛡️ Admin Security Guard (Isse States ke thik niche rakhein)
+  useEffect(() => {
+    if (!isLoadingAuth) {
+      // Agar user logged in nahi hai YA uska role 'admin' nahi hai
+      if (!isAuthenticated || user?.role !== 'admin') {
+        toast({
+          title: "Access Denied! 🚫",
+          description: "Bhai, ye area sirf Admins ke liye hai. Wapas jao!",
+          variant: "destructive",
+        });
+        navigate("/"); // Home page par bhej do
+      }
+    }
+  }, [isAuthenticated, user?.role, isLoadingAuth, navigate]);
+
+  // ✅ 3. Loading UI (Jab tak check chal raha hai, screen khali na dikhe)
+  if (isLoadingAuth) {
+    return (
+      <div className="flex h-screen flex-col items-center justify-center bg-gray-50">
+        <Loader2 className="h-10 w-10 animate-spin text-primary mb-4" />
+        <p className="text-gray-600 font-medium">Verifying Admin Access...</p>
+      </div>
+    );
+  }
+
+  // ✅ 4. Double Safety (Taki unauthorized user ko dashboard ka UI ek second ke liye bhi na dikhe)
+  if (!user || user.role !== 'admin') {
+    return null; 
+  }
   // Socket.io real-time updates
   useEffect(() => {
+
     if (!socket) {
       console.log("Waiting for socket connection in AdminDashboard...");
       return;
