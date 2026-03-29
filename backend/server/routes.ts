@@ -11,7 +11,7 @@ import {
 import { AuthenticatedRequest } from "./middleware/verifyToken";
 import { requireAuth, requireAdminAuth } from "./middleware/authMiddleware";
 import { authAdmin } from "./lib/firebaseAdmin";
-import { eq,sql } from "drizzle-orm";
+import { eq,sql,or } from "drizzle-orm";
 import { authorize } from "./middleware/authorize";
 import { validateRequest } from "./middleware/validation";
 // ✅ Sub-route modules
@@ -179,6 +179,7 @@ router.get(
 });
 
 // 1. ✅ Initial Login: Check if Email exists or needs Phone
+// 1. ✅ Initial Login: Fixed Version
 router.post("/auth/initial-login", async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
@@ -187,23 +188,32 @@ router.post("/auth/initial-login", async (req: Request, res: Response) => {
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     const { uid: firebaseUid, email, name: fullName } = decodedToken;
 
-    // 🔍 Step A: Pehle EMAIL se check karein (Kyuki humne decide kiya hai Email mil gaya matlab user purana hai)
-    let [user] = await db.select().from(users).where(eq(users.email, email || ""));
+    // 🔍 Step A: Check by Firebase UID first (Best Practice) or Email
+    let [user] = await db.select().from(users).where(
+      or(
+        eq(users.firebaseUid, firebaseUid),
+        eq(users.email, email || "---non-existent---")
+      )
+    );
 
-    if (user) {
-      // ✅ User mil gaya! Iska matlab iska phone pehle se link ho chuka hai.
-      // Bas Firebase UID sync kar do agar badli ho toh.
+    // 🚩 FIX: Sirf user milna kaafi nahi hai, Phone bhi hona chahiye!
+    if (user && user.phone) { 
+      // Agar user hai AUR uska phone number bhi hai, tabhi bypass karo
       if (user.firebaseUid !== firebaseUid) {
         await db.update(users).set({ firebaseUid }).where(eq(users.id, user.id));
       }
       return res.status(200).json({ user, needsPhone: false });
     }
 
-    // ❌ User nahi mila: Iska matlab ya toh Naya hai ya Mobile App (Phone-only) wala user hai.
-    // Hum naya user abhi nahi banayenge, pehle phone maangenge.
+    // ❌ Agar user nahi mila YA user hai par Phone number missing hai
+    // Toh phone maango
     return res.status(200).json({ 
       needsPhone: true, 
-      tempData: { firebaseUid, email, fullName } 
+      tempData: { 
+        firebaseUid, 
+        email: email || user?.email, // Purana email agar user exist karta hai par phone nahi
+        fullName: fullName || `${user?.firstName} ${user?.lastName}`
+      } 
     });
 
   } catch (error: any) {

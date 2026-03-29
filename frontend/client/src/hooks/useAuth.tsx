@@ -92,24 +92,33 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
 
   
     // status <--- यह 'status' variable यहाँ से हटा दें, यह एक mistake है
-// ✅ 1. fetchAndSyncBackendUser: The Heart of Plan 3
 const fetchAndSyncBackendUser = useCallback(
   async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
     setIsLoadingAuth(true);
     setAuthError(null);
-    let dbUserData = null;
-let isAdminFromFirebase = false;
+    let dbUserData: any = null;
+    let isAdminFromFirebase = false;
+
     try {
       const idTokenResult = await fbUser.getIdTokenResult(forceRefreshIdToken);
       const idToken = idTokenResult.token;
-      const isAdminFromFirebase = idTokenResult.claims.admin === true;
+      isAdminFromFirebase = idTokenResult.claims.admin === true;
 
-      // STEP A: Pehle check karein ki kya user exist karta hai (/me call)
+      // --- STEP A: Profile Check ---
       try {
         const res = await apiRequest("GET", "/api/users/me");
         dbUserData = res.user || res;
         
-        // Agar user mil gaya aur uska phone bhi hai, toh login success
+        // 🚩 CHECK: User hai par Phone nahi hai? Toh sync par bhejo!
+        if (dbUserData && !dbUserData.phone) {
+           console.log("Profile found but phone missing. Triggering Modal.");
+           return { 
+             needsPhone: true, 
+             tempData: { firebaseUid: fbUser.uid, email: fbUser.email, fullName: fbUser.displayName } 
+           };
+        }
+
+        // Agar user + phone dono hain, toh seedha andar
         if (dbUserData && dbUserData.phone) {
           const newUserData: User = {
             uid: fbUser.uid,
@@ -122,7 +131,6 @@ let isAdminFromFirebase = false;
             deliveryBoyId: dbUserData.deliveryBoyId || null,
             isAdmin: isAdminFromFirebase,
           };
-
           setUser(newUserData);
           setIsAuthenticated(true);
           setIsAdmin(newUserData.isAdmin);
@@ -130,25 +138,21 @@ let isAdminFromFirebase = false;
           return { needsPhone: false, user: newUserData };
         }
       } catch (e: any) {
-        // Agar 404 hai, matlab user database mein nahi hai
-        console.warn("User profile not found or phone missing.");
+        console.warn("User profile not found. Moving to initial-login.");
       }
 
-      // STEP B: Agar user nahi mila ya phone missing hai, toh initial-login hit karein
-      console.log("Attempting initial-login to check phone status...");
+      // --- STEP B: Initial Login Check ---
       const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
 
-      // Agar backend bole ki phone chahiye (needsPhone: true)
       if (res.needsPhone) {
         setIsLoadingAuth(false);
-        setIsAuthenticated(false); // Abhi dashboard mat bhejo
+        setIsAuthenticated(false);
         return { 
           needsPhone: true, 
           tempData: { ...res.tempData, fullName: fbUser.displayName } 
         };
       }
 
-      // Agar backend ne user de diya (Already linked)
       dbUserData = res.user;
 
     } catch (err: any) {
@@ -158,7 +162,7 @@ let isAdminFromFirebase = false;
       return { error: err };
     }
 
-    // FINAL STEP: User Data finalize karein (Agar phone linked tha)
+    // FINAL STEP: Syncing complete
     if (dbUserData) {
       const finalUser: User = {
         uid: fbUser.uid,
@@ -169,7 +173,7 @@ let isAdminFromFirebase = false;
         idToken: await fbUser.getIdToken(),
         sellerProfile: dbUserData.sellerProfile || null,
         deliveryBoyId: dbUserData.deliveryBoyId || null,
-        isAdmin: dbUserData.isAdmin || isAdminFromFirebase || false,
+        isAdmin: isAdminFromFirebase || dbUserData.isAdmin || false,
       };
       setUser(finalUser);
       setIsAuthenticated(true);
@@ -181,7 +185,6 @@ let isAdminFromFirebase = false;
   },
   [user]
 );
-
 // ✅ 2. Google Sign-In Handler
 const signIn = useCallback(
   async (usePopup: boolean = false): Promise<AuthResponse | null> => {
