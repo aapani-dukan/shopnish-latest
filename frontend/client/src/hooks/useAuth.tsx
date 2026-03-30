@@ -112,6 +112,7 @@ const fetchAndSyncBackendUser = useCallback(
         // 🚩 CHECK: User hai par Phone nahi hai? Toh sync par bhejo!
         if (dbUserData && !dbUserData.phone) {
            console.log("Profile found but phone missing. Triggering Modal.");
+           setIsLoadingAuth(false);
            return { 
              needsPhone: true, 
              tempData: { firebaseUid: fbUser.uid, email: fbUser.email, fullName: fbUser.displayName } 

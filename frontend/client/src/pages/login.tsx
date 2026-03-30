@@ -37,7 +37,9 @@ export default function LoginPage() {
       navigate("/");
     }
   }, [isAuthenticated, navigate, showPhoneModal]);
-
+useEffect(() => {
+  console.log("Current Auth State:", { isAuthenticated, isLoadingAuth });
+}, [isAuthenticated, isLoadingAuth]);
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4">
       <div className="p-8 bg-white rounded-xl shadow-lg text-center max-w-md w-full">
