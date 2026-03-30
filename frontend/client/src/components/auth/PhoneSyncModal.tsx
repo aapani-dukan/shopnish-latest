@@ -63,7 +63,7 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Ek Akhri Kadam! 🚀</DialogTitle>
           <DialogDescription>
-            Bhai, apna mobile number link karein taaki aapka account safe rahe aur orders track ho sakein.
+             apna mobile number link karein taaki aapka account safe rahe aur orders track ho sakein.
           </DialogDescription>
         </DialogHeader>
         

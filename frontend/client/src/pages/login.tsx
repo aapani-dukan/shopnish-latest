@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react"; // ✅ React import zaroori hai
+import { useEffect } from "react"; 
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth"; 
 import { Button } from "@/components/ui/button";
@@ -8,38 +8,44 @@ import GoogleIcon from "@/components/ui/GoogleIcon";
 import { PhoneSyncModal } from "@/components/auth/PhoneSyncModal"; 
 
 export default function LoginPage() {
-  const { signIn, isAuthenticated, isLoadingAuth } = useAuth();
-  const navigate = useNavigate();
+  // ✅ useAuth se global sync states nikaali
+  const { 
+    signIn, 
+    isAuthenticated, 
+    isLoadingAuth, 
+    mustSyncPhone, 
+    tempData, 
+    setMustSyncPhone 
+  } = useAuth();
   
-  const [showPhoneModal, setShowPhoneModal] = useState(false);
-  const [tempUserData, setTempUserData] = useState<any>(null);
+  const navigate = useNavigate();
 
+  // 1. Manual Login Handler
   const handleGoogleSignIn = async () => {
     try {
-      // ✅ Tip: Login shuru hone par modal state reset karein
-      setShowPhoneModal(false); 
-      
       const response = await signIn(); 
       
+      // Agar manual click par response mein needsPhone aata hai
       if (response?.needsPhone) {
-        setTempUserData(response.tempData);
-        setShowPhoneModal(true);
+        setMustSyncPhone(true); 
       }
-      // Note: Agar response.user milta hai toh useAuth ka internal state 
-      // isAuthenticated ko true kar dega aur useEffect navigate kar dega.
     } catch (err) {
       console.error("Login Error:", err);
     }
   };
 
+  // 2. Navigation Logic: Jab user fully authenticated ho aur modal ki zaroorat na ho
   useEffect(() => {
-    if (isAuthenticated && !showPhoneModal) {
+    if (isAuthenticated && !mustSyncPhone) {
       navigate("/");
     }
-  }, [isAuthenticated, navigate, showPhoneModal]);
-useEffect(() => {
-  console.log("Current Auth State:", { isAuthenticated, isLoadingAuth });
-}, [isAuthenticated, isLoadingAuth]);
+  }, [isAuthenticated, mustSyncPhone, navigate]);
+
+  // Debugging ke liye logs
+  useEffect(() => {
+    console.log("Current Auth State:", { isAuthenticated, isLoadingAuth, mustSyncPhone });
+  }, [isAuthenticated, isLoadingAuth, mustSyncPhone]);
+
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-100 px-4">
       <div className="p-8 bg-white rounded-xl shadow-lg text-center max-w-md w-full">
@@ -48,10 +54,9 @@ useEffect(() => {
         
         <Button 
           onClick={handleGoogleSignIn} 
-          disabled={isLoadingAuth || showPhoneModal} // ✅ Modal khula ho tab bhi button disable rakhein
+          disabled={isLoadingAuth || mustSyncPhone} 
           className="w-full py-6 text-lg bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 shadow-sm transition-all"
         >
-          {/* ✅ Icon ki sizing aur margin ekdum perfect hai ab */}
           <GoogleIcon className="mr-3 w-6 h-6" />
           {isLoadingAuth ? "Checking account..." : "Continue with Google"}
         </Button>
@@ -61,14 +66,14 @@ useEffect(() => {
         </p>
       </div>
 
-      {showPhoneModal && (
+      {/* 📱 Modal ab Global State 'mustSyncPhone' se control ho raha hai */}
+      {mustSyncPhone && (
         <PhoneSyncModal 
-          isOpen={showPhoneModal}
-          tempData={tempUserData}
-          onSuccess={(_user) => {
-            setShowPhoneModal(false);
-            // ✅ Yahan ensure karein ki navigation tabhi ho jab state update ho jaye
-            setTimeout(() => navigate("/"), 100); 
+          isOpen={mustSyncPhone}
+          tempData={tempData} // Global context se data aa raha hai
+          onSuccess={() => {
+            setMustSyncPhone(false); // Modal band karo
+            // navigate("/") ki zaroorat nahi, upar wala useEffect handle kar lega
           }}
         />
       )}

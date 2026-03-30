@@ -63,6 +63,9 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isAdmin: boolean;
   error: AuthError | null;
+  mustSyncPhone: boolean; 
+  setMustSyncPhone: (val: boolean) => void;
+  tempData: any;
  signIn: (usePopup?: boolean) => Promise<AuthResponse | null>;
   signInWithEmailAndPassword: (email: string, password: string) => Promise<AuthResponse | null>; clearError: () => void;
  
@@ -85,7 +88,8 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [isAdmin, setIsAdmin] = useState(false); // ✅ camelCase
   const [authError, setAuthError] = useState<AuthError | null>(null); // ✅ camelCase
   const queryClient = useQueryClient(); // ✅ camelCase
-
+const [mustSyncPhone, setMustSyncPhone] = useState(false);
+const [tempData, setTempData] = useState<any>(null);
   const clearError = useCallback(() => { // ✅ camelCase
     setAuthError(null);
   }, []);
@@ -113,6 +117,12 @@ const fetchAndSyncBackendUser = useCallback(
         if (dbUserData && !dbUserData.phone) {
            console.log("Profile found but phone missing. Triggering Modal.");
            setIsLoadingAuth(false);
+           setTempData({ 
+    firebaseUid: fbUser.uid, 
+    email: fbUser.email, 
+    fullName: fbUser.displayName 
+  });
+  setMustSyncPhone(true);
            return { 
              needsPhone: true, 
              tempData: { firebaseUid: fbUser.uid, email: fbUser.email, fullName: fbUser.displayName } 
@@ -367,6 +377,9 @@ isAdmin: backendUser.role === "admin",
       isAuthenticated, // ✅ camelCase
             isAdmin, // ✅ camelCase
       error: authError, // ✅ camelCase
+      mustSyncPhone, // ✅ camelCase
+      setMustSyncPhone, // ✅ camelCase
+      tempData, // ✅ camelCase
       clearError, // ✅ camelCase
       signIn, // ✅ camelCase
       signOut, // ✅ camelCase
