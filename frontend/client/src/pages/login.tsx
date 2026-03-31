@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react"; 
+import { useEffect } from "react"; 
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "@/hooks/useAuth"; 
 import { Button } from "@/components/ui/button";
@@ -20,14 +20,14 @@ export default function LoginPage() {
   
   const navigate = useNavigate();
 
-  // 1. Fully Authenticated ho jaye to redirect karein
+  // 1. Success Redirect
   useEffect(() => {
     if (isAuthenticated && !mustSyncPhone) {
       navigate("/");
     }
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
-  // 2. Google Sign-In Trigger
+  // 2. Google Sign-In Handler
   const handleGoogleSignIn = async () => {
     try {
       const response = await signIn(true); 
@@ -39,64 +39,53 @@ export default function LoginPage() {
     }
   };
 
-  // --- RENDER LOGIC ---
+  // --- RENDER LOGIC: Switch Pattern ---
 
-  // CASE 1: Agar Modal active hai (Priority Return)
+  // 🚩 CASE 1: Agar Phone Sync zaroori hai, toh Login UI ko RENDER HI MAT KARO
+  // Isse loop physically toot jayega kyunki button screen par bachega hi nahi.
   if (mustSyncPhone) {
     return (
-      <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/80 backdrop-blur-sm">
-        <div className="w-full max-w-md p-4 animate-in fade-in zoom-in duration-300">
+      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white px-4">
+        <div className="w-full max-w-md">
           <PhoneSyncModal 
             isOpen={true} 
             tempData={tempData}
             onSuccess={() => {
               setMustSyncPhone(false);
-              window.location.replace("/"); // Sab saaf karke home par jao
+              window.location.replace("/"); 
             }}
           />
-          {/* Safety Text: Agar Modal render hone mein der kare */}
-          <p className="text-center text-muted-foreground text-xs mt-4 animate-pulse">
-            Verifying your details...
+          {/* Safety message agar modal render na ho */}
+          <p className="text-center text-sm text-gray-500 mt-8 animate-pulse">
+            Verifying your account details...
           </p>
         </div>
       </div>
     );
   }
 
-  // CASE 2: Normal Login Screen
+  // 🚩 CASE 2: Normal Login UI
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-slate-50 px-4">
-      <div className="p-10 bg-white rounded-3xl shadow-2xl border border-slate-100 text-center max-w-md w-full relative overflow-hidden">
-        {/* Decorative Background Element */}
-        <div className="absolute top-0 left-0 w-full h-2 bg-orange-500" />
-        
-        <div className="mb-10">
-          <h1 className="text-4xl font-black tracking-tight text-slate-900 mb-2">Shopnish</h1>
-          <p className="text-slate-500 font-medium italic">Apne business ki nayi pehchan</p>
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
+      <div className="p-8 bg-white rounded-3xl shadow-xl border border-gray-100 text-center max-w-md w-full">
+        <div className="mb-8">
+          <h1 className="text-4xl font-black text-gray-900">Shopnish</h1>
+          <p className="text-gray-500 mt-2">Apne business ko digital banayein</p>
         </div>
         
-        <div className="space-y-6">
-          <Button 
-            onClick={handleGoogleSignIn} 
-            disabled={isLoadingAuth} 
-            className="w-full py-8 text-lg bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-orange-500 shadow-sm transition-all rounded-2xl group"
-          >
-            {isLoadingAuth ? (
-              <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
-            ) : (
-              <GoogleIcon className="mr-3 w-6 h-6 group-hover:scale-110 transition-transform" />
-            )}
-            {isLoadingAuth ? "Checking account..." : "Continue with Google"}
-          </Button>
-          
-          <p className="text-[11px] text-slate-400 leading-relaxed">
-            By continuing, you agree to our <br />
-            <span className="text-orange-600 underline cursor-pointer font-semibold">Terms of Service</span> and <span className="text-orange-600 underline cursor-pointer font-semibold">Privacy Policy</span>.
-          </p>
-        </div>
+        <Button 
+          onClick={handleGoogleSignIn} 
+          disabled={isLoadingAuth} 
+          className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-orange-500 transition-all rounded-2xl"
+        >
+          {isLoadingAuth ? (
+            <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
+          ) : (
+            <GoogleIcon className="mr-3 w-6 h-6" />
+          )}
+          {isLoadingAuth ? "Checking..." : "Continue with Google"}
+        </Button>
       </div>
-
-      <p className="mt-8 text-sm text-slate-400 font-medium">© 2026 Shopnish Tech</p>
     </div>
   );
 }

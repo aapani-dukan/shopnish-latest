@@ -8,9 +8,10 @@ import {
   DialogContent, 
   DialogHeader, 
   DialogTitle, 
-  DialogDescription 
+  DialogDescription,
+  DialogPortal
 } from "@/components/ui/dialog";
-import api from "@/lib/api"; // Aapka axios ya fetch instance
+import api from "@/lib/api"; 
 
 interface PhoneSyncModalProps {
   isOpen: boolean;
@@ -29,8 +30,9 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (phone.length < 10) {
-      setError("Bhai, valid 10-digit number dalo.");
+    
+    if (phone.length !== 10) {
+      setError("Bhai, pura 10-digit number dalo.");
       return;
     }
 
@@ -38,14 +40,14 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
     setError("");
 
     try {
-      // 🚀 Hamara Master Sync Route jo humne backend mein banaya tha
+      // 🚀 Backend Sync Call
       const response = await api.post("/api/auth/sync-phone", {
         ...tempData,
         phone: phone,
       });
 
       if (response.data.user) {
-        // LocalStorage mein user data set karein (Login complete)
+        // LocalStorage update
         localStorage.setItem("user", JSON.stringify(response.data.user));
         onSuccess(response.data.user);
       }
@@ -59,38 +61,65 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
 
   return (
     <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogContent className="sm:max-w-[425px]">
-        <DialogHeader>
-          <DialogTitle className="text-xl font-bold">Ek Akhri Kadam! 🚀</DialogTitle>
-          <DialogDescription>
-             apna mobile number link karein taaki aapka account safe rahe aur orders track ho sakein.
-          </DialogDescription>
-        </DialogHeader>
-        
-        <form onSubmit={handleSubmit} className="space-y-4 py-4">
-          <div className="space-y-2">
-            <label className="text-sm font-medium">Mobile Number</label>
-            <div className="flex">
-              <span className="inline-flex items-center px-3 rounded-l-md border border-r-0 border-gray-300 bg-gray-50 text-gray-500 text-sm">
-                +91
-              </span>
-              <Input
-                type="tel"
-                placeholder="992830XXXX"
-                value={phone}
-                onChange={(e) => setPhone(e.target.value.replace(/\D/g, "").slice(0, 10))}
-                className="rounded-l-none"
-                required
-              />
+      <DialogPortal>
+        {/* ✅ Overlay ko dark aur blur kiya taaki focus modal par rahe */}
+        <DialogContent 
+          className="sm:max-w-[425px] z-[10001] gap-6" 
+          onPointerDownOutside={(e) => e.preventDefault()} // Bahar click karne par band na ho
+        >
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-slate-900">
+              Ek Akhri Kadam! 🚀
+            </DialogTitle>
+            {/* ✅ Description compulsory hai varna Radix UI crash hota hai */}
+            <DialogDescription className="text-slate-500 font-medium">
+              Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
+            </DialogDescription>
+          </DialogHeader>
+          
+          <form onSubmit={handleSubmit} className="space-y-6">
+            <div className="space-y-3">
+              <label className="text-sm font-bold text-slate-700 ml-1">Mobile Number</label>
+              <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-slate-100 focus-within:border-orange-500 transition-all">
+                <span className="inline-flex items-center px-4 bg-slate-50 text-slate-500 font-bold border-r border-slate-100">
+                  +91
+                </span>
+                <Input
+                  type="tel"
+                  inputMode="numeric" // Mobile keyboard numeric khulega
+                  placeholder="992830XXXX"
+                  value={phone}
+                  onChange={(e) => {
+                    const val = e.target.value.replace(/\D/g, "").slice(0, 10);
+                    setPhone(val);
+                    if (val.length === 10) setError("");
+                  }}
+                  className="border-0 focus-visible:ring-0 text-lg py-6"
+                  required
+                />
+              </div>
+              {error && (
+                <p className="text-red-500 text-xs font-bold animate-bounce ml-1">
+                  ⚠️ {error}
+                </p>
+              )}
             </div>
-            {error && <p className="text-red-500 text-xs">{error}</p>}
-          </div>
 
-          <Button type="submit" className="w-full" disabled={isSubmitting}>
-            {isSubmitting ? "Linking Account..." : "Confirm & Continue"}
-          </Button>
-        </form>
-      </DialogContent>
+            <Button 
+              type="submit" 
+              className="w-full py-7 text-lg font-bold bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 transition-all rounded-xl"
+              disabled={isSubmitting || phone.length < 10}
+            >
+              {isSubmitting ? "Linking Account..." : "Confirm & Continue"}
+            </Button>
+          </form>
+
+          {/* Footer note */}
+          <p className="text-[10px] text-center text-slate-400 font-medium">
+            Aapka data Shopnish par 100% safe hai.
+          </p>
+        </DialogContent>
+      </DialogPortal>
     </Dialog>
   );
 }
