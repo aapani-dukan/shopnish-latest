@@ -185,16 +185,18 @@ router.get(
 });
 
 // 1. ✅ Initial Login: Check if Email exists or needs Phone
-// 1. ✅ Initial Login: Fixed Version
 router.post("/auth/initial-login", async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
-    if (!idToken) return res.status(400).json({ message: "Token is required." });
+    if (!idToken) {
+      return res.status(400).json({ message: "Token is required." });
+    }
 
+    // 🔐 Firebase token verify
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     const { uid: firebaseUid, email, name: fullName } = decodedToken;
 
-    // 🔍 Step A: Check by Firebase UID first (Best Practice) or Email
+    // 🔍 Step 1: User find by UID or Email
     let [user] = await db.select().from(users).where(
       or(
         eq(users.firebaseUid, firebaseUid),
@@ -202,24 +204,46 @@ router.post("/auth/initial-login", async (req: Request, res: Response) => {
       )
     );
 
-    // 🚩 FIX: Sirf user milna kaafi nahi hai, Phone bhi hona chahiye!
-    if (user && user.phone) { 
-      // Agar user hai AUR uska phone number bhi hai, tabhi bypass karo
-      if (user.firebaseUid !== firebaseUid) {
-        await db.update(users).set({ firebaseUid }).where(eq(users.id, user.id));
-      }
-      return res.status(200).json({ user, needsPhone: false });
+    // 🆕 Step 2: Agar user nahi mila → create basic user (WITHOUT phone)
+    if (!user) {
+      console.log("🆕 Creating new user (no phone yet)");
+
+      const nameParts = fullName ? fullName.trim().split(/\s+/) : ["User", ""];
+      const firstName = nameParts[0];
+      const lastName = nameParts.slice(1).join(" ");
+
+      const [newUser] = await db.insert(users).values({
+        firebaseUid,
+        email: email || null,
+        firstName,
+        lastName,
+        role: "customer",
+        isCustomer: true,
+        isActive: true,
+        approvalStatus: "approved",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+
+      return res.status(200).json({
+        user: newUser,
+        needsPhone: true // 🔥 Phone abhi bhi required hai
+      });
     }
 
-    // ❌ Agar user nahi mila YA user hai par Phone number missing hai
-    // Toh phone maango
-    return res.status(200).json({ 
-      needsPhone: true, 
-      tempData: { 
-        firebaseUid, 
-        email: email || user?.email, // Purana email agar user exist karta hai par phone nahi
-        fullName: fullName || `${user?.firstName} ${user?.lastName}`
-      } 
+    // 🔄 Step 3: UID mismatch fix (important for merge cases)
+    if (user.firebaseUid !== firebaseUid) {
+      await db.update(users)
+        .set({ firebaseUid, updatedAt: new Date() })
+        .where(eq(users.id, user.id));
+    }
+
+    // 📱 Step 4: Check phone
+    const needsPhone = !user.phone || user.phone.trim() === "";
+
+    return res.status(200).json({
+      user,
+      needsPhone
     });
 
   } catch (error: any) {
@@ -227,7 +251,6 @@ router.post("/auth/initial-login", async (req: Request, res: Response) => {
     res.status(401).json({ message: "Authentication failed." });
   }
 });
-
 // 2. ✅ New Route: Sync Phone (The Master Sync Logic)
 router.post("/auth/sync-phone", async (req: Request, res: Response) => {
   try {
