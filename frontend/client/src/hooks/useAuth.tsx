@@ -117,10 +117,11 @@ const fetchAndSyncBackendUser = useCallback(
         if (dbUserData && !dbUserData.phone) {
            console.log("Profile found but phone missing. Triggering Modal.");
            setIsLoadingAuth(false);
-           setTempData({ 
-    firebaseUid: fbUser.uid, 
-    email: fbUser.email, 
-    fullName: fbUser.displayName 
+           setIsAuthenticated(false);
+           setTempData({
+    firebaseUid: fbUser.uid,
+    email: fbUser.email || "",
+    fullName: fbUser.displayName || "User"
   });
   setMustSyncPhone(true);
            return { 

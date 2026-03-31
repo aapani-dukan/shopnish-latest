@@ -67,16 +67,20 @@ export default function LoginPage() {
       </div>
 
       {/* 📱 Modal ab Global State 'mustSyncPhone' se control ho raha hai */}
-      {mustSyncPhone && (
-        <PhoneSyncModal 
-          isOpen={mustSyncPhone}
-          tempData={tempData} // Global context se data aa raha hai
-          onSuccess={() => {
-            setMustSyncPhone(false); // Modal band karo
-            // navigate("/") ki zaroorat nahi, upar wala useEffect handle kar lega
-          }}
-        />
-      )}
+      {/* LoginPage.tsx ke ekdum niche, main div ke andar */}
+{mustSyncPhone && (
+  <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50">
+    <PhoneSyncModal 
+      isOpen={true} // Forcefully true
+      tempData={tempData}
+      onSuccess={() => {
+        setMustSyncPhone(false);
+        // Page refresh ya dashboard navigation
+        window.location.href = "/"; 
+      }}
+    />
+  </div>
+)}
     </div>
   );
 }

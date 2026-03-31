@@ -58,7 +58,7 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   };
 
   return (
-    <Dialog open={isOpen}>
+    <Dialog open={isOpen} onOpenChange={() => {}}>
       <DialogContent className="sm:max-w-[425px]">
         <DialogHeader>
           <DialogTitle className="text-xl font-bold">Ek Akhri Kadam! 🚀</DialogTitle>
