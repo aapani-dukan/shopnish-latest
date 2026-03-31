@@ -5,6 +5,8 @@ import {
   useContext,
   useCallback,
   useMemo,
+  useRef,
+
 } from "react";
 import { User as FirebaseUser } from "firebase/auth";
 import { useQueryClient } from "@tanstack/react-query";
@@ -68,12 +70,12 @@ interface AuthContextType {
   tempData: any;
  signIn: (usePopup?: boolean) => Promise<AuthResponse | null>;
   signInWithEmailAndPassword: (email: string, password: string) => Promise<AuthResponse | null>; clearError: () => void;
- 
+  signUpWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUser | null>;
   signOut: () => Promise<void>;
   refetchUser: () => void;
   backendLogin: (email: string, password: string) => Promise<User>; // Delivery/Backend-only login
   
-  signUpWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUser | null>;
+  
   // 🚀 New: Password reset function
   resetPassword: (email: string) => Promise<void>;
 }
@@ -238,75 +240,89 @@ const signInWithEmailAndPassword = useCallback(
   },
   [fetchAndSyncBackendUser]
 );
+// ✅ signUpWithEmailAndPassword function define karein
+const signUpWithEmailAndPassword = useCallback(
+  async (email: string, password: string): Promise<any> => {
+    setIsLoadingAuth(true);
+    setAuthError(null);
+    try {
+      const fbUser = await firebaseSignUpWithEmail(email, password);
+      // Signup ke baad humein backend sync ki zaroorat nahi hoti turant, 
+      // kyunki naya user hamesha 'initial-login' flow se guzrega.
+      return fbUser; 
+    } catch (err: any) {
+      setAuthError(err as AuthError);
+      setIsLoadingAuth(false);
+      throw err;
+    }
+  },
+  [] 
+);
+// --- STEP 1: Loop Se Bachne Ke Liye Ek Constant Ref (Component ke bahar ya andar) ---
+const isSyncingRef = useRef(false);
 
-// ✅ 4. onAuthStateChanged (The Guard)
-// ✅ 4. onAuthStateChanged (The Guard)
+// --- STEP 2: Redirect Check (Ye sirf Page Load par 1 baar chalega) ---
 useEffect(() => {
-  const checkRedirectResult = async () => {
-    try { 
-      await firebaseHandleRedirectResult(); 
-    } catch (e) { 
-      console.error("Redirect error:", e); 
+  const handleRedirect = async () => {
+    try {
+      await firebaseHandleRedirectResult();
+    } catch (e) {
+      console.error("Redirect check failed:", e);
     }
   };
-  checkRedirectResult();
+  handleRedirect();
+}, []); // 👈 Empty array matlab sirf mounting par chalega, loop nahi karega
 
+// --- STEP 3: Main Auth Guard (The Guard) ---
+useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-    if (fbUser) {
-      if (!fbUser.email) {
-        setIsLoadingAuth(false);
-        return;
-      }
-
-      // 🚩 LOOP BREAKER: Agar Modal pehle se active hai, toh dobara sync na karein
-      if (mustSyncPhone) {
-        console.log("Modal already active, skipping sync check.");
-        setIsLoadingAuth(false); // Ensure loading is off
-        return; 
-      }
-
-      // Agar user login hai par hamare context (state) mein data nahi hai
-      if (!user || user.uid !== fbUser.uid) {
-        // Sync check (forceRefresh false rakhein normal flow mein)
-        const res = await fetchAndSyncBackendUser(fbUser, false);
-        
-        // 🔥 Phone missing handle ho chuka hai fetchAndSyncBackendUser ke andar
-        if (res?.needsPhone) {
-          console.log("OnAuthStateChanged: User needs phone sync.");
-          setIsLoadingAuth(false); // Modal dikhane ke liye loading band karein
-        }
-      } else {
-        // Agar user pehle se synced hai, toh loading band karo
-        setIsLoadingAuth(false);
-      }
-    } else {
-      // 🚪 Logout flow
+    // 🚩 1. Agar user logout hai
+    if (!fbUser) {
       setUser(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
       queryClient.clear();
       setIsLoadingAuth(false);
+      isSyncingRef.current = false;
+      return;
+    }
+
+    // 🚩 2. Agar Modal pehle se khula hai, toh aage mat badho
+    if (mustSyncPhone) {
+      console.log("Blocking loop: Modal already active.");
+      setIsLoadingAuth(false);
+      return;
+    }
+
+    // 🚩 3. Sync Logic (Only if user state is missing)
+    if (!user || user.uid !== fbUser.uid) {
+      // Agar pehle se koi request backend par hai, toh dusri mat bhejo
+      if (isSyncingRef.current) return;
+
+      isSyncingRef.current = true; // Lock Lagao
+      setIsLoadingAuth(true);
+
+      try {
+        const res = await fetchAndSyncBackendUser(fbUser, false);
+        
+        if (res?.needsPhone) {
+          console.log("Phone sync required, stopping automatic flow.");
+          // fetchAndSyncBackendUser ne already setMustSyncPhone(true) kar diya hoga
+        }
+      } catch (err) {
+        console.error("Auth Guard Sync Error:", err);
+      } finally {
+        isSyncingRef.current = false; // Lock Kholo
+        setIsLoadingAuth(false);
+      }
+    } else {
+      // User pehle se state mein hai
+      setIsLoadingAuth(false);
     }
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]); // ✅ perfect dependencies
-  // --- Email/Password Sign Up Handler (No change) ---
-  const signUpWithEmailAndPassword = useCallback(
-    async (email: string, password: string): Promise<FirebaseUser | null> => {
-      setIsLoadingAuth(true);
-      setAuthError(null);
-      try {
-        const fbUser = await firebaseSignUpWithEmail(email, password);
-        return fbUser; 
-      } catch (err: any) {
-        setAuthError(err as AuthError);
-        setIsLoadingAuth(false);
-        throw err;
-      }
-    },
-    [] 
-  );
+}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]);
 
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
@@ -390,42 +406,44 @@ isAdmin: backendUser.role === "admin",
     },
     []
   );
-  const authContextValue = useMemo( // ✅ camelCase
-    () => ({
-      user,
-      isLoadingAuth, // ✅ camelCase
-      isAuthenticated, // ✅ camelCase
-            isAdmin, // ✅ camelCase
-      error: authError, // ✅ camelCase
-      mustSyncPhone, // ✅ camelCase
-      setMustSyncPhone, // ✅ camelCase
-      tempData, // ✅ camelCase
-      clearError, // ✅ camelCase
-      signIn, // ✅ camelCase
-      signOut, // ✅ camelCase
-      refetchUser, // ✅ camelCase
-      backendLogin, // ✅ camelCase
-      signInWithEmailAndPassword, // ✅ camelCase
-      signUpWithEmailAndPassword, // ✅ camelCase
-      resetPassword, // ✅ camelCase
-    }),
-    [
-      user,
-      isLoadingAuth,
-      isAuthenticated,
-      isAdmin,
-      authError,
-      clearError,
-      signIn,
-      signOut,
-      refetchUser,
-      backendLogin,
-      signInWithEmailAndPassword,
-      signUpWithEmailAndPassword,
-      resetPassword,
-    ]
-  );
-
+  const authContextValue = useMemo(
+  () => ({
+    user,
+    isLoadingAuth,
+    isAuthenticated,
+    isAdmin,
+    error: authError,
+    mustSyncPhone, // ✅ 
+    setMustSyncPhone, // ✅ 
+    tempData, // ✅ 
+    clearError,
+    signIn,
+    signOut,
+    refetchUser,
+    backendLogin,
+    signInWithEmailAndPassword,
+    signUpWithEmailAndPassword,
+    resetPassword,
+  }),
+  [
+    user,
+    isLoadingAuth,
+    isAuthenticated,
+    isAdmin,
+    authError,
+    mustSyncPhone,    // 👈 Missing tha, add kar diya
+    setMustSyncPhone, // 👈 Missing tha, add kar diya
+    tempData,         // 👈 Missing tha, add kar diya
+    clearError,
+    signIn,
+    signOut,
+    refetchUser,
+    backendLogin,
+    signInWithEmailAndPassword,
+    signUpWithEmailAndPassword,
+    resetPassword,
+  ]
+);
   return (
     <AuthContext.Provider value={authContextValue}> {/* ✅ camelCase */}
       {children}
