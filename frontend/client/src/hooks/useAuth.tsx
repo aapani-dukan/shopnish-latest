@@ -240,31 +240,47 @@ const signInWithEmailAndPassword = useCallback(
 );
 
 // ✅ 4. onAuthStateChanged (The Guard)
+// ✅ 4. onAuthStateChanged (The Guard)
 useEffect(() => {
   const checkRedirectResult = async () => {
-    try { await firebaseHandleRedirectResult(); } catch (e) { console.error(e); }
+    try { 
+      await firebaseHandleRedirectResult(); 
+    } catch (e) { 
+      console.error("Redirect error:", e); 
+    }
   };
   checkRedirectResult();
 
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
     if (fbUser) {
-      if (!fbUser.email) return;
-if (mustSyncPhone) {
+      if (!fbUser.email) {
+        setIsLoadingAuth(false);
+        return;
+      }
+
+      // 🚩 LOOP BREAKER: Agar Modal pehle se active hai, toh dobara sync na karein
+      if (mustSyncPhone) {
         console.log("Modal already active, skipping sync check.");
+        setIsLoadingAuth(false); // Ensure loading is off
         return; 
       }
-      // Agar user login hai par hamare context mein data nahi hai
+
+      // Agar user login hai par hamare context (state) mein data nahi hai
       if (!user || user.uid !== fbUser.uid) {
-        // Check karein ki kya ye user authenticated hone layak hai (Phone check)
-        const res = await fetchAndSyncBackendUser(fbUser, true);
+        // Sync check (forceRefresh false rakhein normal flow mein)
+        const res = await fetchAndSyncBackendUser(fbUser, false);
         
-        // 🔥 AGAR PHONE MISSING HAI: Toh handle manually (don't auto-redirect)
+        // 🔥 Phone missing handle ho chuka hai fetchAndSyncBackendUser ke andar
         if (res?.needsPhone) {
           console.log("OnAuthStateChanged: User needs phone sync.");
-          // Iska matlab login.tsx apna modal dikhayega
+          setIsLoadingAuth(false); // Modal dikhane ke liye loading band karein
         }
+      } else {
+        // Agar user pehle se synced hai, toh loading band karo
+        setIsLoadingAuth(false);
       }
     } else {
+      // 🚪 Logout flow
       setUser(null);
       setIsAuthenticated(false);
       setIsAdmin(false);
@@ -274,7 +290,7 @@ if (mustSyncPhone) {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]);
+}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]); // ✅ perfect dependencies
   // --- Email/Password Sign Up Handler (No change) ---
   const signUpWithEmailAndPassword = useCallback(
     async (email: string, password: string): Promise<FirebaseUser | null> => {
