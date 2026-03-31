@@ -42,24 +42,13 @@ export const verifyToken = async (req: AuthenticatedRequest, res: Response, next
     // DB से यूजर निकालें
     let [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, decodedToken.uid));
 
-    // अगर यूजर नहीं है (Auto-Registration)
     if (!dbUser) {
-      const [newUser] = await db.insert(users).values({
-        firebaseUid: decodedToken.uid,
-        email: decodedToken.email || null,
-        phone: decodedToken.phone_number || null,
-        firstName: "New",
-        lastName: "User",
-        role: "customer",
-        isAdmin: false,       // ✅ नया
-        isSeller: false,      // ✅ नया
-        isDelivery: false,    // ✅ नया
-        approvalStatus: "approved",
-      }).returning();
-      
-      dbUser = newUser;
+      console.log(`⚠️ User ${decodedToken.email} not found in DB. Needs Sync.`);
+      return res.status(404).json({ 
+        message: 'User not found in database. Please complete registration.',
+        needsSync: true 
+      });
     }
-
     // ✅ 2. req.user में नए कॉलम्स मैप करें
     req.user = {
       id: dbUser.id,

@@ -91,7 +91,6 @@ router.post("/register", async (req: Request, res: Response) => {
 });
 
 // ✅ User Profile
-// ✅ User Profile (Updated for Multi-Role)
 router.get(
   "/users/me",
   requireAuth as any,
@@ -101,9 +100,15 @@ router.get(
       if (!userUuid) return res.status(401).json({ error: "Not authenticated." });
 
       let [user] = await db.select().from(users).where(eq(users.firebaseUid, userUuid));
-      if (!user) return res.status(404).json({ error: "User not found." });
+      
+      // 🚩 CHANGE 1: Agar user DB mein nahi hai, toh automatic create mat hone do
+      // Seedha 404 bhejo taaki Frontend 'initial-login' hit kare
+      if (!user) return res.status(404).json({ error: "User profile not found. Please sync." });
 
-      // 🔥 Virtual Role Mapping: पुरानी ऐप्स के लिए 'role' यहाँ जनरेट हो रहा है
+      // 🚩 CHANGE 2: "needsPhone" Flag check
+      // Agar user mil gaya par uska phone null/empty hai, toh response mein batao
+      const needsPhoneSync = !user.phone || user.phone.trim() === "";
+
       const virtualRole = user.isAdmin ? 'admin' : 
                           user.isSeller ? 'seller' : 
                           user.isDelivery ? 'delivery-boy' : 'customer';
@@ -111,7 +116,6 @@ router.get(
       const userWithRole = { ...user, role: virtualRole };
 
       let sellerInfo = null;
-      // अब 'user.isSeller' चेक करना ज़्यादा सुरक्षित है
       if (user.isSeller) {
         const [record] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, user.id));
         if (record) sellerInfo = record;
@@ -123,18 +127,20 @@ router.get(
         if (dboy) deliveryBoyId = dboy.id;
       }
 
+      // ✅ Final Response: needsPhone flag ke saath
       res.status(200).json({ 
         ...userWithRole, 
+        needsPhone: needsPhoneSync, // 🔥 Frontend ko signal
         sellerProfile: sellerInfo,
         deliveryBoyId 
       });
+      
     } catch (error: any) {
-      console.error(error);
+      console.error("❌ Error in /users/me:", error);
       res.status(500).json({ error: "Internal error." });
     }
   }
 );
-
 router.get(
   "/:orderId/tracking", // यह URL /api/orders/170/tracking को मैच करेगा
   requireAuth as any, // सुनिश्चित करें कि ग्राहक लॉग इन है
