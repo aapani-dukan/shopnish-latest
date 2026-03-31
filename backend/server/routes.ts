@@ -233,48 +233,88 @@ router.post("/auth/sync-phone", async (req: Request, res: Response) => {
   try {
     const { firebaseUid, email, phone, fullName } = req.body;
 
-    if (!phone) return res.status(400).json({ message: "Phone number is required." });
-
-    // 🔍 Step B: PHONE se check karein (Kya ye Mobile App wala user hai?)
-    let [existingUserByPhone] = await db.select().from(users).where(eq(users.phone, phone));
-
-    if (existingUserByPhone) {
-      // 🔄 MERGE: Mobile user mil gaya, ab usme Email aur UID link kar do
-      console.log(`🔄 Merging Phone ID ${existingUserByPhone.id} with Email ${email}`);
-      const [updatedUser] = await db.update(users).set({
-        email: email,
-        firebaseUid: firebaseUid,
-        updatedAt: new Date(),
-      }).where(eq(users.id, existingUserByPhone.id)).returning();
-
-      return res.status(200).json({ user: updatedUser, message: "Accounts merged successfully!" });
+    if (!phone) {
+      return res.status(400).json({ message: "Phone number is required." });
     }
 
-    // 🆕 NEW USER: Na Email mila na Phone, toh bilkul naya entry karo
-    console.log("🆕 Creating brand new user with Phone and Email");
-    const [firstName, ...lastNameParts] = fullName ? fullName.split(' ') : ['User', ''];
+    // 1. Pehle check karein: Kya ye Phone pehle se kisi account mein hai?
+    // (Ye un users ke liye hai jo pehle Mobile Number se login kar chuke hain)
+    let [existingUserByPhone] = await db
+      .select()
+      .from(users)
+      .where(eq(users.phone, phone));
+
+    if (existingUserByPhone) {
+      console.log(`🔄 Merging: Linking Google Email (${email}) to existing Phone ID (${existingUserByPhone.id})`);
+      
+      const [updatedUser] = await db
+        .update(users)
+        .set({
+          email: email || existingUserByPhone.email,
+          firebaseUid: firebaseUid, // Firebase UID link kar diya
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, existingUserByPhone.id))
+        .returning();
+
+      return res.status(200).json({ 
+        user: updatedUser, 
+        message: "Account merged successfully!" 
+      });
+    }
+
+    // 2. Agar Phone nahi mila, toh check karein: Kya ye Email/UID pehle se hai?
+    let [existingUserByUid] = await db
+      .select()
+      .from(users)
+      .where(eq(users.firebaseUid, firebaseUid));
+
+    if (existingUserByUid) {
+      // User hai par phone nahi tha, toh sirf phone update karo
+      const [updatedUser] = await db
+        .update(users)
+        .set({ 
+          phone: phone,
+          updatedAt: new Date() 
+        })
+        .where(eq(users.id, existingUserByUid.id))
+        .returning();
+      
+      return res.status(200).json({ user: updatedUser });
+    }
+
+    // 3. 🆕 NEW USER: Bilkul naya banda (Fresh Entry)
+    console.log("🆕 Creating brand new user entry in DB");
     
+    // FullName se First aur Last Name alag karein
+    const nameParts = fullName ? fullName.trim().split(/\s+/) : ["User", ""];
+    const fName = nameParts[0];
+    const lName = nameParts.slice(1).join(" ");
+
     const [newUser] = await db.insert(users).values({
       firebaseUid,
-      email,
-      phone,
-      firstName,
-      lastName: lastNameParts.join(' '),
-      role: 'customer',
-      approvalStatus: 'approved',
+      email: email || null,
+      phone: phone,
+      firstName: fName,
+      lastName: lName,
+      role: "customer", // Default Role
+      isCustomer: true,  // Aapke schema ke flags
+      isActive: true,
+      approvalStatus: "approved",
       createdAt: new Date(),
       updatedAt: new Date(),
     }).returning();
 
-    return res.status(201).json({ user: newUser });
+    return res.status(201).json({ 
+      user: newUser, 
+      message: "User created and synced successfully!" 
+    });
 
   } catch (error: any) {
     console.error("❌ Sync phone failed:", error);
-    res.status(500).json({ message: "Internal server error during sync." });
+    res.status(500).json({ message: "Internal server error", error: error.message });
   }
 });
-
-
 // ✅ Logout
 router.post("/auth/logout", async (req, res) => {
   const sessionCookie = req.cookies?.__session || "";
