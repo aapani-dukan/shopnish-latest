@@ -249,7 +249,10 @@ useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
     if (fbUser) {
       if (!fbUser.email) return;
-
+if (mustSyncPhone) {
+        console.log("Modal already active, skipping sync check.");
+        return; 
+      }
       // Agar user login hai par hamare context mein data nahi hai
       if (!user || user.uid !== fbUser.uid) {
         // Check karein ki kya ye user authenticated hone layak hai (Phone check)
@@ -271,7 +274,7 @@ useEffect(() => {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient, user]);
+}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]);
   // --- Email/Password Sign Up Handler (No change) ---
   const signUpWithEmailAndPassword = useCallback(
     async (email: string, password: string): Promise<FirebaseUser | null> => {
