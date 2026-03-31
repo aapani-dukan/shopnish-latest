@@ -156,17 +156,21 @@ const fetchAndSyncBackendUser = useCallback(
       }
 
       // --- STEP B: Initial Login Check ---
-      const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
+     // --- STEP B: Initial Login Check ---
+const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
 
-      if (res.needsPhone) {
-        setIsLoadingAuth(false);
-        setIsAuthenticated(false);
-        return { 
-          needsPhone: true, 
-          tempData: { ...res.tempData, fullName: fbUser.displayName } 
-        };
-      }
-
+if (res.needsPhone) {
+  // 🚩 YE CHARO LINES COMPULSORY HAIN LOOP TODNE KE LIYE
+  setTempData({ ...res.tempData, fullName: fbUser.displayName }); // Data save karo
+  setMustSyncPhone(true);        // 👈 YE MISSING THA (Modal on karo)
+  setIsAuthenticated(false);     // User abhi login nahi hai
+  setIsLoadingAuth(false);       // Loading spinner hatao
+  
+  return { 
+    needsPhone: true, 
+    tempData: { ...res.tempData, fullName: fbUser.displayName } 
+  };
+}
       dbUserData = res.user;
 
     } catch (err: any) {
@@ -274,41 +278,34 @@ useEffect(() => {
 }, []); // 👈 Empty array matlab sirf mounting par chalega, loop nahi karega
 
 // --- STEP 3: Main Auth Guard (The Guard) ---
+// --- STEP 3: Main Auth Guard ---
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-    // 🚩 1. Agar user logout hai
     if (!fbUser) {
       setUser(null);
       setIsAuthenticated(false);
-      setIsAdmin(false);
-      queryClient.clear();
       setIsLoadingAuth(false);
       isSyncingRef.current = false;
       return;
     }
 
-    // 🚩 2. Agar Modal pehle se khula hai, toh aage mat badho
+    // 🚩 Agar mustSyncPhone true hai, toh turant stop ho jao
     if (mustSyncPhone) {
       console.log("Blocking loop: Modal already active.");
-      setIsLoadingAuth(false);
+      setIsLoadingAuth(false); // 👈 Spinner band karo taaki modal dikhe
       return;
     }
 
-    // 🚩 3. Sync Logic (Only if user state is missing)
     if (!user || user.uid !== fbUser.uid) {
-      // Agar pehle se koi request backend par hai, toh dusri mat bhejo
       if (isSyncingRef.current) return;
-
-      isSyncingRef.current = true; // Lock Lagao
+      isSyncingRef.current = true;
       setIsLoadingAuth(true);
 
       try {
-        const res = await fetchAndSyncBackendUser(fbUser, false);
+        // Humne 'const res =' hata diya hai taaki TypeScript warning na de
+        await fetchAndSyncBackendUser(fbUser, false);
         
-        if (res?.needsPhone) {
-          console.log("Phone sync required, stopping automatic flow.");
-          // fetchAndSyncBackendUser ne already setMustSyncPhone(true) kar diya hoga
-        }
+        // Modal trigger logic ab fetchAndSyncBackendUser ke andar se handle ho rahi hai
       } catch (err) {
         console.error("Auth Guard Sync Error:", err);
       } finally {
@@ -322,8 +319,7 @@ useEffect(() => {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, queryClient, user, mustSyncPhone]);
-
+}, [fetchAndSyncBackendUser, user, mustSyncPhone]); // ✅ perfect
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
