@@ -20,14 +20,13 @@ export default function LoginPage() {
   
   const navigate = useNavigate();
 
-  // 1. Success Redirect
+  // Navigation Logic
   useEffect(() => {
     if (isAuthenticated && !mustSyncPhone) {
       navigate("/");
     }
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
-  // 2. Google Sign-In Handler
   const handleGoogleSignIn = async () => {
     try {
       const response = await signIn(true); 
@@ -39,14 +38,11 @@ export default function LoginPage() {
     }
   };
 
-  // --- RENDER LOGIC: Switch Pattern ---
-
-  // 🚩 CASE 1: Agar Phone Sync zaroori hai, toh Login UI ko RENDER HI MAT KARO
-  // Isse loop physically toot jayega kyunki button screen par bachega hi nahi.
+  // 🚩 STEP 1: Agar Modal active hai, toh Pura Page badal do
   if (mustSyncPhone) {
     return (
       <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white px-4">
-        <div className="w-full max-w-md">
+        <div className="w-full max-w-md text-center">
           <PhoneSyncModal 
             isOpen={true} 
             tempData={tempData}
@@ -55,28 +51,29 @@ export default function LoginPage() {
               window.location.replace("/"); 
             }}
           />
-          {/* Safety message agar modal render na ho */}
-          <p className="text-center text-sm text-gray-500 mt-8 animate-pulse">
-            Verifying your account details...
-          </p>
+          {/* Ek backup spinner agar modal load hone mein time le */}
+          <div className="mt-8 flex flex-col items-center gap-2">
+            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
+            <p className="text-gray-500 text-sm animate-pulse">Setting up your profile...</p>
+          </div>
         </div>
       </div>
     );
   }
 
-  // 🚩 CASE 2: Normal Login UI
+  // 🚩 STEP 2: Normal Login UI (Ye tabhi dikhega jab mustSyncPhone false ho)
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
       <div className="p-8 bg-white rounded-3xl shadow-xl border border-gray-100 text-center max-w-md w-full">
         <div className="mb-8">
           <h1 className="text-4xl font-black text-gray-900">Shopnish</h1>
-          <p className="text-gray-500 mt-2">Apne business ko digital banayein</p>
+          <p className="text-gray-500 mt-2 font-medium">Apne business ko digital banayein</p>
         </div>
         
         <Button 
           onClick={handleGoogleSignIn} 
           disabled={isLoadingAuth} 
-          className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-orange-500 transition-all rounded-2xl"
+          className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl"
         >
           {isLoadingAuth ? (
             <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
