@@ -14,60 +14,58 @@ export default function LoginPage() {
     isAuthenticated, 
     isLoadingAuth, 
     mustSyncPhone, 
-    tempData, 
-    setMustSyncPhone 
+    tempData 
   } = useAuth();
   
   const navigate = useNavigate();
 
-  // Navigation Logic
+  // ✅ Navigation Logic
   useEffect(() => {
     if (isAuthenticated && !mustSyncPhone) {
-      navigate("/");
+      navigate("/", { replace: true });
     }
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
   const handleGoogleSignIn = async () => {
     try {
-      const response = await signIn(true); 
-      if (response?.needsPhone) {
-        setMustSyncPhone(true); 
-      }
+      await signIn(true); // 🔥 state useAuth में handle होगा
     } catch (err) {
       console.error("Login Error:", err);
     }
   };
 
-  // 🚩 STEP 1: Agar Modal active hai, toh Pura Page badal do
-  if (mustSyncPhone) {
+  // 🚩 SAFETY: अगर phone sync required है लेकिन tempData नहीं है
+  if (mustSyncPhone && !tempData) {
     return (
-      <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-white px-4">
-        <div className="w-full max-w-md text-center">
-          <PhoneSyncModal 
-            isOpen={true} 
-            tempData={tempData}
-            onSuccess={() => {
-              setMustSyncPhone(false);
-              window.location.replace("/"); 
-            }}
-          />
-          {/* Ek backup spinner agar modal load hone mein time le */}
-          <div className="mt-8 flex flex-col items-center gap-2">
-            <Loader2 className="h-8 w-8 animate-spin text-orange-500" />
-            <p className="text-gray-500 text-sm animate-pulse">Setting up your profile...</p>
-          </div>
-        </div>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-gray-500">Something went wrong. Please refresh.</p>
       </div>
     );
   }
 
-  // 🚩 STEP 2: Normal Login UI (Ye tabhi dikhega jab mustSyncPhone false ho)
+  // 🚩 PHONE SYNC SCREEN (FULL BLOCK)
+  if (mustSyncPhone) {
+    return (
+      <PhoneSyncModal 
+        isOpen={true} 
+        tempData={tempData}
+        onSuccess={() => {
+          navigate("/", { replace: true });
+        }}
+      />
+    );
+  }
+
+  // 🚩 NORMAL LOGIN UI
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
       <div className="p-8 bg-white rounded-3xl shadow-xl border border-gray-100 text-center max-w-md w-full">
+        
         <div className="mb-8">
           <h1 className="text-4xl font-black text-gray-900">Shopnish</h1>
-          <p className="text-gray-500 mt-2 font-medium">Apne business ko digital banayein</p>
+          <p className="text-gray-500 mt-2 font-medium">
+            Apne business ko digital banayein
+          </p>
         </div>
         
         <Button 
@@ -82,6 +80,7 @@ export default function LoginPage() {
           )}
           {isLoadingAuth ? "Checking..." : "Continue with Google"}
         </Button>
+
       </div>
     </div>
   );
