@@ -14,84 +14,91 @@ export default function LoginPage() {
     isAuthenticated, 
     isLoadingAuth, 
     mustSyncPhone, 
-    tempData 
+    tempData,
+   // setMustSyncPhone // ✅ Context se state nikaali
   } = useAuth();
   
   const navigate = useNavigate();
 
-  // ✅ Navigation Logic
+  // ✅ 1. Navigation Logic: Full login ke baad hi dashboard bhejo
   useEffect(() => {
     if (isAuthenticated && !mustSyncPhone) {
       navigate("/", { replace: true });
     }
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
- const handleGoogleSignIn = async () => {
-  // 🔥 सबसे जरूरी line
-  if (mustSyncPhone || isAuthenticated) {
-    console.log("⛔ Login blocked (modal active या already logged in)");
-    return;
-  }
+  // ✅ 2. Login Handler
+  const handleGoogleSignIn = async () => {
+    if (mustSyncPhone || isAuthenticated) return;
 
-  try {
-    await signIn(true);
-  } catch (err) {
-    console.error("Login Error:", err);
-  }
-};
+    try {
+      await signIn(true);
+      // Note: useAuth ka useEffect khud hi check karke mustSyncPhone trigger karega
+    } catch (err) {
+      console.error("Login Error:", err);
+    }
+  };
 
-  // 🚩 SAFETY: अगर phone sync required है लेकिन tempData नहीं है
-  if (mustSyncPhone && !tempData) {
+  // 🚩 3. PHONE SYNC SCREEN (Full Block Layout)
+  if (mustSyncPhone) {
     return (
-      <div className="flex items-center justify-center min-h-screen">
-        <p className="text-gray-500">Something went wrong. Please refresh.</p>
+      <div className="flex flex-col items-center justify-center min-h-screen bg-white px-4">
+        {/* Background mein spinner taaki screen empty na lage */}
+        <Loader2 className="h-10 w-10 animate-spin text-orange-500 mb-4" />
+        <p className="text-gray-500 font-medium animate-pulse">Account setup kar rahe hain...</p>
+        
+        <PhoneSyncModal 
+          isOpen={true} 
+          tempData={tempData}
+          onSuccess={() => {
+            // Modal khud hi state clean kar raha hai, 
+            // bas navigate trigger kar do
+            navigate("/", { replace: true });
+          }}
+        />
       </div>
     );
   }
 
-  // 🚩 PHONE SYNC SCREEN (FULL BLOCK)
-  if (mustSyncPhone) {
-    return (
-      <PhoneSyncModal 
-        isOpen={true} 
-        tempData={tempData}
-      onSuccess={() => {
-          navigate("/", { replace: true });
-}}
-      />
-    );
-  }
-
-  // 🚩 NORMAL LOGIN UI
+  // 🚩 4. NORMAL LOGIN UI
   return (
     <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
-      <div className="p-8 bg-white rounded-3xl shadow-xl border border-gray-100 text-center max-w-md w-full">
+      <div className="p-10 bg-white rounded-3xl shadow-2xl border border-gray-100 text-center max-w-md w-full transition-all">
         
-        <div className="mb-8">
-          <h1 className="text-4xl font-black text-gray-900">Shopnish</h1>
-          <p className="text-gray-500 mt-2 font-medium">
-            Apne business ko digital banayein
+        <div className="mb-10">
+          <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
+             <span className="text-3xl">🛒</span>
+          </div>
+          <h1 className="text-4xl font-black tracking-tight text-gray-900">Shopnish</h1>
+          <p className="text-gray-400 mt-2 font-medium italic">
+            "Apne business ko digital banayein"
           </p>
         </div>
         
-       <Button 
-  onClick={handleGoogleSignIn} 
-  disabled={isLoadingAuth || mustSyncPhone} // 🔥 isAuthenticated हटाओ
-  className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
->
-  {isLoadingAuth ? (
-    <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
-  ) : (
-    <GoogleIcon className="mr-3 w-6 h-6" />
-  )}
-  {isLoadingAuth 
-    ? "Checking..." 
-    : mustSyncPhone 
-      ? "Complete Profile First" // 🔥 UX improvement
-      : "Continue with Google"}
-</Button>
+        <Button 
+          onClick={handleGoogleSignIn} 
+          disabled={isLoadingAuth || mustSyncPhone} 
+          className="w-full py-8 text-xl bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-orange-500 transition-all rounded-2xl shadow-sm disabled:opacity-70"
+        >
+          {isLoadingAuth ? (
+            <>
+              <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-600" />
+              Checking...
+            </>
+          ) : (
+            <>
+              <GoogleIcon className="mr-3 w-6 h-6" />
+              Continue with Google
+            </>
+          )}
+        </Button>
 
+        <p className="mt-8 text-[11px] text-gray-400 leading-relaxed uppercase tracking-widest font-bold">
+          100% Secure Authentication
+        </p>
       </div>
+      
+      <p className="mt-8 text-sm text-gray-400">© 2026 Shopnish Tech</p>
     </div>
   );
 }

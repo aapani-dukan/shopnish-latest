@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { 
@@ -9,17 +9,15 @@ import {
   DialogHeader, 
   DialogTitle, 
   DialogDescription,
-  DialogPortal
+  DialogPortal,
+  DialogOverlay
 } from "@/components/ui/dialog";
 import api from "@/lib/api"; 
 import { useAuth } from "@/hooks/useAuth";
+
 interface PhoneSyncModalProps {
   isOpen: boolean;
-  tempData: {
-    firebaseUid: string;
-    email: string;
-    fullName: string;
-  } | null;
+  tempData: any;
   onSuccess: (user: any) => void;
 }
 
@@ -27,8 +25,18 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   const [phone, setPhone] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
+  
+  // Hooks
+  const { setMustSyncPhone, setTempData } = useAuth();
 
-  const { setMustSyncPhone, setTempData } = useAuth(); // ✅ ADD
+  // Reset state when modal opens
+  useEffect(() => {
+    if (isOpen) {
+      setPhone("");
+      setError("");
+    }
+  }, [isOpen]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -41,22 +49,22 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
     setError("");
 
     try {
-      // 🚀 Backend Sync Call
       const response = await api.post("/api/auth/sync-phone", {
         ...tempData,
         phone: phone,
       });
 
       if (response.data.user) {
-  localStorage.setItem("user", JSON.stringify(response.data.user));
+        // 1. Pehle local storage set karein
+        localStorage.setItem("user", JSON.stringify(response.data.user));
 
-  // 🔥 IMPORTANT FIX
-  setMustSyncPhone(false);   // modal बंद
-  setTempData(null);         // temp data साफ
+        // 2. Global Auth states ko clean karein (Yahi loop break karega)
+        setMustSyncPhone(false);
+        setTempData(null);
 
-  onSuccess(response.data.user);
-}
-      
+        // 3. Success callback (Redirect etc.)
+        onSuccess(response.data.user);
+      }
     } catch (err: any) {
       console.error("Sync Error:", err);
       setError(err.response?.data?.message || "Kuch galat hua, phir koshish karein.");
@@ -66,37 +74,35 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   };
 
   return (
-<Dialog open={isOpen} onOpenChange={(open) => { if (!open) return; }}>
-  <DialogPortal>
-    <DialogContent 
-      className="sm:max-w-[425px] z-[10001] gap-6"
-      onPointerDownOutside={(e) => e.preventDefault()}
-      onEscapeKeyDown={(e) => e.preventDefault()}
-      aria-describedby="phone-sync-description"
-    >
-      <DialogHeader>
-        <DialogTitle className="text-2xl font-black text-slate-900">
-          Ek Akhri Kadam! 🚀
-        </DialogTitle>
-
-        <DialogDescription 
-          id="phone-sync-description"
-          className="text-slate-500 font-medium"
+    <Dialog open={isOpen}>
+      <DialogPortal>
+        {/* Overlay ko thoda dark rakho taaki piche ka loop na dikhe */}
+        <DialogOverlay className="bg-black/80 backdrop-blur-sm z-[10000]" /> 
+        
+        <DialogContent 
+          className="sm:max-w-[425px] z-[10001] gap-6 border-none shadow-2xl"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
         >
-          Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
-        </DialogDescription>
-      </DialogHeader>
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-black text-slate-900">
+              Ek Akhri Kadam! 🚀
+            </DialogTitle>
+            <DialogDescription className="text-slate-500 font-medium pt-2">
+              Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
+            </DialogDescription>
+          </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">
-              <label className="text-sm font-bold text-slate-700 ml-1">Mobile Number</label>
+              <label className="text-sm font-bold text-slate-700">Mobile Number</label>
               <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-slate-100 focus-within:border-orange-500 transition-all">
-                <span className="inline-flex items-center px-4 bg-slate-50 text-slate-500 font-bold border-r border-slate-100">
+                <span className="inline-flex items-center px-4 bg-slate-50 text-slate-500 font-bold border-r">
                   +91
                 </span>
                 <Input
                   type="tel"
-                  inputMode="numeric" // Mobile keyboard numeric khulega
+                  inputMode="numeric"
                   placeholder="992830XXXX"
                   value={phone}
                   onChange={(e) => {
@@ -104,12 +110,12 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
                     setPhone(val);
                     if (val.length === 10) setError("");
                   }}
-                  className="border-0 focus-visible:ring-0 text-lg py-6"
+                  className="border-0 focus-visible:ring-0 text-lg py-6 h-auto"
                   required
                 />
               </div>
               {error && (
-                <p className="text-red-500 text-xs font-bold animate-bounce ml-1">
+                <p className="text-red-500 text-xs font-bold animate-pulse ml-1">
                   ⚠️ {error}
                 </p>
               )}
@@ -117,14 +123,13 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
 
             <Button 
               type="submit" 
-              className="w-full py-7 text-lg font-bold bg-orange-500 hover:bg-orange-600 shadow-lg shadow-orange-200 transition-all rounded-xl"
+              className="w-full py-7 text-lg font-bold bg-orange-500 hover:bg-orange-600 shadow-lg transition-all rounded-xl"
               disabled={isSubmitting || phone.length < 10}
             >
               {isSubmitting ? "Linking Account..." : "Confirm & Continue"}
             </Button>
           </form>
 
-          {/* Footer note */}
           <p className="text-[10px] text-center text-slate-400 font-medium">
             Aapka data Shopnish par 100% safe hai.
           </p>
