@@ -1,11 +1,10 @@
 // client/src/components/auth-redirect-guard.tsx
-
 import React from "react";
 import { useAuth } from "@/hooks/useAuth";
 import { Navigate, useLocation, Outlet } from "react-router-dom";
 
 const AuthRedirectGuard = () => {
-  const { isAuthenticated, isLoadingAuth } = useAuth();
+  const { isAuthenticated, isLoadingAuth, mustSyncPhone } = useAuth(); // 👈 mustSyncPhone yahan se nikalo
   const location = useLocation();
 
   if (isLoadingAuth) {
@@ -16,13 +15,20 @@ const AuthRedirectGuard = () => {
     );
   }
 
-  if (!isAuthenticated) {
-    // अगर लॉग इन नहीं है, तो लॉगिन पेज पर रीडायरेक्ट करें
-    return <Navigate to="/auth" state={{ from: location.pathname }} replace />;
+  // 🚩🔥 Sabse bada Loop Breaker:
+  // Agar phone sync pending hai, toh redirect MAT KARO. 
+  // User ko wahi rehne do jahan LoginPage modal dikha raha hai.
+  if (mustSyncPhone) {
+    return <Outlet />; 
   }
 
-  // अगर उपयोगकर्ता लॉग इन है, तो बच्चों को रेंडर करें।
-    return <Outlet />; 
+  if (!isAuthenticated) {
+    // 🚩 Yahan dhyaan dena: Agar aapka LoginPage '/login' par hai, 
+    // toh niche '/auth' ko '/login' se badal dena.
+    return <Navigate to="/login" state={{ from: location.pathname }} replace />;
+  }
+
+  return <Outlet />; 
 };
 
 export default AuthRedirectGuard;
