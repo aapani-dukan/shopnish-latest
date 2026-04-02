@@ -26,13 +26,17 @@ export default function LoginPage() {
     }
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
-  const handleGoogleSignIn = async () => {
-  if (isLoadingAuth || mustSyncPhone) return; // 🔥 BLOCK
+ const handleGoogleSignIn = async () => {
+  // 🔥 सबसे जरूरी line
+  if (mustSyncPhone || isAuthenticated) {
+    console.log("⛔ Login blocked (modal active या already logged in)");
+    return;
+  }
 
   try {
     await signIn(true);
   } catch (err) {
-    console.error(err);
+    console.error("Login Error:", err);
   }
 };
 
@@ -52,7 +56,7 @@ export default function LoginPage() {
         isOpen={true} 
         tempData={tempData}
       onSuccess={() => {
-  window.location.replace("/"); // 🔥 hard reload (best fix)
+          navigate("/", { replace: true });
 }}
       />
     );
