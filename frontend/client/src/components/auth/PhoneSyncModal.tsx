@@ -60,22 +60,26 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   };
 
   return (
-    <Dialog open={isOpen} onOpenChange={() => {}}>
-      <DialogPortal>
-        {/* ✅ Overlay ko dark aur blur kiya taaki focus modal par rahe */}
-        <DialogContent 
-          className="sm:max-w-[425px] z-[10001] gap-6" 
-          onPointerDownOutside={(e) => e.preventDefault()} // Bahar click karne par band na ho
+<Dialog open={isOpen} onOpenChange={(open) => { if (!open) return; }}>
+  <DialogPortal>
+    <DialogContent 
+      className="sm:max-w-[425px] z-[10001] gap-6"
+      onPointerDownOutside={(e) => e.preventDefault()}
+      onEscapeKeyDown={(e) => e.preventDefault()}
+      aria-describedby="phone-sync-description"
+    >
+      <DialogHeader>
+        <DialogTitle className="text-2xl font-black text-slate-900">
+          Ek Akhri Kadam! 🚀
+        </DialogTitle>
+
+        <DialogDescription 
+          id="phone-sync-description"
+          className="text-slate-500 font-medium"
         >
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-900">
-              Ek Akhri Kadam! 🚀
-            </DialogTitle>
-            {/* ✅ Description compulsory hai varna Radix UI crash hota hai */}
-            <DialogDescription className="text-slate-500 font-medium">
-              Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
-            </DialogDescription>
-          </DialogHeader>
+          Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
+        </DialogDescription>
+      </DialogHeader>
           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">

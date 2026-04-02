@@ -27,12 +27,18 @@ export default function LoginPage() {
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
   const handleGoogleSignIn = async () => {
-    try {
-      await signIn(true); // 🔥 state useAuth में handle होगा
-    } catch (err) {
-      console.error("Login Error:", err);
+  try {
+    // 🚫 अगर modal खुला है या user already login है → STOP
+    if (mustSyncPhone || isAuthenticated) {
+      console.log("⛔ Skipping Google Sign-In");
+      return;
     }
-  };
+
+    await signIn(true);
+  } catch (err) {
+    console.error("Login Error:", err);
+  }
+};
 
   // 🚩 SAFETY: अगर phone sync required है लेकिन tempData नहीं है
   if (mustSyncPhone && !tempData) {
@@ -68,11 +74,11 @@ export default function LoginPage() {
           </p>
         </div>
         
-        <Button 
-          onClick={handleGoogleSignIn} 
-          disabled={isLoadingAuth} 
-          className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl"
-        >
+       <Button 
+  onClick={handleGoogleSignIn} 
+  disabled={isLoadingAuth || mustSyncPhone || isAuthenticated} // 🔥 FIX
+  className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl"
+>
           {isLoadingAuth ? (
             <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
           ) : (
