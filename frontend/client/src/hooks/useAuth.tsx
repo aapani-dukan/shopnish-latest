@@ -126,21 +126,30 @@ setAuthError(null);
         dbUserData = res.user || res;
         
         // 🚩 CHECK: User hai par Phone nahi hai? Toh sync par bhejo!
-        if (dbUserData && !dbUserData.phone) {
-           console.log("Profile found but phone missing. Triggering Modal.");
-           setIsLoadingAuth(false);
-           setIsAuthenticated(false);
-           setTempData({
+       if (dbUserData && !dbUserData.phone) {
+  console.log("🚩 Profile exists but phone missing. Locking Auth and triggering Modal.");
+
+  // 1. Pehle data taiyar karo (Consistent structure)
+  const syncData = {
     firebaseUid: fbUser.uid,
     email: fbUser.email || "",
     fullName: fbUser.displayName || "User"
-  });
+  };
+
+  // 2. Global states update karo
+  setTempData(syncData); 
   setMustSyncPhone(true);
-           return { 
-             needsPhone: true, 
-             tempData: { firebaseUid: fbUser.uid, email: fbUser.email, fullName: fbUser.displayName } 
-           };
-        }
+  
+  // 3. Auth states ko reset karo (Taaki user dashboard na dekh sake)
+  setIsAuthenticated(false);
+  setIsLoadingAuth(false); 
+
+  // 4. Return wahi data jo upar set kiya hai
+  return { 
+    needsPhone: true, 
+    tempData: syncData 
+  };
+}
 
         // Agar user + phone dono hain, toh seedha andar
         if (dbUserData && dbUserData.phone) {
@@ -201,8 +210,8 @@ if (res.needsPhone) {
         idToken: await fbUser.getIdToken(),
         sellerProfile: dbUserData.sellerProfile || null,
         deliveryBoyId: dbUserData.deliveryBoyId || null,
-        isAdmin: isAdminFromFirebase || dbUserData.isAdmin || false,
-      };
+       isAdmin: isAdminFromFirebase || dbUserData.is_admin || dbUserData.role === "admin",
+};
       setUser(finalUser);
       setIsAuthenticated(true);
       setIsLoadingAuth(false);
