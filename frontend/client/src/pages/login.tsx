@@ -15,12 +15,12 @@ export default function LoginPage() {
     isLoadingAuth, 
     mustSyncPhone, 
     tempData,
-   // setMustSyncPhone // ✅ Context se state nikaali
+    setMustSyncPhone 
   } = useAuth();
   
   const navigate = useNavigate();
 
-  // ✅ 1. Navigation Logic: Full login ke baad hi dashboard bhejo
+  // ✅ 1. Navigation Logic: Full login (with phone) ke baad hi dashboard
   useEffect(() => {
     if (isAuthenticated && !mustSyncPhone) {
       navigate("/", { replace: true });
@@ -29,76 +29,93 @@ export default function LoginPage() {
 
   // ✅ 2. Login Handler
   const handleGoogleSignIn = async () => {
+    // Agar modal khula hai ya user pehle se login hai, toh click block karo
     if (mustSyncPhone || isAuthenticated) return;
 
     try {
       await signIn(true);
-      // Note: useAuth ka useEffect khud hi check karke mustSyncPhone trigger karega
     } catch (err) {
       console.error("Login Error:", err);
     }
   };
 
-  // 🚩 3. PHONE SYNC SCREEN (Full Block Layout)
+  // 🚩 3. PHONE SYNC SCREEN (Priority Render)
+  // Jab mustSyncPhone true hoga, tab niche wala pura UI render hi nahi hoga.
+  // Isse loop physically break ho jayega.
   if (mustSyncPhone) {
     return (
-      <div className="flex flex-col items-center justify-center min-h-screen bg-white px-4">
-        {/* Background mein spinner taaki screen empty na lage */}
-        <Loader2 className="h-10 w-10 animate-spin text-orange-500 mb-4" />
-        <p className="text-gray-500 font-medium animate-pulse">Account setup kar rahe hain...</p>
+      <div className="fixed inset-0 z-[9999] flex flex-col items-center justify-center bg-white px-4">
+        {/* Background Spinner taaki screen blank na lage */}
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-12 w-12 animate-spin text-orange-500" />
+          <p className="text-slate-500 font-bold animate-pulse tracking-tight">
+            Account setup kar rahe hain...
+          </p>
+        </div>
         
+        {/* Modal Entry */}
         <PhoneSyncModal 
           isOpen={true} 
           tempData={tempData}
           onSuccess={() => {
-            // Modal khud hi state clean kar raha hai, 
-            // bas navigate trigger kar do
+            // Modal state clean up useAuth mein hi handle ho raha hai
             navigate("/", { replace: true });
           }}
         />
+        
+        {/* Modal visibility safety check */}
+        <div className="absolute bottom-10 text-[10px] text-slate-300 uppercase tracking-widest">
+          Secure Identity Verification
+        </div>
       </div>
     );
   }
 
   // 🚩 4. NORMAL LOGIN UI
   return (
-    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4">
-      <div className="p-10 bg-white rounded-3xl shadow-2xl border border-gray-100 text-center max-w-md w-full transition-all">
+    <div className="flex flex-col items-center justify-center min-h-screen bg-gray-50 px-4 overflow-hidden">
+      <div className="p-10 bg-white rounded-3xl shadow-2xl border border-gray-100 text-center max-w-md w-full transition-all duration-300">
         
         <div className="mb-10">
-          <div className="w-16 h-16 bg-orange-50 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-inner">
-             <span className="text-3xl">🛒</span>
+          <div className="w-20 h-20 bg-orange-50 rounded-3xl flex items-center justify-center mx-auto mb-6 shadow-inner border border-orange-100">
+             <span className="text-4xl">🛒</span>
           </div>
-          <h1 className="text-4xl font-black tracking-tight text-gray-900">Shopnish</h1>
-          <p className="text-gray-400 mt-2 font-medium italic">
+          <h1 className="text-4xl font-black tracking-tighter text-gray-900">Shopnish</h1>
+          <p className="text-slate-400 mt-2 font-medium italic">
             "Apne business ko digital banayein"
           </p>
         </div>
         
-        <Button 
-          onClick={handleGoogleSignIn} 
-          disabled={isLoadingAuth || mustSyncPhone} 
-          className="w-full py-8 text-xl bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 hover:border-orange-500 transition-all rounded-2xl shadow-sm disabled:opacity-70"
-        >
-          {isLoadingAuth ? (
-            <>
-              <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-600" />
-              Checking...
-            </>
-          ) : (
-            <>
-              <GoogleIcon className="mr-3 w-6 h-6" />
-              Continue with Google
-            </>
-          )}
-        </Button>
+        <div className="space-y-4">
+          <Button 
+            onClick={handleGoogleSignIn} 
+            disabled={isLoadingAuth} 
+            className="w-full py-8 text-xl bg-white border-2 border-slate-200 text-slate-700 hover:bg-slate-50 hover:border-orange-400 transition-all rounded-2xl shadow-sm disabled:opacity-80"
+          >
+            {isLoadingAuth ? (
+              <>
+                <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-600" />
+                Verifying...
+              </>
+            ) : (
+              <>
+                <GoogleIcon className="mr-3 w-6 h-6" />
+                Continue with Google
+              </>
+            )}
+          </Button>
+          
+          <p className="text-[11px] text-slate-400 leading-relaxed font-medium px-4">
+            By continuing, you agree to Shopnish's <span className="text-orange-500 underline underline-offset-2">Terms</span> and <span className="text-orange-500 underline underline-offset-2">Privacy Policy</span>.
+          </p>
+        </div>
 
-        <p className="mt-8 text-[11px] text-gray-400 leading-relaxed uppercase tracking-widest font-bold">
-          100% Secure Authentication
-        </p>
+        <div className="mt-12 pt-6 border-t border-slate-50">
+          <p className="text-[10px] text-slate-300 uppercase tracking-widest font-bold">
+            © 2026 Shopnish Tech
+          </p>
+        </div>
       </div>
-      
-      <p className="mt-8 text-sm text-gray-400">© 2026 Shopnish Tech</p>
     </div>
   );
 }
