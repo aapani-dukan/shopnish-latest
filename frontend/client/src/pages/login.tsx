@@ -76,16 +76,20 @@ export default function LoginPage() {
         
        <Button 
   onClick={handleGoogleSignIn} 
-  disabled={isLoadingAuth || mustSyncPhone || isAuthenticated} // 🔥 FIX
-  className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl"
+  disabled={isLoadingAuth || mustSyncPhone} // 🔥 isAuthenticated हटाओ
+  className="w-full py-7 text-lg bg-white border-2 border-gray-200 text-gray-700 hover:bg-gray-50 transition-all rounded-2xl disabled:opacity-60 disabled:cursor-not-allowed"
 >
-          {isLoadingAuth ? (
-            <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
-          ) : (
-            <GoogleIcon className="mr-3 w-6 h-6" />
-          )}
-          {isLoadingAuth ? "Checking..." : "Continue with Google"}
-        </Button>
+  {isLoadingAuth ? (
+    <Loader2 className="mr-3 h-6 w-6 animate-spin text-orange-500" />
+  ) : (
+    <GoogleIcon className="mr-3 w-6 h-6" />
+  )}
+  {isLoadingAuth 
+    ? "Checking..." 
+    : mustSyncPhone 
+      ? "Complete Profile First" // 🔥 UX improvement
+      : "Continue with Google"}
+</Button>
 
       </div>
     </div>

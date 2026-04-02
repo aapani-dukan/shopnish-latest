@@ -103,11 +103,14 @@ const fetchAndSyncBackendUser = useCallback(
 
     // 🚩🔥 MASTER GUARD (सबसे important)
     if (mustSyncPhone) {
-      console.log("⛔ Skipping backend sync (phone modal active)");
-      return { needsPhone: true };
-    }
-    setIsLoadingAuth(true);
-    setAuthError(null);
+  console.log("⛔ Skipping backend sync (phone modal active)");
+
+  setIsLoadingAuth(false); // 🔥 VERY IMPORTANT
+  return { needsPhone: true };
+}
+
+setIsLoadingAuth(true);
+setAuthError(null);
     let dbUserData: any = null;
     let isAdminFromFirebase = false;
 
