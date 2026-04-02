@@ -100,6 +100,12 @@ const [tempData, setTempData] = useState<any>(null);
     // status <--- यह 'status' variable यहाँ से हटा दें, यह एक mistake है
 const fetchAndSyncBackendUser = useCallback(
   async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
+
+    // 🚩🔥 MASTER GUARD (सबसे important)
+    if (mustSyncPhone) {
+      console.log("⛔ Skipping backend sync (phone modal active)");
+      return { needsPhone: true };
+    }
     setIsLoadingAuth(true);
     setAuthError(null);
     let dbUserData: any = null;
