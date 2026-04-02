@@ -12,7 +12,7 @@ import {
   DialogPortal
 } from "@/components/ui/dialog";
 import api from "@/lib/api"; 
-
+import { useAuth } from "@/hooks/useAuth";
 interface PhoneSyncModalProps {
   isOpen: boolean;
   tempData: {
@@ -28,6 +28,7 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState("");
 
+  const { setMustSyncPhone, setTempData } = useAuth(); // ✅ ADD
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
@@ -47,10 +48,15 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
       });
 
       if (response.data.user) {
-        // LocalStorage update
-        localStorage.setItem("user", JSON.stringify(response.data.user));
-        onSuccess(response.data.user);
-      }
+  localStorage.setItem("user", JSON.stringify(response.data.user));
+
+  // 🔥 IMPORTANT FIX
+  setMustSyncPhone(false);   // modal बंद
+  setTempData(null);         // temp data साफ
+
+  onSuccess(response.data.user);
+}
+      
     } catch (err: any) {
       console.error("Sync Error:", err);
       setError(err.response?.data?.message || "Kuch galat hua, phir koshish karein.");

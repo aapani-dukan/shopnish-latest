@@ -68,6 +68,7 @@ interface AuthContextType {
   mustSyncPhone: boolean; 
   setMustSyncPhone: (val: boolean) => void;
   tempData: any;
+  setTempData: React.Dispatch<React.SetStateAction<any>>;
  signIn: (usePopup?: boolean) => Promise<AuthResponse | null>;
   signInWithEmailAndPassword: (email: string, password: string) => Promise<AuthResponse | null>; clearError: () => void;
   signUpWithEmailAndPassword: (email: string, password: string) => Promise<FirebaseUser | null>;
@@ -287,9 +288,9 @@ useEffect(() => {
 }, []); // 👈 Empty array matlab sirf mounting par chalega, loop nahi karega
 
 // --- STEP 3: Main Auth Guard (The Guard) ---
-// --- STEP 3: Main Auth Guard ---
 useEffect(() => {
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+
     if (!fbUser) {
       setUser(null);
       setIsAuthenticated(false);
@@ -298,37 +299,36 @@ useEffect(() => {
       return;
     }
 
-    // 🚩 Agar mustSyncPhone true hai, toh turant stop ho jao
-   if (mustSyncPhone) {
-  console.log("🚫 Blocking auth sync: Modal active");
-  setIsLoadingAuth(false);
-  return;
-}
+    // 🚫 Modal active → kuch mat karo
+    if (mustSyncPhone) {
+      console.log("⛔ Modal active - skipping backend sync");
+      setIsLoadingAuth(false);
+      return;
+    }
 
-   if (!mustSyncPhone && (!user || user.uid !== fbUser.uid)) {
-      if (isSyncingRef.current) return;
-      isSyncingRef.current = true;
+    // 🚫 Already same user → kuch mat karo
+    if (user && user.uid === fbUser.uid) {
+      setIsLoadingAuth(false);
+      return;
+    }
+
+    // 🔒 Lock
+    if (isSyncingRef.current) return;
+    isSyncingRef.current = true;
+
+    try {
       setIsLoadingAuth(true);
-
-      try {
-        // Humne 'const res =' hata diya hai taaki TypeScript warning na de
-        await fetchAndSyncBackendUser(fbUser, false);
-        
-        // Modal trigger logic ab fetchAndSyncBackendUser ke andar se handle ho rahi hai
-      } catch (err) {
-        console.error("Auth Guard Sync Error:", err);
-      } finally {
-        isSyncingRef.current = false; // Lock Kholo
-        setIsLoadingAuth(false);
-      }
-    } else {
-      // User pehle se state mein hai
+      await fetchAndSyncBackendUser(fbUser);
+    } catch (err) {
+      console.error("Auth Guard Sync Error:", err);
+    } finally {
+      isSyncingRef.current = false;
       setIsLoadingAuth(false);
     }
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, mustSyncPhone]); // ✅ perfect
+}, [fetchAndSyncBackendUser, mustSyncPhone, user]);
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
@@ -421,6 +421,7 @@ isAdmin: backendUser.role === "admin",
     mustSyncPhone, // ✅ 
     setMustSyncPhone, // ✅ 
     tempData, // ✅ 
+    setTempData,
     clearError,
     signIn,
     signOut,
@@ -438,7 +439,8 @@ isAdmin: backendUser.role === "admin",
     authError,
     mustSyncPhone,    // 👈 Missing tha, add kar diya
     setMustSyncPhone, // 👈 Missing tha, add kar diya
-    tempData,         // 👈 Missing tha, add kar diya
+    tempData, 
+    setTempData,
     clearError,
     signIn,
     signOut,

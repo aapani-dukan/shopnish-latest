@@ -27,16 +27,12 @@ export default function LoginPage() {
   }, [isAuthenticated, mustSyncPhone, navigate]);
 
   const handleGoogleSignIn = async () => {
-  try {
-    // 🚫 अगर modal खुला है या user already login है → STOP
-    if (mustSyncPhone || isAuthenticated) {
-      console.log("⛔ Skipping Google Sign-In");
-      return;
-    }
+  if (isLoadingAuth || mustSyncPhone) return; // 🔥 BLOCK
 
+  try {
     await signIn(true);
   } catch (err) {
-    console.error("Login Error:", err);
+    console.error(err);
   }
 };
 
