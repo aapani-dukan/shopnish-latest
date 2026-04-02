@@ -49,9 +49,9 @@ export default function LoginPage() {
       <PhoneSyncModal 
         isOpen={true} 
         tempData={tempData}
-        onSuccess={() => {
-          navigate("/", { replace: true });
-        }}
+      onSuccess={() => {
+  window.location.replace("/"); // 🔥 hard reload (best fix)
+}}
       />
     );
   }

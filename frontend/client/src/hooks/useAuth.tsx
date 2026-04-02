@@ -290,13 +290,13 @@ useEffect(() => {
     }
 
     // 🚩 Agar mustSyncPhone true hai, toh turant stop ho jao
-    if (mustSyncPhone) {
-      console.log("Blocking loop: Modal already active.");
-      setIsLoadingAuth(false); // 👈 Spinner band karo taaki modal dikhe
-      return;
-    }
+   if (mustSyncPhone) {
+  console.log("🚫 Blocking auth sync: Modal active");
+  setIsLoadingAuth(false);
+  return;
+}
 
-    if (!user || user.uid !== fbUser.uid) {
+   if (!mustSyncPhone && (!user || user.uid !== fbUser.uid)) {
       if (isSyncingRef.current) return;
       isSyncingRef.current = true;
       setIsLoadingAuth(true);
@@ -319,7 +319,7 @@ useEffect(() => {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, user, mustSyncPhone]); // ✅ perfect
+}, [fetchAndSyncBackendUser, mustSyncPhone]); // ✅ perfect
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
