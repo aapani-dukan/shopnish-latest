@@ -76,7 +76,7 @@ function App() {
   return (
     <>  
       {/* 1. Header sirf tab dikhao jab phone synced ho */}
-      {!mustSyncPhone && <Header onCartClick={() => setIsCartModalOpen(true)} />}
+      <Header onCartClick={() => setIsCartModalOpen(true)} />
       
       {/* 2. Main content area */}
       <main className={mustSyncPhone ? "w-full h-screen overflow-hidden" : "min-h-screen"}>
