@@ -74,35 +74,40 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   };
 
   return (
-   <Dialog open={isOpen} onOpenChange={(open) => { if(!open) return; }}> 
-      <DialogPortal>
-        <DialogOverlay className="bg-black/90 backdrop-blur-md z-[10000] fixed inset-0" /> 
-        
-        <DialogContent 
-          // 🚩 Change 2: 'fixed' aur 'translate' classes ensure karein
-          className="fixed left-[50%] top-[50%] z-[10001] w-[90%] max-w-[425px] translate-x-[-50%] translate-y-[-50%] gap-6 border-none shadow-2xl bg-white p-6 rounded-3xl duration-200"
-          onPointerDownOutside={(e) => e.preventDefault()}
-          onEscapeKeyDown={(e) => e.preventDefault()}
-          // 🚩 Change 3: Manual ID for description warning (Optional but safer)
-          aria-describedby="phone-sync-description"
-        >
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">
-              Ek Akhri Kadam! 🚀
-            </DialogTitle>
-            <DialogDescription 
-              id="phone-sync-description" // Warning fix
-              className="text-slate-500 font-medium pt-2"
-            >
-              Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
-            </DialogDescription>
-          </DialogHeader>
-           
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="space-y-3">
-              <label className="text-sm font-bold text-slate-700">Mobile Number</label>
-              <div className="flex shadow-sm rounded-xl overflow-hidden border-2 border-slate-100 focus-within:border-orange-500 transition-all">
-                <span className="inline-flex items-center px-4 bg-slate-50 text-slate-500 font-bold border-r">
+  <Dialog open={isOpen} onOpenChange={(open) => { if(!open) return; }}> 
+    <DialogPortal>
+      {/* 1. Overlay ko full screen aur dark rakho */}
+      <DialogOverlay className="bg-black/80 backdrop-blur-sm z-[10000] fixed inset-0" /> 
+      
+      <DialogContent 
+        // 2. 'aria-describedby' ko explicitly wahi ID do jo niche description ki hai
+        aria-describedby="phone-sync-description"
+        className="fixed left-[50%] top-[50%] z-[10001] w-[95%] max-w-[400px] translate-x-[-50%] translate-y-[-50%] gap-6 border-none shadow-2xl bg-white p-8 rounded-[2rem] duration-300 animate-in fade-in zoom-in-95"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
+      >
+        <DialogHeader className="space-y-3">
+          <DialogTitle className="text-3xl font-black text-slate-900 tracking-tighter leading-tight">
+            Ek Akhri Kadam! 🚀
+          </DialogTitle>
+          
+          {/* 🚩 Warning Fix: ID pakka check karo 'phone-sync-description' hi ho */}
+          <DialogDescription 
+            id="phone-sync-description" 
+            className="text-slate-500 font-medium text-sm leading-relaxed"
+          >
+            Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
+          </DialogDescription>
+        </DialogHeader>
+
+        <form onSubmit={handleSubmit} className="space-y-6 mt-2">
+          <div className="space-y-4">
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-bold text-slate-400 uppercase tracking-widest ml-1">
+                Mobile Number
+              </label>
+              <div className="flex shadow-sm rounded-2xl overflow-hidden border-2 border-slate-100 focus-within:border-orange-500 transition-all bg-slate-50/50">
+                <span className="inline-flex items-center px-5 bg-slate-100 text-slate-600 font-black border-r border-slate-200">
                   +91
                 </span>
                 <Input
@@ -115,31 +120,36 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
                     setPhone(val);
                     if (val.length === 10) setError("");
                   }}
-                  className="border-0 focus-visible:ring-0 text-lg py-6 h-auto"
+                  className="border-0 focus-visible:ring-0 text-xl py-7 h-auto bg-transparent font-bold tracking-tight"
                   required
+                  autoFocus // 👈 Direct focus taaki keyboard khul jaye
                 />
               </div>
-              {error && (
-                <p className="text-red-500 text-xs font-bold animate-pulse ml-1">
-                  ⚠️ {error}
-                </p>
-              )}
             </div>
 
-            <Button 
-              type="submit" 
-              className="w-full py-7 text-lg font-bold bg-orange-500 hover:bg-orange-600 shadow-lg transition-all rounded-xl"
-              disabled={isSubmitting || phone.length < 10}
-            >
-              {isSubmitting ? "Linking Account..." : "Confirm & Continue"}
-            </Button>
-          </form>
+            {error && (
+              <div className="bg-red-50 text-red-600 p-3 rounded-xl text-xs font-bold flex items-center gap-2 animate-bounce">
+                ⚠️ {error}
+              </div>
+            )}
+          </div>
 
-          <p className="text-[10px] text-center text-slate-400 font-medium">
-            Aapka data Shopnish par 100% safe hai.
+          <Button 
+            type="submit" 
+            className="w-full py-8 text-xl font-black bg-orange-500 hover:bg-orange-600 shadow-xl shadow-orange-200 transition-all rounded-2xl text-white active:scale-95"
+            disabled={isSubmitting || phone.length < 10}
+          >
+            {isSubmitting ? "Linking Account..." : "Confirm & Continue"}
+          </Button>
+        </form>
+
+        <div className="pt-2 text-center">
+          <p className="text-[11px] text-slate-400 font-bold uppercase tracking-widest">
+             🛡️ 100% Safe & Secure Authentication
           </p>
-        </DialogContent>
-      </DialogPortal>
-    </Dialog>
+        </div>
+      </DialogContent>
+    </DialogPortal>
+  </Dialog>
   );
 }
