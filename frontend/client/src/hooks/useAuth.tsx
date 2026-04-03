@@ -296,48 +296,22 @@ useEffect(() => {
 }, []); // 👈 Empty array matlab sirf mounting par chalega, loop nahi karega
 
 // --- STEP 3: Main Auth Guard (The Guard) ---
+// useAuth.tsx ka useEffect
 useEffect(() => {
-  // 🚩 STEP 1: Sirf Auth Listener lagao
-  const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-    
-    // 1. Agar user login nahi hai
-    if (!fbUser) {
+  const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+    if (fbUser) {
+      // Sirf user set karo, backend sync yahan mat karo loop se bachne ke liye
+      setUser({ uid: fbUser.uid, email: fbUser.email } as any);
+      setIsAuthenticated(true);
+    } else {
       setUser(null);
       setIsAuthenticated(false);
-      setIsLoadingAuth(false);
-      isSyncingRef.current = false;
-      return;
+      setMustSyncPhone(false);
     }
-
-    // 2. 🚫 Modal active check (Ref check karna zyada safe hai dependency loop se bachne ke liye)
-    // Lekin abhi ke liye aapka state check bhi chalega
-    if (mustSyncPhone) {
-      console.log("⛔ Modal active - skipping backend sync");
-      setIsLoadingAuth(false);
-      return;
-    }
-
-    // 3. 🚫 Sync Lock Check
-    if (isSyncingRef.current) return;
-
-    try {
-      isSyncingRef.current = true;
-      setIsLoadingAuth(true);
-      await fetchAndSyncBackendUser(fbUser);
-    } catch (err) {
-      console.error("Auth Guard Sync Error:", err);
-    } finally {
-      isSyncingRef.current = false;
-      setIsLoadingAuth(false);
-    }
+    setIsLoadingAuth(false);
   });
-
   return () => unsubscribe();
-  
-  // 🚩 STEP 2: Dependency array se 'mustSyncPhone' aur 'user' hata do
-  // Humein ise tab trigger nahi karna jab user ya mustSyncPhone badle, 
-  // kyunki 'onAuthStateChanged' khud hi state change par trigger ho jata hai.
-}, [fetchAndSyncBackendUser]);
+}, []); // 🚩 Dependency empty rakho
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
