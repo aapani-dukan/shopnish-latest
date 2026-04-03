@@ -1,18 +1,14 @@
-
-// client/src/App.tsx..
-import { useState } from "react";
-import { Routes, Route } from "react-router-dom";
+// client/src/App.tsx
+import { useState, useEffect } from "react"; // ✅ useEffect add kiya
+import { Routes, Route, useNavigate, useLocation } from "react-router-dom"; // ✅ useNavigate add kiya
 
 // Layouts and components
 import Header from "./components/header";
 import CartModal from "./components/cart-modal";
 import AdminLayout from "@/components/AdminLayout";
-//import { LocationProvider } from "./context/LocationContext";
 import SellerDashboardLayout from "./components/layout/SellerDashboardLayout"; 
 
-
 // Pages
-
 import HomePage from "@/pages/home";
 import ProductDetail from "@/pages/product-detail";
 import Cart from "@/pages/cart";
@@ -40,6 +36,7 @@ import CookiesPolicy from "@/pages/CookiesPolicy";
 import FAQ from "@/pages/FAQ";
 import AboutUs from "@/pages/AboutUs";
 import ContactUs from "@/pages/ContactUs";
+
 // Protected / Auth-based
 import AuthRedirectGuard from "@/components/auth-redirect-guard";
 import AdminGuard from "@/components/admin-guard";
@@ -47,11 +44,10 @@ import AdminVendorDetailsPage from './pages/admin/AdminVendorDetailsPage';
 import AdminSettingsPage from './pages/admin/AdminSettingsPage';
 import SellerProfileEdit from '@/components/seller/SellerProfileEdit';
 import AdminProductDetailsPage from './pages/admin/AdminProductDetailsPage'; 
-//import LocationDisplay from "./components/LocationDisplay"; // <-- LocationDisplay को इम्पोर्ट करें
 import SellerProductsPage from "./pages/SellerProductsPage";
 import SellerOrdersPage from "./pages/SellerOrdersPage";
-import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; // Capitalized
-import SellerAddProductPage from "./pages/SellerAddProductPage"; // आपके द्वारा प्रदान किए गए पाथ के अनुसार
+import DeliverySettingsPage from "@/components/seller/DeliverySettingsPage"; 
+import SellerAddProductPage from "./pages/SellerAddProductPage"; 
 import SellerEditProductPage from "./pages/SellerEditProductPage"; 
 import OrderDetailsPage from "./pages/order-details/[id].tsx";
 import AdminVendorsPage from "./pages/admin/AdminVendorsPage.tsx";
@@ -60,18 +56,30 @@ import AdminWalletManager from './pages/admin/WalletManagement';
 import DeliveryWallet from './components/delivery/DeliveryWallet';
 import SellerWallet from './components/seller/SellerWallet';
 import DeliveryLayout from './components/layout/DeliveryLayout';
+
 import { useAuth } from "./hooks/useAuth.tsx";
-import SyncPhonePage from "./components/auth/SyncPhonePage.tsx";
+import SyncPhonePage from "./components/auth/SyncPhonePage.tsx"; // ✅ Path sahi check kar lena
+
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-const { mustSyncPhone } = useAuth();
+  const { mustSyncPhone, isAuthenticated } = useAuth();
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // 🚩 MASTER REDIRECT: Phone missing hai toh sync page pe bhejo
+  useEffect(() => {
+    if (isAuthenticated && mustSyncPhone && location.pathname !== "/sync-phone") {
+      navigate("/sync-phone", { replace: true });
+    }
+  }, [isAuthenticated, mustSyncPhone, navigate, location.pathname]);
+
   return (
     <>  
+      {/* 1. Header sirf tab dikhao jab phone synced ho */}
       {!mustSyncPhone && <Header onCartClick={() => setIsCartModalOpen(true)} />}
-      <Header onCartClick={() => setIsCartModalOpen(true)} />
       
-      
-       <main className={mustSyncPhone ? "" : "min-h-screen"}>
+      {/* 2. Main content area */}
+      <main className={mustSyncPhone ? "w-full h-screen overflow-hidden" : "min-h-screen"}>
         <Routes>
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<HomePage />} />
@@ -91,30 +99,29 @@ const { mustSyncPhone } = useAuth();
           <Route path="/faq" element={<FAQ />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
-<Route path="/sync-phone" element={<SyncPhonePage />} />
+          
+          {/* ✅ SYNC PHONE PAGE (Isse guard ke bahar rakha hai taaki redirect loop na bane) */}
+          <Route path="/sync-phone" element={<SyncPhonePage />} />
           
           <Route element={<AuthRedirectGuard />}> 
-            
             <Route path="/customer/orders" element={<CustomerOrdersPage />} />
             <Route path="/order-confirmation/:orderId" element={<OrderConfirmation />} />
             <Route path="/track-order/:orderId" element={<TrackOrder />} />
             <Route path="/order-details/:id" element={<OrderDetailsPage />} />
-            {/* Seller Routes (using a shared layout for the dashboard) */}
-              <Route path="/seller-dashboard" element={<SellerDashboardLayout />}>
+            
+            {/* Seller Routes */}
+            <Route path="/seller-dashboard" element={<SellerDashboardLayout />}>
               <Route index element={<SellerDashboard />} />
-              
               <Route path="apply" element={<SellerApplyPage />} />
-              
               <Route path="profile/edit" element={<SellerProfileEdit />} />
               <Route path="delivery-settings" element={<DeliverySettingsPage />} />
-                <Route path="products" element={<SellerProductsPage />} /> 
+              <Route path="products" element={<SellerProductsPage />} /> 
               <Route path="products/add" element={<SellerAddProductPage />} />
               <Route path="products/edit/:productId" element={<SellerEditProductPage />} />
               <Route path="orders" element={<SellerOrdersPage />} /> 
               <Route path="wallet" element={<SellerWallet />} />
             </Route>
 
-            
             {/* Delivery Person Routes */}
             <Route path="/delivery" element={<DeliveryLayout />}>
               <Route index element={<DeliveryDashboard />} />
@@ -122,35 +129,32 @@ const { mustSyncPhone } = useAuth();
               <Route path="apply" element={<DeliveryApplyPage />} />
               <Route path="wallet" element={<DeliveryWallet />} />
             </Route>
-           </Route>
-         {/* ADMIN ROUTES - सब कुछ एक ही Guard और Layout के अंदर सुरक्षित रखें */}
-<Route element={<AdminGuard />}> 
-  <Route path="/admin" element={<AdminLayout />}>
-    {/* बेस एडमिन रूट्स */}
-    <Route index element={<AdminDashboard />} />
-    <Route path="dashboard" element={<AdminDashboard />} />
-    <Route path="orders" element={<AdminOrderDashboard />} />
-    <Route path="settings" element={<AdminSettingsPage />} />
-    <Route path="wallets" element={<AdminWalletManager />} />
-    {/* ✅ Pincode Management रूट्स (अब ये सुरक्षित हैं) */}
-    <Route path="vendors" element={<AdminVendorsPage />} />
-    <Route path="delivery-areas" element={<AdminDeliveryAreasPage />} />
-    
-    {/* Details वाले रूट्स */}
-    <Route path="vendors/:id" element={<AdminVendorDetailsPage />} />
-    <Route path="products/:id" element={<AdminProductDetailsPage />} />
-    <Route path="categories" element={<CategoriesManagement />} />
-  </Route>
-</Route>
+          </Route>
+
+          {/* ADMIN ROUTES */}
+          <Route element={<AdminGuard />}> 
+            <Route path="/admin" element={<AdminLayout />}>
+              <Route index element={<AdminDashboard />} />
+              <Route path="dashboard" element={<AdminDashboard />} />
+              <Route path="orders" element={<AdminOrderDashboard />} />
+              <Route path="settings" element={<AdminSettingsPage />} />
+              <Route path="wallets" element={<AdminWalletManager />} />
+              <Route path="vendors" element={<AdminVendorsPage />} />
+              <Route path="delivery-areas" element={<AdminDeliveryAreasPage />} />
+              <Route path="vendors/:id" element={<AdminVendorDetailsPage />} />
+              <Route path="products/:id" element={<AdminProductDetailsPage />} />
+              <Route path="categories" element={<CategoriesManagement />} />
+            </Route>
+          </Route>
           
-          {/* 404 CATCH-ALL ROUTE (हमेशा अंत में होना चाहिए) */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </main>
       
-      {/* GLOBAL MODALS / COMPONENTS */}
-      {/* CartModal को यहां रखें ताकि यह सभी पेजों पर फ़्लोट कर सके */}
-    {!mustSyncPhone && <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />}
+      {/* 3. Global Modals (Only if synced) */}
+      {!mustSyncPhone && (
+        <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />
+      )}
     </>
   );
 }
