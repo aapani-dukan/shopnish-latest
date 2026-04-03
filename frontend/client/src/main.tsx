@@ -1,6 +1,4 @@
 // client/src/main.tsx
-
-import React from "react";
 import ReactDOM from "react-dom/client";
 import { BrowserRouter } from "react-router-dom"; // Capitalized BrowserRouter
 import App from "./App.tsx";
@@ -16,26 +14,25 @@ import { SocketProvider } from "./hooks/useSocket"; // Assuming this path
 import LocationDisplay from "./components/LocationDisplay";
 
 import { LocationProvider } from "./context/LocationContext";
+// client/src/main.tsx
 
 ReactDOM.createRoot(document.getElementById("root")!).render(
-  <React.StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <TooltipProvider>
-          <AuthProvider>
-            
-              <LocationProvider> 
-              <SocketProvider>
-                 <div>
+  // ❌ StrictMode hatao, ye do baar render karke loop banata hai
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <TooltipProvider>
+        <AuthProvider>
+          <LocationProvider> 
+            <SocketProvider>
+              <div>
                 <Toaster />
-                   <LocationDisplay /> 
+                <LocationDisplay /> 
                 <App />
-                 </div>
-                </SocketProvider>        
-                </LocationProvider> 
-          </AuthProvider>
-        </TooltipProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  </React.StrictMode>
+              </div>
+            </SocketProvider>        
+          </LocationProvider> 
+        </AuthProvider>
+      </TooltipProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
 );
