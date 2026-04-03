@@ -60,16 +60,17 @@ import AdminWalletManager from './pages/admin/WalletManagement';
 import DeliveryWallet from './components/delivery/DeliveryWallet';
 import SellerWallet from './components/seller/SellerWallet';
 import DeliveryLayout from './components/layout/DeliveryLayout';
+import { useAuth } from "./hooks/useAuth.tsx";
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-
+const { mustSyncPhone } = useAuth();
   return (
     <>  
-      
+      {!mustSyncPhone && <Header onCartClick={() => setIsCartModalOpen(true)} />}
       <Header onCartClick={() => setIsCartModalOpen(true)} />
       
       
-      <main className="min-h-screen"> 
+       <main className={mustSyncPhone ? "" : "min-h-screen"}>
         <Routes>
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<HomePage />} />
@@ -148,7 +149,7 @@ function App() {
       
       {/* GLOBAL MODALS / COMPONENTS */}
       {/* CartModal को यहां रखें ताकि यह सभी पेजों पर फ़्लोट कर सके */}
-      <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />
+    {!mustSyncPhone && <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />}
     </>
   );
 }

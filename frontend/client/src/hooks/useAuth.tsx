@@ -297,8 +297,10 @@ useEffect(() => {
 
 // --- STEP 3: Main Auth Guard (The Guard) ---
 useEffect(() => {
+  // 🚩 STEP 1: Sirf Auth Listener lagao
   const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-
+    
+    // 1. Agar user login nahi hai
     if (!fbUser) {
       setUser(null);
       setIsAuthenticated(false);
@@ -307,24 +309,19 @@ useEffect(() => {
       return;
     }
 
-    // 🚫 Modal active → kuch mat karo
+    // 2. 🚫 Modal active check (Ref check karna zyada safe hai dependency loop se bachne ke liye)
+    // Lekin abhi ke liye aapka state check bhi chalega
     if (mustSyncPhone) {
       console.log("⛔ Modal active - skipping backend sync");
       setIsLoadingAuth(false);
       return;
     }
 
-    // 🚫 Already same user → kuch mat karo
-    if (user && user.uid === fbUser.uid) {
-      setIsLoadingAuth(false);
-      return;
-    }
-
-    // 🔒 Lock
+    // 3. 🚫 Sync Lock Check
     if (isSyncingRef.current) return;
-    isSyncingRef.current = true;
 
     try {
+      isSyncingRef.current = true;
       setIsLoadingAuth(true);
       await fetchAndSyncBackendUser(fbUser);
     } catch (err) {
@@ -336,7 +333,11 @@ useEffect(() => {
   });
 
   return () => unsubscribe();
-}, [fetchAndSyncBackendUser, mustSyncPhone, user]);
+  
+  // 🚩 STEP 2: Dependency array se 'mustSyncPhone' aur 'user' hata do
+  // Humein ise tab trigger nahi karna jab user ya mustSyncPhone badle, 
+  // kyunki 'onAuthStateChanged' khud hi state change par trigger ho jata hai.
+}, [fetchAndSyncBackendUser]);
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
