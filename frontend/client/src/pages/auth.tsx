@@ -124,7 +124,7 @@ const ErrorState: React.FC<ErrorStateProps> = ({ error, onRetry }) => {
 };
 // --- SuccessState Component (Skipped for brevity) ---
 interface SuccessStateProps {
-  user: FirebaseUserType; 
+  user: any; 
   onContinue: () => void;
 }
 
@@ -456,7 +456,7 @@ export default function AuthPage() {
       warnings.forEach(warning => toast({
         title: "Browser Warning",
         description: warning,
-        variant: "warning",
+        variant: "destructive",
       }));
     }
   }, [toast]);
@@ -539,7 +539,7 @@ export default function AuthPage() {
     clearError();
     
     if (!email) {
-      toast({ title: "Input Required", description: "Please enter your email address above to reset the password.", variant: "warning" });
+      toast({ title: "Input Required", description: "Please enter your email address above to reset the password.", variant: "destructive" });
       setIsProcessing(false); // Ensure loading state is reset if we early exit
       return;
     }
