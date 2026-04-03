@@ -101,95 +101,75 @@ const [tempData, setTempData] = useState<any>(null);
     // status <--- यह 'status' variable यहाँ से हटा दें, यह एक mistake है
 const fetchAndSyncBackendUser = useCallback(
   async (fbUser: FirebaseUser, forceRefreshIdToken: boolean = false) => {
-
-    // 🚩🔥 MASTER GUARD (सबसे important)
-    if (mustSyncPhone) {
-  console.log("⛔ Skipping backend sync (phone modal active)");
-
-  setIsLoadingAuth(false); // 🔥 VERY IMPORTANT
-  return { needsPhone: true };
-}
-
-setIsLoadingAuth(true);
-setAuthError(null);
+    let idToken = "";
     let dbUserData: any = null;
-    let isAdminFromFirebase = false;
+    let isAdminFromFirebase = false; // 🚩 Isko upar declare kar diya scope fix ke liye
 
+    if (mustSyncPhone) {
+      setIsLoadingAuth(false);
+      return { needsPhone: true };
+    }
+
+    setIsLoadingAuth(true);
     try {
-      const idTokenResult = await fbUser.getIdTokenResult(forceRefreshIdToken);
-      const idToken = idTokenResult.token;
+      idToken = await fbUser.getIdToken(forceRefreshIdToken);
+      const idTokenResult = await fbUser.getIdTokenResult();
       isAdminFromFirebase = idTokenResult.claims.admin === true;
 
       // --- STEP A: Profile Check ---
       try {
         const res = await apiRequest("GET", "/api/users/me");
         dbUserData = res.user || res;
-        
-        // 🚩 CHECK: User hai par Phone nahi hai? Toh sync par bhejo!
-       if (dbUserData && !dbUserData.phone) {
-  console.log("🚩 Profile exists but phone missing. Locking Auth and triggering Modal.");
 
-  // 1. Pehle data taiyar karo (Consistent structure)
-  const syncData = {
-    firebaseUid: fbUser.uid,
-    email: fbUser.email || "",
-    fullName: fbUser.displayName || "User"
-  };
-
-  // 2. Global states update karo
-  setTempData(syncData); 
-  setMustSyncPhone(true);
-  
-  // 3. Auth states ko reset karo (Taaki user dashboard na dekh sake)
-  setIsAuthenticated(false);
-  setIsLoadingAuth(false); 
-
-  // 4. Return wahi data jo upar set kiya hai
-  return { 
-    needsPhone: true, 
-    tempData: syncData 
-  };
-}
-
-        // Agar user + phone dono hain, toh seedha andar
-        if (dbUserData && dbUserData.phone) {
-          const newUserData: User = {
-            uid: fbUser.uid,
-            id: dbUserData.id,
-            email: fbUser.email || dbUserData.email,
-            name: fbUser.displayName || dbUserData.name,
-            role: dbUserData.role || "customer",
-            idToken,
-            sellerProfile: dbUserData.sellerProfile || null,
-            deliveryBoyId: dbUserData.deliveryBoyId || null,
-            isAdmin: isAdminFromFirebase,
+        if (dbUserData && !dbUserData.phone) {
+          console.log("🚩 Profile exists but phone missing.");
+          const syncData = {
+            firebaseUid: fbUser.uid,
+            email: fbUser.email || "",
+            fullName: fbUser.displayName || "User"
           };
-          setUser(newUserData);
-          setIsAuthenticated(true);
-          setIsAdmin(newUserData.isAdmin);
+          setTempData(syncData);
+          setMustSyncPhone(true);
+          setIsAuthenticated(false);
           setIsLoadingAuth(false);
-          return { needsPhone: false, user: newUserData };
+          return { needsPhone: true, tempData: syncData };
         }
-      } catch (e: any) {
-        console.warn("User profile not found. Moving to initial-login.");
+      } catch (e) {
+        console.warn("User profile not found, trying initial-login...");
       }
-      // --- STEP B: Initial Login Check ---
-     // --- STEP B: Initial Login Check ---
-const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
 
-if (res.needsPhone) {
-  // 🚩 YE CHARO LINES COMPULSORY HAIN LOOP TODNE KE LIYE
-  setTempData({ ...res.tempData, fullName: fbUser.displayName }); // Data save karo
-  setMustSyncPhone(true);        // 👈 YE MISSING THA (Modal on karo)
-  setIsAuthenticated(false);     // User abhi login nahi hai
-  setIsLoadingAuth(false);       // Loading spinner hatao
-  
-  return { 
-    needsPhone: true, 
-    tempData: { ...res.tempData, fullName: fbUser.displayName } 
-  };
-}
-      dbUserData = res.user;
+      // --- STEP B: Initial Login Check (Agar Profile nahi mili tab) ---
+      if (!dbUserData) {
+        const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });
+        if (res.needsPhone) {
+          setTempData({ ...res.tempData, fullName: fbUser.displayName });
+          setMustSyncPhone(true);
+          setIsAuthenticated(false);
+          setIsLoadingAuth(false);
+          return { needsPhone: true, tempData: res.tempData };
+        }
+        dbUserData = res.user;
+      }
+
+      // --- FINAL STEP: User Syncing ---
+      if (dbUserData) {
+        const finalUser: User = {
+          uid: fbUser.uid,
+          id: dbUserData.id,
+          email: fbUser.email || dbUserData.email,
+          name: fbUser.displayName || dbUserData.name,
+          role: dbUserData.role || "customer",
+          idToken: idToken || await fbUser.getIdToken(),
+          sellerProfile: dbUserData.sellerProfile || null,
+          deliveryBoyId: dbUserData.deliveryBoyId || null,
+          isAdmin: isAdminFromFirebase || dbUserData.is_admin || dbUserData.role === "admin",
+        };
+        setUser(finalUser);
+        setIsAuthenticated(true);
+        setIsAdmin(finalUser.isAdmin);
+        setIsLoadingAuth(false);
+        return { needsPhone: false, user: finalUser };
+      }
 
     } catch (err: any) {
       console.error("❌ Auth Sync Error:", err);
@@ -198,28 +178,9 @@ if (res.needsPhone) {
       return { error: err };
     }
 
-    // FINAL STEP: Syncing complete
-    if (dbUserData) {
-      const finalUser: User = {
-        uid: fbUser.uid,
-        id: dbUserData.id,
-        email: fbUser.email || dbUserData.email,
-        name: fbUser.displayName || dbUserData.name,
-        role: dbUserData.role || "customer",
-        idToken: await fbUser.getIdToken(),
-        sellerProfile: dbUserData.sellerProfile || null,
-        deliveryBoyId: dbUserData.deliveryBoyId || null,
-       isAdmin: isAdminFromFirebase || dbUserData.is_admin || dbUserData.role === "admin",
-};
-      setUser(finalUser);
-      setIsAuthenticated(true);
-      setIsLoadingAuth(false);
-      return { needsPhone: false, user: finalUser };
-    }
-
     setIsLoadingAuth(false);
   },
-  []
+  [mustSyncPhone] // 🚩 mustSyncPhone ko dependency mein rakho taaki update ho sake
 );
 // ✅ 2. Google Sign-In Handler
 const signIn = useCallback(
@@ -296,22 +257,24 @@ useEffect(() => {
 }, []); // 👈 Empty array matlab sirf mounting par chalega, loop nahi karega
 
 // --- STEP 3: Main Auth Guard (The Guard) ---
-// useAuth.tsx ka useEffect
 useEffect(() => {
-  const unsubscribe = onAuthStateChanged(auth, (fbUser) => {
+  const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
     if (fbUser) {
-      // Sirf user set karo, backend sync yahan mat karo loop se bachne ke liye
-      setUser({ uid: fbUser.uid, email: fbUser.email } as any);
-      setIsAuthenticated(true);
+      // 🚩 Loop todne ke liye: Agar pehle se isAuthenticated hai toh dubara sync mat karo
+      if (isSyncingRef.current) return;
+      
+      isSyncingRef.current = true;
+      await fetchAndSyncBackendUser(fbUser);
+      isSyncingRef.current = false;
     } else {
       setUser(null);
       setIsAuthenticated(false);
       setMustSyncPhone(false);
+      setIsLoadingAuth(false);
     }
-    setIsLoadingAuth(false);
   });
   return () => unsubscribe();
-}, []); // 🚩 Dependency empty rakho
+}, [fetchAndSyncBackendUser]); // ✅ fetch function dependency mein dalo
   // --- 🚀 New: Password Reset Handler ---
   const resetPassword = useCallback(
     async (email: string): Promise<void> => {
