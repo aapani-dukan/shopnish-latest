@@ -133,39 +133,21 @@ export const signInWithGoogle = async (
     console.log(
       `Attempting Google sign-in using ${usePopup ? "popup" : "redirect"} flow...`
     );
-
-    if (usePopup) {
-      console.log("Starting popup authentication...");
+if (usePopup) {
+      // ✅ STEP 2: Popup block hone se bachne ke liye force selection
+      provider.setCustomParameters({ prompt: 'select_account' }); 
       const result = await signInWithPopup(auth, provider);
-      console.log("Popup authentication successful:", result.user.email);
       return result.user;
     } else {
-      console.log("Starting redirect authentication...");
       await signInWithRedirect(auth, provider);
-      console.log("Redirect initiated, page will reload...");
       return null;
     }
   } catch (error: any) {
     console.error("Authentication error:", error);
-
-    if (error.code === "auth/web-storage-unsupported" && !usePopup) {
-      console.log("Storage unsupported, trying popup fallback...");
-      return await signInWithGoogle(true);
-    }
-
-    if (error.code === "auth/unauthorized-domain") {
-      throw {
-        code: error.code,
-        message: "This domain is not authorized for Google sign-in.",
-        details:
-          "Please add this domain to Firebase Console → Authentication → Settings → Authorized domains. Current domain needs to be added to Firebase configuration.",
-      } as AuthError;
-    }
-
+    // ❌ Yahan se auto-fallback hata dein, ye loop karta hai
     throw {
       code: error.code || "auth/signin-error",
       message: error.message || "Failed to sign in with Google",
-      details: `Error: ${error.toString()}. Check console for more details.`,
     } as AuthError;
   }
 };
@@ -301,4 +283,4 @@ export const checkBrowserCompatibility = (): {
 export { app };
 export { signOutUser as logout };
 export const signInWithGooglePopup = () => signInWithGoogle(true);
-export const firebaseApp = initializeApp(firebaseConfig);
+
