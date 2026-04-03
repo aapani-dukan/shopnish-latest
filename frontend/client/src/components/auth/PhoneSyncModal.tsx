@@ -74,25 +74,30 @@ export function PhoneSyncModal({ isOpen, tempData, onSuccess }: PhoneSyncModalPr
   };
 
   return (
-    <Dialog open={isOpen}>
+   <Dialog open={isOpen} onOpenChange={(open) => { if(!open) return; }}> 
       <DialogPortal>
-        {/* Overlay ko thoda dark rakho taaki piche ka loop na dikhe */}
-        <DialogOverlay className="bg-black/80 backdrop-blur-sm z-[10000]" /> 
+        <DialogOverlay className="bg-black/90 backdrop-blur-md z-[10000] fixed inset-0" /> 
         
         <DialogContent 
-          className="sm:max-w-[425px] z-[10001] gap-6 border-none shadow-2xl"
+          // 🚩 Change 2: 'fixed' aur 'translate' classes ensure karein
+          className="fixed left-[50%] top-[50%] z-[10001] w-[90%] max-w-[425px] translate-x-[-50%] translate-y-[-50%] gap-6 border-none shadow-2xl bg-white p-6 rounded-3xl duration-200"
           onPointerDownOutside={(e) => e.preventDefault()}
           onEscapeKeyDown={(e) => e.preventDefault()}
+          // 🚩 Change 3: Manual ID for description warning (Optional but safer)
+          aria-describedby="phone-sync-description"
         >
           <DialogHeader>
-            <DialogTitle className="text-2xl font-black text-slate-900">
+            <DialogTitle className="text-2xl font-black text-slate-900 tracking-tight">
               Ek Akhri Kadam! 🚀
             </DialogTitle>
-            <DialogDescription className="text-slate-500 font-medium pt-2">
+            <DialogDescription 
+              id="phone-sync-description" // Warning fix
+              className="text-slate-500 font-medium pt-2"
+            >
               Shopnish par apna account verify karne ke liye apna 10-digit mobile number link karein.
             </DialogDescription>
           </DialogHeader>
-          
+           
           <form onSubmit={handleSubmit} className="space-y-6">
             <div className="space-y-3">
               <label className="text-sm font-bold text-slate-700">Mobile Number</label>
