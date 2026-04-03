@@ -173,7 +173,6 @@ setAuthError(null);
       } catch (e: any) {
         console.warn("User profile not found. Moving to initial-login.");
       }
-
       // --- STEP B: Initial Login Check ---
      // --- STEP B: Initial Login Check ---
 const res = await apiRequest("POST", "/api/auth/initial-login", { idToken });

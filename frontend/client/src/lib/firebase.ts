@@ -7,7 +7,7 @@ import {
   getRedirectResult,
   signOut,
   onAuthStateChanged,
-  User,
+  User as FirebaseUserType,
   // 🚀 New Imports for Email/Password Auth & Credential
   createUserWithEmailAndPassword,
   signInWithEmailAndPassword,
@@ -55,7 +55,7 @@ export interface AuthResult {
   user: User | null;
   error: AuthError | null;
 }
-
+export type User = FirebaseUserType;
 // ----------------------------------------------------
 // ✅ New: Sign In with Credential (Native/Token Login)
 // ----------------------------------------------------
