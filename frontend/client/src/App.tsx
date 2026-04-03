@@ -61,6 +61,7 @@ import DeliveryWallet from './components/delivery/DeliveryWallet';
 import SellerWallet from './components/seller/SellerWallet';
 import DeliveryLayout from './components/layout/DeliveryLayout';
 import { useAuth } from "./hooks/useAuth.tsx";
+import SyncPhonePage from "./components/auth/SyncPhonePage.tsx";
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
 const { mustSyncPhone } = useAuth();
@@ -90,7 +91,7 @@ const { mustSyncPhone } = useAuth();
           <Route path="/faq" element={<FAQ />} />
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
-
+<Route path="/sync-phone" element={<SyncPhonePage />} />
           
           <Route element={<AuthRedirectGuard />}> 
             
