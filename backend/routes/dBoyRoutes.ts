@@ -40,63 +40,70 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
       return res.status(400).json({ message: "Bhai, Name aur Vehicle details zaroori hain." });
     }
 
-    // 2. 🚀 DATABASE TRANSACTION (Hybrid Logic)
+    // 2. 🚀 DATABASE TRANSACTION (UID Based Hybrid Logic)
     const result = await db.transaction(async (tx) => {
       
-      // A. Pehle check karo kya ye user (Admin/Customer) 'users' table mein pehle se hai?
-      let [existingUser] = await tx.select().from(users).where(eq(users.firebaseUid, firebaseUid));
-
-      let userId;
-      if (existingUser) {
-        // Purana user mil gaya (Admin/Customer), bas usko Delivery Boy ka tag de do
-        userId = existingUser.id;
-        await tx.update(users).set({
-          isDelivery: true,
-          deliveryApprovalStatus: 'pending',
-          updatedAt: new Date(),
-        }).where(eq(users.id, userId));
-      } else {
-        // Ekdum naya banda hai, pehle 'users' table mein uska account banao
-        const [newUser] = await tx.insert(users).values({
+      /**
+       * A. USERS TABLE: Upsert Logic (UID based)
+       * Agar firebaseUid pehle se hai, toh sirf status update karo.
+       * Isse 'duplicate email' ya 'duplicate phone' ka error nahi aayega.
+       */
+      const [userEntry] = await tx.insert(users)
+        .values({
           firebaseUid: firebaseUid,
           phone: phone,
           email: email || "",
           firstName: fullName,
           isDelivery: true,
           deliveryApprovalStatus: 'pending',
-          role: 'delivery-boy', // Default role
-        }).returning();
-        userId = newUser.id;
-      }
+          role: 'delivery-boy',
+        })
+        .onConflictDoUpdate({
+          target: [users.firebaseUid], // 🎯 Main Check: Firebase UID
+          set: { 
+            isDelivery: true, 
+            deliveryApprovalStatus: 'pending',
+            // Email aur Phone tabhi update karein jab wo naye hon ya zaroori ho
+            firstName: fullName,
+            updatedAt: new Date()
+          }
+        })
+        .returning();
 
-      // B. Ab 'delivery_boys' table mein entry dalo ya Update karo (Upsert Logic)
-      const [deliveryEntry] = await tx.insert(deliveryBoys).values({
-        userId: userId,
-        firebaseUid: firebaseUid,
-        name: fullName,
-        phone: phone,
-        email: email || "",
-        vehicleType,
-        vehicleNumber: vehicleNumber || null,
-        approvalStatus: 'pending',
-        isOnline: false,
-      })
-      .onConflictDoUpdate({
-        target: deliveryBoys.userId, // Agar userId pehle se hai, toh update kardo
-        set: { 
-          name: fullName, 
-          vehicleType, 
-          vehicleNumber, 
+      const userId = userEntry.id;
+
+      /**
+       * B. DELIVERY BOYS TABLE: Profile Link
+       * User table se mili 'id' ko yahan connect karein.
+       */
+      const [deliveryEntry] = await tx.insert(deliveryBoys)
+        .values({
+          userId: userId,
+          firebaseUid: firebaseUid,
+          name: fullName,
+          phone: phone,
+          email: email || userEntry.email || "",
+          vehicleType,
+          vehicleNumber: vehicleNumber || null,
           approvalStatus: 'pending',
-          updatedAt: new Date() 
-        }
-      })
-      .returning();
+          isOnline: false,
+        })
+        .onConflictDoUpdate({
+          target: [deliveryBoys.userId], // Agar profile pehle se hai toh update kardo
+          set: { 
+            name: fullName, 
+            vehicleType, 
+            vehicleNumber, 
+            approvalStatus: 'pending',
+            updatedAt: new Date() 
+          }
+        })
+        .returning();
 
       return deliveryEntry;
     });
 
-    // 3. ✅ Admin ko Real-time update bhejo
+    // 3. ✅ Admin ko Real-time notification bhejo
     if (result) {
       getIO().emit("admin:update", { type: "delivery-boy-register", data: result });
       
@@ -107,8 +114,13 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
     }
 
   } catch (error: any) {
-    console.error("❌ Upgraded Registration Error:", error);
-    return res.status(500).json({ message: "Server error", error: error.message });
+    console.error("❌ Final Registration Error:", error);
+    // User-friendly message handle karein
+    const errorMsg = error.constraint === 'users_email_unique' 
+      ? "Ye Email pehle se kisi aur account se juda hai." 
+      : error.message;
+
+    return res.status(500).json({ message: "Server error", error: errorMsg });
   }
 });
 /**
