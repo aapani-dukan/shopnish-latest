@@ -58,28 +58,26 @@ import SellerWallet from './components/seller/SellerWallet';
 import DeliveryLayout from './components/layout/DeliveryLayout';
 
 import { useAuth } from "./hooks/useAuth.tsx";
-import SyncPhonePage from "./components/auth/SyncPhonePage.tsx"; // ✅ Path sahi check kar lena
+//import SyncPhonePage from "./components/auth/SyncPhonePage.tsx"; // ✅ Path sahi check kar lena
 
 function App() {
   const [isCartModalOpen, setIsCartModalOpen] = useState(false);
-  const { mustSyncPhone, isAuthenticated } = useAuth();
+  const { isAuthenticated } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
 
-  // 🚩 MASTER REDIRECT: Phone missing hai toh sync page pe bhejo
+  // ✅ MASTER REDIRECT: SyncPhone wala logic poora saaf kar diya hai
   useEffect(() => {
-    if (isAuthenticated && mustSyncPhone && location.pathname !== "/sync-phone") {
-      navigate("/sync-phone", { replace: true });
-    }
-  }, [isAuthenticated, mustSyncPhone, navigate, location.pathname]);
+    // Ab yahan koi redirect nahi chahiye kyunki login direct mobile se ho raha hai
+  }, [isAuthenticated, navigate, location.pathname]);
 
   return (
     <>  
-      {/* 1. Header sirf tab dikhao jab phone synced ho */}
+      {/* 1. Header ab hamesha dikhega */}
       <Header onCartClick={() => setIsCartModalOpen(true)} />
       
-      {/* 2. Main content area */}
-      <main className={mustSyncPhone ? "w-full h-screen overflow-hidden" : "min-h-screen"}>
+      {/* 2. Main content area - overflow logic hata diya gaya hai */}
+      <main className="min-h-screen">
         <Routes>
           {/* PUBLIC ROUTES */}
           <Route path="/" element={<HomePage />} />
@@ -100,8 +98,7 @@ function App() {
           <Route path="/about" element={<AboutUs />} />
           <Route path="/contact" element={<ContactUs />} />
           
-          {/* ✅ SYNC PHONE PAGE (Isse guard ke bahar rakha hai taaki redirect loop na bane) */}
-          <Route path="/sync-phone" element={<SyncPhonePage />} />
+          {/* ✅ SYNC PHONE PAGE Ka Route hata diya gaya hai taaki build error na aaye */}
           
           <Route element={<AuthRedirectGuard />}> 
             <Route path="/customer/orders" element={<CustomerOrdersPage />} />
@@ -151,10 +148,8 @@ function App() {
         </Routes>
       </main>
       
-      {/* 3. Global Modals (Only if synced) */}
-      {!mustSyncPhone && (
-        <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />
-      )}
+      {/* 3. Global Modals - Ab hamesha available rahenge */}
+      <CartModal isOpen={isCartModalOpen} onClose={() => setIsCartModalOpen(false)} />
     </>
   );
 }

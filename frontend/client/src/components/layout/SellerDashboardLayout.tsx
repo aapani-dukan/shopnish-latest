@@ -7,7 +7,6 @@ import SellerSidebar from './SellerSidebar';
 // sidebar.tsx से आवश्यक कंपोनेंट्स इम्पोर्ट करें
 import {
   SidebarProvider,
-  SidebarTrigger,
   SidebarInset,
   useSidebar
 } from '../ui/sidebar';
