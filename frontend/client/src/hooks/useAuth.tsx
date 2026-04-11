@@ -50,7 +50,11 @@ interface AuthContextType {
   clearError: () => void;
   refetchUser: () => void;
 }
-
+declare global {
+  interface Window {
+    recaptchaVerifier: any;
+  }
+}
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
@@ -105,35 +109,57 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   );
 
   // ✅ 2. OTP Sending Logic
+ 
+// ✅ 2. OTP Sending Logic (Updated with Recaptcha Cleanup)
   const sendOtp = useCallback(async (phoneNumber: string) => {
     setAuthError(null);
     try {
-      // Firebase lib mein setupRecaptcha function hona chahiye
+      // 🚩 Puraane recaptcha ko saaf karein taaki "DUPE" error na aaye
+      if (window.recaptchaVerifier) {
+        try {
+          window.recaptchaVerifier.clear();
+          const container = document.getElementById('otp-container');
+          if (container) container.innerHTML = ''; 
+        } catch (e) {
+          console.log("Recaptcha clear error (safe to ignore):", e);
+        }
+      }
+
+      // Naya verifier set karein
       const verifier = setupRecaptcha('otp-container'); 
       const confirmation = await signInWithPhone(phoneNumber, verifier);
       return confirmation;
     } catch (err: any) {
+      console.error("❌ Send OTP Error:", err);
       setAuthError(err);
       throw err;
     }
   }, []);
 
-  // ✅ 3. OTP Verification Logic
+  // ✅ 3. OTP Verification Logic (Updated for smoother sync)
   const verifyOtp = useCallback(async (confirmationResult: ConfirmationResult, code: string) => {
     setIsLoadingAuth(true);
+    setAuthError(null); // Clear any previous errors
     try {
       const result = await confirmationResult.confirm(code);
       if (result.user) {
+        // Backend sync shuru karein
         await fetchAndSyncBackendUser(result.user);
+        
+        // Success ke baad recaptcha clear kar dein taaki agli baar fresh start ho
+        if (window.recaptchaVerifier) {
+          window.recaptchaVerifier.clear();
+        }
       }
     } catch (err: any) {
+      console.error("❌ OTP Verification Error:", err);
       setAuthError(err);
       throw err;
     } finally {
       setIsLoadingAuth(false);
     }
   }, [fetchAndSyncBackendUser]);
-    
+  
 // --- STEP 1: Main Auth Guard (The Engine) ---
   // Ye check karta hai ki user logged in hai ya nahi
   useEffect(() => {

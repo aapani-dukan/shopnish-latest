@@ -81,25 +81,52 @@ router.post("/register", async (req: Request, res: Response) => {
     res.status(400).json({ error: error.message });
   }
 });
-
-// ✅ User Profile
+// ✅ User Profile (Auto-Registration + Schema Sync)
 router.get("/users/me", requireAuth as any, async (req: any, res: Response) => {
   try {
-    const userId = req.user?.id;
-    const [user] = await db.select().from(users).where(eq(users.id, userId));
+    const { uid, phone_number, email, name } = req.user;
 
-    if (!user) return res.status(404).json({ error: "User not found." });
+    // 1. Firebase UID se user ko dhoondo
+    let [user] = await db.select().from(users).where(eq(users.firebaseUid, uid));
 
-    // Virtual role logic (Same as before)
+    // 2. AGAR USER NAHI HAI (Auto-Create)
+    if (!user) {
+      console.log(`[AUTH] Creating new profile for UID: ${uid}`);
+      
+      // Name ko FirstName/LastName mein split karein agar schema waisa hai
+      const nameParts = (name || "User").split(" ");
+      const fName = nameParts[0];
+      const lName = nameParts.slice(1).join(" ") || "";
+
+      const [newUser] = await db.insert(users).values({
+        firebaseUid: uid,
+        phone: phone_number || "", 
+        firstName: fName, // ✅ Schema ke sath sync rakhein
+        lastName: lName,
+        email: email || null,
+        role: "customer",
+        isCustomer: true, // ✅ Register route ki tarah flags set karein
+        isActive: true,
+        approvalStatus: "approved",
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      }).returning();
+      
+      user = newUser;
+    }
+
+    // 3. Virtual role logic
     const virtualRole = user.isAdmin ? 'admin' : 
-                        user.isSeller ? 'seller' : 
-                        user.isDelivery ? 'delivery-boy' : 'customer';
+                        (user.isSeller || user.role === 'seller') ? 'seller' : 
+                        (user.isDelivery || user.role === 'delivery-boy') ? 'delivery-boy' : 'customer';
 
     res.status(200).json({ ...user, role: virtualRole });
   } catch (error) {
+    console.error("❌ User Sync Error:", error);
     res.status(500).json({ error: "Internal error." });
   }
 });
+
 router.get(
   "/:orderId/tracking", // यह URL /api/orders/170/tracking को मैच करेगा
   requireAuth as any, // सुनिश्चित करें कि ग्राहक लॉग इन है
