@@ -3,16 +3,17 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 import api from "./api"; // ✅ axios इंस्टेंस को यहाँ आयात करें
 import { signOutUser } from "@/lib/firebase";
+//import { any } from "zod";
 
 /**
  * एक सामान्य API अनुरोध फ़ंक्शन जो `axios` का उपयोग करता है।
  * Axios स्वचालित रूप से हेडर में Firebase टोकन को इंटरसेप्टर के माध्यम से जोड़ता है।
  */
-export async function apiRequest(
+export async function apiRequest <T = any>(
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   path: string,
   data?: unknown | FormData
-): Promise<any> {
+): Promise<T> {
   try {
     const config = {
       method,
@@ -47,23 +48,27 @@ export async function apiRequest(
 
 type UnauthorizedBehavior = "returnNull" | "throw";
 
-export const getQueryFn: <T>(options: {
+// Standard function syntax use karein, isme 'T' ka scope ekdum clear rehta hai
+export function getQueryFn<T>(options: {
   on401: UnauthorizedBehavior;
-}) => QueryFunction<T | null> =
-  ({ on401: unauthorizedBehavior }) =>
-  async ({ queryKey }) => {
+}): QueryFunction<T | null> {
+  
+  return async ({ queryKey }) => {
     const path = queryKey[0] as string;
 
     try {
-      const res = await apiRequest("GET", path);
-      return res as T;
+      // ✅ Ab yahan 'T' par koi error nahi aayega
+      const res = await apiRequest<T>("GET", path);
+      return res;
     } catch (error: any) {
-      if (error.status === 401 && unauthorizedBehavior === "returnNull") {
+      // 401 check (Unauthorized)
+      if (error.status === 401 && options.on401 === "returnNull") {
         return null;
       }
       throw error;
     }
   };
+}
 
 export const queryClient = new QueryClient({
   defaultOptions: {

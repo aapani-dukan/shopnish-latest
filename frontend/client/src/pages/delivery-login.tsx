@@ -1,106 +1,141 @@
-// client/src/pages/DeliveryLogin.tsx
+"use client";
 
-import { useState } from "react"; // `useState` में `usestate` को ठीक किया
-import { useToast } from "@/hooks/use-toast"; // `@/hooks/use-toast` का पथ भी `hooks` से है, `/hooks` नहीं
-import { Button } from "@/components/ui/button"; // `Button` में `button` को ठीक किया
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"; // `Card`, `CardContent`, `CardHeader`, `CardTitle` को ठीक किया
-import { useNavigate } from "react-router-dom"; // `useNavigate` में `usenavigate` को ठीक किया
-import { Truck } from "lucide-react"; // `Truck` में `truck` को ठीक किया
-import { signInWithPopup, GoogleAuthProvider } from "firebase/auth"; // `signInWithPopup`, `GoogleAuthProvider` में `signinwithpopup`, `googleauthprovider` को ठीक किया
-import { auth } from "@/lib/firebase"; // `auth` में `auth` को ठीक किया, `@/lib` का उपयोग किया
-import { apiRequest } from "@/lib/queryClient"; // `apiRequest` में `apirequest` को ठीक किया, `@/lib` का उपयोग किया
+import { useState } from "react";
+import { useAuth } from "@/hooks/useAuth";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { useNavigate } from "react-router-dom";
+import { Truck, Loader2, Phone, ShieldCheck } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 
-export default function DeliveryLogin() { // `DeliveryLogin` में `deliverylogin` को ठीक किया
+export default function DeliveryLogin() {
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [loading, setLoading] = useState(false); // `setLoading` में `setloading` को ठीक किया, `useState` में `usestate` को ठीक किया
+  const { sendOtp, verifyOtp, isLoadingAuth } = useAuth();
 
-  const handleGoogleLogin = async () => { // `handleGoogleLogin` में `handlegooglelogin` को ठीक किया
-    setLoading(true);
+  const [phone, setPhone] = useState("");
+  const [otp, setOtp] = useState("");
+  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [confirmationResult, setConfirmationResult] = useState<any>(null);
+
+  // 🚀 1. OTP Bhejne ka Handler
+  const handleSendOtp = async () => {
+    if (phone.length < 10) {
+      return toast({ title: "Error", description: "Bhai, valid number dalo!", variant: "destructive" });
+    }
+
     try {
-      const provider = new GoogleAuthProvider(); // `GoogleAuthProvider` को ठीक किया
-      const result = await signInWithPopup(auth, provider); // `signInWithPopup` को ठीक किया
-
-      if (result && result.user) {
-        const user = result.user;
-        const token = await user.getIdToken(); // `getIdToken` में `getidtoken` को ठीक किया
-
-        // बैकएंड को प्रमाणीकरण के लिए API call करें
-        const backendResponse = await apiRequest("POST", "/api/delivery/login", { // `backendResponse` में `backendresponse` को ठीक किया, `POST` में `post` को ठीक किया
-          firebaseUid: user.uid, // `firebaseUid` में `firebaseuid` को ठीक किया
-          email: user.email || "",
-          name: user.displayName || user.email || "", // `displayName` में `displayname` को ठीक किया
-        });
-        
-        const deliveryBoy = { ...backendResponse.user, role: "delivery" }; // `deliveryBoy` में `deliveryboy` को ठीक किया, `backendResponse` को ठीक किया
-        
-        if (!deliveryBoy) {
-          throw new Error("Delivery boy data not received from backend."); // `Error` में `error` को ठीक किया
-        }
-
-        // localStorage में टोकन और ईमेल सेव करें (वैकल्पिक)
-        localStorage.setItem("deliveryBoyToken", token); // `localStorage.setItem` में `localstorage.setitem` को ठीक किया, "deliveryBoyToken" को ठीक किया
-        localStorage.setItem("deliveryBoyEmail", deliveryBoy.email || ""); // "deliveryBoyEmail" को ठीक किया
-
-        if (deliveryBoy.approvalStatus === "approved") { // `approvalStatus` में `approvalstatus` को ठीक किया
-          toast({ title: "Login Successful", description: `Welcome ${deliveryBoy.name || deliveryBoy.email}` }); // `Login Successful` और `Welcome` में `login successful` और `welcome` को ठीक किया
-          navigate("/delivery");
-        } else {
-          toast({
-            title: "Approval Pending",
-            description: "You are not approved yet. Please wait for admin approval.", // `Approval Pending` और `You are not approved yet` में `approval pending` और `you are not approved yet` को ठीक किया
-            variant: "destructive",
-          });
-        }
-      }
+      const formattedPhone = phone.startsWith("+") ? phone : `+91${phone}`;
+      const result = await sendOtp(formattedPhone);
+      setConfirmationResult(result);
+      setStep("otp");
+      toast({ title: "OTP Sent", description: "Delivery partner verification code bhej diya gaya hai." });
     } catch (err: any) {
-      console.error("Delivery login (popup) failed:", err); // `Delivery login` को ठीक किया
-      if (err.code !== 'auth/popup-closed-by-user' && err.code !== 'auth/cancelled-popup-request') {
-        toast({
-          title: "Login Failed",
-          description: err.message || "Something went wrong during login.", // `Login Failed` और `Something went wrong` में `login failed` और `something went wrong` को ठीक किया
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setLoading(false);
+      console.error("Delivery OTP Error:", err);
+      toast({ title: "Error", description: err.message || "OTP nahi gaya.", variant: "destructive" });
     }
   };
 
-  const handleRegister = () => { // `handleRegister` में `handleregister` को ठीक किया
-    navigate("/delivery-apply");
+  // 🚀 2. OTP Verify karne ka Handler
+  const handleVerifyOtp = async () => {
+    try {
+      await verifyOtp(confirmationResult, otp);
+      
+      // Verification ke baad humein check karna hoga ki banda delivery boy hai ya nahi
+      // Ye logic useAuth ya backend handle kar lega, hum bas navigate karenge
+      toast({ title: "Success", description: "Verification successful!" });
+      navigate("/delivery"); // Dashboard chalo
+    } catch (err: any) {
+      toast({ title: "Failed", description: "Galti OTP, check karein.", variant: "destructive" });
+    }
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-12"> {/* `className` में `classname` को ठीक किया */}
-      <div className="max-w-md w-full"> {/* `className` में `classname` को ठीक किया */}
-        <Card className="shadow-xl"> {/* `Card` और `className` को ठीक किया */}
-          <CardHeader className="text-center"> {/* `CardHeader` और `className` को ठीक किया */}
-            <div className="w-16 h-16 mx-auto bg-blue-600 rounded-full flex items-center justify-center mb-4"> {/* `className` में `classname` को ठीक किया */}
-              <Truck className="w-8 h-8 text-white" /> {/* `Truck` और `className` को ठीक किया */}
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 px-4 py-12">
+      {/* Invisible Recaptcha Container */}
+      <div id="otp-container"></div>
+
+      <div className="max-w-md w-full">
+        <Card className="shadow-2xl border-none rounded-[2rem] overflow-hidden">
+          <CardHeader className="text-center bg-blue-600 pb-10 pt-10">
+            <div className="w-20 h-20 mx-auto bg-white/20 backdrop-blur-md rounded-3xl flex items-center justify-center mb-4 shadow-inner">
+              <Truck className="w-10 h-10 text-white" />
             </div>
-            <CardTitle className="text-2xl font-bold">Welcome Delivery Boy</CardTitle> {/* `CardTitle` और `className` को ठीक किया */}
+            <CardTitle className="text-3xl font-black text-white tracking-tight">
+              Delivery Partner
+            </CardTitle>
+            <p className="text-blue-100 text-sm font-medium">Shopnish Delivery Network</p>
           </CardHeader>
-          <CardContent className="space-y-4"> {/* `CardContent` और `className` को ठीक किया */}
-            <Button // `Button` को ठीक किया
-              className="w-full" // `className` में `classname` को ठीक किया
-              onClick={handleGoogleLogin} // `onClick` में `onclick` को ठीक किया, `handleGoogleLogin` को ठीक किया
-              disabled={loading}
-            >
-              {loading ? "Checking..." : "Login with Google"} {/* "Checking..." और "Login with Google" में "checking..." और "login with google" को ठीक किया */}
-            </Button>
-            <Button // `Button` को ठीक किया
+
+          <CardContent className="p-8 space-y-6 -mt-6 bg-white rounded-t-[2.5rem]">
+            {step === "phone" ? (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Phone className="absolute left-4 top-4 h-5 w-5 text-slate-400" />
+                  <Input
+                    type="tel"
+                    placeholder="Mobile Number"
+                    value={phone}
+                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
+                    className="pl-12 py-7 text-lg rounded-2xl border-slate-200 focus:border-blue-500"
+                    maxLength={10}
+                  />
+                </div>
+                <Button
+                  className="w-full py-7 text-xl font-bold bg-blue-600 hover:bg-blue-700 rounded-2xl shadow-lg shadow-blue-100 transition-all"
+                  onClick={handleSendOtp}
+                  disabled={isLoadingAuth || phone.length < 10}
+                >
+                  {isLoadingAuth ? <Loader2 className="animate-spin" /> : "Send OTP"}
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                <div className="relative">
+                  <ShieldCheck className="absolute left-4 top-4 h-5 w-5 text-slate-400" />
+                  <Input
+                    type="text"
+                    placeholder="Enter 6-digit OTP"
+                    value={otp}
+                    onChange={(e) => setOtp(e.target.value)}
+                    className="pl-12 py-7 text-center text-2xl tracking-[0.3em] font-bold rounded-2xl border-slate-200 focus:border-blue-500"
+                    maxLength={6}
+                  />
+                </div>
+                <Button
+                  className="w-full py-7 text-xl font-bold bg-green-600 hover:bg-green-700 rounded-2xl shadow-lg shadow-green-100 transition-all"
+                  onClick={handleVerifyOtp}
+                  disabled={isLoadingAuth || otp.length < 6}
+                >
+                  {isLoadingAuth ? <Loader2 className="animate-spin" /> : "Verify & Login"}
+                </Button>
+                <button 
+                  onClick={() => setStep("phone")}
+                  className="w-full text-center text-sm font-bold text-blue-600 hover:underline"
+                >
+                  Change Number?
+                </button>
+              </div>
+            )}
+
+            <div className="relative py-2">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-slate-100"></span></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-white px-2 text-slate-400 font-bold">New Here?</span></div>
+            </div>
+
+            <Button
               variant="outline"
-              className="w-full" // `className` में `classname` को ठीक किया
-              onClick={handleRegister} // `onClick` में `onclick` को ठीक किया, `handleRegister` को ठीक किया
-              disabled={loading}
+              className="w-full py-6 rounded-2xl border-2 border-slate-100 hover:bg-slate-50 font-bold text-slate-600"
+              onClick={() => navigate("/delivery-apply")}
+              disabled={isLoadingAuth}
             >
-              Register
+              Apply as Delivery Partner
             </Button>
           </CardContent>
         </Card>
-        <p className="mt-6 text-center text-sm text-gray-600"> {/* `className` में `classname` को ठीक किया */}
-          Need help? Contact support@shopnish.com {/* "Need help?" को ठीक किया */}
+        <p className="mt-8 text-center text-xs text-slate-400 font-medium uppercase tracking-widest">
+          © 2026 Shopnish Tech Logistics
         </p>
       </div>
     </div>

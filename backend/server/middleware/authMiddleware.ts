@@ -1,11 +1,15 @@
-// server/middleware/authMiddleware.ts
 import { Response, NextFunction } from "express";
 import { verifyToken, AuthenticatedRequest } from "./verifyToken";
 import { deliveryBoys, sellersPgTable } from "../../shared/backend/schema";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
- import { authAdmin } from "../lib/firebaseAdmin";
-// 1️⃣ सामान्य प्रमाणीकरण (No Change needed here)
+import { authAdmin } from "../lib/firebaseAdmin";
+
+/**
+ * 1️⃣ Standard Authentication
+ * Isme verifyToken (Jo ab Mobile/UID based hai) use hota hai.
+ * Ye un routes ke liye hai jahan user pehle se login/register hai.
+ */
 export const requireAuth = [
   verifyToken,
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -18,13 +22,14 @@ export const requireAuth = [
   },
 ] as any[];
 
-// 2️⃣ केवल Admin के लिए (Updated for Boolean Logic)
+/**
+ * 2️⃣ Only Admin Access
+ */
 export const requireAdminAuth = [
   ...requireAuth,
   (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ message: "User not found." });
 
-    // ✅ नया तरीका: सीधा isAdmin चेक करें
     if (!req.user.isAdmin) {
       return res.status(403).json({
         message: "Forbidden: Admin access required.",
@@ -34,13 +39,14 @@ export const requireAdminAuth = [
   },
 ];
 
-// 3️⃣ केवल Seller के लिए (Updated for Multi-Role)
+/**
+ * 3️⃣ Only Seller Access
+ */
 export const requireSellerAuth = [
   ...requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ message: "Not authorized." });
 
-    // ✅ नया तरीका: isSeller चेक करें
     if (!req.user.isSeller) {
       return res.status(403).json({
         message: "Forbidden: Seller access required.",
@@ -49,12 +55,10 @@ export const requireSellerAuth = [
 
     const userId = req.user.id;
     
-    // DB से प्रोफाइल और अप्रूवल चेक करें
     const sellerProfile = await db.query.sellersPgTable.findFirst({
         where: eq(sellersPgTable.userId, userId),
     });
 
-    // ✅ अब status सीधा "approved" स्ट्रिंग से चेक करें (ज्यादा सुरक्षित)
     if (!sellerProfile || sellerProfile.approvalStatus !== "approved") {
          return res.status(403).json({ 
              message: "Seller account not approved or not found." 
@@ -66,13 +70,14 @@ export const requireSellerAuth = [
   },
 ];
 
-// 4️⃣ केवल Delivery Boy के लिए (Updated)
+/**
+ * 4️⃣ Only Delivery Boy Access
+ */
 export const requireDeliveryBoyAuth = [
   ...requireAuth,
   async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     if (!req.user) return res.status(401).json({ message: "Not authorized." });
 
-    // ✅ नया तरीका: isDelivery चेक करें
     if (!req.user.isDelivery) {
       return res.status(403).json({ message: "Forbidden: Not a delivery boy." });
     }
@@ -94,8 +99,13 @@ export const requireDeliveryBoyAuth = [
     next();
   },
 ];
-// 5️⃣ Registration के लिए (Bypass Database Check)
-// Iska use sirf /register route par karein
+
+/**
+ * 5️⃣ Special Registration Middleware (Bypass Database Check)
+ * Iska use sirf /register routes par hoga. 
+ * Ye database mein user nahi dhundta, sirf Firebase Token verify karke 
+ * UID aur Phone data req.firebaseUser mein bhej deta hai.
+ */
 export const verifyFirebaseOnly = async (req: any, res: Response, next: NextFunction) => {
   try {
     const authHeader = req.headers.authorization;
@@ -105,13 +115,14 @@ export const verifyFirebaseOnly = async (req: any, res: Response, next: NextFunc
       return res.status(401).json({ message: "No token provided." });
     }
 
-    // ✅ Yahan authAdmin use karein
+    // Token verify karke Firebase User data nikaalein
     const decodedToken = await authAdmin.verifyIdToken(token);
     
+    // Naya property set karein taaki controller ko pata chale ki user naya hai
     req.firebaseUser = decodedToken; 
     next();
   } catch (error) {
-    console.error("Firebase Verify Error:", error);
+    console.error("❌ Firebase Verify Error:", error);
     res.status(401).json({ message: "Invalid or expired token." });
   }
 };

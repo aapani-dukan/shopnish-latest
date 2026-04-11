@@ -81,9 +81,11 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
             .insert(sellersPgTable)
             .values({
                 userId: currentUserId,
+                firebaseUid: firebaseUid,
                 businessName,
                 businessAddress,
                 businessPhone,
+                email: email || null,
                 description: description || null,
                 city,
                 pincode,
@@ -118,6 +120,7 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
                 // Agar user badalna chahta hai toh yahan update kar sakte hain
                 isSeller: true, // Iska request submit ho gaya
                 sellerApprovalStatus: 'pending', 
+                role: 'seller', // Role ko 'seller' set kar dein, admin approval ke baad bhi yeh role rahega, approvalStatus se pata chalega ki active seller hai ya nahi
                 updatedAt: new Date(),
             })
             .where(eq(users.id, currentUserId))
@@ -172,20 +175,14 @@ sellerRouter.get('/me', requireSellerAuth, async (req: any, res: Response) => {
       .where(eq(products.sellerId, sellerId));
 
     // कुल राजस्व की गणना (subOrders से, क्योंकि sellerId यहीं है)
-    // subOrders.total कॉलम का उपयोग करें
-    const [{ totalRevenueResult }] = await db // 'totalRevenue' नाम दें ताकि स्पष्ट हो
-      .select({ totalRevenueResult: sql<number>`sum(${subOrders.total}::numeric)` }) // ✅ subOrders.total का उपयोग करें
-      .from(subOrders)
-      .where(
-        // ऑर्डर्स को फिल्टर करें जिनके लिए आप राजस्व गिनना चाहते हैं (उदाहरण के लिए, केवल 'completed' सब-ऑर्डर)
-        // यदि आप सभी ऑर्डर के total को जोड़ना चाहते हैं, तो 'and' को हटा दें
-        // and(
-        eq(subOrders.sellerId, sellerId)
-        //   inArray(subOrders.status, ['completed', 'shipped']) // उदाहरण के लिए, यदि आवश्यक हो तो इसे अनकमेंट करें
-        // )
-      );
+    
+    // Revenue calculation line (Line 130 ke paas):
+const [{ totalRevenueResult }] = await db
+  .select({ totalRevenueResult: sql<string | number>`sum(${subOrders.total}::numeric)` }) 
+  .from(subOrders)
+  .where(eq(subOrders.sellerId, sellerId));
 
-    const totalRevenue = totalRevenueResult || 0; // यदि sum null लौटाता है तो 0
+const totalRevenue = Number(totalRevenueResult) || 0; // ✅ String to Number safe conversion
 const sellerProfileWithRating = sellerProfile as unknown as { rating: number | null, [key: string]: any };
 
     // औसत रेटिंग की गणना

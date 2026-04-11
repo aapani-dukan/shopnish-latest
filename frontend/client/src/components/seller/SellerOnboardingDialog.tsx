@@ -37,77 +37,69 @@ const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 // 📦 Form Validation Schema
 const sellerFormSchema = z.object({
   businessName: z.string().min(3).max(100),
-  
   description: z.string().min(10).max(500),
   businessAddress: z.string().min(10).max(200),
   city: z.string().min(2).max(50),
-  pincode: z.string().regex(/^\d{6}$/),
-  businessPhone: z.string().regex(/^\d{10}$/),
-  gstNumber: z.string().max(15).optional(),
-  bankAccountNumber: z.string().regex(/^\d{9,18}$/),
-  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/), // Regex fixed to uppercase for IFSC standard
+  pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits"),
+  businessPhone: z.string().regex(/^\d{10}$/, "Phone must be 10 digits"),
+  gstNumber: z.string().max(15).optional().or(z.literal('')),
+  bankAccountNumber: z.string().regex(/^\d{9,18}$/, "Invalid Bank Account"),
+  ifscCode: z.string().regex(/^[A-Z]{4}0[A-Z0-9]{6}$/, "Invalid IFSC Code"),
   deliveryRadius: z.preprocess(
-    (val) => (val === "" ? undefined : Number(val)),
+    (val) => (val === "" ? 5 : Number(val)),
     z.number().min(1).max(100)
   ),
   businessType: z.string().min(2).max(50),
-  latitude: z.number().min(-90).max(90).nullable().optional(),
-  longitude: z.number().min(-180).max(180).nullable().optional(),
+  latitude: z.number().optional(),
+  longitude: z.number().optional(),
 });
 
 type FormData = z.infer<typeof sellerFormSchema>;
-
 interface SellerOnboardingDialogProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
-// ✅ Custom Mutation Hook
 function useRegisterSeller(onClose: () => void, resetForm: () => void) {
-  const { user } = useAuth();
+  const { refetchUser } = useAuth(); // Profile refresh ke liye refetchUser mangwaya
   const { toast } = useToast();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
   return useMutation<any, Error, FormData>({
     mutationFn: async (formData) => {
-      if (!user?.idToken || !user?.uid) {
-        throw new Error("User not authenticated.");
-      }
-
+      // ✅ Naya logic: VerifyToken humein handle kar lega, bas payload bhejo
       const payload = {
         ...formData,
-        firebaseUid: user.uid,
-        email: user.email,
+        // Backend humari identity token se verify kar lega, 
+        // par ye fields safety ke liye bhej rahe hain
         phone: formData.businessPhone,
-        name: user.name,
       };
 
       try {
-        const response = await apiRequest(
-          "POST",
-          "/api/sellers/apply",
-          payload,
-          
-        );
+        const response = await apiRequest("POST", "/api/sellers/apply", payload);
         return response;
       } catch (error: any) {
         throw new Error(error.message || "Failed to register seller.");
       }
     },
 
-    onSuccess: (data) => {
+    onSuccess: async () => {
       toast({
-        title: "Application Submitted!",
-        description:
-          data?.message ||
-          "Your seller application was submitted successfully.",
+        title: "Application Submitted! 🚀",
+        description: "Bhai, admin approval ka intezar karein.",
       });
-      queryClient.invalidateQueries({ queryKey: ["sellerProfile", user?.uid] });
+      
+      // ✅ Auth state refresh karein taaki useSeller hooks update ho jayein
+      await refetchUser();
+      
+      queryClient.invalidateQueries({ queryKey: ["/api/sellers/me"] });
       queryClient.invalidateQueries({ queryKey: ["/api/users/me"] });
+      
       resetForm();
       onClose();
-      setTimeout(() => navigate("/seller-status"), 1500);
+      // Redirect to home or status page
+      navigate("/", { replace: true });
     },
 
     onError: (error) => {
@@ -119,11 +111,7 @@ function useRegisterSeller(onClose: () => void, resetForm: () => void) {
     },
   });
 }
-
-export default function SellerOnboardingDialog({
-  isOpen,
-  onClose,
-}: SellerOnboardingDialogProps) {
+export default function SellerOnboardingDialog({ isOpen, onClose }: SellerOnboardingDialogProps) {
   const { user, isAuthenticated, isLoadingAuth } = useAuth();
   const { toast } = useToast();
   const navigate = useNavigate();
@@ -135,39 +123,28 @@ export default function SellerOnboardingDialog({
       businessType: "grocery",
       description: "",
       businessAddress: "",
-      businessPhone: "",
+      businessPhone: user?.phoneNumber?.replace("+91", "") || "", // ✅ Prefill phone from auth
       city: "",
       pincode: "",
       gstNumber: "",
       bankAccountNumber: "",
       ifscCode: "",
       deliveryRadius: 5,
-      latitude: undefined,
-      longitude: undefined,
     },
   });
 
   const registerSellerMutation = useRegisterSeller(onClose, form.reset);
 
   const onSubmit = (data: FormData) => {
-    if (
-      !isAuthenticated ||
-      isLoadingAuth ||
-      !user?.uid ||
-      !user?.idToken
-    ) {
-      toast({
-        title: "Please Wait...",
-        description: "Authenticating user. Please try again.",
-        variant: "default",
-      });
+    if (!isAuthenticated || isLoadingAuth) {
+      toast({ title: "Please Wait...", description: "Authenticating..." });
       return;
     }
 
-    if (data.latitude === undefined || data.longitude === undefined) {
+    if (!data.latitude || !data.longitude) {
       toast({
-        title: "Location Missing",
-        description: "Please ensure your business address is valid so we can pinpoint its location (latitude/longitude).",
+        title: "Location Required 📍",
+        description: "Bhai, address sahi dalo taaki hum coordinates nikal sakein.",
         variant: "destructive",
       });
       return;

@@ -56,91 +56,50 @@ router.get("/health", (req: Request, res: Response) => {
 // ✅ Register User
 router.post("/register", async (req: Request, res: Response) => {
   try {
-    const userData = req.body;
-    if (!userData.firebaseUid || !userData.email) {
-      return res.status(400).json({ error: "Firebase UID and email are required." });
+    const { firebaseUid, phone, firstName, lastName } = req.body;
+
+    if (!firebaseUid || !phone) {
+      return res.status(400).json({ error: "Firebase UID and Phone are required." });
     }
 
     const [newUser] = await db.insert(users).values({
-    firebaseUid: userData.firebaseUid,
-    email: userData.email || null,
-    // 'name' column nahi hai, isliye ise hata diya gaya hai
-    firstName: userData.firstName || userData.name || "", // Agar 'name' aa raha hai toh use firstName mein daal sakte hain
-    lastName: userData.lastName || "",
-    phone: userData.phone || "",
-    
-    // Enum values ko string ke taur par pass karein
-    role: "customer", 
-    approvalStatus: "approved", 
-    
-    password: userData.password || null, // Schema mein optional hai
-    address: userData.address || null,
-    city: userData.city || null,
-    pincode: userData.pincode || null,
-    
-    isActive: true,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  }).returning();
+      firebaseUid,
+      phone,
+      firstName: firstName || "User",
+      lastName: lastName || "",
+      role: "customer", // Default
+      isCustomer: true,
+      isActive: true,
+      approvalStatus: "approved",
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    }).returning();
 
-  res.status(201).json(newUser);
-} catch (error: any) {
-  console.error("❌ User registration failed:", error);
-  res.status(400).json({ error: error.message });
-}
+    res.status(201).json(newUser);
+  } catch (error: any) {
+    console.error("❌ Registration failed:", error);
+    res.status(400).json({ error: error.message });
+  }
 });
 
 // ✅ User Profile
-router.get(
-  "/users/me",
-  requireAuth as any,
-  async (req: any, res: Response) => {
-    try {
-      const userUuid = req.user?.firebaseUid;
-      if (!userUuid) return res.status(401).json({ error: "Not authenticated." });
+router.get("/users/me", requireAuth as any, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
+    const [user] = await db.select().from(users).where(eq(users.id, userId));
 
-      let [user] = await db.select().from(users).where(eq(users.firebaseUid, userUuid));
-      
-      // 🚩 CHANGE 1: Agar user DB mein nahi hai, toh automatic create mat hone do
-      // Seedha 404 bhejo taaki Frontend 'initial-login' hit kare
-      if (!user) return res.status(404).json({ error: "User profile not found. Please sync." });
+    if (!user) return res.status(404).json({ error: "User not found." });
 
-      // 🚩 CHANGE 2: "needsPhone" Flag check
-      // Agar user mil gaya par uska phone null/empty hai, toh response mein batao
-      const needsPhoneSync = !user.phone || user.phone.trim() === "";
+    // Virtual role logic (Same as before)
+    const virtualRole = user.isAdmin ? 'admin' : 
+                        user.isSeller ? 'seller' : 
+                        user.isDelivery ? 'delivery-boy' : 'customer';
 
-      const virtualRole = user.isAdmin ? 'admin' : 
-                          user.isSeller ? 'seller' : 
-                          user.isDelivery ? 'delivery-boy' : 'customer';
-
-      const userWithRole = { ...user, role: virtualRole };
-
-      let sellerInfo = null;
-      if (user.isSeller) {
-        const [record] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, user.id));
-        if (record) sellerInfo = record;
-      }
-
-      let deliveryBoyId = null;
-      if (user.isDelivery) {
-        const [dboy] = await db.select({ id: deliveryBoys.id }).from(deliveryBoys).where(eq(deliveryBoys.userId, user.id));
-        if (dboy) deliveryBoyId = dboy.id;
-      }
-
-      // ✅ Final Response: needsPhone flag ke saath
-      res.status(200).json({ 
-        ...userWithRole, 
-        needsPhone: needsPhoneSync, // 🔥 Frontend ko signal
-        sellerProfile: sellerInfo,
-        deliveryBoyId 
-      });
-      
-    } catch (error: any) {
-      console.error("❌ Error in /users/me:", error);
-      res.status(500).json({ error: "Internal error." });
-    }
+    res.status(200).json({ ...user, role: virtualRole });
+  } catch (error) {
+    res.status(500).json({ error: "Internal error." });
   }
-);
+});
 router.get(
   "/:orderId/tracking", // यह URL /api/orders/170/tracking को मैच करेगा
   requireAuth as any, // सुनिश्चित करें कि ग्राहक लॉग इन है
@@ -185,159 +144,30 @@ router.get(
 });
 
 // 1. ✅ Initial Login: Check if Email exists or needs Phone
-router.post("/auth/initial-login", async (req: Request, res: Response) => {
+// ✅ Simple Login Check (After Firebase Phone OTP)
+router.post("/auth/login", async (req: Request, res: Response) => {
   try {
     const { idToken } = req.body;
-    if (!idToken) {
-      return res.status(400).json({ message: "Token is required." });
-    }
-
-    // 🔐 Firebase token verify
     const decodedToken = await authAdmin.verifyIdToken(idToken);
-    const { uid: firebaseUid, email, name: fullName } = decodedToken;
+    const { uid, phone_number } = decodedToken;
 
-    // 🔍 Step 1: User find by UID or Email
-    let [user] = await db.select().from(users).where(
-      or(
-        eq(users.firebaseUid, firebaseUid),
-        eq(users.email, email || "---non-existent---")
-      )
-    );
+    // Direct check by UID
+    let [user] = await db.select().from(users).where(eq(users.firebaseUid, uid));
 
-    // 🆕 Step 2: Agar user nahi mila → create basic user (WITHOUT phone)
     if (!user) {
-      console.log("🆕 Creating new user (no phone yet)");
-
-      const nameParts = fullName ? fullName.trim().split(/\s+/) : ["User", ""];
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(" ");
-
-      const [newUser] = await db.insert(users).values({
-        firebaseUid,
-        email: email || null,
-        firstName,
-        lastName,
-        role: "customer",
-        isCustomer: true,
-        isActive: true,
-        approvalStatus: "approved",
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      }).returning();
-
-      return res.status(200).json({
-        user: newUser,
-        needsPhone: true // 🔥 Phone abhi bhi required hai
-      });
-    }
-
-    // 🔄 Step 3: UID mismatch fix (important for merge cases)
-    if (user.firebaseUid !== firebaseUid) {
-      await db.update(users)
-        .set({ firebaseUid, updatedAt: new Date() })
-        .where(eq(users.id, user.id));
-    }
-
-    // 📱 Step 4: Check phone
-    const needsPhone = !user.phone || user.phone.trim() === "";
-
-    return res.status(200).json({
-      user,
-      needsPhone
-    });
-
-  } catch (error: any) {
-    console.error("❌ Initial login failed:", error);
-    res.status(401).json({ message: "Authentication failed." });
-  }
-});
-// 2. ✅ New Route: Sync Phone (The Master Sync Logic)
-router.post("/auth/sync-phone", async (req: Request, res: Response) => {
-  try {
-    const { firebaseUid, email, phone, fullName } = req.body;
-
-    if (!phone) {
-      return res.status(400).json({ message: "Phone number is required." });
-    }
-
-    // 1. Pehle check karein: Kya ye Phone pehle se kisi account mein hai?
-    // (Ye un users ke liye hai jo pehle Mobile Number se login kar chuke hain)
-    let [existingUserByPhone] = await db
-      .select()
-      .from(users)
-      .where(eq(users.phone, phone));
-
-    if (existingUserByPhone) {
-      console.log(`🔄 Merging: Linking Google Email (${email}) to existing Phone ID (${existingUserByPhone.id})`);
-      
-      const [updatedUser] = await db
-        .update(users)
-        .set({
-          email: email || existingUserByPhone.email,
-          firebaseUid: firebaseUid, // Firebase UID link kar diya
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, existingUserByPhone.id))
-        .returning();
-
       return res.status(200).json({ 
-        user: updatedUser, 
-        message: "Account merged successfully!" 
+        registered: false, 
+        firebaseUid: uid, 
+        phone: phone_number 
       });
     }
 
-    // 2. Agar Phone nahi mila, toh check karein: Kya ye Email/UID pehle se hai?
-    let [existingUserByUid] = await db
-      .select()
-      .from(users)
-      .where(eq(users.firebaseUid, firebaseUid));
-
-    if (existingUserByUid) {
-      // User hai par phone nahi tha, toh sirf phone update karo
-      const [updatedUser] = await db
-        .update(users)
-        .set({ 
-          phone: phone,
-          updatedAt: new Date() 
-        })
-        .where(eq(users.id, existingUserByUid.id))
-        .returning();
-      
-      return res.status(200).json({ user: updatedUser });
-    }
-
-    // 3. 🆕 NEW USER: Bilkul naya banda (Fresh Entry)
-    console.log("🆕 Creating brand new user entry in DB");
-    
-    // FullName se First aur Last Name alag karein
-    const nameParts = fullName ? fullName.trim().split(/\s+/) : ["User", ""];
-    const fName = nameParts[0];
-    const lName = nameParts.slice(1).join(" ");
-
-    const [newUser] = await db.insert(users).values({
-      firebaseUid,
-      email: email || null,
-      phone: phone,
-      firstName: fName,
-      lastName: lName,
-      role: "customer", // Default Role
-      isCustomer: true,  // Aapke schema ke flags
-      isActive: true,
-      approvalStatus: "approved",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
-
-    return res.status(201).json({ 
-      user: newUser, 
-      message: "User created and synced successfully!" 
-    });
-
-  } catch (error: any) {
-    console.error("❌ Sync phone failed:", error);
-    res.status(500).json({ message: "Internal server error", error: error.message });
+    return res.status(200).json({ registered: true, user });
+  } catch (error) {
+    res.status(401).json({ message: "Auth failed" });
   }
 });
+
 // ✅ Logout
 router.post("/auth/logout", async (req, res) => {
   const sessionCookie = req.cookies?.__session || "";

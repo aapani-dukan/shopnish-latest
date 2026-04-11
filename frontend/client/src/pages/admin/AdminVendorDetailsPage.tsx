@@ -17,7 +17,8 @@ import { useToast } from "../../hooks/use-toast"; // 'useToast' को सीध
 interface Seller { 
   id: number;
   businessName: string; 
-  email: string; 
+  email: string | null; 
+  phone: string;
   approvalStatus: "pending" | "approved" | "rejected"; 
   rejectionReason: string | null; 
   approvedAt: string | null; 
@@ -220,15 +221,15 @@ toast({
     pincode
   } = sellerData;
 
-  // 2. एक साफ़ ऑब्जेक्ट बनाएँ (जो बैकएंड मांग रहा है)
+  // 2. एक साफ़ ऑब्जेक्ट बनाएँ (जो बैकएंड मांग रहा है)
   const cleanData = {
     deliveryRadius: deliveryRadius, // हम Km वाले को ही असली Radius मान रहे हैं
     deliveryPincodes,
-    deliveryCharge: baseDeliveryCharge,
-    chargePerKm,
-    businessName,
-    city,
-    pincode
+   deliveryCharge: baseDeliveryCharge ? Number(baseDeliveryCharge) : undefined,
+      chargePerKm: chargePerKm ? Number(chargePerKm) : undefined,
+      businessName,
+      city,
+      pincode
   };
 
   // 3. जो अनडिफाइंड हैं उन्हें डिलीट करें ताकि एरर न आए
@@ -287,6 +288,10 @@ toast({
               {seller.approvalStatus}
             </span>
           </p>
+          <p className="flex justify-between border-b pb-2">
+              <span className="text-slate-500 font-medium">Phone (Login):</span>
+              <span className="font-bold text-blue-600">{seller.phone}</span> {/* ✅ Phone Number dikhana zaroori hai */}
+            </p>
           {seller.rejectionReason && (
             <p className="text-red-500 text-sm mb-2">
               <strong>अस्वीकृति का कारण:</strong> {seller.rejectionReason}

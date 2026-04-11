@@ -1,57 +1,33 @@
-// Client/src/hooks/useSeller.tsx
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "./useAuth";
-import axios from "axios";
-import { getAuth } from "firebase/auth";
 
 interface Seller {
   id: string;
   userId: string;
   businessName: string;
   approvalStatus: "pending" | "approved" | "rejected";
+  // Aapke schema ke hisab se baaki fields bhi add kar sakte hain
 }
 
 export function useSeller() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoadingAuth, user } = useAuth();
 
-  const { data: seller, isLoading: sellerLoading } = useQuery<Seller | null>({
+  const { data: seller, isLoading: sellerLoading, error } = useQuery<Seller | null>({
     queryKey: ["/api/sellers/me"],
-    queryFn: async () => {
-      const auth = getAuth();
-      const firebaseUser = auth.currentUser;
-
-      if (!firebaseUser) {
-        console.warn("🚫 useSeller: No Firebase user found.");
-        return null;
-      }
-
-      const idToken = await firebaseUser.getIdToken();
-      if (!idToken) {
-        console.warn("🚫 useSeller: Failed to get ID token.");
-        return null;
-      }
-
-      const response = await axios.get("/api/sellers/me", {
-        headers: {
-          Authorization: `Bearer ${idToken}`,
-        },
-      });
-
-      if (response.status === 204) return null;
-      return response.data;
-    },
-    enabled: isAuthenticated,
+    // ✅ Note: Humne QueryClient mein getQueryFn set kiya hua hai 
+    // isliye yahan queryFn likhne ki zaroorat nahi hai agar default config set hai.
+    // Lekin safety ke liye hum isAuthenticated flag use kar rahe hain.
+    enabled: isAuthenticated && !!user,
+    staleTime: 5 * 60 * 1000, // 5 minutes tak data fresh rahega
     retry: false,
-    staleTime: 5 * 60 * 1000,
-    onError: (error) => {
-      console.error("❌ useSeller: Error fetching seller data:", error);
-    },
   });
 
   return {
     seller,
-    isSeller: !!seller,
-    isLoading: authLoading || sellerLoading,
+    // Agar user role 'seller' hai ya seller profile mil gayi hai
+    isSeller: !!seller || user?.role === 'seller' || !!user?.isSeller,
+    isLoading: isLoadingAuth || sellerLoading,
     isAuthenticated,
+    error
   };
 }

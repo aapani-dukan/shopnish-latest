@@ -31,39 +31,33 @@ const router = Router();
 //Simplified Delivery Boy Registration
 router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Response) => {
   try {
-    const { vehicleType, vehicleNumber, fullName, email } = req.body;
+    const { vehicleType, vehicleNumber, fullName, email } = req.body; // Email sirf store karne ke liye hai
     const firebaseUid = req.firebaseUser.uid;
     const phone = req.firebaseUser.phone_number || "";
 
-    // 1. ✅ Basic Validation
-    if (!vehicleType || !fullName) {
-      return res.status(400).json({ message: "Bhai, Name aur Vehicle details zaroori hain." });
+    if (!vehicleType || !fullName || !phone) {
+      return res.status(400).json({ message: "Bhai, Name, Phone aur Vehicle details zaroori hain." });
     }
 
-    // 2. 🚀 DATABASE TRANSACTION (UID Based Hybrid Logic)
     const result = await db.transaction(async (tx) => {
-      
-      /**
-       * A. USERS TABLE: Upsert Logic (UID based)
-       * Agar firebaseUid pehle se hai, toh sirf status update karo.
-       * Isse 'duplicate email' ya 'duplicate phone' ka error nahi aayega.
-       */
+      // ✅ STEP A: Users Table - Phone Number se Merge Karo
+      // Agar Phone pehle se hai (ID 57), toh bas Firebase UID aur flags update karo
       const [userEntry] = await tx.insert(users)
         .values({
           firebaseUid: firebaseUid,
           phone: phone,
-          email: email || "",
+          email: email || "", // Email sirf info ki tarah jayega
           firstName: fullName,
           isDelivery: true,
           deliveryApprovalStatus: 'pending',
           role: 'delivery-boy',
         })
         .onConflictDoUpdate({
-          target: [users.firebaseUid], // 🎯 Main Check: Firebase UID
+          target: [users.phone], // 🎯 Main Target: Phone Number (Conflict yahan solve hoga)
           set: { 
+            firebaseUid: firebaseUid, // Nayi UID link kar do
             isDelivery: true, 
             deliveryApprovalStatus: 'pending',
-            // Email aur Phone tabhi update karein jab wo naye hon ya zaroori ho
             firstName: fullName,
             updatedAt: new Date()
           }
@@ -72,10 +66,7 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
 
       const userId = userEntry.id;
 
-      /**
-       * B. DELIVERY BOYS TABLE: Profile Link
-       * User table se mili 'id' ko yahan connect karein.
-       */
+      // ✅ STEP B: Delivery Boys Profile
       const [deliveryEntry] = await tx.insert(deliveryBoys)
         .values({
           userId: userId,
@@ -89,7 +80,7 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
           isOnline: false,
         })
         .onConflictDoUpdate({
-          target: [deliveryBoys.userId], // Agar profile pehle se hai toh update kardo
+          target: [deliveryBoys.userId],
           set: { 
             name: fullName, 
             vehicleType, 
@@ -103,24 +94,42 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
       return deliveryEntry;
     });
 
-    // 3. ✅ Admin ko Real-time notification bhejo
     if (result) {
       getIO().emit("admin:update", { type: "delivery-boy-register", data: result });
-      
       return res.status(201).json({
         message: "Application submitted successfully! Admin approval ka intezar karein.",
         deliveryBoy: result
       });
     }
-
   } catch (error: any) {
     console.error("❌ Final Registration Error:", error);
-    // User-friendly message handle karein
-    const errorMsg = error.constraint === 'users_email_unique' 
-      ? "Ye Email pehle se kisi aur account se juda hai." 
-      : error.message;
+    return res.status(500).json({ message: "Server error", error: error.message });
+  }
+});
 
-    return res.status(500).json({ message: "Server error", error: errorMsg });
+/**
+ * ✅ Login Route (Only UID based)
+ */
+router.post('/login', verifyToken as any, async (req: any, res: Response) => {
+  try {
+    const firebaseUid = req.user?.firebaseUid;
+
+    if (!firebaseUid) return res.status(401).json({ message: "Authentication failed." });
+
+    const deliveryBoy = await db.query.deliveryBoys.findFirst({
+      where: eq(deliveryBoys.firebaseUid, firebaseUid),
+      with: { user: true }
+    });
+
+    if (!deliveryBoy || deliveryBoy.approvalStatus !== 'approved') {
+      return res.status(404).json({ message: "Account not found or not approved." });
+    }
+
+    res.status(200).json({ message: "Login successful", user: deliveryBoy });
+
+  } catch (error: any) {
+    console.error("❌ Login error:", error);
+    res.status(500).json({ message: "Failed to authenticate." });
   }
 });
 /**
@@ -130,22 +139,19 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
 router.post('/login', verifyToken as any, async (req: any, res: Response) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
-    const email = req.user?.email;
+    // ❌ Email dependence hata di gayi hai
 
-    if (!firebaseUid || !email) return res.status(401).json({ message: "Authentication failed." });
+    if (!firebaseUid) return res.status(401).json({ message: "Authentication failed." });
 
     const deliveryBoy = await db.query.deliveryBoys.findFirst({
       where: eq(deliveryBoys.firebaseUid, firebaseUid),
       with: { user: true }
     });
 
-    if (!deliveryBoy || deliveryBoy.approvalStatus !== approvalStatusEnum.enumValues[1] /* 'approved' */) {
-      return res.status(404).json({ message: "Account not found or not approved." });
+    // Check if account exists and is approved
+    if (!deliveryBoy || deliveryBoy.approvalStatus !== 'approved') {
+      return res.status(404).json({ message: "Account not found or not approved by Admin." });
     }
-
-   // if (!deliveryBoy.user || deliveryBoy.user.role !== userRoleEnum.enumValues[3] /* 'delivery-boy' */) { // ✅ userRoleEnum[3] = 'delivery-boy'
-  //    await db.update(users).set({ role: userRoleEnum.enumValues[3] as any }).where(eq(users.id, deliveryBoy.userId)); // ✅ 'as any' for enum update
-   // }
 
     res.status(200).json({ message: "Login successful", user: deliveryBoy });
 
@@ -395,68 +401,40 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
     }
     const deliveryBoyId = deliveryBoyProfile.id;
 
-    const assignedBatches = await db.query.deliveryBatches.findMany({
-      where: and(
-        eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
-        // ✅ Index 5 ('delivered') और Index 8 ('cancelled') के बजाय स्ट्रिंग का उपयोग करें
-        not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
-      ),
+   const assignedBatches = await db.query.deliveryBatches.findMany({
+  where: and(
+    eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
+    // ✅ String check ekdum sahi hai aapka
+    not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
+  ),
+  with: {
+    subOrders: {
       with: {
-        // ... (Nested relational data remains the same) ...
-        subOrders: {
+        masterOrder: {
           with: {
-            masterOrder: {
-                   
-              with: {
-                deliveryAddress: true,
-                customer: {
-                  columns: { id: true, firstName: true, lastName: true, phone: true }
-                },
-              //  deliveryAddress: true,
-              }
+            deliveryAddress: true,
+            customer: {
+              // ✅ Phone number zaroori hai delivery boy ke liye
+              columns: { id: true, firstName: true, lastName: true, phone: true }
             },
-            seller: {
-              columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
-            },
-            orderItems: {
-              with: {
-                product: {
-                  columns: { id: true, name: true, image: true, price: true, unit: true }
-                }
-              }
+          }
+        },
+        seller: {
+          // ✅ Business phone zaroori hai pickup ke liye
+          columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
+        },
+        orderItems: {
+          with: {
+            product: {
+              columns: { id: true, name: true, image: true, price: true, unit: true }
             }
           }
         }
-      },
-      orderBy: desc(deliveryBatches.createdAt),
-    });
-
-    // ... (Formatting logic remains the same) ...
-   /* const formattedBatches = assignedBatches.map(batch => {
-      const parsedSubOrders = batch.subOrders.map(subOrder => {
-        let parsedDeliveryAddress = {};
-        try {
-          if (subOrder.masterOrder?.deliveryAddress) {
-            // Address JSON string to object conversion
-            parsedDeliveryAddress = JSON.parse(subOrder.masterOrder.deliveryAddress as string);
-          }
-        } catch (e) {
-          console.warn(`Failed to parse deliveryAddress JSON for sub-order ${subOrder.id}:`, e);
-        }
-        return {
-          ...subOrder,
-          masterOrder: {
-            ...subOrder.masterOrder,
-            deliveryAddress: parsedDeliveryAddress,
-          },
-        };
-      });
-
-      return {
-        ...batch,
-        subOrders: parsedSubOrders,
-      };
-    });  */
+      }
+    }
+  },
+  orderBy: desc(deliveryBatches.createdAt),
+});
 
 
     return res.status(200).json({ batches: assignedBatches });
@@ -466,10 +444,6 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
   }
 });
 
-/**
- * ✅ Send OTP to Customer (Dedicated Route for Delivery Boy Dashboard)
- * POST /api/delivery/batches/:batchId/send-otp
- */
 /**
  * ✅ Send OTP to Customer (Final Version)
  * POST /api/delivery/batches/:batchId/send-otp
@@ -686,29 +660,26 @@ router.patch(
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
 /// --- 💰 WALLET SETTLEMENT LOGIC ---
-        if (newStatus === 'delivered') {
-          // 1. एडमिन सेटिंग्स से रेट निकालें (पहली रो)
-          const [settings] = await tx.select().from(adminSettings).limit(1);
-          
-          // वेरिएबल्स को यहाँ डिफाइन करें (यही वो 'baseDeliveryFee' है जो मिसिंग था)
-          const baseDeliveryFee = Number(settings?.baseDeliveryCharge || 40);
-          const platformCommission = Number(settings?.platformCommissionRate || 10);
+       // 💰 WALLET SETTLEMENT LOGIC (Inside Transaction)
+if (newStatus === 'delivered') {
+    const [settings] = await tx.select().from(adminSettings).limit(1);
+    const baseDeliveryFee = Number(settings?.baseDeliveryCharge || 40);
+    const platformCommission = Number(settings?.platformCommissionRate || 10);
 
-          const masterOrder = existingBatch.subOrders[0].masterOrder;
-          const isCOD = (masterOrder as any).paymentMethod === 'COD';
-
-          // 2. डिलीवरी बॉय को उसकी फीस दें (Always +)
-          await WalletService.addMoney(
-            userId, 
-            'delivery-boy', 
-            baseDeliveryFee, 
-            'delivery_fee', 
-            `batch_${batchId}`, 
-            `Earnings for batch #${batchId}`,
-            tx 
-          );
+    // ✅ Delivery Boy Earning (Always uses userId from req.user)
+    await WalletService.addMoney(
+        userId, 
+        'delivery-boy', 
+        baseDeliveryFee, 
+        'delivery_fee', 
+        `batch_${batchId}`, 
+        `Earnings for batch #${batchId}`,
+        tx 
+    );
 
           // 3. अगर COD है, तो डिलीवरी बॉय के वॉलेट से कैश अमाउंट माइनस करें
+          const masterOrder = existingBatch.subOrders[0].masterOrder;
+          const isCOD = masterOrder.paymentMethod === 'COD';
           if (isCOD) {
             const totalCashToCollect = existingBatch.subOrders.reduce((sum, so) => sum + Number(so.total), 0);
             
@@ -786,11 +757,11 @@ router.patch(
             else finalMasterStatus = 'cancelled';
 
             await tx.update(orders)
-              .set({ 
-                status: finalMasterStatus as any, 
-                updatedAt: new Date().toISOString() // Fixed Type Error
-              })
-              .where(eq(orders.id, masterOrderId));
+    .set({ 
+      status: finalMasterStatus as any,
+        updatedAt: new Date().toISOString() // ✅ Type safety fix for 'orders' table
+    })
+    .where(eq(orders.id, masterOrderId));
 
             // Tracking for Master Order completion
             await tx.insert(orderTracking).values({

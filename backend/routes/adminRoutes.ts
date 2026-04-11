@@ -43,8 +43,37 @@ const upload = multer({ dest: 'uploads/' });
  * ✅ GET /api/admin/me
  * (Authorization handled by `authorize(['admin'])`)
  */
+/**
+ * ✅ GET /api/admin/me
+ * Firebase UID + Phone based Admin check
+ */
 adminRouter.get('/me', authorize(['admin']), (req: any, res: Response) => {
-  return res.status(200).json({ message: 'Welcome, Admin!', user: req.user });
+  // Ab req.user mein email ki jagah phone number primary hoga
+  return res.status(200).json({ 
+    message: 'Welcome, Admin!', 
+    adminInfo: {
+      id: req.user.id,
+      name: req.user.name,
+      phone: req.user.phoneNumber, // 👈 Phone primary hai
+      role: req.user.role
+    } 
+  });
+});
+
+/**
+ * ✅ GET /api/admin/categories
+ */
+adminRouter.get('/categories', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    // Hum sorting bhi add kar dete hain taaki Frontend par categories sahi dikhein
+    const allCategories = await db.query.categories.findMany({
+      orderBy: (categories, { asc }) => [asc(categories.sortOrder)]
+    });
+    return res.status(200).json(allCategories);
+  } catch (error: any) {
+    console.error('❌ Admin Category Fetch Error:', error);
+    return res.status(500).json({ error: 'Internal Server Error' });
+  }
 });
 
 // --- Category Management ---
@@ -58,19 +87,6 @@ const categorySchema = z.object({
   sortOrder: z.number().int().min(0).optional().default(0),
 });
 
-/**
- * ✅ GET /api/admin/categories
- * (Authorization handled by `authorize(['admin'])`)
- */
-adminRouter.get('/categories', authorize(['admin']), async (req: any, res: Response) => {
-  try {
-    const allCategories = await db.query.categories.findMany();
-    return res.status(200).json(allCategories);
-  } catch (error: any) {
-    console.error('❌ Error fetching categories:', error);
-    return res.status(500).json({ error: 'Failed to fetch categories.' });
-  }
-});
 
 /**
  * ✅ POST /api/admin/categories

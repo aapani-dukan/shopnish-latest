@@ -1,20 +1,19 @@
 // routes/sellers/apply.ts
 import { Router, Response, NextFunction } from "express";
 import { db } from "../../server/db.ts";
-import { sellersPgTable, users, approvalStatusEnum, userRoleEnum } from "../../shared/backend/schema.ts";
+import { sellersPgTable, users } from "../../shared/backend/schema.ts"; // Enum hata diye kyunki hum string use karenge
 import { verifyToken } from "../../server/middleware/verifyToken.ts";
 import { eq } from "drizzle-orm";
 
 const router = Router();
 
-// ✅ ट्रिक: यहाँ 'req' को 'any' दें ताकि Express का Overload इसे स्वीकार कर ले
 router.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
   try {
-    // यहाँ हमने 'req.user' को 'any' के जरिए एक्सेस किया, कोई एरर नहीं आएगी
     const firebaseUid = req.user?.firebaseUid; 
+    const currentUserId = req.user?.id; // verifyToken se humein ye mil jayega
     
-    if (!firebaseUid) {
-      return res.status(401).json({ message: "Unauthorized: Firebase UID missing" });
+    if (!firebaseUid || !currentUserId) {
+      return res.status(401).json({ message: "Unauthorized: Please login with Phone" });
     }
 
     const {
@@ -31,68 +30,68 @@ router.post("/apply", verifyToken as any, async (req: any, res: Response, next: 
       businessType,
     } = req.body;
 
-    // 1. Validation
+    // 1. Basic Validation (Phone zaroori hai business ke liye)
     if (!businessName || !businessPhone || !city || !pincode || !businessAddress || !businessType) {
       return res.status(400).json({ message: "Missing required fields." });
     }
 
-    // 2. Database User Check
-    const [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid)).limit(1);
-    if (!dbUser) return res.status(404).json({ message: "User not found." });
-
-    // 3. Duplicate Application Check
-    const [existing] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, dbUser.id)).limit(1);
+    // 2. Duplicate Application Check (Already Optimized)
+    const [existing] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, currentUserId)).limit(1);
     if (existing) {
       return res.status(400).json({
-        message: "Application already submitted.",
+        message: "Bhai, aapne pehle hi apply kar diya hai!",
         status: existing.approvalStatus,
       });
     }
 
-    // 4. Create Seller Record
-    const [newSeller] = await db.insert(sellersPgTable).values({
-      userId: dbUser.id,
-      businessName,
-      businessAddress,
-      businessPhone,
-      description: description || null,
-      city,
-      pincode,
-      gstNumber: gstNumber || null,
-      bankAccountNumber: bankAccountNumber || null,
-      ifscCode: ifscCode || null,
-      deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : 5,
-      businessType,
-      approvalStatus: approvalStatusEnum.enumValues[0],
-    }).returning();
+    // 3. Transaction: Seller Table + User Table Update
+    const result = await db.transaction(async (tx) => {
+      // A. Create Seller Record
+      const [newSeller] = await tx.insert(sellersPgTable).values({
+        userId: currentUserId,
+        firebaseUid: firebaseUid, // 👈 Sync ke liye UID yahan bhi rakhein
+        businessName,
+        businessAddress,
+        businessPhone,
+        description: description || null,
+        city,
+        pincode,
+        gstNumber: gstNumber || null,
+        bankAccountNumber: bankAccountNumber || null,
+        ifscCode: ifscCode || null,
+        deliveryRadius: deliveryRadius ? parseInt(String(deliveryRadius)) : 5,
+        businessType,
+        approvalStatus: 'pending', // ✅ String based status
+      } as any).returning();
 
-    // 5. Update User Role & Status (Boolean Logic)
-const [updatedUser] = await db.update(users)
-  .set({
-    // ✅ 'role' को 'customer' ही रहने दें ताकि वो शॉपिंग कर सके
-    // ✅ बस सेलर बनने की रिक्वेस्ट को इन कॉलम्स में ट्रैक करें:
-    isSeller: false, // अभी अप्रूव नहीं हुआ है
-    sellerApprovalStatus: 'pending', // स्टेटस पेंडिंग कर दिया
-    updatedAt: new Date(),
-  })
-  .where(eq(users.id, dbUser.id))
-  .returning();
+      // B. Update User Flags (Single Identity Logic)
+      const [updatedUser] = await tx.update(users)
+        .set({
+          // Note: role ko 'customer' hi rehne de sakte hain ya 'seller' mark kar sakte hain
+          // Lekin 'isSeller' ko True tabhi karein jab admin approve kare
+          sellerApprovalStatus: 'pending', 
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, currentUserId))
+        .returning();
 
-// 6. Response
-return res.status(201).json({
-  message: "Application submitted successfully!",
-  seller: newSeller,
-  user: {
-    firebaseUid: updatedUser.firebaseUid,
-    isSeller: updatedUser.isSeller,
-    sellerApprovalStatus: updatedUser.sellerApprovalStatus,
-    email: updatedUser.email,
-    name: `${updatedUser.firstName || ""} ${updatedUser.lastName || ""}`.trim(),
-  },
-});
+      return { newSeller, updatedUser };
+    });
+
+    // 4. Response (Clean & Google-Free)
+    return res.status(201).json({
+      message: "Application submitted successfully!",
+      seller: result.newSeller,
+      user: {
+        firebaseUid: result.updatedUser.firebaseUid,
+        phone: result.updatedUser.phone, // 👈 Email ki jagah Phone bhejo
+        sellerApprovalStatus: result.updatedUser.sellerApprovalStatus,
+        name: `${result.updatedUser.firstName || ""} ${result.updatedUser.lastName || ""}`.trim(),
+      },
+    });
 
   } catch (error) {
-    console.error("❌ Error in apply.ts:", error);
+    console.error("❌ Error in seller apply:", error);
     next(error);
   }
 });

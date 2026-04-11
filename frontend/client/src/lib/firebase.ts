@@ -1,22 +1,14 @@
 import { initializeApp, getApps, getApp } from "firebase/app";
 import {
   getAuth,
-  GoogleAuthProvider,
-  signInWithRedirect,
-  signInWithPopup,
-  getRedirectResult,
   signOut,
   onAuthStateChanged,
   User as FirebaseUserType,
-  // 🚀 New Imports for Email/Password Auth & Credential
-  createUserWithEmailAndPassword,
-  signInWithEmailAndPassword,
-  // 👇 New Import for Native Login via Token
-  signInWithCredential,
-  sendPasswordResetEmail as firebaseSendPasswordResetEmail,
+  signInWithPhoneNumber,
+  RecaptchaVerifier,
+  ConfirmationResult
 } from "firebase/auth";
 import { getStorage } from "firebase/storage";
-// ... (existing firebaseConfig and setup) ...
 
 const firebaseConfig = {
   apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
@@ -27,23 +19,64 @@ const firebaseConfig = {
   appId: import.meta.env.VITE_FIREBASE_APP_ID,
 };
 
+// Initialize Firebase
 const app = getApps().length ? getApp() : initializeApp(firebaseConfig);
 export const auth = getAuth(app);
 export const storage = getStorage(app);
-const provider = new GoogleAuthProvider();
-// 🚀 New function to export
-export const sendPasswordResetEmail = async (email: string): Promise<void> => {
-  if (!auth) throw new Error("Firebase Auth not initialized.");
+
+// --- 📱 Mobile OTP Authentication Functions ---
+
+/**
+ * ✅ 1. Recaptcha Setup
+ * OTP bhejne ke liye invisible recaptcha ka use karenge.
+ */
+export const setupRecaptcha = (containerId: string) => {
+  if (!(window as any).recaptchaVerifier) {
+    (window as any).recaptchaVerifier = new RecaptchaVerifier(auth, containerId, {
+      'size': 'invisible', // Invisible rakhne se user experience disturb nahi hota
+      'callback': () => {
+        console.log("✅ Recaptcha verified successfully");
+      },
+      'expired-callback': () => {
+        console.warn("⚠️ Recaptcha expired, please try again.");
+      }
+    });
+  }
+  return (window as any).recaptchaVerifier;
+};
+
+/**
+ * ✅ 2. Phone Number OTP Request
+ */
+export const signInWithPhone = async (
+  phoneNumber: string, 
+  appVerifier: any
+): Promise<ConfirmationResult> => {
   try {
-    await firebaseSendPasswordResetEmail(auth, email);
-  } catch (error) {
-    console.error("Firebase Password Reset Error:", error);
-    // You should wrap Firebase error here if you use AuthError type globally
+    return await signInWithPhoneNumber(auth, phoneNumber, appVerifier);
+  } catch (error: any) {
+    console.error("❌ Firebase Phone Auth Error:", error);
+    throw {
+      code: error.code || "auth/phone-error",
+      message: error.message || "Failed to send OTP",
+    } as AuthError;
+  }
+};
+
+/**
+ * ✅ 3. Sign Out
+ */
+export const signOutUser = async (): Promise<void> => {
+  try {
+    await signOut(auth);
+    console.log("Firebase: User signed out.");
+  } catch (error: any) {
+    console.error("Firebase signOut error:", error);
     throw error;
   }
 };
 
-// ... (existing provider scope and interfaces) ...
+// --- Types & Exports ---
 
 export interface AuthError {
   code: string;
@@ -51,236 +84,7 @@ export interface AuthError {
   details?: string;
 }
 
-export interface AuthResult {
-  user: User | null;
-  error: AuthError | null;
-}
 export type User = FirebaseUserType;
-// ----------------------------------------------------
-// ✅ New: Sign In with Credential (Native/Token Login)
-// ----------------------------------------------------
-/**
- * Signs in a user using an ID Token obtained from a native (Android/iOS) SDK.
- * This is crucial for enabling a native Google Sign-In experience in a hybrid app.
- */
-export const signInWithNativeCredential = async (idToken: string): Promise<User> => {
-    try {
-        const credential = GoogleAuthProvider.credential(idToken);
-        const userCredential = await signInWithCredential(auth, credential);
-        console.log("Native Credential Sign In successful:", userCredential.user.email);
-        return userCredential.user;
-    } catch (error: any) {
-        console.error("Native Credential Sign In Error:", error);
-        throw {
-            code: error.code || "auth/native-signin-error",
-            message: error.message || "Failed to sign in with native token",
-            details: error.toString(),
-        } as AuthError;
-    }
-};
-// ----------------------------------------------------
 
-// ----------------------------------------------------
-// Existing: Sign Up with Email and Password
-// ----------------------------------------------------
-export const signUpWithEmail = async (
-  email: string,
-  password: string
-): Promise<User> => {
-// ... (implementation remains the same)
-  try {
-    const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-    console.log("Email Sign Up successful:", userCredential.user.email);
-    return userCredential.user;
-  } catch (error: any) {
-    console.error("Email Sign Up Error:", error);
-    throw {
-      code: error.code || "auth/signup-error",
-      message: error.message || "Failed to sign up with email and password",
-      details: error.toString(),
-    } as AuthError;
-  }
-};
-
-// ----------------------------------------------------
-// Existing: Sign In with Email and Password
-// ----------------------------------------------------
-export const signInWithEmail = async (
-  email: string,
-  password: string
-): Promise<User> => {
-// ... (implementation remains the same)
-  try {
-    const userCredential = await signInWithEmailAndPassword(auth, email, password);
-    console.log("Email Sign In successful:", userCredential.user.email);
-    return userCredential.user;
-  } catch (error: any) {
-    console.error("Email Sign In Error:", error);
-    throw {
-      code: error.code || "auth/signin-error",
-      message: error.message || "Failed to sign in with email and password",
-      details: error.toString(),
-    } as AuthError;
-  }
-};
-
-
-export const signInWithGoogle = async (
-// ... (existing signInWithGoogle implementation) ...
-  usePopup: boolean = false
-): Promise<User | null> => {
-  try {
-    console.log(
-      `Attempting Google sign-in using ${usePopup ? "popup" : "redirect"} flow...`
-    );
-if (usePopup) {
-      // ✅ STEP 2: Popup block hone se bachne ke liye force selection
-      provider.setCustomParameters({ prompt: 'select_account' }); 
-      const result = await signInWithPopup(auth, provider);
-      return result.user;
-    } else {
-      await signInWithRedirect(auth, provider);
-      return null;
-    }
-  } catch (error: any) {
-    console.error("Authentication error:", error);
-    // ❌ Yahan se auto-fallback hata dein, ye loop karta hai
-    throw {
-      code: error.code || "auth/signin-error",
-      message: error.message || "Failed to sign in with Google",
-    } as AuthError;
-  }
-};
-
-export const handleRedirectResult = async (): Promise<AuthResult> => {
-// ... (existing handleRedirectResult implementation) ...
-  try {
-    const result = await getRedirectResult(auth);
-
-    if (result) {
-      const user = result.user;
-      const credential = GoogleAuthProvider.credentialFromResult(result);
-
-      if (credential?.accessToken) {
-        sessionStorage.setItem("google_access_token", credential.accessToken);
-      }
-
-      return { user, error: null };
-    }
-
-    return { user: null, error: null };
-  } catch (error: any) {
-    let authError: AuthError;
-
-    switch (error.code) {
-      case "auth/account-exists-with-different-credential":
-        authError = {
-          code: error.code,
-          message:
-            "An account already exists with the same email address but different sign-in credentials.",
-          details:
-            "Please sign in using the original method you used to create this account.",
-        };
-        break;
-      case "auth/cancelled-popup-request":
-        authError = {
-          code: error.code,
-          message: "Sign-in was cancelled by the user.",
-          details: "The authentication process was interrupted.",
-        };
-        break;
-      case "auth/network-request-failed":
-        authError = {
-          code: error.code,
-          message: "Network error occurred during authentication.",
-          details: "Please check your internet connection and try again.",
-        };
-        break;
-      case "auth/web-storage-unsupported":
-        authError = {
-          code: error.code,
-          message: "Web storage is not supported or disabled.",
-          details:
-            "This browser does not support or has disabled cookies/local storage required for authentication.",
-        };
-        break;
-      default:
-        authError = {
-          code: error.code || "auth/unknown-error",
-          message:
-            error.message ||
-            "An unexpected error occurred during authentication.",
-          details:
-            "Third-party storage access may be blocked by your browser. Please check your browser settings or try a different browser.",
-        };
-    }
-
-    return { user: null, error: authError };
-  }
-};
-
-export const signOutUser = async (): Promise<void> => {
-// ... (existing signOutUser implementation) ...
-  try {
-    await signOut(auth);
-    sessionStorage.removeItem("google_access_token");
-    console.log("Firebase: User signed out.");
-  } catch (error: any) {
-    console.error("Firebase signOut error:", error);
-    throw {
-      code: error.code || "auth/signout-error",
-      message: error.message || "Failed to sign out",
-      details: error.toString(),
-    } as AuthError;
-  }
-};
-
-export { onAuthStateChanged };
-
-export const onAuthStateChange = (callback: (user: User | null) => void) => {
-  return onAuthStateChanged(auth, callback);
-};
-
-export const checkBrowserCompatibility = (): {
-// ... (existing checkBrowserCompatibility implementation) ...
-  isCompatible: boolean;
-  warnings: string[];
-} => {
-  const warnings: string[] = [];
-  let isCompatible = true;
-
-  const userAgent = navigator.userAgent;
-  const isChrome = userAgent.includes("Chrome");
-  const isFirefox = userAgent.includes("Firefox");
-  const isSafari = userAgent.includes("Safari") && !userAgent.includes("Chrome");
-
-  if (isChrome) {
-    warnings.push(
-      "Chrome 115+ may block third-party storage access. Ensure cookies are enabled."
-    );
-  }
-  if (isFirefox) {
-    warnings.push(
-      "Firefox 109+ may block third-party storage access. Check privacy settings."
-    );
-  }
-  if (isSafari) {
-    warnings.push(
-      'Safari 16.1+ may block third-party storage access. Disable "Prevent cross-site tracking" for this site.'
-    );
-  }
-
-  if (!navigator.cookieEnabled) {
-    warnings.push(
-      "Cookies are disabled. Please enable cookies for authentication to work."
-    );
-    isCompatible = false;
-  }
-
-  return { isCompatible, warnings };
-};
-
-export { app };
+export { onAuthStateChanged, app };
 export { signOutUser as logout };
-export const signInWithGooglePopup = () => signInWithGoogle(true);
-

@@ -32,7 +32,7 @@ import {
 } from "lucide-react";
 import SellerOnboardingDialog from "./seller/SellerOnboardingDialog"; // ✅ Corrected casing
 import { logout } from "../lib/firebase"; // ✅ Corrected casing and path
-import LocationDisplay from "./LocationDisplay"; // ✅ Corrected casing
+//import LocationDisplay from "./LocationDisplay"; // ✅ Corrected casing
 
 interface Category { // ✅ Corrected casing
   id: string;
@@ -60,12 +60,12 @@ interface HeaderProps { // ✅ Corrected casing
   categories?: Category[]; // ✅ Made optional with default value below
   onCartClick: () => void; // ✅ Added onCartClick prop
 }
-
-const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => { // ✅ Corrected casing, default categories
-  const [searchValue, setSearchValue] = useState(""); // ✅ Corrected casing
+const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
+  const [searchValue, setSearchValue] = useState("");
   const navigate = useNavigate();
-  const { user, isAuthenticated, isLoadingAuth } = useAuth(); // ✅ Corrected casing
-  const [isSellerDialogOpen, setIsSellerDialogOpen] = useState(false); // ✅ Corrected casing
+  // ✅ useAuth se ab humein verified phone number bhi mil raha hai
+  const { user, isAuthenticated, isLoadingAuth } = useAuth(); 
+  const [isSellerDialogOpen, setIsSellerDialogOpen] = useState(false);
 
   const { data: cartData } = useQuery<CartResponse>({ // ✅ Corrected casing
     queryKey: ["/api/cart"],
@@ -82,40 +82,41 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => { //
       setSearchValue("");
     }
   };
-
-  const handleLogout = async () => { // ✅ Corrected casing
+ const getDisplayName = () => {
+    if (!user) return "User";
+    if (user.name) return user.name;
+    // Agar name nahi hai, toh Phone Number dikhao (e.g., +91 9928XXXXXX)
+    if (user.phoneNumber) return user.phoneNumber;
+    // Fallback agar kuch bhi na ho (Purana email logic handle karne ke liye)
+    if (user?.email) return user.email.split('@')[0];
+    return "My Account";
+  };
+ const handleLogout = async () => {
     try {
       await logout();
-      console.log("Header: User logged out successfully.");
-      navigate("/");
-      localStorage.removeItem('redirectIntent'); // ✅ Added removeItem
+      navigate("/login"); // ✅ "/auth" ko "/login" kiya
+      localStorage.removeItem('redirectIntent');
     } catch (error) {
-      console.error("Header: Error during logout:", error);
+      console.error("Header Logout Error:", error);
     }
   };
-
-  const handleSellerButtonClick = () => { // ✅ Corrected casing
-    console.log("Seller button clicked! isAuthenticated:", isAuthenticated, "user:", user);
-
-    if (isLoadingAuth) {
-      return;
-    }
+const handleSellerButtonClick = () => {
+    if (isLoadingAuth) return;
 
     if (!isAuthenticated) {
       localStorage.setItem('redirectIntent', 'become-seller');
-      navigate("/auth");
+      navigate("/login"); // ✅ Redirect to new login page
       return;
     }
 
-    // ✅ लॉजिक को ठीक किया गया
     if (user?.role === "seller") {
-      const approvalStatus = user.sellerProfile?.approvalStatus; // ✅ Corrected casing
-      if (approvalStatus === "approved") {
+      const status = user.sellerProfile?.approvalStatus || user.sellerApprovalStatus;
+      if (status === "approved") {
         navigate("/seller-dashboard");
-      } else { // यह 'pending' या 'null' स्थिति को संभालता है
+      } else {
         navigate("/seller-status");
       }
-    } else { // यह तब चलता है जब उपयोगकर्ता 'customer' या अन्य भूमिका में हो
+    } else {
       setIsSellerDialogOpen(true);
     }
   };
@@ -134,7 +135,7 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => { //
         }
       case "admin":
         return { label: "Admin Login", path: "/admin-login" };
-      case "delivery":
+      case "delivery-boy":
         return { label: "Delivery Dashboard", path: "/delivery-page" };
       case "customer":
         return { label: "My Orders", path: "/customer/orders" };
@@ -209,50 +210,68 @@ return (
             <span className="sr-only">Shopping Cart</span>
           </Button>
 
-          <DropdownMenu>
+        <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="ghost" size="icon">
-                <span> {/* Fix: Wrap children in a single element */}
+              <Button variant="ghost" size="icon" className="rounded-full">
+                <span>
                   <User className="h-5 w-5" />
                   <span className="sr-only">User menu</span>
                 </span>
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
+            
+            <DropdownMenuContent align="end" className="w-60 p-2 shadow-xl rounded-2xl border-slate-100">
               {isLoadingAuth ? (
-                <DropdownMenuLabel>Loading...</DropdownMenuLabel>
+                <DropdownMenuLabel className="text-slate-400">Profile loading...</DropdownMenuLabel>
               ) : isAuthenticated ? (
                 <>
-                  <DropdownMenuLabel>{user?.name || user?.email?.split('@')[0] || "My Account"}</DropdownMenuLabel>
-                  <DropdownMenuSeparator />
+                  {/* ✅ Name/Phone dikhane ke liye naya logic */}
+                  <DropdownMenuLabel className="flex flex-col pb-3">
+                    <span className="text-sm font-black text-slate-900 leading-none mb-1">
+                      {getDisplayName()}
+                    </span>
+                    <span className="text-[10px] text-blue-600 uppercase tracking-widest font-bold">
+                      {user?.role || "Customer"}
+                    </span>
+                  </DropdownMenuLabel>
+                  
+                  <DropdownMenuSeparator className="my-1" />
 
                   {dashboardLink && (
-                    <DropdownMenuItem asChild>
-                      <Link to={dashboardLink.path}>
-                        <LayoutDashboard className="mr-2 h-4 w-4" />
-                        {dashboardLink.label}
+                    <DropdownMenuItem asChild className="rounded-lg py-2.5 cursor-pointer">
+                      <Link to={dashboardLink.path} className="flex items-center">
+                        <LayoutDashboard className="mr-2 h-4 w-4 text-blue-500" />
+                        <span className="font-medium text-slate-700">{dashboardLink.label}</span>
                       </Link>
                     </DropdownMenuItem>
                   )}
+
                   {user?.role === "customer" && (
-                    <DropdownMenuItem asChild>
-                      <Link to="/customer/orders">
-                        <ListOrdered className="mr-2 h-4 w-4" />
-                        My Orders
+                    <DropdownMenuItem asChild className="rounded-lg py-2.5 cursor-pointer">
+                      <Link to="/customer/orders" className="flex items-center">
+                        <ListOrdered className="mr-2 h-4 w-4 text-slate-500" />
+                        <span className="font-medium text-slate-700">My Orders</span>
                       </Link>
                     </DropdownMenuItem>
                   )}
-                  <DropdownMenuItem onClick={handleLogout}>
+
+                  <DropdownMenuSeparator className="my-1" />
+                  
+                  <DropdownMenuItem 
+                    onClick={handleLogout} 
+                    className="rounded-lg py-2.5 cursor-pointer text-red-600 focus:bg-red-50 focus:text-red-700 font-bold"
+                  >
                     <LogOut className="mr-2 h-4 w-4" />
                     Logout
                   </DropdownMenuItem>
                 </>
               ) : (
                 <>
-                  <DropdownMenuItem asChild>
-                    <Link to="/auth">
+                  {/* ✅ Path ko /auth se /login kiya */}
+                  <DropdownMenuItem asChild className="rounded-lg py-3 cursor-pointer bg-blue-600 text-white focus:bg-blue-700 focus:text-white mb-1">
+                    <Link to="/login" className="flex items-center justify-center w-full">
                       <LogIn className="mr-2 h-4 w-4" />
-                      Login / Sign Up
+                      <span className="font-bold text-center">Login / Sign Up</span>
                     </Link>
                   </DropdownMenuItem>
                 </>
@@ -309,7 +328,9 @@ return (
                   <p className="text-gray-700">Loading user...</p>
                 ) : isAuthenticated ? (
                   <>
-                    <span className="font-semibold text-gray-900">Hello, {user?.name || user?.email?.split('@')[0] || "User"}</span>
+                  <span className="font-semibold text-gray-900">
+      Hello, {getDisplayName()}
+    </span>
                     {dashboardLink && (
                       <Link to={dashboardLink.path} className="w-full">
                         <Button variant="ghost" className="w-full justify-start">
@@ -332,6 +353,7 @@ return (
                     </Button>
                   </>
                 ) : (
+                  
                   <Link to="/auth" className="w-full">
                     <Button variant="ghost" className="w-full justify-start">
                       <LogIn className="mr-2 h-4 w-4" />
@@ -339,7 +361,12 @@ return (
                     </Button>
                   </Link>
                 )}
-
+<Link to="/login" className="w-full">
+    <Button variant="ghost" className="w-full justify-start">
+      <LogIn className="mr-2 h-4 w-4" />
+      Login / Sign Up
+    </Button>
+  </Link>
                 <Link to="/wishlist" className="w-full">
                   <Button variant="ghost" className="w-full justify-start">
                     <Heart className="mr-2 h-4 w-4" />

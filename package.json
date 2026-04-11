@@ -6,6 +6,7 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
-    "expo-server-sdk": "^5.0.0"
+    "expo-server-sdk": "^5.0.0",
+    "sonner": "^2.0.7"
   }
 }
