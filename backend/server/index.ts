@@ -2,7 +2,7 @@
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
 import cors from "cors";
 import apiRouter from "./routes";
-import "./lib/firebaseAdmin.ts";
+import "./lib/firebaseAdmin";
 import { createServer, type Server } from "http";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
 import path from "path";

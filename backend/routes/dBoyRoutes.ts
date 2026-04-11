@@ -24,92 +24,95 @@ import { getIO } from '../server/socket';
 import { sendWhatsAppMessage } from '../server/lib/whatsappHelpers'; // ✅ केवल WhatsApp मैसेज का उपयोग
 import { generateOTP } from '../server/util/otp'; // ✅ 'generateOTP' सही नाम है
 import { WalletService } from '../services/walletService';
-// sendSms को हटा दिया गया है
+import { verifyFirebaseOnly } from '../server/middleware/authMiddleware'; // ✅ Firebase-only verification middleware
 
 const router = Router();
 
-// ---
-/**
- * ✅ Delivery Boy Registration
- * /api/delivery-boys/register
- */
-/**
- **/
-// ✅ Delivery Boy Registration (The Ultimate Dual-Merge Solution)
-// ✅ Simplified Delivery Boy Registration
-router.post('/register', verifyToken as any, async (req: any, res: Response) => {
+//Simplified Delivery Boy Registration
+router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Response) => {
   try {
-    const { vehicleType, vehicleNumber, fullName } = req.body;
-    const currentUserId = req.user?.id; // MiddleWare se synced ID mil gayi
-    const firebaseUid = req.user?.firebaseUid;
+    const { vehicleType, vehicleNumber, fullName, email } = req.body;
+    const firebaseUid = req.firebaseUser.uid;
+    const phone = req.firebaseUser.phone_number || "";
 
     // 1. ✅ Basic Validation
-    if (!currentUserId || !vehicleType || !fullName) {
+    if (!vehicleType || !fullName) {
       return res.status(400).json({ message: "Bhai, Name aur Vehicle details zaroori hain." });
     }
 
-    // 2. 🚀 DATABASE TRANSACTION (Ek hi baar mein sab update)
+    // 2. 🚀 DATABASE TRANSACTION (Hybrid Logic)
     const result = await db.transaction(async (tx) => {
       
-      // A. Check if user is already in delivery_boys table
-      let [existingDB] = await tx.select().from(deliveryBoys).where(eq(deliveryBoys.userId, currentUserId));
+      // A. Pehle check karo kya ye user (Admin/Customer) 'users' table mein pehle se hai?
+      let [existingUser] = await tx.select().from(users).where(eq(users.firebaseUid, firebaseUid));
 
-      let deliveryEntry;
-
-      if (existingDB) {
-        // Purani entry update karo (Re-apply)
-        [deliveryEntry] = await tx.update(deliveryBoys).set({
-          name: fullName,
-          vehicleType,
-          vehicleNumber: vehicleNumber || existingDB.vehicleNumber,
-          approvalStatus: 'pending', 
+      let userId;
+      if (existingUser) {
+        // Purana user mil gaya (Admin/Customer), bas usko Delivery Boy ka tag de do
+        userId = existingUser.id;
+        await tx.update(users).set({
+          isDelivery: true,
+          deliveryApprovalStatus: 'pending',
           updatedAt: new Date(),
-        })
-        .where(eq(deliveryBoys.id, existingDB.id))
-        .returning();
+        }).where(eq(users.id, userId));
       } else {
-        // Nayi entry delivery table mein
-        [deliveryEntry] = await tx.insert(deliveryBoys).values({
-          userId: currentUserId,
-          firebaseUid,
-          name: fullName,
-          phone: req.user.phone || "", // User table se uthaya
-          email: req.user.email || "", // User table se uthaya
-          vehicleType,
-          vehicleNumber: vehicleNumber || null,
-          approvalStatus: 'pending',
-          isOnline: false,
+        // Ekdum naya banda hai, pehle 'users' table mein uska account banao
+        const [newUser] = await tx.insert(users).values({
+          firebaseUid: firebaseUid,
+          phone: phone,
+          email: email || "",
+          firstName: fullName,
+          isDelivery: true,
+          deliveryApprovalStatus: 'pending',
+          role: 'delivery-boy', // Default role
         }).returning();
+        userId = newUser.id;
       }
 
-      // B. Main Users table mein status update karo
-      await tx.update(users).set({
-        isDelivery: true,
-        deliveryApprovalStatus: 'pending',
-        updatedAt: new Date(),
-      }).where(eq(users.id, currentUserId));
+      // B. Ab 'delivery_boys' table mein entry dalo ya Update karo (Upsert Logic)
+      const [deliveryEntry] = await tx.insert(deliveryBoys).values({
+        userId: userId,
+        firebaseUid: firebaseUid,
+        name: fullName,
+        phone: phone,
+        email: email || "",
+        vehicleType,
+        vehicleNumber: vehicleNumber || null,
+        approvalStatus: 'pending',
+        isOnline: false,
+      })
+      .onConflictDoUpdate({
+        target: deliveryBoys.userId, // Agar userId pehle se hai, toh update kardo
+        set: { 
+          name: fullName, 
+          vehicleType, 
+          vehicleNumber, 
+          approvalStatus: 'pending',
+          updatedAt: new Date() 
+        }
+      })
+      .returning();
 
       return deliveryEntry;
     });
 
-    // 3. ✅ Response & Admin Socket
+    // 3. ✅ Admin ko Real-time update bhejo
     if (result) {
       getIO().emit("admin:update", { type: "delivery-boy-register", data: result });
-
+      
       return res.status(201).json({
-        message: "Delivery application submitted successfully!",
+        message: "Application submitted successfully! Admin approval ka intezar karein.",
         deliveryBoy: result
       });
     }
 
   } catch (error: any) {
-    console.error("❌ Delivery Registration Error:", error);
+    console.error("❌ Upgraded Registration Error:", error);
     return res.status(500).json({ message: "Server error", error: error.message });
   }
 });
-// ---
 /**
- * ✅ Login
+ *  Login
  * /api/delivery-boys/login
  */
 router.post('/login', verifyToken as any, async (req: any, res: Response) => {

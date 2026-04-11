@@ -4,7 +4,7 @@ import { verifyToken, AuthenticatedRequest } from "./verifyToken";
 import { deliveryBoys, sellersPgTable } from "../../shared/backend/schema";
 import { db } from "../db";
 import { eq, and } from "drizzle-orm";
-
+ import { authAdmin } from "../lib/firebaseAdmin";
 // 1️⃣ सामान्य प्रमाणीकरण (No Change needed here)
 export const requireAuth = [
   verifyToken,
@@ -94,3 +94,24 @@ export const requireDeliveryBoyAuth = [
     next();
   },
 ];
+// 5️⃣ Registration के लिए (Bypass Database Check)
+// Iska use sirf /register route par karein
+export const verifyFirebaseOnly = async (req: any, res: Response, next: NextFunction) => {
+  try {
+    const authHeader = req.headers.authorization;
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.split("Bearer ")[1] : null;
+
+    if (!token) {
+      return res.status(401).json({ message: "No token provided." });
+    }
+
+    // ✅ Yahan authAdmin use karein
+    const decodedToken = await authAdmin.verifyIdToken(token);
+    
+    req.firebaseUser = decodedToken; 
+    next();
+  } catch (error) {
+    console.error("Firebase Verify Error:", error);
+    res.status(401).json({ message: "Invalid or expired token." });
+  }
+};
