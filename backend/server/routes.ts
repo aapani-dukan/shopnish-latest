@@ -81,49 +81,45 @@ router.post("/register", async (req: Request, res: Response) => {
     res.status(400).json({ error: error.message });
   }
 });
-// ✅ User Profile (Auto-Registration + Schema Sync)
-router.get("/users/me", requireAuth as any, async (req: any, res: Response) => {
+
+router.get("/users/me", verifyToken as any, async (req: any, res: Response) => {
   try {
-    const { uid, phone_number, email, name } = req.user;
+    const { firebaseUid, phoneNumber, email, name, isNewUser } = req.user;
 
-    // 1. Firebase UID se user ko dhoondo
-    let [user] = await db.select().from(users).where(eq(users.firebaseUid, uid));
+    // 1. Pehle user dhundo
+    let [user] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid));
 
-    // 2. AGAR USER NAHI HAI (Auto-Create)
+    // 2. Agar user nahi hai (Middleware ne isNewUser flag bheja hai)
     if (!user) {
-      console.log(`[AUTH] Creating new profile for UID: ${uid}`);
+      console.log(`[AUTH] Auto-registering: ${firebaseUid}`);
       
-      // Name ko FirstName/LastName mein split karein agar schema waisa hai
       const nameParts = (name || "User").split(" ");
-      const fName = nameParts[0];
-      const lName = nameParts.slice(1).join(" ") || "";
-
+      
       const [newUser] = await db.insert(users).values({
-        firebaseUid: uid,
-        phone: phone_number || "", 
-        firstName: fName, // ✅ Schema ke sath sync rakhein
-        lastName: lName,
+        firebaseUid: firebaseUid,
+        phone: phoneNumber || null,
         email: email || null,
+        firstName: nameParts[0] || "User",
+        lastName: nameParts.slice(1).join(" ") || "",
         role: "customer",
-        isCustomer: true, // ✅ Register route ki tarah flags set karein
+        isCustomer: true,
         isActive: true,
         approvalStatus: "approved",
-        createdAt: new Date(),
-        updatedAt: new Date(),
       }).returning();
       
       user = newUser;
     }
 
-    // 3. Virtual role logic
+    // 3. Virtual role calculation
     const virtualRole = user.isAdmin ? 'admin' : 
-                        (user.isSeller || user.role === 'seller') ? 'seller' : 
-                        (user.isDelivery || user.role === 'delivery-boy') ? 'delivery-boy' : 'customer';
+                        user.isSeller ? 'seller' : 
+                        user.isDelivery ? 'delivery-boy' : 'customer';
 
     res.status(200).json({ ...user, role: virtualRole });
-  } catch (error) {
-    console.error("❌ User Sync Error:", error);
-    res.status(500).json({ error: "Internal error." });
+
+  } catch (error: any) {
+    console.error("❌ Profile Sync Error:", error);
+    res.status(500).json({ error: "Internal server error." });
   }
 });
 

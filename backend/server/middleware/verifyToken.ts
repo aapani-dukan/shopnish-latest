@@ -19,8 +19,7 @@ export interface AuthenticatedRequest extends Request {
     deliveryBoyId?: number | null;
   };
 }
-
-export const verifyToken = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
+export const verifyToken = async (req: any, res: Response, next: NextFunction) => {
   const authHeader = req.headers.authorization;
 
   if (!authHeader?.startsWith('Bearer ')) {
@@ -33,28 +32,33 @@ export const verifyToken = async (req: AuthenticatedRequest, res: Response, next
     const decodedToken = await authAdmin.verifyIdToken(idToken);
     const firebaseUid = decodedToken.uid;
 
-    // ✅ Seedha UID se user dhundo (Kyunki DB clear hai aur login sirf Phone se hai)
+    // 1. Database mein user dhundo
     const [dbUser] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid));
 
+    // 2. 🚩 SMART LOGIC: Agar user nahi hai, toh Error mat do! 
+    // Bas Firebase ka data req.user mein dalo taaki /users/me use register kar sake.
     if (!dbUser) {
-      return res.status(404).json({ 
-        message: 'User not found. Please register.',
-        needsSync: false 
-      });
+      req.user = {
+        firebaseUid: firebaseUid,
+        phoneNumber: decodedToken.phone_number || "",
+        email: decodedToken.email || "",
+        name: decodedToken.name || "User",
+        isNewUser: true // Ek flag taaki backend ko pata chale register karna hai
+      };
+      return next(); // ✅ Agle step (/users/me) par jane do
     }
 
-    // ✅ req.user data mapping
+    // 3. Agar user mil gaya, toh normal mapping
     req.user = {
       id: dbUser.id,
-      firebaseUid: dbUser.firebaseUid || firebaseUid, // Fallback to decoded UID
+      firebaseUid: dbUser.firebaseUid,
       phoneNumber: dbUser.phone || "",
-      name: dbUser.firstName ? `${dbUser.firstName} ${dbUser.lastName || ""}`.trim() : "User",
+      name: `${dbUser.firstName || "User"} ${dbUser.lastName || ""}`.trim(),
       role: dbUser.role as string,
       isAdmin: !!dbUser.isAdmin, 
       isSeller: !!dbUser.isSeller,
       isDelivery: !!dbUser.isDelivery,
       approvalStatus: dbUser.approvalStatus as string,
-      
     };
 
     // Delivery Boy extra ID linkage
