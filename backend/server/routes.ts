@@ -115,7 +115,14 @@ router.get("/users/me", verifyToken as any, async (req: any, res: Response) => {
                         user.isSeller ? 'seller' : 
                         user.isDelivery ? 'delivery-boy' : 'customer';
 
-    res.status(200).json({ ...user, role: virtualRole });
+    // ✅ Response mein approval statuses add kiye hain taaki Frontend check kar sake
+    res.status(200).json({ 
+      ...user, 
+      role: virtualRole,
+      // Frontend ko ye batane ke liye ki approval pending hai ya nahi
+      currentDeliveryStatus: user.deliveryApprovalStatus, // Example: "pending", "approved", "rejected"
+      currentSellerStatus: user.sellerApprovalStatus      // Example: "pending", "approved", "rejected"
+    });
 
   } catch (error: any) {
     console.error("❌ Profile Sync Error:", error);
