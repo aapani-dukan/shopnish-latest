@@ -209,8 +209,7 @@ return (
             )}
             <span className="sr-only">Shopping Cart</span>
           </Button>
-
-        <DropdownMenu>
+<DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" size="icon" className="rounded-full">
                 <span>
@@ -225,7 +224,6 @@ return (
                 <DropdownMenuLabel className="text-slate-400">Profile loading...</DropdownMenuLabel>
               ) : isAuthenticated ? (
                 <>
-                  {/* ✅ Name/Phone dikhane ke liye naya logic */}
                   <DropdownMenuLabel className="flex flex-col pb-3">
                     <span className="text-sm font-black text-slate-900 leading-none mb-1">
                       {getDisplayName()}
@@ -266,15 +264,12 @@ return (
                   </DropdownMenuItem>
                 </>
               ) : (
-                <>
-                  {/* ✅ Path ko /auth se /login kiya */}
-                  <DropdownMenuItem asChild className="rounded-lg py-3 cursor-pointer bg-blue-600 text-white focus:bg-blue-700 focus:text-white mb-1">
-                    <Link to="/login" className="flex items-center justify-center w-full">
-                      <LogIn className="mr-2 h-4 w-4" />
-                      <span className="font-bold text-center">Login / Sign Up</span>
-                    </Link>
-                  </DropdownMenuItem>
-                </>
+                <DropdownMenuItem asChild className="rounded-lg py-3 cursor-pointer bg-blue-600 text-white focus:bg-blue-700 focus:text-white">
+                  <Link to="/login" className="flex items-center justify-center w-full">
+                    <LogIn className="mr-2 h-4 w-4" />
+                    <span className="font-bold text-center">Login / Sign Up</span>
+                  </Link>
+                </DropdownMenuItem>
               )}
             </DropdownMenuContent>
           </DropdownMenu>
@@ -300,76 +295,80 @@ return (
           <Sheet>
             <SheetTrigger asChild>
               <Button variant="ghost" size="icon">
-                <span> {/* Fix: Wrap children in a single element */}
+                <span>
                   <Menu className="h-5 w-5" />
                   <span className="sr-only">Toggle menu</span>
                 </span>
               </Button>
             </SheetTrigger>
-            <SheetContent side="right" className="w-full max-w-xs p-4">
+            <SheetContent side="right" className="w-full max-w-xs p-4 overflow-y-auto">
               <SheetHeader>
-                <SheetTitle>Menu</SheetTitle>
+                <SheetTitle className="text-left">Menu</SheetTitle>
               </SheetHeader>
-              <div className="flex flex-col items-start space-y-4">
+              <div className="flex flex-col items-start space-y-4 mt-4">
                 <form onSubmit={handleSearch} className="w-full flex">
                   <Input
                     type="search"
                     placeholder="Search products..."
-                    className="flex-grow rounded-r-none focus-visible:ring-offset-0 focus-visible:ring-0"
+                    className="flex-grow rounded-r-none focus-visible:ring-0"
                     value={searchValue}
                     onChange={(e) => setSearchValue(e.target.value)}
                   />
-                  <Button type="submit" variant="ghost" className="rounded-l-none">
+                  <Button type="submit" variant="ghost" className="rounded-l-none border border-l-0">
                     <Search className="h-5 w-5" />
                   </Button>
                 </form>
 
                 {isLoadingAuth ? (
-                  <p className="text-gray-700">Loading user...</p>
+                  <p className="text-sm text-gray-400">Loading user...</p>
                 ) : isAuthenticated ? (
                   <>
-                  <span className="font-semibold text-gray-900">
-      Hello, {getDisplayName()}
-    </span>
+                    <div className="bg-slate-50 w-full p-3 rounded-xl border border-slate-100">
+                      <p className="text-xs text-slate-500 uppercase font-bold tracking-tighter">Welcome back</p>
+                      <p className="font-bold text-slate-900">{getDisplayName()}</p>
+                    </div>
+                    
                     {dashboardLink && (
                       <Link to={dashboardLink.path} className="w-full">
-                        <Button variant="ghost" className="w-full justify-start">
-                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                        <Button variant="ghost" className="w-full justify-start font-medium">
+                          <LayoutDashboard className="mr-2 h-4 w-4 text-blue-500" />
                           {dashboardLink.label}
                         </Button>
                       </Link>
                     )}
+                    
                     {user?.role === "customer" && (
                       <Link to="/customer/orders" className="w-full">
-                        <Button variant="ghost" className="w-full justify-start">
-                          <ListOrdered className="mr-2 h-4 w-4" />
+                        <Button variant="ghost" className="w-full justify-start font-medium">
+                          <ListOrdered className="mr-2 h-4 w-4 text-slate-500" />
                           My Orders
                         </Button>
                       </Link>
                     )}
-                    <Button onClick={handleLogout} variant="ghost" className="w-full justify-start text-red-500 hover:bg-red-50">
+                    
+                    <Button 
+                      onClick={handleLogout} 
+                      variant="ghost" 
+                      className="w-full justify-start text-red-600 font-bold hover:bg-red-50"
+                    >
                       <LogOut className="mr-2 h-4 w-4" />
                       Logout
                     </Button>
                   </>
                 ) : (
-                  
-                  <Link to="/auth" className="w-full">
-                    <Button variant="ghost" className="w-full justify-start">
+                  <Link to="/login" className="w-full">
+                    <Button className="w-full justify-center bg-blue-600 hover:bg-blue-700 text-white font-bold py-6 rounded-xl">
                       <LogIn className="mr-2 h-4 w-4" />
                       Login / Sign Up
                     </Button>
                   </Link>
                 )}
-<Link to="/login" className="w-full">
-    <Button variant="ghost" className="w-full justify-start">
-      <LogIn className="mr-2 h-4 w-4" />
-      Login / Sign Up
-    </Button>
-  </Link>
+
+                <div className="w-full h-[1px] bg-slate-100 my-2" />
+
                 <Link to="/wishlist" className="w-full">
-                  <Button variant="ghost" className="w-full justify-start">
-                    <Heart className="mr-2 h-4 w-4" />
+                  <Button variant="ghost" className="w-full justify-start font-medium">
+                    <Heart className="mr-2 h-4 w-4 text-pink-500" />
                     Wishlist
                   </Button>
                 </Link>
@@ -378,28 +377,26 @@ return (
                   onClick={handleSellerButtonClick}
                   disabled={isLoadingAuth}
                   variant="ghost"
-                  className="w-full justify-start text-blue-600 hover:bg-blue-50"
+                  className="w-full justify-start text-blue-600 font-bold hover:bg-blue-50"
                 >
                   <Store className="mr-2 h-4 w-4" />
                   {getSellerButtonLabel()}
                 </Button>
 
                 <div className="w-full border-t pt-4">
-                  <p className="font-semibold mb-2">Categories</p>
+                  <p className="font-bold text-slate-900 mb-3 px-2 text-sm uppercase tracking-widest">Categories</p>
                   {categories.length > 0 ? (
-                    <ul className="space-y-2">
+                    <div className="grid grid-cols-1 gap-1">
                       {categories.map((category) => (
-                        <li key={category.id}>
-                          <Link to={`/category/${category.slug}`}>
-                            <Button variant="ghost" className="w-full justify-start">
-                              {category.name}
-                            </Button>
-                          </Link>
-                        </li>
+                        <Link key={category.id} to={`/category/${category.slug}`}>
+                          <Button variant="ghost" className="w-full justify-start text-slate-600">
+                            {category.name}
+                          </Button>
+                        </Link>
                       ))}
-                    </ul>
+                    </div>
                   ) : (
-                    <p className="text-sm text-gray-500">No categories available.</p>
+                    <p className="text-xs text-gray-500 px-2">No categories available.</p>
                   )}
                 </div>
               </div>
@@ -407,11 +404,7 @@ return (
           </Sheet>
         </div>
       </div>
-      {/*   <div className="bg-gray-100 py-2 border-t border-b">
-        <div className="container mx-auto px-4 md:px-6">
-          <LocationDisplay />
-        </div>
-      </div> */}
+      
       {isAuthenticated && (
         <SellerOnboardingDialog
           isOpen={isSellerDialogOpen}
