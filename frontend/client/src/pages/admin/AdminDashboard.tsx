@@ -49,34 +49,45 @@ interface LayoutElement {
 const AdminDashboard: React.FC = () => {
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState("pending-vendors");
-  const { user, isAuthenticated, isLoadingAuth } = useAuth(); 
+  
+  // 🚩 isAdmin ko extract kiya (SQL manual check ke liye)
+  const { isAuthenticated, isLoadingAuth, isAdmin } = useAuth(); 
+  
   const { toast } = useToast();
   const navigate = useNavigate();
   const { socket } = useSocket();
   
-const [bannerFile, setBannerFile] = useState<File | null>(null);
+  const [bannerFile, setBannerFile] = useState<File | null>(null);
   const [bannerType, setBannerType] = useState("main_banner");
-  // अपनी स्टेट को ऐसे बदलें:
-const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none">("none");
-  const [linkValue, setLinkValue] = useState<string>(""); // Product ID, Category ID, or URL based on linkType
+  const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none">("none");
+  const [linkValue, setLinkValue] = useState<string>(""); 
+  const [targetPincodes, setTargetPincodes] = useState<string>(""); 
 
-  const [targetPincodes, setTargetPincodes] = useState<string>(""); // Comma separated pincodes ke liye
- // ✅ 2. 🛡️ Admin Security Guard (Isse States ke thik niche rakhein)
+  // 🚩 Admin Password Verification Check
+  const isAdminPasswordVerified = localStorage.getItem("admin_password_verified") === "true";
+
+  // ✅ 2. 🛡️ Admin Security Guard (Updated for Manual Admin + Password)
   useEffect(() => {
     if (!isLoadingAuth) {
-      // Agar user logged in nahi hai YA uska role 'admin' nahi hai
-      if (!isAuthenticated || user?.role !== 'admin') {
+      // Teeno check: Login hona chahiye, SQL se Admin true hona chahiye, aur Password verified hona chahiye
+      if (!isAuthenticated || !isAdmin || !isAdminPasswordVerified) {
         toast({
           title: "Access Denied! 🚫",
-          description: "Bhai, ye area sirf Admins ke liye hai. Wapas jao!",
+          description: "Admin privileges verify nahi ho payi. Wapas jao!",
           variant: "destructive",
         });
-        navigate("/"); // Home page par bhej do
+
+        // Agar admin flag hi nahi hai toh home, agar sirf password bacha hai toh login page
+        if (!isAuthenticated || !isAdmin) {
+          navigate("/");
+        } else {
+          navigate("/sh-admin-login"); 
+        }
       }
     }
-  }, [isAuthenticated, user?.role, isLoadingAuth, navigate]);
+  }, [isAuthenticated, isAdmin, isAdminPasswordVerified, isLoadingAuth, navigate]);
 
-  // ✅ 3. Loading UI (Jab tak check chal raha hai, screen khali na dikhe)
+  // ✅ 3. Loading UI
   if (isLoadingAuth) {
     return (
       <div className="flex h-screen flex-col items-center justify-center bg-gray-50">
@@ -86,18 +97,17 @@ const [linkType, setLinkType] = useState<"product" | "category" | "url" | "none"
     );
   }
 
-  // ✅ 4. Double Safety (Taki unauthorized user ko dashboard ka UI ek second ke liye bhi na dikhe)
-  if (!user || user.role !== 'admin') {
+  // ✅ 4. Double Safety
+  if (!isAuthenticated || !isAdmin || !isAdminPasswordVerified) {
     return null; 
   }
+
   // Socket.io real-time updates
   useEffect(() => {
-
     if (!socket) {
       console.log("Waiting for socket connection in AdminDashboard...");
       return;
     }
-
     console.log("Socket connection established. Listening for admin events.");
 
     const handleVendorUpdate = () => {

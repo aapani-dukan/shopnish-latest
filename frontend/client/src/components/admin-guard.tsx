@@ -1,48 +1,52 @@
-
-// ✅ client/src/components/admin-guard.tsx
-import React, { useEffect } from "react";
-import { useNavigate, Outlet } from "react-router-dom"; // Outlet को इंपोर्ट करें
+import { useEffect } from "react";
+import { useNavigate, Outlet } from "react-router-dom";
 import { useAuth } from "../hooks/useAuth"; 
 
-// अब children प्रॉप की कोई आवश्यकता नहीं है
 const AdminGuard = () => { 
-  
-  const { user, isLoadingAuth, isAuthenticated, isAdmin } = useAuth();
+  const { isLoadingAuth, isAuthenticated, isAdmin } = useAuth();
   const navigate = useNavigate();
 
+  // 🚩 Naya Check: Kya session mein password verify hua hai?
+  // Iska data hum login ke waqt localStorage ya context mein rakhenge
+  const isAdminPasswordVerified = localStorage.getItem("admin_password_verified") === "true";
+
   useEffect(() => {
-    // ⚡ केवल तब चेक करें जब AuthContext लोडिंग खत्म कर चुका हो
     if (isLoadingAuth) return;
 
-    // यदि authenticated नहीं है या admin नहीं है, तो redirect करें
+    // 1. Pehla Naka: Login aur Admin Flag check
     if (!isAuthenticated || !isAdmin) {
-      console.warn("AdminGuard: User not authenticated or not an admin. Redirecting to /admin-login.");
-      // Replace: true का उपयोग करें ताकि back button से वापस न आ सकें
-      navigate("/admin-login", { replace: true }); 
+      console.warn("Unauthorized access attempt.");
+      navigate("/login", { replace: true }); // Pehle normal login karwao
+      return;
     }
-    // यदि authenticated और admin है, तो useEffect चुपचाप खत्म हो जाएगा
-    
-  }, [isLoadingAuth, isAuthenticated, isAdmin, navigate]);
 
-  // ✅ Loading phase: 
+    // 2. Doosra Naka: Admin Password Verification check
+    // Agar login hai, admin hai, lekin password nahi dala, toh password page par bhejo
+    if (!isAdminPasswordVerified) {
+      console.warn("Admin Password required.");
+      navigate("/sh-admin-login", { replace: true }); 
+    }
+    
+  }, [isLoadingAuth, isAuthenticated, isAdmin, isAdminPasswordVerified, navigate]);
+
   if (isLoadingAuth) {
     return (
-      <div className="text-center py-20 text-lg font-semibold text-gray-600">
-        <p>Loading Admin Panel...</p>
+      <div className="flex items-center justify-center h-screen">
+        <div className="text-center py-20 text-lg font-semibold text-blue-600 animate-pulse">
+          <p>Verifying Admin Privileges...</p>
+        </div>
       </div>
     ); 
   }
 
-  // ✅ यदि सुरक्षा जाँच पास हो जाती है, तो Outlet को रेंडर करें।
-  //    Outlet नेस्टेड रूट्स (AdminLayout) को रेंडर करेगा।
-  //    यदि जाँच फेल हुई है, तो useEffect पहले ही navigate कर चुका होगा।
-  //    हम यह भी सुनिश्चित करते हैं कि यह तभी रेंडर हो जब isAuthenticated और isAdmin दोनों TRUE हों।
-  if (isAuthenticated && isAdmin) {
-      return <Outlet />; // Outlet नेस्टेड <Route> (AdminLayout) को रेंडर करेगा
+  // ✅ SIRF TABHI DASHBOARD DIKHAO JAB TEENO CHEEZEIN SAHI HON:
+  // 1. Login ho (isAuthenticated)
+  // 2. SQL se admin ho (isAdmin)
+  // 3. Password dala ho (isAdminPasswordVerified)
+  if (isAuthenticated && isAdmin && isAdminPasswordVerified) {
+      return <Outlet />; 
   }
 
-  // यदि लोडिंग समाप्त हो गई है लेकिन न तो एडमिन है और न ही ऑथेंटिकेटेड, 
-  // तो navigate हो चुका होगा, लेकिन फॉलबैक के रूप में खाली रेंडर (null) करें
   return null;
 };
 

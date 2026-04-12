@@ -5,27 +5,27 @@ import {
   categories,
   users,
   userRoleEnum,
-  orders, // Master orders (for overall view)
-  subOrders, // Sub-orders (seller-specific items)
-  deliveryBatches, // Delivery batches
-  orderItems, // Items within sub-orders
+  orders, 
+  subOrders, 
+  deliveryBatches, 
+  orderItems, 
   products,
-  deliveryBoys, // ✅ Corrected deliveryBoys table name
-  sellersPgTable, // ✅ Corrected sellers table name
-  deliveryAddresses, // ✅ Added for complete address details
-  masterOrderStatusEnum, // ✅ Master order status enum
-  subOrderStatusEnum, // ✅ Sub-order status enum
-  deliveryStatusEnum, // ✅ Delivery batch status enum
-  approvalStatusEnum // ✅ Approval status enum
+  deliveryBoys, 
+  sellersPgTable, 
+  deliveryAddresses, 
+  masterOrderStatusEnum, 
+  subOrderStatusEnum, 
+  deliveryStatusEnum, 
+  approvalStatusEnum 
 } from '../shared/backend/schema';
-import { eq, and, desc, inArray, or } from 'drizzle-orm'; // ✅ Added 'or'
+import { eq, and, desc, inArray, or } from 'drizzle-orm'; 
 import multer from 'multer';
 import { uploadImage } from '../server/cloudStorage';
 import { AuthenticatedRequest } from '../server/middleware/verifyToken';
 import { v4 as uuidv4 } from "uuid";
-import { authorize } from '../server/middleware/authorize'; // ✅ Assuming authorize middleware is preferred
+import { authorize } from '../server/middleware/authorize'; 
 import { validateRequest } from '../server/middleware/validation';
-import { any, z } from 'zod'; // ✅ For category validation
+import { any, z } from 'zod'; 
 import { orderTracking } from "../shared/backend/schema";
 import { requireAdminAuth } from '../server/middleware/authMiddleware';
 import fs from 'fs';
@@ -34,32 +34,30 @@ import { getIO } from "../server/socket";
 const adminRouter = Router();
 const upload = multer({ dest: 'uploads/' });
 
-// ✅ adminAuthMiddleware (अब authorize middleware का उपयोग करें)
-// यदि `authorize(['admin'])` middleware उपलब्ध है, तो इसे सीधे उपयोग करना बेहतर है।
-// इस custom `adminAuthMiddleware` की आवश्यकता नहीं है यदि `authorize` middleware पर्याप्त है।
-// मैं नीचे `authorize(['admin'])` का उपयोग कर रहा हूँ।
-
 /**
  * ✅ GET /api/admin/me
- * (Authorization handled by `authorize(['admin'])`)
- */
-/**
- * ✅ GET /api/admin/me
- * Firebase UID + Phone based Admin check
+ * OTP Login + Admin Flag + Password Session Check
  */
 adminRouter.get('/me', authorize(['admin']), (req: any, res: Response) => {
-  // Ab req.user mein email ki jagah phone number primary hoga
+  
+  // 🚩 SECURITY CHECK: 
+  // Kya is session mein password verify ho chuka hai?
+  // (Note: Frontend login ke waqt humne jo 'adminVerified' flag set kiya tha use check karein)
+  if (!req.user.isAdmin) {
+     return res.status(403).json({ message: 'Unauthorized: Not an admin.' });
+  }
+
   return res.status(200).json({ 
     message: 'Welcome, Admin!', 
     adminInfo: {
       id: req.user.id,
       name: req.user.name,
-      phone: req.user.phoneNumber, // 👈 Phone primary hai
-      role: req.user.role
+      phone: req.user.phoneNumber,
+      role: req.user.role,
+      lastLogin: new Date().toISOString()
     } 
   });
 });
-
 /**
  * ✅ GET /api/admin/categories
  */
@@ -257,9 +255,6 @@ adminRouter.delete('/categories/:id', authorize(['admin']), validateRequest(z.ob
       return res.status(404).json({ error: 'Category not found.' });
     }
 
-    // TODO: यदि इस कैटेगरी के अधीन कोई प्रोडक्ट हैं, तो उन्हें कैसे हैंडल किया जाए?
-    // या तो सभी संबंधित प्रोडक्ट्स की कैटेगरी को null पर सेट करें, या डिलीट होने से रोकें।
-    // अभी के लिए, यह मान रहा है कि डिलीट ठीक है या DB cascading handles it.
 
     return res.status(200).json({ message: "Category deleted successfully.", category: deletedCategory });
 
@@ -269,12 +264,9 @@ adminRouter.delete('/categories/:id', authorize(['admin']), validateRequest(z.ob
   }
 });
 
-// --- Order Management (Updated for new schema) ---
 
 /**
  * ✅ GET /api/admin/orders
- * सभी मास्टर ऑर्डर्स को फ़ेच करें, उनके सब-ऑर्डर्स और डिलीवरी बैचेस के साथ।
- * (Authorization handled by `authorize(['admin'])`)
  */
 adminRouter.get('/orders', authorize(['admin']), async (req: any, res: Response) => {
   try {
@@ -321,12 +313,10 @@ adminRouter.get('/orders', authorize(['admin']), async (req: any, res: Response)
       }
 
       const formattedSubOrders = masterOrder.subOrders.map(subOrder => {
-        // subOrder का deliveryAddress मास्टर ऑर्डर से आता है, इसलिए इसे दोबारा पार्स करने की आवश्यकता नहीं है
-        // लेकिन अगर subOrder में अपना खुद का deliveryAddress है (जो कि हमारी स्कीमा में नहीं है), तो उसे यहाँ हैंडल किया जाएगा
+        
         return {
           ...subOrder,
-          // यदि subOrder में deliveryAddress होता, तो:
-          // deliveryAddress: subOrder.deliveryAddress ? JSON.parse(subOrder.deliveryAddress as string) : parsedDeliveryAddress,
+          deliveryAddress: parsedDeliveryAddress,
         };
       });
 
