@@ -133,34 +133,45 @@ router.post('/login', verifyToken as any, async (req: any, res: Response) => {
   }
 });
 /**
- *  Login
+ * ✅ Updated Login: Ab Pending users ko bhi entry milegi
  * /api/delivery-boys/login
  */
 router.post('/login', verifyToken as any, async (req: any, res: Response) => {
   try {
     const firebaseUid = req.user?.firebaseUid;
-    // ❌ Email dependence hata di gayi hai
 
-    if (!firebaseUid) return res.status(401).json({ message: "Authentication failed." });
+    if (!firebaseUid) {
+      return res.status(401).json({ message: "Authentication failed. Firebase UID missing." });
+    }
 
     const deliveryBoy = await db.query.deliveryBoys.findFirst({
       where: eq(deliveryBoys.firebaseUid, firebaseUid),
       with: { user: true }
     });
 
-    // Check if account exists and is approved
-    if (!deliveryBoy || deliveryBoy.approvalStatus !== 'approved') {
-      return res.status(404).json({ message: "Account not found or not approved by Admin." });
+    // 1. Agar Delivery Boy table mein entry hi nahi hai (Matlab naya banda hai)
+    if (!deliveryBoy) {
+      return res.status(404).json({ message: "Account not found. Please register first." });
     }
 
-    res.status(200).json({ message: "Login successful", user: deliveryBoy });
+    // 2. 🚩 SMART CHECK: Agar status 'rejected' hai toh use block karein
+    if (deliveryBoy.approvalStatus === 'rejected') {
+      return res.status(403).json({ message: "Aapki application reject kar di gayi hai. Support se baat karein." });
+    }
+
+    // 3. ✅ SUCCESS: Ab chahe 'pending' ho ya 'approved', hum 200 OK bhejenge
+    // Mobile App ab is 'approvalStatus' ko dekh kar "Wait" message dikhayega
+    res.status(200).json({ 
+      message: "Login successful", 
+      user: deliveryBoy,
+      status: deliveryBoy.approvalStatus // 'pending' ya 'approved'
+    });
 
   } catch (error: any) {
     console.error("❌ Login error:", error);
     res.status(500).json({ message: "Failed to authenticate." });
   }
 });
-
 // ---
 /**
  * ✅ GET Delivery Boy Profile
