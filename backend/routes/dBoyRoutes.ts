@@ -107,31 +107,7 @@ router.post('/register', verifyFirebaseOnly as any, async (req: any, res: Respon
   }
 });
 
-/**
- * ✅ Login Route (Only UID based)
- */
-router.post('/login', verifyToken as any, async (req: any, res: Response) => {
-  try {
-    const firebaseUid = req.user?.firebaseUid;
 
-    if (!firebaseUid) return res.status(401).json({ message: "Authentication failed." });
-
-    const deliveryBoy = await db.query.deliveryBoys.findFirst({
-      where: eq(deliveryBoys.firebaseUid, firebaseUid),
-      with: { user: true }
-    });
-
-    if (!deliveryBoy || deliveryBoy.approvalStatus !== 'approved') {
-      return res.status(404).json({ message: "Account not found or not approved." });
-    }
-
-    res.status(200).json({ message: "Login successful", user: deliveryBoy });
-
-  } catch (error: any) {
-    console.error("❌ Login error:", error);
-    res.status(500).json({ message: "Failed to authenticate." });
-  }
-});
 /**
  * ✅ Updated Login: Ab Pending users ko bhi entry milegi
  * /api/delivery-boys/login
