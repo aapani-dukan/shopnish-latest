@@ -39,10 +39,7 @@ const AdminGuard = () => {
     ); 
   }
 
-  // ✅ SIRF TABHI DASHBOARD DIKHAO JAB TEENO CHEEZEIN SAHI HON:
-  // 1. Login ho (isAuthenticated)
-  // 2. SQL se admin ho (isAdmin)
-  // 3. Password dala ho (isAdminPasswordVerified)
+  
   if (isAuthenticated && isAdmin && isAdminPasswordVerified) {
       return <Outlet />; 
   }

@@ -30,7 +30,7 @@ export default function AdminLogin() {
     setLoading(true);
     try {
       // ✅ Backend ke naye "Password-Only" route ko hit karein
-      const response = await fetch("/api/admin-verify-password", {
+      const response = await fetch("/api/auth/admin-verify-password", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
