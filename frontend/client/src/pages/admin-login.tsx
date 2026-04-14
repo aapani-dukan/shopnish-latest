@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Shield, Loader2 } from "lucide-react";
 import { useAuth } from "../hooks/useAuth"; // Hook se data lene ke liye
+import { getAuth } from "firebase/auth"; 
 
 export default function AdminLogin() {
   const navigate = useNavigate();
@@ -14,11 +15,15 @@ export default function AdminLogin() {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const handleAdminVerify = async (e: React.FormEvent) => {
+const handleAdminVerify = async (e: React.FormEvent) => {
     e.preventDefault();
     
+    // Firebase auth instance
+    const auth = getAuth();
+    const currentUser = auth.currentUser;
+
     // 🚩 Basic Check: Pehle OTP se login hona chahiye
-    if (!isAuthenticated || !isAdmin) {
+    if (!isAuthenticated || !isAdmin || !currentUser) {
       toast({
         title: "Access Denied",
         description: "Bhai, pehle normal OTP login karo, tabhi admin verify hoga.",
@@ -29,12 +34,16 @@ export default function AdminLogin() {
 
     setLoading(true);
     try {
+      // ✅ LOCALSTORAGE KI JAGAH: Firebase se ekdam taja (fresh) token lo
+      // 'true' pass karne se ye force refresh karta hai
+      const freshToken = await currentUser.getIdToken(true);
+
       // ✅ Backend ke naye "Password-Only" route ko hit karein
       const response = await fetch("/api/auth/admin-verify-password", {
         method: "POST",
         headers: { 
           "Content-Type": "application/json",
-          "Authorization": `Bearer ${localStorage.getItem("token")}` // OTP wala token zaroori hai
+          "Authorization": `Bearer ${freshToken}` // Fresh token bhej rahe hain 🚀
         },
         body: JSON.stringify({ password }),
       });
@@ -42,7 +51,7 @@ export default function AdminLogin() {
       const data = await response.json();
 
       if (response.ok && data.adminVerified) {
-        // ✅ 🚩 Sabse IMPORTANT: Password verify hone ka flag set karo
+        // ✅ Password verify hone ka flag set karo taaki dashboard access ho sake
         localStorage.setItem("admin_password_verified", "true");
         
         toast({
@@ -52,9 +61,11 @@ export default function AdminLogin() {
         
         navigate("/admin-dashboard", { replace: true });
       } else {
-        throw new Error(data.error || "Wrong Admin Password!");
+        // Backend se aane wale error message ko pakdo
+        throw new Error(data.error || data.message || "Wrong Admin Password!");
       }
     } catch (err: any) {
+      console.error("Verification Error:", err);
       toast({
         title: "Verification Failed",
         description: err.message,
@@ -63,7 +74,7 @@ export default function AdminLogin() {
     } finally {
       setLoading(false);
     }
-  };
+};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 to-slate-700 flex items-center justify-center p-4">
