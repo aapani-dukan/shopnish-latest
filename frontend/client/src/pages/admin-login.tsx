@@ -59,7 +59,7 @@ const handleAdminVerify = async (e: React.FormEvent) => {
           description: "Boss, welcome to the control room! 🔥",
         });
         
-        navigate("/admin-dashboard", { replace: true });
+        navigate("/admin/dashboard", { replace: true });
       } else {
         // Backend se aane wale error message ko pakdo
         throw new Error(data.error || data.message || "Wrong Admin Password!");
