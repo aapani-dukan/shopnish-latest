@@ -2,7 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "https://shopnish-seprate.onrender.com/api/:path*"
+      "destination": "https://api.shopnish.com/api/:path*"
     },
     {
       "source": "/(.*)",

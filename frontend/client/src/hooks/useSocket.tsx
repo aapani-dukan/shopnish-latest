@@ -39,7 +39,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     // 2. Prevent multiple connections
     if (socket?.connected) return;
 
-    const socketUrl = import.meta.env.VITE_API_BASE_URL || "https://shopnish-seprate.onrender.com";
+    const socketUrl = import.meta.env.VITE_API_BASE_URL || "https://api.shopnish.com";
 
     console.log("🔌 Attempting socket connection to:", socketUrl);
 

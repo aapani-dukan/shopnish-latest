@@ -61,7 +61,7 @@ const SellerAddProductPage: React.FC = () => {
         return;
       }
       try {
-        let url = `https://shopnish-seprate.onrender.com/api/products/master-search?q=${searchTerm}`;
+        let url = `https://api.shopnish.com/api/products/master-search?q=${searchTerm}`;
         if (selectedCat && selectedCat !== "all") url += `&categoryId=${selectedCat}`;
         const res = await axios.get(url);
         setMasterProducts(res.data);

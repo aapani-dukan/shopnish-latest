@@ -5,7 +5,7 @@ const api = axios.create({
   // 🔴 बदलाव यहाँ: सीधे Render URL का उपयोग करने के बजाय
     //    baseURL को खाली छोड़ें या '/' पर सेट करें ताकि यह Vercel प्रॉक्सी का उपयोग करे।
       baseURL: "", 
-        // हमने vercel.json में नियम सेट किया है: /api/(.*) -> https://shopnish-seprate.onrender.com/api/$1
+        // हमने vercel.json में नियम सेट किया है: /api/(.*) -> https://api.shopnish.com/api/$1
 
           withCredentials: true,
           });

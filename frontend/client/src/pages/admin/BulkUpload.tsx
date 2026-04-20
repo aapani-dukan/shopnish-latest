@@ -46,11 +46,11 @@ const BulkUpload = () => {
           
           setStatus(`अपलोड हो रहा है: ${uploadedCount} / ${totalProducts}...`);
 
-          const response = await fetch('https://shopnish-seprate.onrender.com/api/bulk-products', {
+          const response = await fetch('https://api.shopnish.com/api/bulk-products', {
             method: 'POST',
             headers: { 
               'Content-Type': 'application/json',
-              'Authorization': `Bearer ${token}` // Firebase Token यहाँ जोड़ दिया ✅
+              'Authorization': `Bearer ${token}` // Firebase Token यहाँ जोड़ दिया ✅
             },
             body: JSON.stringify(batch),
           });
