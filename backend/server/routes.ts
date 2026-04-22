@@ -41,7 +41,7 @@ import layoutRoutes from '../routes/layoutRoutes'; // Check karein path sahi ho
 import { masterProducts } from "../shared/backend/tables";
 import adminSettingsRouter from "../routes/adminSettingRoutes";
 import walletRoutes from '../routes/walletRoutes';
-
+import { formatPhone } from "./util/phoneFormatter"; // Path check kar lena
 const router = Router();
 
 // ✅ Health Check
@@ -58,16 +58,21 @@ router.post("/register", async (req: Request, res: Response) => {
   try {
     const { firebaseUid, phone, firstName, lastName } = req.body;
 
+    // 1. Pehle validation check karein
     if (!firebaseUid || !phone) {
       return res.status(400).json({ error: "Firebase UID and Phone are required." });
     }
 
-    const [newUser] = await db.insert(users).values({
+    // 2. 🚩 Phone Number ko Standard format (+91) mein badlein
+    const standardizedPhone = formatPhone(phone);
+
+    // 3. Database mein insert karein (Sirf EK baar)
+    const result = await db.insert(users).values({
       firebaseUid,
-      phone,
+      phone: standardizedPhone, // ✅ Standardized phone use ho raha hai
       firstName: firstName || "User",
       lastName: lastName || "",
-      role: "customer", // Default
+      role: "customer",
       isCustomer: true,
       isActive: true,
       approvalStatus: "approved",
@@ -75,13 +80,15 @@ router.post("/register", async (req: Request, res: Response) => {
       updatedAt: new Date(),
     }).returning();
 
+    // 4. Result se naya user nikalein (Destructuring error se bachne ke liye)
+    const newUser = result[0];
+
     res.status(201).json(newUser);
   } catch (error: any) {
     console.error("❌ Registration failed:", error);
     res.status(400).json({ error: error.message });
   }
 });
-
 router.get("/users/me", verifyToken as any, async (req: any, res: Response) => {
   try {
     const { firebaseUid, phoneNumber, email, name, isNewUser } = req.user;
@@ -91,13 +98,11 @@ router.get("/users/me", verifyToken as any, async (req: any, res: Response) => {
 
     // 2. Agar user nahi hai (Middleware ne isNewUser flag bheja hai)
     if (!user) {
-      console.log(`[AUTH] Auto-registering: ${firebaseUid}`);
-      
       const nameParts = (name || "User").split(" ");
-      
       const [newUser] = await db.insert(users).values({
         firebaseUid: firebaseUid,
-        phone: phoneNumber || null,
+        phone: formatPhone(phoneNumber),
+      //console.log(`[AUTH] Auto-registering: ${firebaseUid}`);
         email: email || null,
         firstName: nameParts[0] || "User",
         lastName: nameParts.slice(1).join(" ") || "",
