@@ -1274,8 +1274,8 @@ sellerRouter.patch(
       const currentStatus = existingSubOrder.status;
       const validStatusTransitions: { [key: string]: string[] } = {
         'pending': ['accepted', 'rejected'],
-        'accepted': ['preparing', 'rejected'],
-        'preparing': ['ready_for_pickup'],
+        'accepted': ['preparing', 'ready_for_pickup', 'rejected'],
+        'preparing': ['ready_for_pickup','rejected'],
         // 'ready_for_pickup' के बाद केवल सिस्टम या डिलीवरी बॉय ही स्थिति बदल सकता है,
         // जब तक कि सेल्फ-डिलीवरी न हो (जिसे हम नीचे संभालेंगे)।
         'ready_for_pickup': existingSubOrder.isSelfDeliveryBySeller ? ['delivered_by_seller'] : [],
