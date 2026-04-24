@@ -2,18 +2,18 @@ import "express";
 
 declare global {
   namespace Express {
-    // 1. पहले User का ढांचा पक्का करें
+    // User structure ko actual backend requirements se match karein
     interface User {
-      id: string;
+      id: number | string;
+      firebaseUid: string; // 👈 Ye sabse zaroori hai, iske bina req.user.firebaseUid error dega
       email?: string;
       role?: string;
       sellerId?: number | null;
       deliveryBoyId?: number | null;
     }
 
-    // 2. अब Request के अंदर उसी User को इस्तेमाल करें
     interface Request {
-      user?: User;
+      user?: User; // Request ke andar user ko optional rakhein taaki non-login routes na tutein
     }
   }
 }

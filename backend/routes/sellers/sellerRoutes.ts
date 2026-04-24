@@ -268,15 +268,28 @@ sellerRouter.get("/orders", requireSellerAuth, async (req: any, res: Response) =
       orderBy: desc(subOrders.createdAt),
     });
 
-    // ✅ JSON स्ट्रिंग को पार्स करें
+   // ✅ JSON parsing ko safe banayein (Object vs String check)
     const formattedSubOrders = sellerSubOrders.map(subOrder => {
+      let rawAddress = subOrder.masterOrder?.deliveryAddress;
       let parsedDeliveryAddress = {};
+
       try {
-        if (subOrder.masterOrder?.deliveryAddress) {
-          parsedDeliveryAddress = JSON.parse(subOrder.masterOrder.deliveryAddress as string);
+        if (rawAddress) {
+          if (typeof rawAddress === 'object') {
+            parsedDeliveryAddress = rawAddress;
+          } 
+          else if (typeof rawAddress === 'string') {
+            if (rawAddress.startsWith('{') || rawAddress.startsWith('[')) {
+              parsedDeliveryAddress = JSON.parse(rawAddress);
+            } else {
+              console.warn(`Invalid JSON string found in order ${subOrder.id}: ${rawAddress}`);
+              parsedDeliveryAddress = { error: "Invalid address format" };
+            }
+          }
         }
       } catch (e) {
-        console.warn(`Failed to parse deliveryAddress JSON for sub-order ${subOrder.id}:`, e);
+        console.error(`❌ JSON Parse Error (Sub-order ${subOrder.id}):`, e);
+        parsedDeliveryAddress = { error: "Parse failed" };
       }
 
       return {
@@ -288,14 +301,14 @@ sellerRouter.get("/orders", requireSellerAuth, async (req: any, res: Response) =
       };
     });
 
+    // ✅ Response bhejien
     return res.status(200).json(formattedSubOrders);
-  } catch (error: any) {
+
+  } catch (error: any) { // 👈 Ye wala Catch aapke code mein missing tha
     console.error("❌ Error in GET /api/sellers/orders:", error);
     return res.status(500).json({ error: "Failed to fetch seller orders." });
   }
-});
-
-
+}); 
 // ✅ POST /api/sellers/categories (Clean & Multi-role compatible)
 sellerRouter.post(
   '/categories',

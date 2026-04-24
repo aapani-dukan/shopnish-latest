@@ -1,42 +1,49 @@
 // ordersRouter.ts
 
-import { Router } from "express";
+import { Router, Request, Response, NextFunction, RequestHandler } from "express";
 import { requireAuth } from "../server/middleware/authMiddleware";
 import { 
     placeOrderFromCart, 
     placeOrderBuyNow, 
     getUserOrders, 
     getOrderTrackingDetails,
-    getSubOrderDetails, // यह फ़ंक्शन अब केवल पुरानी सब-ऑर्डर ट्रैकिंग के लिए इस्तेमाल हो
-    getOrderDetail // ⭐ Master Order Details Controller
+    getOrderDetail 
 } from "../server/controllers/orderController";
 
 const ordersRouter = Router();
 
-// ... (POST routes are fine)
-ordersRouter.post("/", requireAuth, placeOrderFromCart);
-ordersRouter.post("/buy-now", requireAuth, placeOrderBuyNow);
+// --- 🛒 POST Routes ---
+// Yahan humne (req, res, next) pass kiya hai kyunki ye controllers 3 args maang rahe hain
+ordersRouter.post("/", requireAuth, (async (req: any, res: Response, next: NextFunction) => {
+    try { await placeOrderFromCart(req, res, next); } catch (e) { next(e); }
+}) as RequestHandler);
 
-// ✅ 1. सभी ऑर्डर्स प्राप्त करें (सबसे सामान्य)
-ordersRouter.get("/", requireAuth, getUserOrders);
+ordersRouter.post("/buy-now", requireAuth, (async (req: any, res: Response, next: NextFunction) => {
+    try { await placeOrderBuyNow(req, res, next); } catch (e) { next(e); }
+}) as RequestHandler);
 
-// --------------------------------------------------------------------------
-// 🛑 FIX: सबसे विशिष्ट रूट्स को पहले परिभाषित करें!
-// --------------------------------------------------------------------------
 
-// ✅ 2. ट्रैकिंग रूट (सबसे विशिष्ट)
-// e.g., /api/orders/12/tracking
-ordersRouter.get("/:orderId/tracking", requireAuth, getOrderTrackingDetails);
+// --- 📦 GET Routes ---
 
-// ✅ 3. मास्टर ऑर्डर विवरण रूट (यह वह है जिसे आपका Frontend कॉल कर रहा है)
-// e.g., /api/orders/12/details
-ordersRouter.get("/:orderId/details", requireAuth, getOrderDetail); // **अब यह सही फ़ंक्शन कॉल करेगा**
+// 1. सभी ऑर्डर्स प्राप्त करें
+ordersRouter.get("/", requireAuth, (async (req: any, res: Response, next: NextFunction) => {
+    try { await getUserOrders(req, res, next); } catch (e) { next(e); }
+}) as RequestHandler);
 
-// 🛑 REMOVE (या इसका नाम बदलें): यह रूट अनावश्यक है और conflict पैदा कर रहा था
-// ordersRouter.get("/:orderId/details", requireAuth, getSubOrderDetails); 
+// 2. ट्रैकिंग विवरण
+ordersRouter.get("/:orderId/tracking", requireAuth, (async (req: any, res: Response, next: NextFunction) => {
+    try { await getOrderTrackingDetails(req, res); } catch (e) { next(e); }
+}) as RequestHandler);
 
-// ✅ 4. मास्टर ऑर्डर विवरण प्राप्त करने का दूसरा/आकस्मिक तरीका (सबसे कम विशिष्ट)
-// e.g., /api/orders/12
-ordersRouter.get("/:orderId", requireAuth, getOrderDetail);
+// 3. मास्टर ऑर्डर विवरण (Yahan Error aa raha tha, isliye yahan sirf 2 args pass kiye hain)
+ordersRouter.get("/:orderId/details", requireAuth, (async (req: any, res: Response) => {
+    try { await getOrderDetail(req, res); } catch (e) { console.error(e); res.status(500).send(e); }
+}) as RequestHandler);
+
+// 4. मास्टर ऑर्डर विवरण (Backup route)
+ordersRouter.get("/:orderId", requireAuth, (async (req: any, res: Response) => {
+    try { await getOrderDetail(req, res); } catch (e) { console.error(e); res.status(500).send(e); }
+}) as RequestHandler);
+
 
 export default ordersRouter;

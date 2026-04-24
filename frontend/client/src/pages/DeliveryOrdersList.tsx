@@ -61,12 +61,12 @@ export interface DeliveryBatch {
 
 
 export interface UIComponents {
-  Button: React.FC<any>;
-  Card: React.FC<any>;
-  CardContent: React.FC<any>;
-  CardHeader: React.FC<any>;
-  CardTitle: React.FC<any>;
-  Badge: React.FC<any>;
+  Button: React.ElementType;
+  Card: React.ElementType;
+  CardContent: React.ElementType;
+  CardHeader: React.ElementType;
+  CardTitle: React.ElementType;
+  Badge: React.ElementType;
 }
 
 // 🛑 Updated Props: अब orders के बजाय batches का उपयोग कर रहे हैं

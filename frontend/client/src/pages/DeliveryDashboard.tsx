@@ -29,8 +29,16 @@ import { Button } from "../components/ui/button";
 import { useToast } from "../hooks/use-toast"; 
 import { Label } from "../components/ui/label"; 
 import { Input } from "../components/ui/input"; 
-import { DatePicker } from "../components/ui/date-picker"; // मान लें कि आपके पास DatePicker कंपोनेंट है
-
+//import { DatePicker } from "../components/ui/date-picker"; // मान लें कि आपके पास DatePicker कंपोनेंट है
+//import { signOut } from "firebase/auth";
+// Imports ke neeche ise add karein
+interface DeliveryBatch {
+  id: number;
+  status: string;
+  deliveryBoyId?: number | null;
+  createdAt?: string;
+  // Jo bhi fields aap use kar rahe hain wo yahan dalo
+}
 
 // --- Utility Functions (Batch Statuses) ---
 const getStatusColor = (status: string) => {
@@ -95,9 +103,23 @@ const getNextStatusLabel = (status: string) => {
       return "डिलीवर करें";
 
     default:
-      return null; // ❗ बहुत जरूरी
+      return ""; // ❗ बहुत जरूरी
   }
 };
+// --- Missing Types & Interfaces ---
+
+interface OrderItem {
+  id: number;
+  productName: string;
+  quantity: number;
+  price: number;
+}
+
+interface Seller {
+  id: number;
+  businessName: string;
+  businessAddress: string;
+}
 
 // --- OrdersListViewProps Interface (Required for Part 2) ---
 interface OrdersListViewProps {
@@ -152,16 +174,18 @@ const normalizeBatchData = (rawBatch: RawBatch, myDeliveryBoyId: number | null):
     const allSellers: Seller[] = [];
 
     rawBatch.subOrders.forEach(sub => {
-        // A. आइटम और मात्रा जोड़ें
         if (sub.orderItems) {
-            sub.orderItems.forEach((item: any) => {
-                allItems.push({
-                    id: item.id,
-                    quantity: Number(item.quantity || 0),
-                    product: item.product,
-                    // यदि आपके पास price, itemTotal जैसे फ़ील्ड हैं, तो उन्हें यहाँ जोड़ें
-                } as OrderItem);
-            });
+    sub.orderItems.forEach((item: any) => {
+        allItems.push({
+            id: item.id,
+            quantity: Number(item.quantity || 0),
+            // ✅ Product object se name aur price nikaal kar yahan set karein
+            productName: item.product?.name || "Unknown Product", 
+            price: Number(item.product?.price || 0),
+            // Agar aapka interface 'product' object bhi mang raha hai toh ise rehne dein:
+            product: item.product, 
+        } as OrderItem);
+    });
         }
         
         // B. कुल योग जोड़ें (JSON से स्ट्रिंग के रूप में आता है)
@@ -216,7 +240,7 @@ if (!finalAddress || Object.keys(finalAddress).length === 0) {
 export default function DeliveryDashboard() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const { user, auth, isLoadingAuth, isAuthenticated } = useAuth();
+  const { user, isLoadingAuth, isAuthenticated,signOut } = useAuth();
   const rawSocket = useSocket() as any;
   const socket = rawSocket?.socket ?? rawSocket;
 
@@ -265,7 +289,7 @@ export default function DeliveryDashboard() {
                 allRawBatches.forEach((b: RawBatch) => {
                     if (b && typeof b.id === "number") {
                         // 🛑 Normalizer यहाँ डेटा को ठीक करता है
-                        const normalized = normalizeBatchData(b, myDeliveryBoyId); 
+                        const normalized = normalizeBatchData(b, myDeliveryBoyId ?? null); 
                         map.set(b.id, normalized);
                     }
                 });
@@ -561,7 +585,7 @@ console.log("STEP-1 batchesRaw =", batchesRaw);
   };
 
 
-  const handleLogout = () => auth?.signOut().then(() => window.location.reload());
+  const handleLogout = () => signOut().then(() => window.location.reload());
 
   // 🛑 प्रमुख परिवर्तन: useMemo को बैच फ़िल्टरिंग के लिए अपडेट करें
   const { 
@@ -863,7 +887,6 @@ const OrdersListView: React.FC<OrdersListViewProps> = ({
   statusColor, 
   statusText, 
   nextStatus, 
-  nextStatusLabel,
 }) => {
   return (
     <>
@@ -882,6 +905,7 @@ const OrdersListView: React.FC<OrdersListViewProps> = ({
           onUpdateStatus={onUpdateStatus}
           acceptLoading={acceptLoading}
           updateLoading={updateLoading}
+          myDeliveryBoyId={myDeliveryBoyId as any}
           Button={Button} Card={Card} CardContent={CardContent} CardHeader={CardHeader}
           CardTitle={CardTitle} Badge={Badge} statusColor={statusColor}
           statusText={statusText} nextStatus={nextStatus} nextStatusLabel={getNextStatusLabel}
