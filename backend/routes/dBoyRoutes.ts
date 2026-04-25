@@ -416,9 +416,33 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
   },
   orderBy: desc(deliveryBatches.createdAt),
 });
+// ... existing query code above ...
 
+    const formattedBatches = assignedBatches.map(batch => {
+      // 1. Saare sub-orders se shop names aur addresses nikalna
+      const shopNames = batch.subOrders.map(so => so.seller?.businessName).filter(Boolean);
+      const shopAddresses = batch.subOrders.map(so => so.seller?.businessAddress).filter(Boolean);
 
-    return res.status(200).json({ batches: assignedBatches });
+      // 2. Total delivery charge calculate karna
+      const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
+
+      return {
+        ...batch,
+        // ✅ Ye frontend ke liye zaroori hai
+        pickupShops: shopNames.join(" + ") || "Unknown Shop",
+        pickupAddresses: shopAddresses.join(" | "),
+        totalSubOrders: batch.subOrders.length,
+        deliveryCharge: totalDeliveryFee || 40,
+        
+        // 💡 Customer Details (Pehle sub-order se le rahe hain kyunki batch ek hi customer ka hai)
+        customerName: batch.subOrders[0]?.masterOrder?.customer?.firstName || "Customer",
+        customerPhone: batch.subOrders[0]?.masterOrder?.customer?.phone || "",
+        deliveryAddress: batch.subOrders[0]?.masterOrder?.deliveryAddress || null
+      };
+    });
+
+    return res.status(200).json({ batches: formattedBatches }); // ✅ formattedBatches bhejein
+
   } catch (error: any) {
     console.error('❌ Error in GET /api/delivery-boys/batches:', error);
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
