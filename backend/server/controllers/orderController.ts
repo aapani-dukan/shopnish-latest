@@ -1189,11 +1189,19 @@ export const getOrderTrackingDetails = async (
         )[0] || null
       : null;
 
-    /* 3️⃣ Sub Orders */
-    const subOrdersList = await db
-      .select()
-      .from(subOrders)
-      .where(eq(subOrders.masterOrderId, orderId));
+    /* 3️⃣ Sub Orders - Updated with Seller Details */
+const subOrdersList = await db.query.subOrders.findMany({
+  where: eq(subOrders.masterOrderId, orderId),
+  with: {
+    seller: { // 👈 Ye relation add karna zaroori hai
+      columns: {
+        businessName: true,
+        businessAddress: true,
+      }
+    },
+    store: true // Agar store ka lat/lng bhi chahiye
+  }
+});
 
     /* 4️⃣ Delivery Batches */
     const deliveryBatchesList = await db
