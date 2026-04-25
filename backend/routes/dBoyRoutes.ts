@@ -191,66 +191,60 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             return res.status(401).json({ error: 'Unauthorized.' });
         }
 
-        // 🛑 NOTE: हम यहां DeliveryBoy Profile को चेक नहीं कर रहे हैं,
-        // क्योंकि हम चाहते हैं कि सभी लॉग-इन किए गए डिलीवरी बॉय उपलब्ध बैच देख सकें।
-
         const availableBatches = await db.query.deliveryBatches.findMany({
             where: and(
-                // 1. किसी डिलीवरी बॉय को असाइन नहीं किया गया है
                 isNull(deliveryBatches.deliveryBoyId), 
-                // 2. बैच की स्थिति 'pending' होनी चाहिए (जैसे ही Master Order बनता है)
                 eq(deliveryBatches.status, 'pending') 
             ),
             with: {
-                //customerDeliveryAddress: true,
                 subOrders: {
                     with: {
                         seller: {
                             columns: { id: true, businessName: true, businessAddress: true }
-                        },
-                        orderItems: {
-                             with: {
-                                product: {
-                                    columns: { id: true, name: true, image: true }
-                                }
-                            }
                         }
                     }
                 },
                 masterOrder: {
-                      with: {
+                    with: {
                         deliveryAddress: true, 
-                        customer: true, 
-                 //   columns: { orderNumber: true }
-                }
+                        customer: {
+                            columns: { firstName: true, lastName: true, phone: true }
+                        }
+                    }
                 }
             },
             orderBy: desc(deliveryBatches.createdAt),
-            // ✅ IMPROVEMENT: आप यहां ग्राहक के स्थान से दूरी के आधार पर फ़िल्टर कर सकते हैं।
-            // For now, we fetch all pending unassigned batches.
         });
         
-        // ... (Formatting logic for available batches if needed, similar to /batches route) ...
         const formattedBatches = availableBatches.map(batch => {
-            // यहां आप Haversine का उपयोग करके DBoy के स्थान से दूरी की गणना कर सकते हैं
-            // (यदि DBoy की currentLat/currentLng req.user से उपलब्ध हो)
-            // ...
+            const shopNames = batch.subOrders.map(so => so.seller?.businessName).filter(Boolean);
+            const shopAddresses = batch.subOrders.map(so => so.seller?.businessAddress).filter(Boolean);
+
+            // ✅ Har sub-order ke delivery charge ko jod kar total nikalna
+            const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
+
             return {
                 ...batch,
-                // Simple formatting: Find the first store location for distance calculation
-                firstSubOrderSeller: batch.subOrders[0]?.seller,
-                totalSubOrders: batch.subOrders.length
+                pickupShops: shopNames.join(" + ") || "Unknown Shop",
+                pickupAddresses: shopAddresses.join(" | "), // Sabhi dukanon ka address
+                totalSubOrders: batch.subOrders.length,
+                
+                // ✅ Frontend ke liye zaroori fields
+                deliveryCharge: totalDeliveryFee || 40, // Agar 0 hai toh default 40
+                customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'}`,
+                deliveryArea: batch.masterOrder?.deliveryAddress?.city || "Local Area",
+                
+                // Security: Sensitive data check
+                customerPhone: batch.masterOrder?.customer?.phone || "" 
             };
         });
 
         return res.status(200).json({ batches: formattedBatches });
     } catch (error: any) {
-        console.error('❌ Error in GET /api/delivery-boys/available-batches:', error);
+        console.error('❌ Error in GET /api/delivery/available-batches:', error);
         return res.status(500).json({ error: 'Failed to fetch available batches.' });
     }
 });
-
-
 /**
  * 🚀 PATCH Claim Delivery Batch
  * /api/delivery-boys/batches/:batchId/claim
