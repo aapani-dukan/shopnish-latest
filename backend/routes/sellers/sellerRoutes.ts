@@ -1485,7 +1485,61 @@ sellerRouter.patch(
     }
   }
 );
+// ✅ नया API: /api/sellers/sub-orders/:orderId/details
+sellerRouter.get('/sub-orders/:orderId/details', requireSellerAuth, async (req: any, res: Response) => {
+  try {
+    const { orderId } = req.params;
 
+    const subOrder = await db.query.subOrders.findFirst({
+      where: eq(subOrders.id, parseInt(orderId)),
+      with: {
+        masterOrder: {
+          with: {
+            customer: {
+              columns: { firstName: true, lastName: true, phone: true }
+            },
+            deliveryAddress: true,
+          }
+        },
+        orderItems: true, // 👈 Sabse zaroori: Items yahan se aayenge
+      }
+    });
+
+    if (!subOrder) {
+      return res.status(404).json({ error: "Sub-order details not found" });
+    }
+
+    // ✅ Frontend ki umeed (Mapping) ke mutabiq data format karein
+    const formattedData = {
+      id: subOrder.id,
+      subordernumber: subOrder.subOrderNumber,
+      status: subOrder.status,
+      createdAt: subOrder.createdAt,
+      paymentMethod: subOrder.masterOrder?.paymentMethod === 'COD' ? 'Cash on Delivery' : 'Online',
+      
+      customerName: `${subOrder.masterOrder?.customer?.firstName} ${subOrder.masterOrder?.customer?.lastName || ''}`,
+      customerPhone: subOrder.masterOrder?.customer?.phone,
+      
+      deliveryAddress: subOrder.masterOrder?.deliveryAddress,
+
+      // 🛒 Items ki mapping
+      items: subOrder.orderItems.map((item: any) => ({
+        productName: item.productName,
+        quantity: item.quantity,
+        unit: item.productUnit || 'unit',
+        itemTotal: item.itemTotal
+      })),
+      
+      total: subOrder.total,
+    };
+
+    return res.status(200).json({ subOrder: formattedData });
+
+  } catch (error) {
+    console.error("❌ Error fetching sub-order details:", error);
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
 
 export default sellerRouter;
             
