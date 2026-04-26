@@ -1,6 +1,6 @@
 // backend/src/shared/backend/tables.ts
 
-import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum, unique, varchar,index,doublePrecision} from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, decimal, boolean, timestamp, json, pgEnum, unique, varchar,index,doublePrecision,numeric} from "drizzle-orm/pg-core";
 import { sql } from "drizzle-orm";
 
 
@@ -363,19 +363,32 @@ discount: decimal("discount", { precision: 5, scale: 2 })
 // 15. deliveryBatches - orders, deliveryBoys, deliveryAddresses को संदर्भित करता है
 export const deliveryBatches = pgTable("delivery_batches", {
     id: serial("id").primaryKey(),
+    
+    // 🔗 Relations
     masterOrderId: integer("master_order_id").notNull().references(() => orders.id, { onDelete: "cascade" }),
     deliveryBoyId: integer("delivery_boy_id").references(() => deliveryBoys.id, { onDelete: "set null" }),
     customerDeliveryAddressId: integer("customer_delivery_address_id").notNull().references(() => deliveryAddresses.id),
+    
+    // 💰 Dynamic Earnings & Distance (Naye Fields)
+    // Isse hum frontend par ₹50 ki jagah asli calculated amount dikha payenge
+    deliveryFee: integer("delivery_fee").default(0).notNull(), 
+    totalDistance: numeric("total_distance", { precision: 10, scale: 2 }).default("0.00"),
+    pickupCount: integer("pickup_count").default(1).notNull(), // Kitni shops hain (1, 2, ya 3)
+
+    // 📍 Status & Logistics
     status: deliveryStatusEnum("status").default("pending").notNull(),
     estimatedDeliveryTime: timestamp("estimated_delivery_time"),
     actualDeliveryTime: timestamp("actual_delivery_time"),
+    
+    // 🔐 Verification
     deliveryOtp: text("delivery_otp"),
     deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
+    
+    // 📅 Timestamps
     createdAt: timestamp("created_at").defaultNow(),
     updatedAt: timestamp("updated_at").defaultNow(),
     deliveredAt: timestamp('delivered_at'),
 });
-
 // 14. subOrders - orders, sellersPgTable, stores को संदर्भित करता है
 export const subOrders = pgTable("sub_orders", {
   id: serial("id").primaryKey(),
@@ -568,7 +581,9 @@ export const homeLayout = pgTable("home_layout", {
 export const adminSettings = pgTable("admin_settings", {
   id: serial("id").primaryKey(),
   defaultDeliveryRadiusKm: decimal("default_delivery_radius_km", { precision: 5, scale: 2 }).default("5.00").$type<number>(),
-  baseDeliveryCharge: decimal("base_delivery_charge", { precision: 10, scale: 2 }).default("20.00").$type<number>(),
+baseDeliveryCharge: decimal("base_delivery_charge", { precision: 10, scale: 2 }).default("20.00").$type<number>(),
+  // ✅ Naya Column: Har extra shop pickup ke liye kitne paise milenge
+  extraPickupCharge: decimal("extra_pickup_charge", { precision: 10, scale: 2 }).default("15.00").$type<number>(),
   platformCommissionRate: decimal("platform_commission_rate", { precision: 5, scale: 2 }).default("10.00").$type<number>(),
   chargePerKm: decimal("charge_per_km", { precision: 10, scale: 2 }).default("5.00").$type<number>(),
   freeDeliveryMinOrderValue: decimal("free_delivery_min_order_value", { precision: 10, scale: 2 }).default("500.00").$type<number>(),

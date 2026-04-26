@@ -176,9 +176,6 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
   }
 });
 
-// backend/server/routes/deliveryBoyRoutes.ts (मौजूदा फ़ाइल में नया रूट जोड़ें)
-
-// ... (Imports and existing logic like /batches GET route) ...
 
 /**
  * 🟡 GET Available Delivery Batches for Claiming
@@ -200,7 +197,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 subOrders: {
                     with: {
                         seller: {
-                            columns: { id: true, businessName: true, businessAddress: true }
+                            columns: { id: true, businessName: true, businessAddress: true,businessPhone: true}
                         }
                     }
                 },
@@ -216,40 +213,38 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             orderBy: desc(deliveryBatches.createdAt),
         });
         
-        const formattedBatches = availableBatches.map(batch => {
-            const shopNames = batch.subOrders.map(so => so.seller?.businessName).filter(Boolean);
-            const shopAddresses = batch.subOrders.map(so => so.seller?.businessAddress).filter(Boolean);
+       const formattedBatches = availableBatches.map(batch => {
+    // 1. Pickup Points (Jo humne pehle discuss kiya)
+    const pickupPoints = batch.subOrders.map(so => ({
+        shopName: so.seller?.businessName || "Unknown Shop",
+        address: so.seller?.businessAddress || "Address not available",
+        phone: so.seller?.businessPhone || "", 
+        sellerId: so.seller?.id
+    }));
 
-            // ✅ Har sub-order ke delivery charge ko jod kar total nikalna
-            const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
+    return {
+        ...batch,
+        pickupPoints: pickupPoints,
+        
+        // ✅ AB YAHAN DHYAN DEIN: 
+        // Ab math nahi karna, seedha batch table wala 'deliveryFee' uthana hai
+        // Jo batch bante waqt admin settings ke hisaab se freeze ho chuka hai
+        deliveryCharge: batch.deliveryFee || 40, 
 
-            return {
-                ...batch,
-                pickupShops: shopNames.join(" + ") || "Unknown Shop",
-                pickupAddresses: shopAddresses.join(" | "), // Sabhi dukanon ka address
-                totalSubOrders: batch.subOrders.length,
-                
-                // ✅ Frontend ke liye zaroori fields
-                deliveryCharge: totalDeliveryFee || 40, // Agar 0 hai toh default 40
-                customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'}`,
-                deliveryArea: batch.masterOrder?.deliveryAddress?.city || "Local Area",
-                
-                // Security: Sensitive data check
-                customerPhone: batch.masterOrder?.customer?.phone || "" 
-            };
-        });
-
+        customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'}`,
+        deliveryArea: batch.masterOrder?.deliveryAddress?.city || "Local Area",
+        
+        // Note: Customer phone yahan sirf tab bhejein agar claim se pehle dikhana hai
+        customerPhone: batch.masterOrder?.customer?.phone || "" 
+    };
+});
         return res.status(200).json({ batches: formattedBatches });
     } catch (error: any) {
         console.error('❌ Error in GET /api/delivery/available-batches:', error);
         return res.status(500).json({ error: 'Failed to fetch available batches.' });
     }
 });
-/**
- * 🚀 PATCH Claim Delivery Batch
- * /api/delivery-boys/batches/:batchId/claim
- * जब डिलीवरी बॉय एक उपलब्ध बैच का दावा करता है
- */
+
 /**
  * 🚀 PATCH Claim Delivery Batch
  * /api/delivery-boys/batches/:batchId/claim
@@ -311,15 +306,11 @@ router.patch(
                     })
                     .where(eq(deliveryBatches.id, batchId))
                     .returning();
-
-                // C. मास्टर ऑर्डर का स्टेटस अपडेट करें (Professional Sync)
-                // जब बैच असाइन होता है, तो मास्टर ऑर्डर को 'processing' या 'confirmed' से 
-                // अगले स्टेप पर ले जाना चाहिए (जैसे 'out_for_delivery' की तैयारी)
                 await tx.update(orders)
                     .set({ updatedAt: new Date().toISOString() })
                     .where(eq(orders.id, updatedBatch.masterOrderId));
 
-                // D. ट्रैकिंग इतिहास जोड़ें
+                // D. ट्रैकिंग इतिहास जोड़ें
                 await tx.insert(orderTracking).values({
                     masterOrderId: updatedBatch.masterOrderId,
                     deliveryBatchId: batchId,
@@ -416,8 +407,6 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
   },
   orderBy: desc(deliveryBatches.createdAt),
 });
-// ... existing query code above ...
-
     const formattedBatches = assignedBatches.map(batch => {
       // 1. Saare sub-orders se shop names aur addresses nikalna
       const shopNames = batch.subOrders.map(so => so.seller?.businessName).filter(Boolean);
@@ -428,7 +417,6 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
 
       return {
         ...batch,
-        // ✅ Ye frontend ke liye zaroori hai
         pickupShops: shopNames.join(" + ") || "Unknown Shop",
         pickupAddresses: shopAddresses.join(" | "),
         totalSubOrders: batch.subOrders.length,
@@ -668,20 +656,18 @@ router.patch(
        // 💰 WALLET SETTLEMENT LOGIC (Inside Transaction)
 if (newStatus === 'delivered') {
     const [settings] = await tx.select().from(adminSettings).limit(1);
-    const baseDeliveryFee = Number(settings?.baseDeliveryCharge || 40);
-    const platformCommission = Number(settings?.platformCommissionRate || 10);
+     const platformCommission = Number(settings?.platformCommissionRate || 10);
+    const payoutAmount = Number(existingBatch.deliveryFee); // ✅ Ye batch table se uthayega (Fixed rate)
 
-    // ✅ Delivery Boy Earning (Always uses userId from req.user)
-    await WalletService.addMoney(
-        userId, 
-        'delivery-boy', 
-        baseDeliveryFee, 
-        'delivery_fee', 
-        `batch_${batchId}`, 
-        `Earnings for batch #${batchId}`,
-        tx 
-    );
-
+await WalletService.addMoney(
+    userId, 
+    'delivery-boy', 
+    payoutAmount, // Batch table wala fixed amount
+    'delivery_fee', 
+    `batch_${batchId}`, 
+    `Earnings for batch #${batchId}`,
+    tx 
+);
           // 3. अगर COD है, तो डिलीवरी बॉय के वॉलेट से कैश अमाउंट माइनस करें
           const masterOrder = existingBatch.subOrders[0].masterOrder;
           const isCOD = masterOrder.paymentMethod === 'COD';

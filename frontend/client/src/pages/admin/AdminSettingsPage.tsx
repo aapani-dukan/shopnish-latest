@@ -21,6 +21,7 @@ interface AdminSettings {
   baseDeliveryCharge: number;
   chargePerKm: number;
   freeDeliveryMinOrderValue: number;
+  extraPickupCharge: number;
 }
 
 interface Promocode {
@@ -239,7 +240,25 @@ export default function AdminSettingsPage() {
                 required
               />
             </div>
-
+{/* --- Multi-Shop Bonus Section --- */}
+<div className="space-y-2">
+  <label htmlFor="extraPickupCharge" className="block text-sm font-medium text-gray-700">
+    Multi-Shop Pickup Bonus (₹)
+  </label>
+  <input
+    id="extraPickupCharge" // 👈 Ye ID backend field name se match honi chahiye
+    type="number"
+    step="0.01"
+    className="w-full p-2 border rounded-md focus:ring-2 focus:ring-blue-500"
+    placeholder="e.g. 15"
+    value={formData.extraPickupCharge || ''}
+    onChange={handleSettingsChange}
+    required
+  />
+  <p className="text-xs text-gray-500 italic">
+    Ek se zyada dukanon se pickup hone par delivery boy ko har extra shop ke liye milne wala bonus.
+  </p>
+</div>
             <Button type="submit" disabled={isUpdatingSettings}>
               {isUpdatingSettings && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               {isUpdatingSettings ? 'Saving...' : 'Save Delivery Settings'}

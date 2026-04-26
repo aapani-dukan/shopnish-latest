@@ -7,7 +7,8 @@ import {
   deliveryAddresses,
   orders, // Master Order
   subOrders, // Sub-Orders per seller
-  deliveryBatches, // Delivery groups
+  deliveryBatches, 
+  adminSettings,
   orderItems, // Items now link to subOrders
   cartItems,
   orderTracking,
@@ -33,6 +34,7 @@ console.log({
   stores,
   deliveryBatches,
   deliveryBoys,
+  adminSettings
 });
 import { ProductService } from "../../services/productService";
 import { sendNotification } from '../../services/notificationService';
@@ -459,23 +461,42 @@ if (updatedProduct && updatedProduct.stock !== null && updatedProduct.sellerId !
 }
 
 // 4. Delivery batching if not self-delivery
-        if (!isSelfDelivery) {
-            const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-                masterOrderId: masterOrder.id,
-                deliveryBoyId: null,
-                customerDeliveryAddressId: finalDeliveryAddressId,
-                status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
-                estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), 
-                deliveryOtp: null,
-                deliveryOtpSentAt: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }).returning({ id: deliveryBatches.id });
+if (!isSelfDelivery) {
+    // 🏦 A. Admin Settings se rates fetch karein
+    const [settings] = await tx.select().from(adminSettings).limit(1);
+    
+    const basePay = Number(settings?.baseDeliveryCharge || 20);
+    const kmRate = Number(settings?.chargePerKm || 5);
+    const extraShopBonus = Number(settings?.extraPickupCharge || 15);
+    
+    // 📍 B. Distance aur Shop count (Filhaal Buy Now mein 1 hi shop hogi)
+    const distance = Number(settings?.defaultDeliveryRadiusKm || 3); 
+    const shopCount = 1; // Buy Now order hai toh dukan ek hi hogi
 
-            await tx.update(subOrders)
-                .set({ deliveryBatchId: deliveryBatch.id })
-                .where(eq(subOrders.id, subOrder.id));
-        }
+    // 💰 C. FINAL EARNING CALCULATION
+    const calculatedFee = basePay + (distance * kmRate) + ((shopCount - 1) * extraShopBonus);
+
+    // 📝 D. Batch Insert (With Fixed Earning)
+    const [deliveryBatch] = await tx.insert(deliveryBatches).values({
+        masterOrderId: masterOrder.id,
+        deliveryBoyId: null,
+        customerDeliveryAddressId: finalDeliveryAddressId,
+        status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+        
+        // ✅ Ye naye fields jo humne schema mein add kiye hain
+        deliveryFee: Math.round(calculatedFee), 
+        totalDistance: distance.toString(),
+        pickupCount: shopCount,
+
+        estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), 
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }).returning({ id: deliveryBatches.id });
+
+    await tx.update(subOrders)
+        .set({ deliveryBatchId: deliveryBatch.id })
+        .where(eq(subOrders.id, subOrder.id));
+}
 
         // 🛑 FIX: subOrder par depend rehne ki bajaye seedha 'sellerId' use karein 
         // jo function ke input arguments mein pehle se available hai.
