@@ -213,29 +213,35 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             orderBy: desc(deliveryBatches.createdAt),
         });
         
-       const formattedBatches = availableBatches.map(batch => {
-    // 1. Pickup Points (Jo humne pehle discuss kiya)
-    const pickupPoints = batch.subOrders.map(so => ({
+      const formattedBatches = availableBatches.map(batch => {
+    const subOrders = batch.subOrders || [];
+    
+    // 1. Pickup Details (Address ke saath)
+    const pickupPoints = subOrders.map(so => ({
         shopName: so.seller?.businessName || "Unknown Shop",
-        address: so.seller?.businessAddress || "Address not available",
-        phone: so.seller?.businessPhone || "", 
-        sellerId: so.seller?.id
+        address: so.seller?.businessAddress || "Address Not Available",
+        phone: so.seller?.businessPhone || "",
     }));
-const uniqueShops = [...new Set(pickupPoints.map(p => p.shopName))];
+
+    // Saari shops ke naam ek sath dikhane ke liye
+    const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
+    // Saare addresses ek sath dikhane ke liye
+    const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
+
     return {
         ...batch,
+        pickupShops: shopNames || "Unknown Shop",
+        pickupAddresses: shopAddresses, // ✅ Naya field
         pickupPoints: pickupPoints,
-        pickupShops: uniqueShops.join(" + "),
-        
-       customerName: `${batch.masterOrder?.customer?.firstName || ''} ${batch.masterOrder?.customer?.lastName || ''}`.trim() || "Customer",
-        customerPhone: batch.masterOrder?.customer?.phone || "",
-        deliveryArea: batch.masterOrder?.deliveryAddress?.city || "Local Area",
-        fullDeliveryAddress: batch.masterOrder?.deliveryAddress,
 
-        // ✅ Batch Level Info
-        deliveryCharge: Number(batch.deliveryFee || 40),
-        totalItems: batch.subOrders.length,
-        pickupCount: batch.pickupCount || uniqueShops.length
+        // 2. Customer & Delivery Details
+        customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'} ${batch.masterOrder?.customer?.lastName || ''}`.trim(),
+        deliveryAddress: batch.masterOrder?.deliveryAddress?.addressLine1 || "Local Address",
+        deliveryCity: batch.masterOrder?.deliveryAddress?.city || "",
+        
+        deliveryCharge: Number(batch.deliveryFee||40), // ✅ Batch table se delivery fee uthayenge (Fixed rate)
+        totalItems: batch.subOrders.length
+        
     };
 });
         return res.status(200).json({ batches: formattedBatches });
