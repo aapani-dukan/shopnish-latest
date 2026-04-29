@@ -221,21 +221,21 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
         phone: so.seller?.businessPhone || "", 
         sellerId: so.seller?.id
     }));
-
+const uniqueShops = [...new Set(pickupPoints.map(p => p.shopName))];
     return {
         ...batch,
         pickupPoints: pickupPoints,
+        pickupShops: uniqueShops.join(" + "),
         
-        // ✅ AB YAHAN DHYAN DEIN: 
-        // Ab math nahi karna, seedha batch table wala 'deliveryFee' uthana hai
-        // Jo batch bante waqt admin settings ke hisaab se freeze ho chuka hai
-        deliveryCharge: batch.deliveryFee || 40, 
-
-        customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'}`,
+       customerName: `${batch.masterOrder?.customer?.firstName || ''} ${batch.masterOrder?.customer?.lastName || ''}`.trim() || "Customer",
+        customerPhone: batch.masterOrder?.customer?.phone || "",
         deliveryArea: batch.masterOrder?.deliveryAddress?.city || "Local Area",
-        
-        // Note: Customer phone yahan sirf tab bhejein agar claim se pehle dikhana hai
-        customerPhone: batch.masterOrder?.customer?.phone || "" 
+        fullDeliveryAddress: batch.masterOrder?.deliveryAddress,
+
+        // ✅ Batch Level Info
+        deliveryCharge: Number(batch.deliveryFee || 40),
+        totalItems: batch.subOrders.length,
+        pickupCount: batch.pickupCount || uniqueShops.length
     };
 });
         return res.status(200).json({ batches: formattedBatches });
@@ -413,15 +413,15 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       const shopAddresses = batch.subOrders.map(so => so.seller?.businessAddress).filter(Boolean);
 
       // 2. Total delivery charge calculate karna
-      const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
+      // const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
 
       return {
         ...batch,
         pickupShops: shopNames.join(" + ") || "Unknown Shop",
         pickupAddresses: shopAddresses.join(" | "),
         totalSubOrders: batch.subOrders.length,
-        deliveryCharge: totalDeliveryFee || 40,
-        
+       
+        deliveryCharge: Number(batch.deliveryFee || 40),
         // 💡 Customer Details (Pehle sub-order se le rahe hain kyunki batch ek hi customer ka hai)
         customerName: batch.subOrders[0]?.masterOrder?.customer?.firstName || "Customer",
         customerPhone: batch.subOrders[0]?.masterOrder?.customer?.phone || "",
