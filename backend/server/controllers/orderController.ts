@@ -541,19 +541,38 @@ if (!isSelfDelivery) {
 
     // 🌐 Socket.io Events
     const io = getIO();
-    io.emit("new-order", {
-      orderId: finalResult.masterOrder.id,
-      orderNumber: finalResult.masterOrder.orderNumber,
-      customerId: finalResult.masterOrder.customerId,
-      total: finalResult.masterOrder.total,
-      status: finalResult.masterOrder.status,
-      createdAt: finalResult.masterOrder.createdAt,
-    });
 
+    // 1. 👤 CUSTOMER KO UPDATE BHEJEIN (Order Success)
+    // Isse customer ki screen par loader khatam ho jayega ya confirmation dikhegi
     io.emit(`user:${userId}`, { 
       type: 'order-placed', 
       order: finalResult.masterOrder, 
-      subOrder: finalResult.subOrder 
+      subOrder: finalResult.subOrder // Single item buy now ke liye
+    });
+
+    // 2. 🏪 SELLERS KO TARGETED ALERT BHEJEIN (Tring Tring Logic)
+    // Agar finalResult mein subOrders ki array hai, toh loop chalayenge
+    const subOrdersList = Array.isArray(finalResult.subOrders) 
+      ? finalResult.subOrders 
+      : [finalResult.subOrder]; // Backup agar sirf ek hi sub-order ho
+
+    subOrdersList.forEach((subOrder: any) => {
+      // Dhyaan dein: Humein Seller ki 'userId' chahiye room join karne ke liye
+      const sellerUserId = subOrder.seller?.user_id || subOrder.seller_id; 
+
+      if (sellerUserId) {
+        // Sirf us specific seller ke unique room mein signal bhejein
+        io.to(`seller_room_${sellerUserId}`).emit("new-order", {
+          orderId: subOrder.id,
+          masterOrderId: finalResult.masterOrder.id,
+          orderNumber: subOrder.sub_order_number || finalResult.masterOrder.orderNumber,
+          total: subOrder.total,
+          status: subOrder.status,
+          createdAt: finalResult.masterOrder.createdAt,
+        });
+
+        console.log(`🚀 [Socket] Alert sent to Seller Room: seller_room_${sellerUserId}`);
+      }
     });
 
     // ✅ Success Response
