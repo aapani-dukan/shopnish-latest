@@ -544,35 +544,52 @@ if (!isSelfDelivery) {
       ? finalResult.subOrders 
       : [finalResult.subOrder]; // Backup agar sirf ek hi sub-order ho
 
-    subOrdersList.forEach((subOrder: any) => {
-      // Dhyaan dein: Humein Seller ki 'userId' chahiye room join karne ke liye
-    const sellerId = subOrder.seller_id; 
-      const sellerUserId = subOrder.seller?.user_id; 
+   // Loop ko update karein
+await Promise.all(subOrdersList.map(async (subOrder: any) => {
+  const sellerId = subOrder.seller_id || subOrder.sellerId;
+  
+  // 1. Check karein kya user_id pehle se mil rahi hai
+  let sellerUserId = subOrder.seller?.user_id || subOrder.seller?.userId;
 
-      // Signal ka data taiyaar karein
-      const orderData = {
-        orderId: subOrder.id,
-        masterOrderId: finalResult.masterOrder.id,
-        orderNumber: subOrder.sub_order_number || finalResult.masterOrder.order_number,
-        total: subOrder.total,
-        status: subOrder.status,
-        createdAt: finalResult.masterOrder.created_at,
-      };
-
-      // 1. Purane tarike se Seller ID room mein bhejein (Taaki Web App chalta rahe)
-      if (sellerId) {
-        io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
-        console.log(`🚀 [Socket] Alert sent to Seller Room: seller_room_${sellerId}`);
+  // 🚨 2. Drizzle Fix: Agar nahi mili toh SellersPgTable se fetch karein
+  if (!sellerUserId && sellerId) {
+    try {
+      const sellerInfo = await db
+        .select()
+        .from(sellersPgTable) // Aapka schema name
+        .where(eq(sellersPgTable.id, sellerId))
+        .limit(1);
+      
+      if (sellerInfo && sellerInfo.length > 0) {
+        sellerUserId = sellerInfo[0].userId;
       }
+    } catch (dbErr) {
+      console.error("❌ Error fetching seller user_id:", dbErr);
+    }
+  }
 
-      // 2. ⚡ Naya Fix: Seller ki User ID room mein bhi bhejein (Mobile App ke liye)
-      // Aapke logs ke hisab se ye user_room_69 hoga
-      if (sellerUserId) {
-        io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-        console.log(`📱 [Socket] Alert sent to User Room: user_room_${sellerUserId}`);
-      }
-    });
+  console.log(`📡 [Socket Debug] SellerID: ${sellerId}, Target UserID: ${sellerUserId}`);
 
+  const orderData = {
+    orderId: subOrder.id,
+    masterOrderId: finalResult.masterOrder.id,
+    orderNumber: subOrder.sub_order_number || finalResult.masterOrder.order_number || finalResult.masterOrder.orderNumber,
+    total: subOrder.total,
+    status: subOrder.status,
+    createdAt: finalResult.masterOrder.created_at || finalResult.masterOrder.createdAt,
+  };
+
+  // 3. Dono rooms mein signal bhejein
+  if (sellerId) {
+    io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
+    console.log(`🚀 [Socket] Alert sent to: seller_room_${sellerId}`);
+  }
+
+  if (sellerUserId) {
+    io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
+    console.log(`📱 [Socket] Alert sent to: user_room_${sellerUserId}`);
+  }
+}));
     // ✅ Success Response
     return res.status(201).json({
       message: "Order placed successfully!",
