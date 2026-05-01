@@ -195,13 +195,6 @@ async function handleDeliveryAddress(
   };
 }
 
-/**
- * handles placing a direct "buy now" order.
- */
- // client/src/pages/checkout2.tsx में `handleLocationUpdate` फ़ंक्शन के नीचे,
-// या `createOrderMutation` से पहले कहीं भी यह जोड़ें।
-
-// ... (handleDeliveryAddress फ़ंक्शन अपरिवर्तित है)
 
 /**
  * handles placing a direct "buy now" order.
@@ -300,12 +293,8 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
           quantity: number;
           itemTotal: number;
         }> = [];
-
-        // ... (product validation logic is unchanged and is assumed correct)
-        
+    
         for (const it of normalizedItems) {
-            // ... (product validation logic is unchanged)
-            // ...
             const productId = Number(it.productId);
             const quantity = Number(it.quantity ?? 1);
             if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
@@ -341,8 +330,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
         // 1. Create master order
 const [masterOrder] = await tx.insert(orders).values({
-    // 1. अगर स्कीमा में 'order_number' है, तो वही लिखें। 
-    // 2. Shopnish Premium ID Logic: SN-BND-2026-XXXX
+    
     orderNumber: `SN-BND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, 
     
     customerId: userId,
@@ -517,7 +505,7 @@ if (!isSelfDelivery) {
         console.error("❌ Error placing buy now order:", error);
         throw error; 
       }
-    }); // end transaction
+    }); 
 
     // 🔥 TRING TRING LOGIC
     const finalResult = result as any;
@@ -539,7 +527,7 @@ if (!isSelfDelivery) {
       }
     }
 
-    // 🌐 Socket.io Events
+   // 🌐 Socket.io Events
     const io = getIO();
 
     // 1. 👤 CUSTOMER KO UPDATE BHEJEIN (Order Success)
@@ -558,20 +546,30 @@ if (!isSelfDelivery) {
 
     subOrdersList.forEach((subOrder: any) => {
       // Dhyaan dein: Humein Seller ki 'userId' chahiye room join karne ke liye
-      const sellerUserId = subOrder.seller?.user_id || subOrder.seller_id; 
+    const sellerId = subOrder.seller_id; 
+      const sellerUserId = subOrder.seller?.user_id; 
 
+      // Signal ka data taiyaar karein
+      const orderData = {
+        orderId: subOrder.id,
+        masterOrderId: finalResult.masterOrder.id,
+        orderNumber: subOrder.sub_order_number || finalResult.masterOrder.order_number,
+        total: subOrder.total,
+        status: subOrder.status,
+        createdAt: finalResult.masterOrder.created_at,
+      };
+
+      // 1. Purane tarike se Seller ID room mein bhejein (Taaki Web App chalta rahe)
+      if (sellerId) {
+        io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
+        console.log(`🚀 [Socket] Alert sent to Seller Room: seller_room_${sellerId}`);
+      }
+
+      // 2. ⚡ Naya Fix: Seller ki User ID room mein bhi bhejein (Mobile App ke liye)
+      // Aapke logs ke hisab se ye user_room_69 hoga
       if (sellerUserId) {
-        // Sirf us specific seller ke unique room mein signal bhejein
-        io.to(`seller_room_${sellerUserId}`).emit("new-order", {
-          orderId: subOrder.id,
-          masterOrderId: finalResult.masterOrder.id,
-          orderNumber: subOrder.sub_order_number || finalResult.masterOrder.orderNumber,
-          total: subOrder.total,
-          status: subOrder.status,
-          createdAt: finalResult.masterOrder.createdAt,
-        });
-
-        console.log(`🚀 [Socket] Alert sent to Seller Room: seller_room_${sellerUserId}`);
+        io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
+        console.log(`📱 [Socket] Alert sent to User Room: user_room_${sellerUserId}`);
       }
     });
 
@@ -581,8 +579,7 @@ if (!isSelfDelivery) {
       orderId: finalResult.masterOrder.id,
       orderNumber: finalResult.masterOrder.orderNumber,
       data: finalResult.masterOrder,
-    });
-
+    }); 
   } catch (err: any) {
     console.error("❌ Unexpected error in placeOrderBuyNow:", err);
     return res.status(500).json({ 
@@ -1045,8 +1042,11 @@ for (const item of subOrderData.items) {
         console.error("🔔 Notification Trigger Error (Non-Critical):", notificationError);
     }
 
-    // ✅ Socket.io Events
-    getIO().emit("new-master-order", {
+   // ✅ Socket.io Events
+    const io = getIO();
+
+    // 1. 📢 Global Update (Agar koi Admin panel monitor kar raha ho)
+    io.emit("new-master-order", {
       masterOrder: transactionResult.masterOrder,
       subOrders: transactionResult.tempSubOrders.map(ts => ({ 
           sellerId: ts.sellerId, 
@@ -1055,9 +1055,40 @@ for (const item of subOrderData.items) {
       })),
     });
 
-    getIO().emit(`user:${userId}`, { 
+    // 2. 👤 Customer ko confirmation bhejein
+    io.emit(`user:${userId}`, { 
         type: 'master-order-placed', 
         masterOrder: transactionResult.masterOrder 
+    });
+
+    // 3. 🏪 SELLERS KO TARGETED ALERT (The "Tring Tring" Loop)
+    // Cart mein multiple sellers ho sakte hain, isliye har ek ko alert bhejenge
+    transactionResult.tempSubOrders.forEach((subOrder: any) => {
+      
+      const sellerId = subOrder.sellerId;
+      // Dhyaan dein: Check karein ki subOrder mein seller ki userId available hai ya nahi
+      const sellerUserId = subOrder.seller?.user_id || subOrder.seller_user_id;
+
+      const orderData = {
+        orderId: subOrder.id,
+        masterOrderId: transactionResult.masterOrder.id,
+        orderNumber: subOrder.subOrderNumber || transactionResult.masterOrder.orderNumber,
+        total: subOrder.total,
+        status: subOrder.status || 'pending',
+        createdAt: transactionResult.masterOrder.createdAt,
+      };
+
+      // A. Purana Room (Seller ID based - 14)
+      if (sellerId) {
+        io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
+        console.log(`🚀 [Socket Cart] Alert sent to Seller Room: seller_room_${sellerId}`);
+      }
+
+      // B. ⚡ Naya Room (User ID based - 69) - Mobile App ke liye
+      if (sellerUserId) {
+        io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
+        console.log(`📱 [Socket Cart] Alert sent to User Room: user_room_${sellerUserId}`);
+      }
     });
 
     return res.status(201).json({
