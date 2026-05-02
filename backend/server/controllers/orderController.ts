@@ -530,66 +530,66 @@ if (!isSelfDelivery) {
    // 🌐 Socket.io Events
     const io = getIO();
 
-    // 1. 👤 CUSTOMER KO UPDATE BHEJEIN (Order Success)
-    // Isse customer ki screen par loader khatam ho jayega ya confirmation dikhegi
+    // 1. 👤 CUSTOMER KO UPDATE BHEJEIN
     io.emit(`user:${userId}`, { 
       type: 'order-placed', 
       order: finalResult.masterOrder, 
-      subOrder: finalResult.subOrder // Single item buy now ke liye
+      subOrder: finalResult.subOrder 
     });
 
-    // 2. 🏪 SELLERS KO TARGETED ALERT BHEJEIN (Tring Tring Logic)
-    // Agar finalResult mein subOrders ki array hai, toh loop chalayenge
-    const subOrdersList = Array.isArray(finalResult.subOrders) 
-      ? finalResult.subOrders 
-      : [finalResult.subOrder]; // Backup agar sirf ek hi sub-order ho
+    // 2. 🏪 SELLERS KO TARGETED ALERT (Fix Applied)
+    // Buy Now mein sellerId seedha req.body se uthana sabse safe hai
+    const targetSellerId = sellerId || finalResult.subOrder?.sellerId;
 
-   // Loop ko update karein
-await Promise.all(subOrdersList.map(async (subOrder: any) => {
-  const sellerId = subOrder.seller_id || subOrder.sellerId;
-  
-  // 1. Check karein kya user_id pehle se mil rahi hai
-  let sellerUserId = subOrder.seller?.user_id || subOrder.seller?.userId;
+    if (targetSellerId) {
+      const emitOrderAlert = async (sId: any) => {
+        let sellerUserId = null;
 
-  // 🚨 2. Drizzle Fix: Agar nahi mili toh SellersPgTable se fetch karein
-  if (!sellerUserId && sellerId) {
-    try {
-      const sellerInfo = await db
-        .select()
-        .from(sellersPgTable) // Aapka schema name
-        .where(eq(sellersPgTable.id, sellerId))
-        .limit(1);
-      
-      if (sellerInfo && sellerInfo.length > 0) {
-        sellerUserId = sellerInfo[0].userId;
-      }
-    } catch (dbErr) {
-      console.error("❌ Error fetching seller user_id:", dbErr);
+        try {
+          // 🚨 Drizzle se actual UserID (69) fetch karein
+          const [sellerInfo] = await db
+            .select()
+            .from(sellersPgTable)
+            .where(eq(sellersPgTable.id, Number(sId)))
+            .limit(1);
+          
+          if (sellerInfo) {
+            sellerUserId = sellerInfo.userId;
+          }
+        } catch (dbErr) {
+          console.error("❌ Error fetching seller userId for socket:", dbErr);
+        }
+
+        console.log(`📡 [Socket Debug] SellerID: ${sId}, Target UserID: ${sellerUserId}`);
+
+        // Data object taiyaar karein
+        const orderData = {
+          orderId: finalResult.subOrder?.id,
+          masterOrderId: finalResult.masterOrder?.id,
+          orderNumber: finalResult.masterOrder?.orderNumber,
+          total: finalResult.masterOrder?.total,
+          status: finalResult.masterOrder?.status || 'pending',
+          createdAt: finalResult.masterOrder?.createdAt,
+        };
+
+        // A. Purana Room (seller_room_14) - Web App ke liye
+        io.to(`seller_room_${sId}`).emit("new-order", orderData);
+        console.log(`🚀 [Socket] Alert sent to: seller_room_${sId}`);
+
+        // B. Naya Room (user_room_69) - Aapke Mobile App ke liye
+        if (sellerUserId) {
+          io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
+          console.log(`📱 [Socket] Alert sent to: user_room_${sellerUserId}`);
+        } else {
+          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila, Mobile App ring nahi karega.");
+        }
+      };
+
+      // Call the async emitter
+      await emitOrderAlert(targetSellerId);
+    } else {
+      console.log("❌ [Socket Error]: No sellerId found to send alert.");
     }
-  }
-
-  console.log(`📡 [Socket Debug] SellerID: ${sellerId}, Target UserID: ${sellerUserId}`);
-
-  const orderData = {
-    orderId: subOrder.id,
-    masterOrderId: finalResult.masterOrder.id,
-    orderNumber: subOrder.sub_order_number || finalResult.masterOrder.order_number || finalResult.masterOrder.orderNumber,
-    total: subOrder.total,
-    status: subOrder.status,
-    createdAt: finalResult.masterOrder.created_at || finalResult.masterOrder.createdAt,
-  };
-
-  // 3. Dono rooms mein signal bhejein
-  if (sellerId) {
-    io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
-    console.log(`🚀 [Socket] Alert sent to: seller_room_${sellerId}`);
-  }
-
-  if (sellerUserId) {
-    io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-    console.log(`📱 [Socket] Alert sent to: user_room_${sellerUserId}`);
-  }
-}));
     // ✅ Success Response
     return res.status(201).json({
       message: "Order placed successfully!",
@@ -1059,10 +1059,10 @@ for (const item of subOrderData.items) {
         console.error("🔔 Notification Trigger Error (Non-Critical):", notificationError);
     }
 
-   // ✅ Socket.io Events
+  // ✅ Socket.io Events
     const io = getIO();
 
-    // 1. 📢 Global Update (Agar koi Admin panel monitor kar raha ho)
+    // 1. 📢 Global Update (Admin Panel ke liye)
     io.emit("new-master-order", {
       masterOrder: transactionResult.masterOrder,
       subOrders: transactionResult.tempSubOrders.map(ts => ({ 
@@ -1072,19 +1072,37 @@ for (const item of subOrderData.items) {
       })),
     });
 
-    // 2. 👤 Customer ko confirmation bhejein
+    // 2. 👤 Customer ko confirmation
     io.emit(`user:${userId}`, { 
         type: 'master-order-placed', 
         masterOrder: transactionResult.masterOrder 
     });
 
     // 3. 🏪 SELLERS KO TARGETED ALERT (The "Tring Tring" Loop)
-    // Cart mein multiple sellers ho sakte hain, isliye har ek ko alert bhejenge
-    transactionResult.tempSubOrders.forEach((subOrder: any) => {
+    // Cart mein multiple sellers ho sakte hain, hum Promise.all use karenge
+    await Promise.all(transactionResult.tempSubOrders.map(async (subOrder: any) => {
       
-      const sellerId = subOrder.sellerId;
-      // Dhyaan dein: Check karein ki subOrder mein seller ki userId available hai ya nahi
-      const sellerUserId = subOrder.seller?.user_id || subOrder.seller_user_id;
+      const sId = subOrder.sellerId || subOrder.seller_id;
+      let sellerUserId = subOrder.seller?.userId || subOrder.seller?.user_id;
+
+      // 🚨 Drizzle Fix: Agar userId nahi mili (जो Cart orders में अक्सर होता है)
+      if (!sellerUserId && sId) {
+        try {
+          const [sellerInfo] = await db
+            .select()
+            .from(sellersPgTable)
+            .where(eq(sellersPgTable.id, Number(sId)))
+            .limit(1);
+          
+          if (sellerInfo) {
+            sellerUserId = sellerInfo.userId; // Drizzle camelCase use karta hai
+          }
+        } catch (dbErr) {
+          console.error("❌ Cart Socket Error fetching userId:", dbErr);
+        }
+      }
+
+      console.log(`📡 [Cart Socket Debug] SellerID: ${sId}, Target UserID: ${sellerUserId}`);
 
       const orderData = {
         orderId: subOrder.id,
@@ -1095,18 +1113,18 @@ for (const item of subOrderData.items) {
         createdAt: transactionResult.masterOrder.createdAt,
       };
 
-      // A. Purana Room (Seller ID based - 14)
-      if (sellerId) {
-        io.to(`seller_room_${sellerId}`).emit("new-order", orderData);
-        console.log(`🚀 [Socket Cart] Alert sent to Seller Room: seller_room_${sellerId}`);
+      // A. Purana Room (seller_room_14)
+      if (sId) {
+        io.to(`seller_room_${sId}`).emit("new-order", orderData);
+        console.log(`🚀 [Socket Cart] Alert sent to: seller_room_${sId}`);
       }
 
-      // B. ⚡ Naya Room (User ID based - 69) - Mobile App ke liye
+      // B. ⚡ Naya Room (user_room_69) - Mobile App ke liye
       if (sellerUserId) {
         io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-        console.log(`📱 [Socket Cart] Alert sent to User Room: user_room_${sellerUserId}`);
+        console.log(`📱 [Socket Cart] Alert sent to: user_room_${sellerUserId}`);
       }
-    });
+    }));
 
     return res.status(201).json({
         message: "Orders placed successfully!",
