@@ -527,7 +527,8 @@ if (!isSelfDelivery) {
       }
     }
 
-   // 🌐 Socket.io Events
+// 🌐 Socket.io Events
+    console.log("🔍 [DEBUG 1]: Socket Logic Start - Starting alert process...");
     const io = getIO();
 
     // 1. 👤 CUSTOMER KO UPDATE BHEJEIN
@@ -536,17 +537,18 @@ if (!isSelfDelivery) {
       order: finalResult.masterOrder, 
       subOrder: finalResult.subOrder 
     });
+    console.log(`🔍 [DEBUG 2]: Customer update emitted to user:${userId}`);
 
-    // 2. 🏪 SELLERS KO TARGETED ALERT (Fix Applied)
-    // Buy Now mein sellerId seedha req.body se uthana sabse safe hai
+    // 2. 🏪 SELLERS KO TARGETED ALERT
     const targetSellerId = sellerId || finalResult.subOrder?.sellerId;
+    console.log(`🔍 [DEBUG 3]: targetSellerId identified as: ${targetSellerId}`);
 
     if (targetSellerId) {
       const emitOrderAlert = async (sId: any) => {
+        console.log(`🔍 [DEBUG 4]: emitOrderAlert started for SellerID: ${sId}`);
         let sellerUserId = null;
 
         try {
-          // 🚨 Drizzle se actual UserID (69) fetch karein
           const [sellerInfo] = await db
             .select()
             .from(sellersPgTable)
@@ -555,14 +557,14 @@ if (!isSelfDelivery) {
           
           if (sellerInfo) {
             sellerUserId = sellerInfo.userId;
+            console.log(`🔍 [DEBUG 5]: DB Fetch Success! Target UserID is: ${sellerUserId}`);
+          } else {
+            console.log(`🔍 [DEBUG 5 - ERROR]: No seller found in DB for ID: ${sId}`);
           }
         } catch (dbErr) {
-          console.error("❌ Error fetching seller userId for socket:", dbErr);
+          console.error("❌ [DEBUG DB ERROR]:", dbErr);
         }
 
-        console.log(`📡 [Socket Debug] SellerID: ${sId}, Target UserID: ${sellerUserId}`);
-
-        // Data object taiyaar karein
         const orderData = {
           orderId: finalResult.subOrder?.id,
           masterOrderId: finalResult.masterOrder?.id,
@@ -572,31 +574,37 @@ if (!isSelfDelivery) {
           createdAt: finalResult.masterOrder?.createdAt,
         };
 
-        // A. Purana Room (seller_room_14) - Web App ke liye
+        // A. Purana Room
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
-        console.log(`🚀 [Socket] Alert sent to: seller_room_${sId}`);
+        console.log(`🚀 [DEBUG 6]: Signal fired to seller_room_${sId}`);
 
-        // B. Naya Room (user_room_69) - Aapke Mobile App ke liye
+        // B. Naya Room (user_room_69)
         if (sellerUserId) {
-          io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-          console.log(`📱 [Socket] Alert sent to: user_room_${sellerUserId}`);
+          const targetRoom = `user_room_${sellerUserId}`;
+          console.log(`🎯 [DEBUG 7]: Ready to fire signal to TARGET ROOM: ${targetRoom}`);
+          
+          io.to(targetRoom).emit("new-order", orderData);
+          
+          console.log(`📱 [DEBUG 8]: FINAL SIGNAL SENT to ${targetRoom}`);
         } else {
-          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila, Mobile App ring nahi karega.");
+          console.log("❌ [DEBUG 7 - FAILURE]: sellerUserId missing, skipping Mobile room.");
         }
       };
 
-      // Call the async emitter
       await emitOrderAlert(targetSellerId);
     } else {
-      console.log("❌ [Socket Error]: No sellerId found to send alert.");
+      console.log("❌ [DEBUG 3 - ERROR]: No targetSellerId found, alert aborted.");
     }
+
+    console.log("🔍 [DEBUG 9]: Socket logic finished, sending 201 response.");
+
     // ✅ Success Response
     return res.status(201).json({
       message: "Order placed successfully!",
       orderId: finalResult.masterOrder.id,
       orderNumber: finalResult.masterOrder.orderNumber,
       data: finalResult.masterOrder,
-    }); 
+    });
   } catch (err: any) {
     console.error("❌ Unexpected error in placeOrderBuyNow:", err);
     return res.status(500).json({ 
