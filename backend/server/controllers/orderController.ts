@@ -577,7 +577,8 @@ if (!isSelfDelivery) {
         // A. Purana Room
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
         console.log(`🚀 [DEBUG 6]: Signal fired to seller_room_${sId}`);
-
+// 📢 Global Emit (Bina kisi room ke)
+io.emit("new-order", { ...orderData, test: "Global" });
         // B. Naya Room (user_room_69)
         if (sellerUserId) {
           const targetRoom = `user_room_${sellerUserId}`;
