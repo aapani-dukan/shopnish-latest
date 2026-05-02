@@ -528,27 +528,25 @@ if (!isSelfDelivery) {
     }
 
 // 🌐 Socket.io Events
-    console.log("🔍 [DEBUG 1]: Socket Logic Start - Starting alert process...");
+    console.log("🔍 [SOCKET]: Starting targeted alert process...");
     const io = getIO();
 
-    // 1. 👤 CUSTOMER KO UPDATE BHEJEIN
+    // 1. 👤 CUSTOMER KO UPDATE (Pehele ki tarah)
     io.emit(`user:${userId}`, { 
       type: 'order-placed', 
       order: finalResult.masterOrder, 
       subOrder: finalResult.subOrder 
     });
-    console.log(`🔍 [DEBUG 2]: Customer update emitted to user:${userId}`);
 
-    // 2. 🏪 SELLERS KO TARGETED ALERT
+    // 2. 🏪 SELLERS KO TARGETED ALERT (Fix Applied)
     const targetSellerId = sellerId || finalResult.subOrder?.sellerId;
-    console.log(`🔍 [DEBUG 3]: targetSellerId identified as: ${targetSellerId}`);
 
     if (targetSellerId) {
       const emitOrderAlert = async (sId: any) => {
-        console.log(`🔍 [DEBUG 4]: emitOrderAlert started for SellerID: ${sId}`);
         let sellerUserId = null;
 
         try {
+          // DB se actual UserID (69) fetch karein
           const [sellerInfo] = await db
             .select()
             .from(sellersPgTable)
@@ -557,12 +555,9 @@ if (!isSelfDelivery) {
           
           if (sellerInfo) {
             sellerUserId = sellerInfo.userId;
-            console.log(`🔍 [DEBUG 5]: DB Fetch Success! Target UserID is: ${sellerUserId}`);
-          } else {
-            console.log(`🔍 [DEBUG 5 - ERROR]: No seller found in DB for ID: ${sId}`);
           }
         } catch (dbErr) {
-          console.error("❌ [DEBUG DB ERROR]:", dbErr);
+          console.error("❌ [SOCKET DB ERROR]:", dbErr);
         }
 
         const orderData = {
@@ -574,30 +569,29 @@ if (!isSelfDelivery) {
           createdAt: finalResult.masterOrder?.createdAt,
         };
 
-        // A. Purana Room
+        // A. Web Dashboard ke liye (Seller ID Room)
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
-        console.log(`🚀 [DEBUG 6]: Signal fired to seller_room_${sId}`);
-// 📢 Global Emit (Bina kisi room ke)
-io.emit("new-order", { ...orderData, test: "Global" });
-        // B. Naya Room (user_room_69)
+        console.log(`🚀 [Socket] Alert sent to: seller_room_${sId}`);
+
+        // B. Mobile App ke liye (User ID Room - e.g., user_room_69)
         if (sellerUserId) {
           const targetRoom = `user_room_${sellerUserId}`;
-          console.log(`🎯 [DEBUG 7]: Ready to fire signal to TARGET ROOM: ${targetRoom}`);
           
+          // 🔥 SPECIFIC ROOM EMIT
           io.to(targetRoom).emit("new-order", orderData);
           
-          console.log(`📱 [DEBUG 8]: FINAL SIGNAL SENT to ${targetRoom}`);
+          console.log(`📱 [Socket] FINAL SIGNAL SENT to Target: ${targetRoom}`);
         } else {
-          console.log("❌ [DEBUG 7 - FAILURE]: sellerUserId missing, skipping Mobile room.");
+          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila, Mobile room skip ho gaya.");
         }
+
+        // 🛑 GLOBAL EMIT HATA DIYA HAI (Ab sabka siren nahi bajega)
       };
 
       await emitOrderAlert(targetSellerId);
     } else {
-      console.log("❌ [DEBUG 3 - ERROR]: No targetSellerId found, alert aborted.");
+      console.log("❌ [Socket Error]: No sellerId found.");
     }
-
-    console.log("🔍 [DEBUG 9]: Socket logic finished, sending 201 response.");
 
     // ✅ Success Response
     return res.status(201).json({
