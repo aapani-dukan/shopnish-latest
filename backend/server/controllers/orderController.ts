@@ -538,7 +538,7 @@ if (!isSelfDelivery) {
       subOrder: finalResult.subOrder 
     });
 
-    // 2. 🏪 SELLERS KO TARGETED ALERT (Fix Applied)
+    // 2. 🏪 SELLERS KO TARGETED ALERT (Direct Hit Logic)
     const targetSellerId = sellerId || finalResult.subOrder?.sellerId;
 
     if (targetSellerId) {
@@ -546,7 +546,6 @@ if (!isSelfDelivery) {
         let sellerUserId = null;
 
         try {
-          // DB se actual UserID (69) fetch karein
           const [sellerInfo] = await db
             .select()
             .from(sellersPgTable)
@@ -569,28 +568,26 @@ if (!isSelfDelivery) {
           createdAt: finalResult.masterOrder?.createdAt,
         };
 
-        // A. Web Dashboard ke liye (Seller ID Room)
+        // A. Web Dashboard (Room logic - Backup)
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
-        console.log(`🚀 [Socket] Alert sent to: seller_room_${sId}`);
 
-        // B. Mobile App ke liye (User ID Room - e.g., user_room_69)
+        // B. Mobile App (🚨 Direct Event Hit - The Solution)
         if (sellerUserId) {
-          const targetRoom = `user_room_${sellerUserId}`;
+          // Hum room ke bajaye seedha unique event name bhej rahe hain
+          // Isse "Room join nahi hua" wali bimari khatam ho jayegi
+          const userSpecificEvent = `new-order-user-${sellerUserId}`;
           
-          // 🔥 SPECIFIC ROOM EMIT
-          io.to(targetRoom).emit("new-order", orderData);
+          io.emit(userSpecificEvent, orderData); 
           
-          console.log(`📱 [Socket] FINAL SIGNAL SENT to Target: ${targetRoom}`);
+          console.log(`🎯 [DIRECT HIT]: Signal sent to ${userSpecificEvent}`);
+          console.log(`📱 [Socket]: Room backup also sent to user_room_${sellerUserId}`);
+          io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
         } else {
-          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila, Mobile room skip ho gaya.");
+          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila.");
         }
-
-        // 🛑 GLOBAL EMIT HATA DIYA HAI (Ab sabka siren nahi bajega)
       };
 
       await emitOrderAlert(targetSellerId);
-    } else {
-      console.log("❌ [Socket Error]: No sellerId found.");
     }
 
     // ✅ Success Response
