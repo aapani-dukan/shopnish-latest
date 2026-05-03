@@ -1079,14 +1079,13 @@ for (const item of subOrderData.items) {
     });
 
     // 3. 🏪 SELLERS KO TARGETED ALERT (The "Tring Tring" Loop)
-    // Cart mein multiple sellers ho sakte hain, hum Promise.all use karenge
     await Promise.all(transactionResult.tempSubOrders.map(async (subOrder: any) => {
       
       const sId = subOrder.sellerId || subOrder.seller_id;
-      let sellerUserId = subOrder.seller?.userId || subOrder.seller?.user_id;
+      let sellerUserId = null;
 
-      // 🚨 Drizzle Fix: Agar userId nahi mili (जो Cart orders में अक्सर होता है)
-      if (!sellerUserId && sId) {
+      // 🔍 Seller ki UserID fetch karein (Siren bajane ke liye sabse zaroori)
+      if (sId) {
         try {
           const [sellerInfo] = await db
             .select()
@@ -1095,14 +1094,12 @@ for (const item of subOrderData.items) {
             .limit(1);
           
           if (sellerInfo) {
-            sellerUserId = sellerInfo.userId; // Drizzle camelCase use karta hai
+            sellerUserId = sellerInfo.userId;
           }
         } catch (dbErr) {
           console.error("❌ Cart Socket Error fetching userId:", dbErr);
         }
       }
-
-      console.log(`📡 [Cart Socket Debug] SellerID: ${sId}, Target UserID: ${sellerUserId}`);
 
       const orderData = {
         orderId: subOrder.id,
@@ -1113,19 +1110,24 @@ for (const item of subOrderData.items) {
         createdAt: transactionResult.masterOrder.createdAt,
       };
 
-      // A. Purana Room (seller_room_14)
+      // A. Web Dashboard ke liye (Room Logic)
       if (sId) {
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
-        console.log(`🚀 [Socket Cart] Alert sent to: seller_room_${sId}`);
       }
 
-      // B. ⚡ Naya Room (user_room_69) - Mobile App ke liye
+      // B. ⚡ MOBILE APP KE LIYE (Direct Hit & Room Backup)
       if (sellerUserId) {
+        const userSpecificEvent = `new-order-user-${sellerUserId}`;
+        
+        // 🚨 DIRECT HIT (Ye wahi event hai jo mobile app listen kar rahi hai)
+        io.emit(userSpecificEvent, orderData);
+        
+        // Room Backup (just in case)
         io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-        console.log(`📱 [Socket Cart] Alert sent to: user_room_${sellerUserId}`);
+
+        console.log(`🎯 [CART DIRECT HIT]: Signal fired for User: ${sellerUserId}`);
       }
     }));
-
     return res.status(201).json({
         message: "Orders placed successfully!",
         masterOrderId: transactionResult.masterOrder.id,
