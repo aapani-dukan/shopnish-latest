@@ -1076,7 +1076,6 @@ sellerRouter.get(
   }
 );
 // 📍 Naya Route: PATCH /api/sellers/profile/me
-// Isme ID ki zaroorat nahi hai, backend khud user dhoond lega
 sellerRouter.patch(
   '/profile/me', 
   requireSellerAuth, 
@@ -1093,8 +1092,6 @@ sellerRouter.patch(
       if (!sellerProfile) {
         return res.status(404).json({ error: "Seller profile not found." });
       }
-
-      // 🚩 Hum ID ko backend mein hi inject kar rahe hain
       req.params.id = String(sellerProfile.id); 
       
       // Ab seedha wahi update logic call karein
@@ -1107,13 +1104,11 @@ sellerRouter.patch(
 // 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
 sellerRouter.patch(
   '/:id',
-  requireSellerAuth, // ✅ अब यह isSeller: true चेक करेगा, पुराने authorize(['seller']) की ज़रूरत नहीं
+  requireSellerAuth, 
   async (req: any, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
       const paramsId = parseInt(req.params.id);
-
-      // 🛑 Security Check: सुनिश्चित करें कि सेलर केवल अपनी खुद की प्रोफ़ाइल अपडेट कर रहा है
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
@@ -1183,7 +1178,6 @@ sellerRouter.patch(
       let finalImageUrl = existingProduct.image;
 
       if (newImageUrlFromClient !== undefined && newImageUrlFromClient !== existingProduct.image) {
-        // अगर नई इमेज आई है या इमेज हटाई गई है, तो पुरानी वाली क्लाउड से डिलीट करें
         if (existingProduct.image) {
           console.log(`[CLEANUP] Deleting old image: ${existingProduct.image}`);
           await deleteImage(existingProduct.image).catch(err => 
@@ -1234,7 +1228,6 @@ sellerRouter.patch(
   }
 );
     // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
-    // --- ✅ नया API: /api/sellers/sub-orders/:id/status ---
 sellerRouter.patch(
   '/sub-orders/:id/status',
   requireSellerAuth,
@@ -1271,7 +1264,7 @@ sellerRouter.patch(
         ),
         with: {
           masterOrder: {
-            columns: { id: true, customerId: true }
+            columns: { id: true, customerId: true,orderNumber: true, status: true}
           },
           deliveryBatch: {
             columns: { id: true, status: true, deliveryBoyId: true }
@@ -1283,7 +1276,6 @@ sellerRouter.patch(
         return res.status(403).json({ error: 'Not authorized to update this sub-order or sub-order not found.' });
       }
 
-      // --- स्थिति परिवर्तन वैलिडेशन (Transition Logic) ---
       const currentStatus = existingSubOrder.status;
       const validStatusTransitions: { [key: string]: string[] } = {
         'pending': ['accepted', 'rejected'],
@@ -1296,7 +1288,6 @@ sellerRouter.patch(
         'rejected': [],
         'cancelled': [],
          'delivered_by_delivery_boy': [],
-        // पुराने या अप्रासंगिक स्टेटस को यहां हैंडल करें यदि वे डेटाबेस में अभी भी हैं
       };
 
       if (!validStatusTransitions[currentStatus]?.includes(newStatus) && newStatus !== currentStatus) {
@@ -1305,8 +1296,6 @@ sellerRouter.patch(
       
       let finalStatusForSubOrder = newStatus;
       
-      // यदि सेलर सेल्फ-डिलीवरी नहीं कर रहा है लेकिन 'delivered_by_seller' भेजने की कोशिश कर रहा है, 
-      // तो उसे रोकें (हालांकि क्लाइंट-साइड f low को अब इसे रोकना चाहिए)।
       if (newStatus === 'delivered_by_seller' && !existingSubOrder.isSelfDeliveryBySeller) {
           return res.status(403).json({ error: 'Unauthorized delivery status change.' });
       }
@@ -1360,22 +1349,11 @@ sellerRouter.patch(
           so.status === 'delivered_by_seller' ||
           so.status === 'cancelled' ||
           so.status === 'rejected'
-          // **नोट:** 'delivered' (डिलीवरी बॉय द्वारा) को यहाँ शामिल न करें, 
-          // क्योंकि इस रूट का उद्देश्य केवल सेलर के कार्यों के आधार पर Master Order को 'processing' पर सेट करना है।
         );
-
-        // ... (विक्रेता के सब-ऑर्डर अपडेट के बाद का लॉजिक)
-
-        // 3. मास्टर ऑर्डर की स्थिति अपडेट करने के लिए जाँच करें (जारी...)
-        // ... (relatedSubOrders और allSubOrdersReadyOrFinalizedBySeller की गणना यहाँ की जाती है)
         
         if (allSubOrdersReadyOrFinalizedBySeller) {
           const [currentMasterOrder] = await tx.select().from(orders).where(eq(orders.id, existingSubOrder.masterOrder.id));
           
-          // --- ✅ लॉजिक अपडेट: ENUM त्रुटि निवारण और टर्मिनल स्टेटस गार्ड ---
-          
-          // 1. यदि मास्टर ऑर्डर पहले से ही अंतिम (Terminal) स्थिति में है, तो अपडेट न करें।
-          //    टर्मिनल स्टेटस: 'fulfilled', 'cancelled', 'failed'
           if (
               currentMasterOrder && 
               currentMasterOrder.status !== 'fulfilled' &&
@@ -1383,8 +1361,6 @@ sellerRouter.patch(
               currentMasterOrder.status !== 'failed'
           ) {
             
-            // 2. ENUM सुधार: 'processing' को 'confirmed' से बदलें
-            //    ('confirmed' आपके ENUM में विक्रेता द्वारा स्वीकार किए जाने के बाद की अगली सक्रिय स्थिति है)
             const newMasterStatus = 'confirmed'; 
             
             // 3. मास्टर ऑर्डर अपडेट करें
@@ -1410,20 +1386,11 @@ sellerRouter.patch(
           }
         }
         
-
-        // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
-
-        // विक्रेता के /sub-orders/:id/status रूट के अंदर
-
 // 4. डिलीवरी बैच की स्थिति अपडेट करें (यदि sub-order 'ready_for_pickup' है)
         if (finalStatusForSubOrder === 'ready_for_pickup' && existingSubOrder.deliveryBatch) {
           
-          // ✅ सिर्फ़ तभी आगे बढ़ें जब डिलीवरी बैच अभी भी 'pending' स्थिति में हो
           if (existingSubOrder.deliveryBatch.status === 'pending') { 
             
-            // 🛑 ध्यान दें: 'assigned' पर अपडेट करने वाले कोड को हटा दिया गया है।
-            // बैच का स्टेटस 'pending' ही रहेगा।
-
             // ✅ ऑर्डर ट्रैकिंग में एंट्री जोड़ें (status: pending का उपयोग करके)
             const currentBatchStatus = existingSubOrder.deliveryBatch.status; // 'pending'
             
@@ -1438,40 +1405,50 @@ sellerRouter.patch(
             }as any);
             
             // --- ✅ OLD STYLE EMIT, BUT NEW LOGIC ---
+            // --- ✅ SIREN & BATCH ALERT LOGIC (DELIVERY BOYS) ---
+            const io = getIO();
             
-            // 1. बैच स्टेटस अपडेट को emit करें (पुराने स्टाइल का उपयोग करते हुए)
-            getIO().emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
-              // ✅ स्टेटस अभी भी 'pending' है, लेकिन यह दर्शाता है कि यह पिकअप के लिए तैयार है
+            // 1. Alert Data taiyar karein
+            const batchAlertData = {
+              deliveryBatchId: existingSubOrder.deliveryBatch.id,
+              batchNumber: `BTCH-${existingSubOrder.deliveryBatch.id}`,
+              orderNumber: existingSubOrder.masterOrder.orderNumber,
+              message: "Naya delivery batch pickup ke liye taiyar hai!",
+              status: currentBatchStatus,
+            };
+
+            // 2. 🚨 SIREN SIGNAL (Direct Hit for all online Delivery Boys)
+            // Mobile App is 'new-available-delivery' ko listen karegi siren bajane ke liye
+            io.emit('new-available-delivery', batchAlertData);
+
+            // 3. Purane Style ke updates (Background updates ke liye)
+            io.emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
               status: currentBatchStatus, 
               message: `Delivery batch is ready for claiming.`,
-            });
-            
-            // 2. किसी विशिष्ट डिलीवरी बॉय को सूचित न करें, क्योंकि यह NULL है।
-            // पुराने IF ब्लॉक को हटा दिया गया है, क्योंकि यह अब असाइन नहीं हुआ है।
-            
-            // ✅ सभी डिलीवरी बॉय को सूचना भेजें कि एक नया बैच उपलब्ध है (यह सुनिश्चित करता है कि वे इसे अपने 'Available' टैब में देखें)
-            getIO().emit(`available-batches:new-batch-ready`, {
-                 deliveryBatchId: existingSubOrder.deliveryBatch.id,
-                 message: "A new batch is available for claiming!",
-            });
-            // --- END OF EMIT ---
+            });           
+
+            io.emit(`available-batches:new-batch-ready`, batchAlertData);
+
+            console.log(`🚚 [DELIVERY SIREN]: Broadcasted for Batch ID: ${existingSubOrder.deliveryBatch.id}`);
+            // --- END OF SIREN LOGIC ---
             
           } 
         }
         
-        // 5. Socket.io: कस्टमर और सेलर को रियल-टाइम अपडेट भेजें
-        getIO().emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
+        // 5. Socket.io: कस्टमर और सेलर को रियल-TIME अपडेट भेजें
+        const io = getIO(); // Ensure io is available
+        io.emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
           subOrderId: subOrderId,
           status: finalStatusForSubOrder,
           masterOrderId: existingSubOrder.masterOrder.id,
           message: `Your order from ${sellerProfile.businessName} is now '${finalStatusForSubOrder}'.`,
         });
-        getIO().emit(`seller:${sellerId}:order-update`, {
+        
+        io.emit(`seller:${sellerId}:order-update`, {
           subOrderId: subOrderId,
           status: finalStatusForSubOrder,
           masterOrderId: existingSubOrder.masterOrder.id,
         });
-
         return res.status(200).json({
           message: 'Sub-order status updated successfully.',
           subOrder: updatedSubOrder,
