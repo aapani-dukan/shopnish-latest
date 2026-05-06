@@ -1,28 +1,27 @@
 import { Expo, ExpoPushMessage } from 'expo-server-sdk';
 
 let expo = new Expo();
-
 export const sendNotification = async (
   targetToken: string, 
   title: string, 
   body: string, 
   data: any = {}
 ) => {
-  // 1. Check karein ki token sahi hai ya nahi
   if (!Expo.isExpoPushToken(targetToken)) {
     console.error(`❌ [Notification] Invalid Token: ${targetToken}`);
     return;
   }
 
-  // 2. Message Object (Yahan 'as const' lagana zaroori hai)
+  // 2. Message Object (Custom Sound ke liye update)
   let messages: ExpoPushMessage[] = [{
     to: targetToken,
-    sound: 'default',
+    // sound: 'default', // 👈 Ise hata dein
+    sound: 'siren.mp3',   // 👈 Siren file ka naam (extension ke saath)
     title: title,
     body: body,
     data: data,
-    priority: 'high', // 🔥 Ise humne 'high' rakha hai
-    channelId: 'default',
+    priority: 'high',
+    channelId: 'orders_channel', // 👈 'default' ki jagah custom channel ID
   }];
 
   try {
@@ -30,7 +29,7 @@ export const sendNotification = async (
     for (let chunk of chunks) {
       await expo.sendPushNotificationsAsync(chunk);
     }
-    console.log("🔔 [Notification] Tring Tring! Message sent successfully.");
+    console.log("🔔 [Notification] Siren signal sent to Expo!");
   } catch (error) {
     console.error("❌ [Notification] Error sending message:", error);
   }
