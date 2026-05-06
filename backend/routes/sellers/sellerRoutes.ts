@@ -9,16 +9,13 @@ import {
   categories,
   products,
   stores,
-  // orders, // ✅ अब master orders की बजाय subOrders पर काम करेंगे
-  // orderItems, // ✅ अब orderItems सीधे subOrders से जुड़े हैं
-  // orderStatusEnum, // ✅ अब masterOrderStatusEnum और subOrderStatusEnum का उपयोग करेंगे
-  subOrders, // ✅ subOrders इम्पोर्ट करें
-  subOrderStatusEnum, // ✅ subOrderStatusEnum इम्पोर्ट करें
-  orders, // ✅ Master Orders इम्पोर्ट करें (मास्टर स्टेटस अपडेट के लिए)
-  masterOrderStatusEnum, // ✅ Master Order Status इम्पोर्ट करें
-  orderTracking, // ✅ orderTracking इम्पोर्ट करें
-  deliveryBatches, // ✅ deliveryBatches इम्पोर्ट करें
-  deliveryStatusEnum, // ✅ deliveryStatusEnum इम्पोर्ट करें
+  subOrders, 
+  subOrderStatusEnum, 
+  orders, 
+  masterOrderStatusEnum, 
+  orderTracking, 
+  deliveryBatches, 
+  deliveryStatusEnum, 
   // insertSellerSchema,
   updateSellerSchema
 } from '../../shared/backend/schema';
@@ -189,18 +186,7 @@ const sellerProfileWithRating = sellerProfile as unknown as { rating: number | n
     // विकल्प 1: यदि sellerProfile में सीधे रेटिंग है (आपका वर्तमान कार्यान्वयन)
     const averageRatingFromProfile = sellerProfileWithRating.rating || 0;
 
-    // विकल्प 2: यदि आप सभी उत्पादों की औसत रेटिंग की गणना करना चाहते हैं
-    // (यह कोड अनकमेंट करें यदि आप इसे उपयोग करना चाहते हैं और products.rating कॉलम मौजूद है)
-    let calculatedAverageRating = averageRatingFromProfile; // Default to profile rating
-
-    // const [{ avgProductRatingResult }] = await db
-    //   .select({ avgProductRatingResult: sql<number>`avg(${products.rating}::numeric)` })
-    //   .from(products)
-    //   .where(eq(products.sellerId, sellerId));
-
-    // if (avgProductRatingResult !== null && avgProductRatingResult !== undefined) {
-    //   calculatedAverageRating = parseFloat(avgProductRatingResult.toFixed(1));
-    // }
+    let calculatedAverageRating = averageRatingFromProfile; 
 
     // 3. सेलर प्रोफाइल में मेट्रिक्स जोड़ें
     // 3. Response के अंत में यूजर का करंट स्टेटस भी भेजें
@@ -484,7 +470,6 @@ sellerRouter.get('/products/:productId/delivery-override', requireSellerAuth, as
     next(error);
   }
 });
-// backend/routes/sellerRoutes.ts में जोड़ें
 
 // ✅ New: GET /api/seller/products/delivery-overview
 sellerRouter.get('/products/delivery-overview', requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
@@ -655,11 +640,6 @@ sellerRouter.put('/profile/delivery-settings', verifyToken as any,requireSellerA
         updateData.deliveryRadius = null;
     }
 
-    // latitude और longitude को अपडेट करें यदि वे दिए गए हैं
-    // ध्यान दें: latitude/longitude आमतौर पर सेलर के पते से ऑटो-जेनरेट होते हैं,
-    // लेकिन अगर फ्रंटएंड से इन्हें अपडेट करने की अनुमति है तो यहां शामिल करें।
-    // सुरक्षा कारणों से, इन्हें केवल तभी अपडेट करना चाहिए जब यह एक स्पष्ट कार्रवाई हो।
-    // यहाँ मैं मान रहा हूँ कि आप इसे अपडेट करना चाहते हैं:
     if (typeof latitude === 'number' && typeof longitude === 'number') {
         updateData.latitude = latitude;
         updateData.longitude = longitude;
@@ -803,9 +783,6 @@ sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, as
       }
     });
 
-// सुनिश्चित करें कि db, products, sellersPgTable, verifyToken, requireSellerAuth, eq, and, deleteImage
-// और AuthenticatedRequest, Response, NextFunction, console.log, parseInt आदि पहले ही इंपोर्टेड (imported) हैं।
-
 // ✅ DELETE /api/sellers/products/:productId (उत्पाद डिलीट करें)
 sellerRouter.delete('/products/:productId', verifyToken as any, requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
   console.log(`🗑️ [API] Received seller request to delete product ${req.params.productId}.`);
@@ -863,7 +840,6 @@ sellerRouter.delete('/products/:productId', verifyToken as any, requireSellerAut
   }
 });
 
-// ✅ POST /api/sellers/products (नया प्रोडक्ट बनाएं)
 // ✅ POST /api/sellers/products (FINAL UPDATED VERSION)
 sellerRouter.post(
   '/products',
@@ -976,7 +952,7 @@ sellerRouter.post(
     }
   }
 );
-// 📍 PATCH /api/sellers/toggle-status - स्टोर को ऑनलाइन/ऑफलाइन करें
+
 // 📍 PATCH /api/sellers/toggle-status
 sellerRouter.patch(
   '/toggle-status',
@@ -1264,7 +1240,7 @@ sellerRouter.patch(
         ),
         with: {
           masterOrder: {
-            columns: { id: true, customerId: true,orderNumber: true, status: true}
+            columns: { id: true, customerId: true,orderNumber: true, status: true,deliveryAddress: true,customer: true}
           },
           deliveryBatch: {
             columns: { id: true, status: true, deliveryBoyId: true }
@@ -1404,24 +1380,37 @@ sellerRouter.patch(
               message: `Delivery batch is now Ready for Claiming (Status: Pending) by seller.`, 
             }as any);
             
-            // --- ✅ OLD STYLE EMIT, BUT NEW LOGIC ---
+          
             // --- ✅ SIREN & BATCH ALERT LOGIC (DELIVERY BOYS) ---
-            const io = getIO();
+           const io = getIO();
             
-            // 1. Alert Data taiyar karein
-            const batchAlertData = {
-              deliveryBatchId: existingSubOrder.deliveryBatch.id,
-              batchNumber: `BTCH-${existingSubOrder.deliveryBatch.id}`,
-              orderNumber: existingSubOrder.masterOrder.orderNumber,
-              message: "Naya delivery batch pickup ke liye taiyar hai!",
-              status: currentBatchStatus,
-            };
+            // 🛑 Data nikaalein (existingSubOrder se)
+            // Dhyaan dein: existingSubOrder fetch karte waqt masterOrder.deliveryAddress aur customer included hona chahiye
+           const masterOrderObj = existingSubOrder.masterOrder as any;
+
+const pickupLocation = masterOrderObj?.deliveryAddress?.addressLine1 || 'Shop Location';
+const city = masterOrderObj?.deliveryAddress?.city || '';
+
+const customerName = masterOrderObj?.customer 
+    ? `${masterOrderObj.customer.firstName} ${masterOrderObj.customer.lastName || ''}`.trim() 
+    : 'Customer';
+
+            // 1. Alert Data taiyar karein (Ab details ke saath)
+           const batchAlertData = {
+    deliveryBatchId: existingSubOrder.deliveryBatch.id,
+    batchNumber: `BTCH-${existingSubOrder.deliveryBatch.id}`,
+    orderNumber: masterOrderObj?.orderNumber || 'N/A', // Yahan bhi safe check
+    pickupLocation: pickupLocation, 
+    city: city,
+    customerName: customerName,
+    message: "Naya delivery batch pickup ke liye taiyar hai!",
+    status: currentBatchStatus,
+};
 
             // 2. 🚨 SIREN SIGNAL (Direct Hit for all online Delivery Boys)
-            // Mobile App is 'new-available-delivery' ko listen karegi siren bajane ke liye
             io.emit('new-available-delivery', batchAlertData);
 
-            // 3. Purane Style ke updates (Background updates ke liye)
+            // 3. Purane Style ke updates
             io.emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
               status: currentBatchStatus, 
               message: `Delivery batch is ready for claiming.`,
@@ -1436,7 +1425,7 @@ sellerRouter.patch(
         }
         
         // 5. Socket.io: कस्टमर और सेलर को रियल-TIME अपडेट भेजें
-        const io = getIO(); // Ensure io is available
+      const io = getIO();
         io.emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
           subOrderId: subOrderId,
           status: finalStatusForSubOrder,
@@ -1449,6 +1438,7 @@ sellerRouter.patch(
           status: finalStatusForSubOrder,
           masterOrderId: existingSubOrder.masterOrder.id,
         });
+
         return res.status(200).json({
           message: 'Sub-order status updated successfully.',
           subOrder: updatedSubOrder,
@@ -1461,7 +1451,8 @@ sellerRouter.patch(
       return res.status(500).json({ error: error.message || 'Failed to update sub-order status.' });
     }
   }
-);
+); 
+            
 // ✅ नया API: /api/sellers/sub-orders/:orderId/details
 sellerRouter.get('/sub-orders/:orderId/details', requireSellerAuth, async (req: any, res: Response) => {
   try {
