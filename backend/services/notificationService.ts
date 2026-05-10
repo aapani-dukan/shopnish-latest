@@ -13,16 +13,15 @@ export const sendNotification = async (
   }
 
   // 2. Message Object (Custom Sound ke liye update)
-  let messages: ExpoPushMessage[] = [{
+ let messages: ExpoPushMessage[] = [{
     to: targetToken,
-    // sound: 'default', // 👈 Ise hata dein
-    sound: 'siren.mp3',   // 👈 Siren file ka naam (extension ke saath)
+    sound: 'default', // 👈 'default' rakho, channel sound ko handle karega
     title: title,
     body: body,
     data: data,
     priority: 'high',
-    channelId: 'orders_channel', // 👈 'default' ki jagah custom channel ID
-  }];
+    channelId: 'orders_siren_v1', // 👈 Naya Unique ID
+}];
 
   try {
     let chunks = expo.chunkPushNotifications(messages);
