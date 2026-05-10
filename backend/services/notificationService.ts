@@ -13,7 +13,7 @@ export const sendNotification = async (
   }
 
   // 2. Message Object (Custom Sound ke liye update)
- let messages: ExpoPushMessage[] = [{
+ let messages: any[] = [{
     to: targetToken,
     sound: 'default', // 👈 'default' rakho, channel sound ko handle karega
     title: title,
@@ -21,6 +21,8 @@ export const sendNotification = async (
     data: data,
     priority: 'high',
     channelId: 'orders_siren_v1', // 👈 Naya Unique ID
+    _displayInForeground: true, 
+    badge: 1,
 }];
 
   try {
