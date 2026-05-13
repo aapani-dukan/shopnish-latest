@@ -12,19 +12,25 @@ export const sendNotification = async (
     return;
   }
 
-  // 2. Message Object (Custom Sound ke liye update)
- let messages: any[] = [{
+  // 2. Message Object (Ab ye perfect hai background aur killed state ke liye)
+let messages: any[] = [{
     to: targetToken,
-    sound: 'default', // 👈 'default' rakho, channel sound ko handle karega
     title: title,
     body: body,
     data: data,
-    priority: 'high',
-    channelId: 'orders_siren_v1', // 👈 Naya Unique ID
+    priority: 'high', // Root priority
+    sound: 'default', // Expo compatibility ke liye
+    
+    // 🚨 YE BLOCK ADD KARNA SABSE ZAROORI HAI 🚨
+    android: {
+      channelId: 'orders_siren_v10', // Wahi ID jo mobile app mein hai
+      priority: 'high',             // OS ko bolta hai turant jagaao app ko
+      sound: 'siren.mp3',           // Background mein isi file ko bajayega
+    },
+
     _displayInForeground: true, 
     badge: 1,
 }];
-
   try {
     let chunks = expo.chunkPushNotifications(messages);
     for (let chunk of chunks) {
