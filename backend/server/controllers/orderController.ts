@@ -1,33 +1,32 @@
 
 // backend/server/controllers/ordercontroller.ts
-import { Request, Response, NextFunction } from "express"; // ✅ express imports को सही करें
+import { Request, Response, NextFunction } from "express"; 
 import { v4 as uuidv4 } from "uuid";
 import { db } from "../db";
 import {
   deliveryAddresses,
-  orders, // Master Order
-  subOrders, // Sub-Orders per seller
+  orders, 
+  subOrders, 
   deliveryBatches, 
   adminSettings,
-  orderItems, // Items now link to subOrders
+  orderItems, 
   cartItems,
   orderTracking,
   products,
   users,
-  masterOrderStatusEnum, // ✅ Master Order Status
-  subOrderStatusEnum, // ✅ Sub-Order Status
-  deliveryStatusEnum, // ✅ Delivery Batch Status
+  masterOrderStatusEnum, 
+  subOrderStatusEnum, 
+  deliveryStatusEnum, 
   approvalStatusEnum,
   sellersPgTable,
-  stores, // ✅ Stores टेबल इम्पोर्ट करें
-  deliveryBoys, // ✅ Delivery Boys इम्पोर्ट करें (रिलेशंस के लिए)
-  // paymentMethodEnum, // ✅ यदि paymentMethodEnum का उपयोग कर रहे हो तो इम्पोर्ट करें
-  // paymentStatusEnum, // ✅ यदि paymentStatusEnum का उपयोग कर रहे हो तो इम्पोर्ट करें
-} from "../../shared/backend/schema"; // ✅ schema फ़ाइल से इम्पोर्ट करें
+  stores, 
+  deliveryBoys, 
+  
+} from "../../shared/backend/schema"; 
 import { eq, desc, and, inArray, sql,isNull } from "drizzle-orm";
-import { AuthenticatedRequest } from "../middleware/verifyToken"; // ✅ AuthenticatedRequest को सही नाम से इम्पोर्ट करें
-import { getIO } from "../socket"; // ✅ getIo को सही नाम से इम्पोर्ट करें
-import { json } from "drizzle-orm/pg-core"; // ✅ json को drizzle से इम्पोर्ट करें
+import { AuthenticatedRequest } from "../middleware/verifyToken"; 
+ import { getIO } from "../socket"; 
+import { json } from "drizzle-orm/pg-core"; 
 console.log({
   subOrders,
   sellersPgTable,
@@ -38,11 +37,7 @@ console.log({
 });
 import { ProductService } from "../../services/productService";
 import { sendNotification } from '../../services/notificationService';
-// --- सहायक कार्य (Helper Functions) ---
 
-// ध्यान दें: यह Haversine फ़ॉर्मूला के लिए एक सरल प्लेसहोल्डर है।
-// उत्पादन (Production) में, आपको एक सटीक कार्यान्वयन या PostGIS का उपयोग करना चाहिए।
-// PostGIS के बिना, यह एक अनुमानित दूरी है।
 const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
   if (lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0) return 9999; // यदि कोई अमान्य समन्वय है तो बड़ी दूरी लौटाएं
 
@@ -508,35 +503,56 @@ if (!isSelfDelivery) {
     }); 
 
     // 🔥 TRING TRING LOGIC
-    // 🔥 TRING TRING LOGIC (Killed State and High Priority Siren Fix)
-    const finalResult = result as any;
+    // 🔥 TRING TRING LOGIC (100% Non-Blocking & Safe Direct DB Fetch)
+const finalResult = result as any;
+const sellerIdForNotification = sellerId || finalResult.subOrder?.sellerId || finalResult.masterOrder?.sellerId;
 
-    if (finalResult?.sellerToken) {
-      try {
-        console.log(`📡 [FCM PUSH]: Initiating siren alert for token: ${finalResult.sellerToken.substring(0, 15)}...`);
-        
-        // Notification fire (Non-blocking)
-        sendNotification(
-          finalResult.sellerToken,
-          "🚨 Naya Order Aaya Hai!", // Title
-          `Order #${finalResult.masterOrder.orderNumber} mila hai. ₹${finalResult.masterOrder.total} ka dhandha!`, // Body
-          { 
-            orderId: String(finalResult.masterOrder.id), 
-            type: "NEW_ORDER" 
-          }
-        ).then(() => {
-          console.log("🔔 [FCM Success]: Push package delivered to Expo server successfully!");
-        }).catch(e => {
-          console.error("❌ [FCM Error inside catch]:", e);
-        });
+if (sellerIdForNotification) {
+  // 🚨 YE ASYNC BLOCK APP KO SLOW HONE SE BACHAYEGA (Background Execution)
+  (async () => {
+    try {
+      // 1. Sellers table se userId nikaalein
+      const [sellerRow] = await db
+        .select()
+        .from(sellersPgTable)
+        .where(eq(sellersPgTable.id, Number(sellerIdForNotification)))
+        .limit(1);
 
-      } catch (notifyErr) {
-        console.error("⚠️ Notification invocation failed:", notifyErr);
+      if (sellerRow && sellerRow.userId) {
+        // 2. Users table se fcm_token nikaalein
+        const [userRow] = await db
+          .select()
+          .from(users)
+          .where(eq(users.id, Number(sellerRow.userId)))
+          .limit(1);
+
+        if (userRow && userRow.fcmToken) {
+          console.log(`📡 [FCM PUSH]: Token found in DB! Sending siren to: ${userRow.fcmToken.substring(0, 15)}...`);
+          
+          // Helper function call kiya
+          await sendNotification(
+            userRow.fcmToken, 
+            "🚨 Naya Order Aaya Hai!",
+            `Order #${finalResult.masterOrder?.orderNumber || ''} mila hai. ₹${finalResult.masterOrder?.total || ''} ka dhandha!`,
+            { 
+              orderId: String(finalResult.masterOrder?.id || ''), 
+              type: "NEW_ORDER" 
+            }
+          );
+          console.log("🔔 [FCM Success]: Background siren notification sent via DB Token!");
+        } else {
+          console.log("⚠️ [FCM Error]: Users table mein fcm_token khali (null) hai!");
+        }
+      } else {
+        console.log("⚠️ [FCM Error]: Sellers table mein id nahi mili ya userId missing hai!");
       }
-    } else {
-      console.log("⚠️ [FCM Warning]: sellerToken nahi mila, check database query response!");
+    } catch (dbFetchErr) {
+      console.error("❌ [FCM DB Fetch Error]: Background notification bypass fail hua:", dbFetchErr);
     }
-
+  })(); // 👈 Yeh parenthesis isko background mein turant chala deti hai
+} else {
+  console.log("⚠️ [FCM Error]: Id hi nahi mili, notification skip ho gaya.");
+}
 // 🌐 Socket.io Events
     console.log("🔍 [SOCKET]: Starting targeted alert process...");
     const io = getIO();
@@ -583,8 +599,7 @@ if (!isSelfDelivery) {
 
         // B. Mobile App (🚨 Direct Event Hit - The Solution)
         if (sellerUserId) {
-          // Hum room ke bajaye seedha unique event name bhej rahe hain
-          // Isse "Room join nahi hua" wali bimari khatam ho jayegi
+         
           const userSpecificEvent = `new-order-user-${sellerUserId}`;
           
           io.emit(userSpecificEvent, orderData); 
@@ -636,7 +651,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
       deliveryCharge: frontendDeliveryCharge,
     } = req.body;
 
-    // --- इनपुट वैलिडेशन ---
     if (!deliveryAddressId && !newDeliveryAddress) {
       return res.status(400).json({ message: "Delivery address is required. Provide deliveryAddressId or newDeliveryAddress." });
     }
@@ -644,7 +658,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
       return res.status(400).json({ message: "Invalid or missing payment method." });
     }
     
-    // Coerce numeric fields safely
     const subtotal = typeof frontendSubtotal === "number" ? frontendSubtotal : parseFloat(frontendSubtotal);
     const total = typeof frontendTotal === "number" ? frontendTotal : parseFloat(frontendTotal);
     const deliveryCharge = typeof frontendDeliveryCharge === "number" ? frontendDeliveryCharge : parseFloat(frontendDeliveryCharge);
@@ -669,22 +682,16 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
             pincode: finalPincode,
         } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
   if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
-            // हम यहाँ users टेबल को tx के माध्यम से अपडेट कर रहे हैं
             await tx.update(users)
                 .set({
                     phone: userPhoneNumberForUpdate,
                     updatedAt: new Date(),
                 })
                 .where(
-                    // 1. उपयोगकर्ता आईडी से मिलान करें
                     eq(users.id, userId), 
-                    // 2. OPTIONAL: केवल तभी अपडेट करें जब फ़ोन नंबर अभी खाली हो
-                    // or(isNull(users.phone), eq(users.phone, '')) 
-                    // सुरक्षा के लिए, हम सीधे अपडेट कर सकते हैं।
                 );
             console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
   }
-        // --- Fetch and Validate Cart Items ---
         const userCartItems = await tx.query.cartItems.findMany({
           where: eq(cartItems.userId, userId),
           with: {
@@ -895,7 +902,6 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
 
             if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
 
-          // ... existing code ...
 // 3. Order Items बनाएं (Self-Delivery)
 for (const item of subOrderData.items) {
     // 🛑 HIGH-CLASS ADDITION: Update Inventory First
@@ -1040,30 +1046,57 @@ for (const item of subOrderData.items) {
     }
 
     // 🛑 [TRING TRING LOGIC] - High Class Notification Flow
-    // Ise try-catch mein rakha hai taaki agar galti se notification fail ho, toh Order placement na ruke
+    // 🔥 TRING TRING LOGIC (Cart Order - 100% Non-Blocking & Safe Direct DB Fetch)
     try {
         const uniqueSellerIds = Array.from(new Set(transactionResult.tempSubOrders.map(ts => ts.sellerId)));
         
         if (uniqueSellerIds.length > 0) {
-            const sellersWithTokens = await db.query.users.findMany({
-                where: inArray(users.id, uniqueSellerIds),
-                columns: { id: true, fcmToken: true }
-            });
+            // 🚨 BACKGROUND EXECUTION: Yeh async block cart order flow ko ratti bhar bhi slow nahi hone dega
+            (async () => {
+                try {
+                    for (const sId of uniqueSellerIds) {
+                        if (!sId) continue;
 
-            // Har seller ko individually notify karein
-            sellersWithTokens.forEach(sellerUser => {
-                if (sellerUser.fcmToken) {
-                    sendNotification(
-                        sellerUser.fcmToken,
-                        "Naya Order Mila Hai! 🛍️",
-                        `Aapki dukaan par ek naya order #${transactionResult.masterOrder.orderNumber} aaya hai.`,
-                        { 
-                            type: 'NEW_ORDER', 
-                            masterOrderId: transactionResult.masterOrder.id.toString() 
+                        // 1. Sellers table se userId nikaalein (Kyunki uniqueSellerIds mein sellers.id hain)
+                        const [sellerRow] = await db
+                            .select()
+                            .from(sellersPgTable)
+                            .where(eq(sellersPgTable.id, Number(sId)))
+                            .limit(1);
+
+                        if (sellerRow && sellerRow.userId) {
+                            // 2. Users table se fcmToken nikaalein (Sahi schema property)
+                            const [userRow] = await db
+                                .select()
+                                .from(users)
+                                .where(eq(users.id, Number(sellerRow.userId)))
+                                .limit(1);
+
+                            if (userRow && userRow.fcmToken) {
+                                console.log(`📡 [FCM PUSH - CART]: Token found! Sending siren to seller: ${sellerRow.id}`);
+                                
+                                // Helper function call kiya (v10 channel aur max priority ke saath)
+                                await sendNotification(
+                                    userRow.fcmToken, 
+                                    "🚨 Naya Order Aaya Hai! (Cart)",
+                                    `Aapki dukaan par ek naya order #${transactionResult.masterOrder.orderNumber} aaya hai.`,
+                                    { 
+                                        type: 'NEW_ORDER', 
+                                        masterOrderId: transactionResult.masterOrder.id.toString() 
+                                    }
+                                );
+                                console.log(`🔔 [FCM Success]: Background siren sent to seller: ${sellerRow.id}`);
+                            } else {
+                                console.log(`⚠️ [FCM Error]: User ${sellerRow.userId} ka fcmToken khali hai.`);
+                            }
+                        } else {
+                            console.log(`⚠️ [FCM Error]: Seller ID ${sId} ki userId nahi mili.`);
                         }
-                    ).catch(e => console.error(`[FCM Error] Seller: ${sellerUser.id}`, e));
+                    }
+                } catch (bgError) {
+                    console.error("❌ [FCM DB Fetch Error Background]: Cart push failed:", bgError);
                 }
-            });
+            })(); // 👈 Yeh parenthesis isko background mein turant push kar degi, response rukega nahi
         }
     } catch (notificationError) {
         console.error("🔔 Notification Trigger Error (Non-Critical):", notificationError);
