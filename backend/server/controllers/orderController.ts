@@ -508,23 +508,33 @@ if (!isSelfDelivery) {
     }); 
 
     // 🔥 TRING TRING LOGIC
+    // 🔥 TRING TRING LOGIC (Killed State and High Priority Siren Fix)
     const finalResult = result as any;
 
     if (finalResult?.sellerToken) {
       try {
+        console.log(`📡 [FCM PUSH]: Initiating siren alert for token: ${finalResult.sellerToken.substring(0, 15)}...`);
+        
         // Notification fire (Non-blocking)
         sendNotification(
           finalResult.sellerToken,
-          "Naya Order Aaya Hai! 🔥",
-          `Order #${finalResult.masterOrder.orderNumber} mila hai. ₹${finalResult.masterOrder.total} ka dhandha!`,
+          "🚨 Naya Order Aaya Hai!", // Title
+          `Order #${finalResult.masterOrder.orderNumber} mila hai. ₹${finalResult.masterOrder.total} ka dhandha!`, // Body
           { 
             orderId: String(finalResult.masterOrder.id), 
             type: "NEW_ORDER" 
           }
-        ).catch(e => console.error("🔔 [FCM Error]:", e));
+        ).then(() => {
+          console.log("🔔 [FCM Success]: Push package delivered to Expo server successfully!");
+        }).catch(e => {
+          console.error("❌ [FCM Error inside catch]:", e);
+        });
+
       } catch (notifyErr) {
-        console.error("⚠️ Notification failed:", notifyErr);
+        console.error("⚠️ Notification invocation failed:", notifyErr);
       }
+    } else {
+      console.log("⚠️ [FCM Warning]: sellerToken nahi mila, check database query response!");
     }
 
 // 🌐 Socket.io Events
