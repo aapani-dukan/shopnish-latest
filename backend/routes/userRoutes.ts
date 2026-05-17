@@ -95,21 +95,18 @@ userLoginRouter.post("/login", async (req: Request, res: Response) => {
 });
 
 // ==========================================
-// 2️⃣ 🚨 NEW ROUTE: UPDATE FCM TOKEN LOGIC (The Solution)
+// 2️⃣ 🚨 AUTOMATIC TOKEN SYNC: MULTI-PATH TRAFFIC CATCHER
 // ==========================================
-userLoginRouter.post("/update-token", async (req: Request, res: Response) => {
+const handleTokenUpdate = async (req: Request, res: Response) => {
     try {
         const { fcmToken } = req.body;
         
-        // Frontend AuthContext mein humare paas Authorization header mein Bearer token aa raha hai
         const authHeader = req.headers.authorization;
         if (!authHeader || !authHeader.startsWith('Bearer ')) {
             return res.status(401).json({ error: "Unauthorized: Missing token" });
         }
 
         const idToken = authHeader.split('Bearer ')[1];
-        
-        // Firebase se token verify karke user ki unique Firebase UID nikaalein
         const decodedToken = await authAdmin.verifyIdToken(idToken);
         const firebaseUid = decodedToken.uid;
 
@@ -117,18 +114,22 @@ userLoginRouter.post("/update-token", async (req: Request, res: Response) => {
             return res.status(400).json({ error: "fcmToken is required" });
         }
 
-        // Users table mein camelCase ke hisab se 'fcmToken' field ko update karein
+        // Users table mein fcmToken column ko automatic update karein
         await db.update(users)
             .set({ fcmToken: fcmToken, updatedAt: new Date() })
             .where(eq(users.firebaseUid, firebaseUid));
 
-        console.log(`💾 [DB Success]: Updated fcmToken for Firebase UID: ${firebaseUid}`);
-        
+        console.log(`💾 [DB AUTOMATIC SUCCESS]: Token synced for Firebase UID: ${firebaseUid}`);
         return res.status(200).json({ message: "Token updated successfully" });
     } catch (error: any) {
         console.error("❌ Error updating FCM token in route:", error);
-        return res.status(500).json({ error: "Internal server error while syncing token." });
+        return res.status(500).json({ error: "Internal server error" });
     }
-});
+};
+
+// 🎯 Frontend jis bhi variation ya prefix se request fenkega, sab yahan trace hokar save ho jayega
+userLoginRouter.post("/update-token", handleTokenUpdate);
+userLoginRouter.post("/users/update-token", handleTokenUpdate);
+userLoginRouter.post("/api/users/update-token", handleTokenUpdate);
 
 export default userLoginRouter;
