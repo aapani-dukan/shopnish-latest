@@ -1,6 +1,7 @@
 import { Expo } from 'expo-server-sdk';
 
 let expo = new Expo();
+
 export const sendNotification = async (
   targetToken: string, 
   title: string, 
@@ -12,22 +13,27 @@ export const sendNotification = async (
     return;
   }
 
-  // 2. Message Object (Killed state ki bimari ka 100% ilaaj)
+  // Message Object (FCM V1 compliant format)
   let messages: any[] = [{
       to: targetToken,
-      title: title,        // 👈 Root title zaroori hai
-      body: body,          // 👈 Root body zaroori hai
+      title: title,        
+      body: body,          
       data: data,
-      priority: 'high',    // 👈 Expo server ko bolta hai turant bhejo
-      sound: 'default',    // 👈 iOS/Expo ki compatibility ke liye
+      priority: 'high',    
       badge: 1,
+      
+      // ✅ ROOT PAR CHANNEL ID: Expo server direct ise read karta hai Android ke liye
+      channelId: 'orders_siren_v10', 
+      
+      // ✅ ROOT PAR SOUND: iOS aur custom channels dono ke liye behtareen kaam karta hai
+      sound: 'siren', // 👈 .mp3 hata diya hai, sirf 'siren' rahega
 
-      // 🚨 ANDROID SYSTEM KO FORCE KARNE KE LIYE SAHI FORMAT 🚨
+      // 🚨 ANDROID SPECIFIC CRITICAL SETTINGS 🚨
       android: {
-        channelId: 'orders_siren_v10', // Mobile app wale ID se bilkul same
-        priority: 'max',               // 'high' se bhi upar 'max' taaki OS block na kare
-        sound: 'siren.mp3',             // System ko pata chale konsi file bajani hai
-        vibrate: [0, 250, 250, 250],   // Vibration notification ko alert mein badalta hai
+        channelId: 'orders_siren_v10', // 👈 Pukka karne ke liye yahan bhi rakha hai
+        priority: 'max',               
+        vibrate: [0, 250, 250, 250],   
+        // Note: FCM V1 ke liye sound hamesha bina extension ke resource name hota hai
       },
   }];
 
@@ -36,7 +42,7 @@ export const sendNotification = async (
     for (let chunk of chunks) {
       await expo.sendPushNotificationsAsync(chunk);
     }
-    console.log("🔔 [Notification] Siren signal sent to Expo!");
+    console.log("🔔 [Notification] Siren signal sent to Expo successfully!");
   } catch (error) {
     console.error("❌ [Notification] Error sending message:", error);
   }
