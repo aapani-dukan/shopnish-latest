@@ -17,7 +17,7 @@ import {
   userRoleEnum,
   adminSettings,
 } from '../shared/backend/schema';
-import { eq, and, or, not, desc, asc, inArray, isNull } from 'drizzle-orm';
+import { eq, and, or, not, desc, asc, inArray, isNull,exists } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
@@ -181,6 +181,7 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
  * 🟡 GET Available Delivery Batches for Claiming
  * /api/delivery-boys/available-batches
  */
+
 router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -188,16 +189,29 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             return res.status(401).json({ error: 'Unauthorized.' });
         }
 
+        // 🎯 Dono shartein puri karne wali sateek query
         const availableBatches = await db.query.deliveryBatches.findMany({
             where: and(
-                isNull(deliveryBatches.deliveryBoyId), 
-                eq(deliveryBatches.status, 'pending') 
+                isNull(deliveryBatches.deliveryBoyId), // 1. Jise abhi tak koi delivery boy na mila ho
+                eq(deliveryBatches.status, 'pending'), // 2. Batch status pending ho
+                
+                // 🚨 MASTERSTROKE SHART: Sirf wahi batch uthao jisme kam se kam ek sub-order 'ready_for_pickup' ho
+                exists(
+                    db.select()
+                      .from(subOrders)
+                      .where(
+                          and(
+                              eq(subOrders.deliveryBatchId, deliveryBatches.id),
+                              eq(subOrders.status, 'ready_for_pickup')
+                          )
+                      )
+                )
             ),
             with: {
                 subOrders: {
                     with: {
                         seller: {
-                            columns: { id: true, businessName: true, businessAddress: true,businessPhone: true}
+                            columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
                         }
                     }
                 },
@@ -213,57 +227,56 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             orderBy: desc(deliveryBatches.createdAt),
         });
         
-     const formattedBatches = availableBatches.map(batch => {
-          const subOrders = batch.subOrders || [];
-          
-          // 1. Pickup Details (Address ke saath)
-          const pickupPoints = subOrders.map(so => ({
-              shopName: so.seller?.businessName || "Unknown Shop",
-              address: so.seller?.businessAddress || "Address Not Available",
-              phone: so.seller?.businessPhone || "",
-          }));
+        const formattedBatches = availableBatches.map(batch => {
+            const currentSubOrders = batch.subOrders || [];
+            
+            // 1. Pickup Details (Address ke saath)
+            const pickupPoints = currentSubOrders.map(so => ({
+                shopName: so.seller?.businessName || "Unknown Shop",
+                address: so.seller?.businessAddress || "Address Not Available",
+                phone: so.seller?.businessPhone || "",
+            }));
 
-          // Saari shops ke naam ek sath dikhane ke liye
-          const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
-          // Saare addresses ek sath dikhane ke liye
-          const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
+            const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
+            const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-          // 🎯 Master Order Object safe check
-          const masterOrderObj = batch.masterOrder as any;
+            // 👤 2. Customer & Delivery Details (Safe Parsing taaki Unknown na aaye)
+            const customerObj = batch.masterOrder?.customer;
+            const addressObj = batch.masterOrder?.deliveryAddress;
 
-          return {
-              id: batch.id,
-              batchNumber: `BTCH-${batch.id}`,
-              status: batch.status,
-              createdAt: batch.createdAt,
-              pickupShops: shopNames || "Unknown Shop",
-              pickupAddresses: shopAddresses, 
-              pickupPoints: pickupPoints,
+            const firstName = customerObj?.firstName || '';
+            const lastName = customerObj?.lastName || '';
+            const finalCustomerName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : 'Customer';
 
-              // 👤 2. Customer Details (Ab Phone ke sath link ho gaya)
-              customerName: `${masterOrderObj?.customer?.firstName || 'Customer'} ${masterOrderObj?.customer?.lastName || ''}`.trim(),
-              customerPhone: masterOrderObj?.customer?.phone || "N/A", // ✨ Yeh line miss thi bhai, ab jud gayi!
-              
-              // 📍 3. Delivery Details
-              deliveryAddress: masterOrderObj?.deliveryAddress?.addressLine1 || "Local Address",
-              deliveryCity: masterOrderObj?.deliveryAddress?.city || "",
-              
-              deliveryCharge: Number(batch.deliveryFee || 40), 
-              totalItems: subOrders.length
-          };
-      });
+            return {
+                id: batch.id,
+                batchNumber: `BTCH-${batch.id}`,
+                status: batch.status,
+                createdAt: batch.createdAt,
+                pickupShops: shopNames || "Unknown Shop",
+                pickupAddresses: shopAddresses, 
+                pickupPoints: pickupPoints,
 
-      // 🚨 MOBILE APP RESPONSE CHECK: 
-      // Agar aapki mobile app direct array expect karti hai toh direct 'formattedBatches' bhejna chahiye.
-      // Lekin agar aapne phle se `{ batches: ... }` handle kiya hua hai, toh isko ese hi rehne dein bhai.
-      return res.status(200).json({ batches: formattedBatches });
+                // Mobile App jo fields dhund rahi hai, unhe 100% sateek bhej rahe hain
+                customerName: finalCustomerName,
+                customerPhone: customerObj?.phone || "N/A", 
+                
+                deliveryAddress: addressObj?.addressLine1 || "Local Address",
+                deliveryCity: addressObj?.city || "",
+                
+                deliveryCharge: Number(batch.deliveryFee || 40), 
+                totalItems: currentSubOrders.length
+            };
+        });
+
+        // Response bhej rahe hain
+        return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
         console.error('❌ Error in GET /api/delivery/available-batches:', error);
         return res.status(500).json({ error: 'Failed to fetch available batches.' });
     }
 });
-
 /**
  * 🚀 PATCH Claim Delivery Batch
  * /api/delivery-boys/batches/:batchId/claim
