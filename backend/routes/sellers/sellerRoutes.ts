@@ -1385,15 +1385,23 @@ sellerRouter.patch(
             } as any);
             
             // --- ✅ SIREN & BATCH ALERT LOGIC (DELIVERY BOYS) ---
-            const io = getIO(); // 👈 Pehla declaration yahan hai
+            const io = getIO(); 
             
             const masterOrderObj = existingSubOrder.masterOrder as any;
-            const pickupLocation = masterOrderObj?.deliveryAddress?.addressLine1 || 'Shop Location';
-            const city = masterOrderObj?.deliveryAddress?.city || '';
+            
+            // 📍 Logs ke mutabik correct address parsing
+            const relationAddressObj = masterOrderObj?.deliveryAddress;
+            const pickupLocation = relationAddressObj?.address_line1 
+                || masterOrderObj?.delivery_address 
+                || 'Shop Location';
+            const city = relationAddressObj?.city || masterOrderObj?.delivery_city || '';
 
-            const customerName = masterOrderObj?.customer 
-                ? `${masterOrderObj.customer.firstName} ${masterOrderObj.customer.lastName || ''}`.trim() 
-                : 'Customer';
+            // 👤 Logs ke mutabik correct customer name parsing
+            const customerObj = masterOrderObj?.customer;
+            const firstName = customerObj?.first_name || customerObj?.firstName || '';
+            const lastName = customerObj?.last_name || customerObj?.lastName || '';
+            let customerName = `${firstName} ${lastName}`.trim();
+            if (!customerName) customerName = masterOrderObj?.full_name || 'Customer';
 
             const batchAlertData = {
                 deliveryBatchId: existingSubOrder.deliveryBatch.id,
@@ -1415,15 +1423,16 @@ sellerRouter.patch(
 
             io.emit(`available-batches:new-batch-ready`, batchAlertData);
 
-            console.log(`🚚 [DELIVERY SIREN]: Broadcasted for Batch ID: ${existingSubOrder.deliveryBatch.id}`);
+            console.log(`🚚 [DELIVERY SIREN]: Broadcasted Socket alerts for Batch ID: ${existingSubOrder.deliveryBatch.id}`);
           
-            // 🚨 PUSH NOTIFICATION & SIREN LOGIC (FINAL WORKING CODE) 🚨
+            // 🚨 PUSH NOTIFICATION WITH FORCED SIREN CHANNEL 🚨
             const sellerLat = parseFloat(String(sellerProfile.latitude || '0'));
             const sellerLng = parseFloat(String(sellerProfile.longitude || '0'));
 
             console.log(`📍 [FILTER] Seller Live Location: (${sellerLat}, ${sellerLng})`);
 
-            const eligibleDeliveryBoys = await tx
+            // Safe Database call (Bina active transaction block lagaye pure system se load karein)
+            const eligibleDeliveryBoys = await db
               .select({
                 id: deliveryBoys.id,
                 currentLat: deliveryBoys.currentLat,
@@ -1461,23 +1470,26 @@ sellerRouter.patch(
               if (distance <= maxRadiusKm) {
                 notificationCount++;
                 
+                // 🚨 FORCED SIREN CHANNEL FIX: Hum direct admin sdk payload check parameters ensure kar rahe hain
                 sendNotification(
                   boy.fcmToken, 
                   "🚚 Naya Delivery Task Taiyar Hai!", 
                   `Batch ${batchAlertData.batchNumber} pickup karein. Doori: ${distance.toFixed(1)} KM`, 
-                  { batchId: existingSubOrder.deliveryBatch.id }, 
+                  { 
+                    batchId: String(existingSubOrder.deliveryBatch.id),
+                    channelId: "delivery_siren_v10", // 👈 Yeh exact payload string pass karna zaroori hai bhai
+                    sound: "siren"
+                  }, 
                   'delivery' 
                 ).catch(err => console.error("❌ Delivery Push Error:", err));
               }
             }
 
             console.log(`🚀 [DELIVERY SIREN]: Total ${notificationCount} delivery boys ko 5 KM ke andar siren bheja gaya.`);
-            // --- END OF SIREN LOGIC ---
           } 
         }
         
         // 5. Socket.io: कस्टमर और सेलर को रियल-TIME अपडेट भेजें
-        // ✅ CHANGE: Yahan se 'const' hata diya hai kyunki 'io' upar pehle se declared hai!
         const finalIo = getIO(); 
         finalIo.emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
           subOrderId: subOrderId,
