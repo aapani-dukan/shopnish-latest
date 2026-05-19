@@ -17,7 +17,7 @@ import {
   userRoleEnum,
   adminSettings,
 } from '../shared/backend/schema';
-import { eq, and, or, not, desc, asc, inArray, isNull,exists } from 'drizzle-orm';
+import { eq, and, or, not, desc, asc, inArray, isNull,exists,sql } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
@@ -201,7 +201,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                       .from(subOrders)
                       .where(
                           and(
-                              eq(subOrders.deliveryBatchId, deliveryBatches.id),
+                             eq(subOrders.deliveryBatchId, sql`${deliveryBatches.id}`),
                               eq(subOrders.status, 'ready_for_pickup')
                           )
                       )
