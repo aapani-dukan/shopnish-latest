@@ -4,6 +4,7 @@ import { db } from '../../server/db.js';
 import {
   sellersPgTable,
   users,
+  deliveryBoys,
   userRoleEnum,
   approvalStatusEnum,
   categories,
@@ -29,8 +30,12 @@ import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, �
 import { getMySellerProfile, updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
 import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
+import { z } from 'zod';
+import { ZodError } from 'zod';
+import { sendNotification } from '../../services/notificationService';
 import * as fs from 'fs/promises'; 
 import * as fsSync from 'fs'; 
+import path from 'path';
 const sellerRouter = Router();
 const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
@@ -1367,8 +1372,7 @@ sellerRouter.patch(
           
           if (existingSubOrder.deliveryBatch.status === 'pending') { 
             
-            // ✅ ऑर्डर ट्रैकिंग में एंट्री जोड़ें (status: pending का उपयोग करके)
-            const currentBatchStatus = existingSubOrder.deliveryBatch.status; // 'pending'
+            const currentBatchStatus = existingSubOrder.deliveryBatch.status; 
             
             await tx.insert(orderTracking).values({
               masterOrderId: existingSubOrder.masterOrder.id,
@@ -1378,39 +1382,32 @@ sellerRouter.patch(
               updatedByUserRole: 'seller', 
               timestamp: new Date(),
               message: `Delivery batch is now Ready for Claiming (Status: Pending) by seller.`, 
-            }as any);
+            } as any);
             
-          
             // --- ✅ SIREN & BATCH ALERT LOGIC (DELIVERY BOYS) ---
-           const io = getIO();
+            const io = getIO(); // 👈 Pehla declaration yahan hai
             
-            // 🛑 Data nikaalein (existingSubOrder se)
-            // Dhyaan dein: existingSubOrder fetch karte waqt masterOrder.deliveryAddress aur customer included hona chahiye
-           const masterOrderObj = existingSubOrder.masterOrder as any;
+            const masterOrderObj = existingSubOrder.masterOrder as any;
+            const pickupLocation = masterOrderObj?.deliveryAddress?.addressLine1 || 'Shop Location';
+            const city = masterOrderObj?.deliveryAddress?.city || '';
 
-const pickupLocation = masterOrderObj?.deliveryAddress?.addressLine1 || 'Shop Location';
-const city = masterOrderObj?.deliveryAddress?.city || '';
+            const customerName = masterOrderObj?.customer 
+                ? `${masterOrderObj.customer.firstName} ${masterOrderObj.customer.lastName || ''}`.trim() 
+                : 'Customer';
 
-const customerName = masterOrderObj?.customer 
-    ? `${masterOrderObj.customer.firstName} ${masterOrderObj.customer.lastName || ''}`.trim() 
-    : 'Customer';
+            const batchAlertData = {
+                deliveryBatchId: existingSubOrder.deliveryBatch.id,
+                batchNumber: `BTCH-${existingSubOrder.deliveryBatch.id}`,
+                orderNumber: masterOrderObj?.orderNumber || 'N/A', 
+                pickupLocation: pickupLocation, 
+                city: city,
+                customerName: customerName,
+                message: "Naya delivery batch pickup ke liye taiyar hai!",
+                status: currentBatchStatus,
+            };
 
-            // 1. Alert Data taiyar karein (Ab details ke saath)
-           const batchAlertData = {
-    deliveryBatchId: existingSubOrder.deliveryBatch.id,
-    batchNumber: `BTCH-${existingSubOrder.deliveryBatch.id}`,
-    orderNumber: masterOrderObj?.orderNumber || 'N/A', // Yahan bhi safe check
-    pickupLocation: pickupLocation, 
-    city: city,
-    customerName: customerName,
-    message: "Naya delivery batch pickup ke liye taiyar hai!",
-    status: currentBatchStatus,
-};
-
-            // 2. 🚨 SIREN SIGNAL (Direct Hit for all online Delivery Boys)
             io.emit('new-available-delivery', batchAlertData);
 
-            // 3. Purane Style ke updates
             io.emit(`delivery-batch:${existingSubOrder.deliveryBatch.id}:status-updated`, {
               status: currentBatchStatus, 
               message: `Delivery batch is ready for claiming.`,
@@ -1419,21 +1416,77 @@ const customerName = masterOrderObj?.customer
             io.emit(`available-batches:new-batch-ready`, batchAlertData);
 
             console.log(`🚚 [DELIVERY SIREN]: Broadcasted for Batch ID: ${existingSubOrder.deliveryBatch.id}`);
+          
+            // 🚨 PUSH NOTIFICATION & SIREN LOGIC (FINAL WORKING CODE) 🚨
+            const sellerLat = parseFloat(String(sellerProfile.latitude || '0'));
+            const sellerLng = parseFloat(String(sellerProfile.longitude || '0'));
+
+            console.log(`📍 [FILTER] Seller Live Location: (${sellerLat}, ${sellerLng})`);
+
+            const eligibleDeliveryBoys = await tx
+              .select({
+                id: deliveryBoys.id,
+                currentLat: deliveryBoys.currentLat,
+                currentLng: deliveryBoys.currentLng,
+                fcmToken: users.fcmToken, 
+              })
+              .from(deliveryBoys)
+              .leftJoin(users, eq(deliveryBoys.userId, users.id)); 
+
+            console.log(`🚚 [DELIVERY SIREN]: Location check ke liye total ${eligibleDeliveryBoys.length} delivery boys mile.`);
+
+            const maxRadiusKm = 5; 
+            let notificationCount = 0;
+
+            for (const boy of eligibleDeliveryBoys) {
+              if (!boy.fcmToken || !boy.currentLat || !boy.currentLng) continue;
+
+              const boyLat = parseFloat(boy.currentLat);
+              const boyLng = parseFloat(boy.currentLng);
+
+              const R = 6371; 
+              const dLat = ((boyLat - sellerLat) * Math.PI) / 180;
+              const dLng = ((boyLng - sellerLng) * Math.PI) / 180;
+              
+              const a =
+                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                Math.cos((sellerLat * Math.PI) / 180) *
+                  Math.cos((boyLat * Math.PI) / 180) *
+                  Math.sin(dLng / 2) *
+                  Math.sin(dLng / 2);
+              
+              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+              const distance = R * c; 
+
+              if (distance <= maxRadiusKm) {
+                notificationCount++;
+                
+                sendNotification(
+                  boy.fcmToken, 
+                  "🚚 Naya Delivery Task Taiyar Hai!", 
+                  `Batch ${batchAlertData.batchNumber} pickup karein. Doori: ${distance.toFixed(1)} KM`, 
+                  { batchId: existingSubOrder.deliveryBatch.id }, 
+                  'delivery' 
+                ).catch(err => console.error("❌ Delivery Push Error:", err));
+              }
+            }
+
+            console.log(`🚀 [DELIVERY SIREN]: Total ${notificationCount} delivery boys ko 5 KM ke andar siren bheja gaya.`);
             // --- END OF SIREN LOGIC ---
-            
           } 
         }
         
         // 5. Socket.io: कस्टमर और सेलर को रियल-TIME अपडेट भेजें
-      const io = getIO();
-        io.emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
+        // ✅ CHANGE: Yahan se 'const' hata diya hai kyunki 'io' upar pehle se declared hai!
+        const finalIo = getIO(); 
+        finalIo.emit(`user:${existingSubOrder.masterOrder.customerId}:order-update`, {
           subOrderId: subOrderId,
           status: finalStatusForSubOrder,
           masterOrderId: existingSubOrder.masterOrder.id,
           message: `Your order from ${sellerProfile.businessName} is now '${finalStatusForSubOrder}'.`,
         });
         
-        io.emit(`seller:${sellerId}:order-update`, {
+        finalIo.emit(`seller:${sellerId}:order-update`, {
           subOrderId: subOrderId,
           status: finalStatusForSubOrder,
           masterOrderId: existingSubOrder.masterOrder.id,
@@ -1451,7 +1504,7 @@ const customerName = masterOrderObj?.customer
       return res.status(500).json({ error: error.message || 'Failed to update sub-order status.' });
     }
   }
-); 
+);
             
 // ✅ नया API: /api/sellers/sub-orders/:orderId/details
 sellerRouter.get('/sub-orders/:orderId/details', requireSellerAuth, async (req: any, res: Response) => {

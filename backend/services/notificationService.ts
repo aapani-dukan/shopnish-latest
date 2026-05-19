@@ -6,12 +6,17 @@ export const sendNotification = async (
   targetToken: string, 
   title: string, 
   body: string, 
-  data: any = {}
+  data: any = {},
+  appType: 'seller' | 'delivery' = 'seller' // 👈 Default hum 'seller' rakh rahe hain
 ) => {
   if (!Expo.isExpoPushToken(targetToken)) {
     console.error(`❌ [Notification] Invalid Token: ${targetToken}`);
     return;
   }
+
+  // 👇 App ke hisab se sahi channel ID select hogi (Dono v10 hain)
+  const channelId = appType === 'delivery' ? 'delivery_siren_v10' : 'orders_siren_v10';
+  const soundName = 'siren'; // Dono apps ke 'raw' folder mein 'siren.mp3' hona chahiye
 
   // Message Object (FCM V1 compliant format)
   let messages: any[] = [{
@@ -22,18 +27,17 @@ export const sendNotification = async (
       priority: 'high',    
       badge: 1,
       
-      // ✅ ROOT PAR CHANNEL ID: Expo server direct ise read karta hai Android ke liye
-      channelId: 'orders_siren_v10', 
+      // ✅ ROOT PAR DYNAMIC CHANNEL ID: Expo server isko read karega
+      channelId: channelId, 
       
-      // ✅ ROOT PAR SOUND: iOS aur custom channels dono ke liye behtareen kaam karta hai
-      sound: 'siren', // 👈 .mp3 hata diya hai, sirf 'siren' rahega
+      // ✅ ROOT PAR SOUND: Bina extension (.mp3) ke rahega
+      sound: soundName, 
 
       // 🚨 ANDROID SPECIFIC CRITICAL SETTINGS 🚨
       android: {
-        channelId: 'orders_siren_v10', // 👈 Pukka karne ke liye yahan bhi rakha hai
+        channelId: channelId, // 👈 Mobile app ke channel se match karega
         priority: 'max',               
         vibrate: [0, 250, 250, 250],   
-        // Note: FCM V1 ke liye sound hamesha bina extension ke resource name hota hai
       },
   }];
 
@@ -42,8 +46,8 @@ export const sendNotification = async (
     for (let chunk of chunks) {
       await expo.sendPushNotificationsAsync(chunk);
     }
-    console.log("🔔 [Notification] Siren signal sent to Expo successfully!");
+    console.log(`🔔 [Notification] Siren signal sent successfully for ${appType} app!`);
   } catch (error) {
-    console.error("❌ [Notification] Error sending message:", error);
+    console.error(`❌ [Notification] Error sending message to ${appType}:`, error);
   }
 };
