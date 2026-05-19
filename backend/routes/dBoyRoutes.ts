@@ -190,18 +190,18 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
         }
 
         // 🎯 Dono shartein puri karne wali sateek query
-        const availableBatches = await db.query.deliveryBatches.findMany({
+       const availableBatches = await db.query.deliveryBatches.findMany({
             where: and(
-                isNull(deliveryBatches.deliveryBoyId), // 1. Jise abhi tak koi delivery boy na mila ho
-                eq(deliveryBatches.status, 'pending'), // 2. Batch status pending ho
+                isNull(deliveryBatches.deliveryBoyId), 
+                eq(deliveryBatches.status, 'pending'),
                 
-                // 🚨 MASTERSTROKE SHART: Sirf wahi batch uthao jisme kam se kam ek sub-order 'ready_for_pickup' ho
+                // 🎯 CONFLICT FIXED: Pure SQL parameter se exact alias inject kar diya hai
                 exists(
                     db.select()
                       .from(subOrders)
                       .where(
                           and(
-                             eq(subOrders.deliveryBatchId, sql`${deliveryBatches.id}`),
+                              sql`"sub_orders"."delivery_batch_id" = "deliveryBatches"."id"`, // ✨ Ekdum sateek alias mapping
                               eq(subOrders.status, 'ready_for_pickup')
                           )
                       )
@@ -226,11 +226,10 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             },
             orderBy: desc(deliveryBatches.createdAt),
         });
-        
-        const formattedBatches = availableBatches.map(batch => {
+      const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
-            // 1. Pickup Details (Address ke saath)
+            // 1. Pickup Details
             const pickupPoints = currentSubOrders.map(so => ({
                 shopName: so.seller?.businessName || "Unknown Shop",
                 address: so.seller?.businessAddress || "Address Not Available",
@@ -240,13 +239,25 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
             const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-            // 👤 2. Customer & Delivery Details (Safe Parsing taaki Unknown na aaye)
-            const customerObj = batch.masterOrder?.customer;
-            const addressObj = batch.masterOrder?.deliveryAddress;
+            // 👤 2. Customer & Delivery Details (Logs Ke Sateek Columns Ke Hisab Se)
+            const mOrder = batch.masterOrder as any;
+            const customerObj = mOrder?.customer;
+            const relationAddressObj = mOrder?.deliveryAddress;
 
-            const firstName = customerObj?.firstName || '';
-            const lastName = customerObj?.lastName || '';
-            const finalCustomerName = (firstName || lastName) ? `${firstName} ${lastName}`.trim() : 'Customer';
+            // Name Parsing
+            const firstName = customerObj?.first_name || customerObj?.firstName || '';
+            const lastName = customerObj?.last_name || customerObj?.lastName || '';
+            let finalCustomerName = `${firstName} ${lastName}`.trim();
+            if (!finalCustomerName) finalCustomerName = mOrder?.full_name || 'Customer';
+
+            // 📍 Address Fallback (Logs ke mutabik direct columns bhi hain master order me)
+            const finalAddress = relationAddressObj?.address_line1 
+                || mOrder?.delivery_address 
+                || "Local Address";
+
+            const finalCity = relationAddressObj?.city 
+                || mOrder?.delivery_city 
+                || "";
 
             return {
                 id: batch.id,
@@ -257,19 +268,18 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 pickupAddresses: shopAddresses, 
                 pickupPoints: pickupPoints,
 
-                // Mobile App jo fields dhund rahi hai, unhe 100% sateek bhej rahe hain
+                // Mobile App standard fields mapping
                 customerName: finalCustomerName,
-                customerPhone: customerObj?.phone || "N/A", 
+                customerPhone: customerObj?.phone || mOrder?.phone_number || "N/A", 
                 
-                deliveryAddress: addressObj?.addressLine1 || "Local Address",
-                deliveryCity: addressObj?.city || "",
+                deliveryAddress: finalAddress, 
+                deliveryCity: finalCity,       
                 
                 deliveryCharge: Number(batch.deliveryFee || 40), 
                 totalItems: currentSubOrders.length
             };
         });
 
-        // Response bhej rahe hain
         return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
