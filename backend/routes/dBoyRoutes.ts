@@ -213,38 +213,51 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             orderBy: desc(deliveryBatches.createdAt),
         });
         
-      const formattedBatches = availableBatches.map(batch => {
-    const subOrders = batch.subOrders || [];
-    
-    // 1. Pickup Details (Address ke saath)
-    const pickupPoints = subOrders.map(so => ({
-        shopName: so.seller?.businessName || "Unknown Shop",
-        address: so.seller?.businessAddress || "Address Not Available",
-        phone: so.seller?.businessPhone || "",
-    }));
+     const formattedBatches = availableBatches.map(batch => {
+          const subOrders = batch.subOrders || [];
+          
+          // 1. Pickup Details (Address ke saath)
+          const pickupPoints = subOrders.map(so => ({
+              shopName: so.seller?.businessName || "Unknown Shop",
+              address: so.seller?.businessAddress || "Address Not Available",
+              phone: so.seller?.businessPhone || "",
+          }));
 
-    // Saari shops ke naam ek sath dikhane ke liye
-    const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
-    // Saare addresses ek sath dikhane ke liye
-    const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
+          // Saari shops ke naam ek sath dikhane ke liye
+          const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
+          // Saare addresses ek sath dikhane ke liye
+          const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-    return {
-        ...batch,
-        pickupShops: shopNames || "Unknown Shop",
-        pickupAddresses: shopAddresses, // ✅ Naya field
-        pickupPoints: pickupPoints,
+          // 🎯 Master Order Object safe check
+          const masterOrderObj = batch.masterOrder as any;
 
-        // 2. Customer & Delivery Details
-        customerName: `${batch.masterOrder?.customer?.firstName || 'Customer'} ${batch.masterOrder?.customer?.lastName || ''}`.trim(),
-        deliveryAddress: batch.masterOrder?.deliveryAddress?.addressLine1 || "Local Address",
-        deliveryCity: batch.masterOrder?.deliveryAddress?.city || "",
-        
-        deliveryCharge: Number(batch.deliveryFee||40), // ✅ Batch table se delivery fee uthayenge (Fixed rate)
-        totalItems: batch.subOrders.length
-        
-    };
-});
-        return res.status(200).json({ batches: formattedBatches });
+          return {
+              id: batch.id,
+              batchNumber: `BTCH-${batch.id}`,
+              status: batch.status,
+              createdAt: batch.createdAt,
+              pickupShops: shopNames || "Unknown Shop",
+              pickupAddresses: shopAddresses, 
+              pickupPoints: pickupPoints,
+
+              // 👤 2. Customer Details (Ab Phone ke sath link ho gaya)
+              customerName: `${masterOrderObj?.customer?.firstName || 'Customer'} ${masterOrderObj?.customer?.lastName || ''}`.trim(),
+              customerPhone: masterOrderObj?.customer?.phone || "N/A", // ✨ Yeh line miss thi bhai, ab jud gayi!
+              
+              // 📍 3. Delivery Details
+              deliveryAddress: masterOrderObj?.deliveryAddress?.addressLine1 || "Local Address",
+              deliveryCity: masterOrderObj?.deliveryAddress?.city || "",
+              
+              deliveryCharge: Number(batch.deliveryFee || 40), 
+              totalItems: subOrders.length
+          };
+      });
+
+      // 🚨 MOBILE APP RESPONSE CHECK: 
+      // Agar aapki mobile app direct array expect karti hai toh direct 'formattedBatches' bhejna chahiye.
+      // Lekin agar aapne phle se `{ batches: ... }` handle kiya hua hai, toh isko ese hi rehne dein bhai.
+      return res.status(200).json({ batches: formattedBatches });
+
     } catch (error: any) {
         console.error('❌ Error in GET /api/delivery/available-batches:', error);
         return res.status(500).json({ error: 'Failed to fetch available batches.' });
