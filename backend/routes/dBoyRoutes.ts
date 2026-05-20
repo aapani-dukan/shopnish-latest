@@ -289,7 +289,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             },
             orderBy: desc(deliveryBatches.createdAt),
         });
-    const formattedBatches = availableBatches.map(batch => {
+   const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
             // 1. Pickup Details
@@ -304,38 +304,53 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
 
             const mOrder = batch.masterOrder as any;
             
-            // 🎯 FIXED: CamelCase aur Snake_case dono ka safety check laga diya bhai
+            // 🎯 कस्टमाइज्ड ऑब्जेक्ट्स एक्सट्रैक्शन (लॉग के अनुसार)
             const customerObj = mOrder?.customer || mOrder?.customer_user || {};
             const addressObj = mOrder?.deliveryAddress || mOrder?.delivery_address || {};
 
-            // 👤 2. Customer Name Safe Fallback
-            let firstName = customerObj?.firstName || customerObj?.first_name || mOrder?.first_name || '';
-            let lastName = customerObj?.lastName || customerObj?.last_name || mOrder?.last_name || '';
+            // 👤 2. CUSTOMER NAME FIX: snake_case और camelCase दोनों का तगड़ा फॉलबैक
+            let firstName = mOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+            let lastName = mOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
             
-            let finalCustomerName = `${firstName} ${lastName}`.trim();
-            
-            // Agar address object ke andar full name save hai
-            if (!finalCustomerName) {
-                finalCustomerName = addressObj?.fullName || addressObj?.full_name || mOrder?.delivery_address?.full_name || "Customer";
+            // अगर लैटरल जॉइन एरे के रूप में रिस्पॉन्स दे रहा हो
+            if (Array.isArray(mOrder)) {
+                const foundCust = mOrder.find((el: any) => el && (el.first_name || el.firstName));
+                if (foundCust) {
+                    firstName = foundCust.first_name || foundCust.firstName || '';
+                    lastName = foundCust.last_name || foundCust.lastName || '';
+                }
             }
 
-            // 📍 3. Delivery Address Safe Fallback
-            let finalAddress = "Local Address";
-            let finalCity = "";
+            let finalCustomerName = `${firstName} ${lastName}`.trim();
+            if (!finalCustomerName) {
+                // अगर ऊपर कुछ न मिले तो आर्डर लेवल या एड्रेस का नाम उठाओ
+                finalCustomerName = mOrder?.customerName || addressObj?.fullName || addressObj?.full_name || "Customer";
+            }
 
-            if (addressObj && typeof addressObj === 'object' && (addressObj.addressLine1 || addressObj.address_line1)) {
-                finalAddress = addressObj.addressLine1 || addressObj.address_line1 || "Local Address";
+            // 📍 3. DELIVERY ADDRESS FIX: डायरेक्ट कॉलम और रिलेशन दोनों को निचोड़ लिया
+            let finalAddress = "";
+            let finalCity = mOrder?.delivery_city || addressObj?.city || "";
+
+            // प्राथमिकता 1: मुख्य आर्डर टेबल का डायरेक्ट 'delivery_address' स्ट्रिंग कॉलम (जो लॉग में साफ दिख रहा है)
+            if (mOrder && typeof mOrder === 'object' && ('delivery_address' in mOrder || 'deliveryAddress' in mOrder)) {
+                finalAddress = mOrder.delivery_address || mOrder.deliveryAddress || "";
+            }
+
+            // प्राथमिकता 2: अगर वो नहीं है, तो जॉइन वाले एड्रेस ऑब्जेक्ट से उठाओ
+            if (!finalAddress && addressObj && typeof addressObj === 'object') {
+                finalAddress = addressObj.addressLine1 || addressObj.address_line1 || "";
                 if (addressObj.addressLine2 || addressObj.address_line2) {
                     finalAddress += `, ${addressObj.addressLine2 || addressObj.address_line2}`;
                 }
-                finalCity = addressObj.city || "";
-            } else if (mOrder?.delivery_address) {
-                finalAddress = typeof mOrder.delivery_address === 'string' ? mOrder.delivery_address : "Local Address";
-                finalCity = mOrder.delivery_city || "";
             }
 
-            // 📞 4. Phone Number Safe Fallback
-            const finalPhone = customerObj?.phone || addressObj?.phoneNumber || addressObj?.phone_number || mOrder?.customerPhone || mOrder?.phone_number || "N/A";
+            // फाइनल सेफ्टी चेक
+            if (!finalAddress || typeof finalAddress !== 'string') {
+                finalAddress = "Local Address";
+            }
+
+            // 📞 4. PHONE NUMBER SAFE EXTRACTION
+            const finalPhone = customerObj?.phone || mOrder?.phone || mOrder?.customerPhone || mOrder?.delivery_address?.phone_number || "N/A";
 
             return {
                 id: batch.id,
@@ -346,7 +361,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 pickupAddresses: shopAddresses, 
                 pickupPoints: pickupPoints,
 
-                // Mobile App Ke Liye Ekdum Sateek Mapped Fields
+                // मोबाइल ऐप की स्क्रीन के लिए एकदम फ्लैट कीज (Keys)
                 customerName: finalCustomerName,
                 customerPhone: finalPhone, 
                 deliveryAddress: finalAddress, 
