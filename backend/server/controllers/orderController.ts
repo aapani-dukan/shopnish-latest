@@ -249,121 +249,120 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
      const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
     
-    // Server-side transaction
-   const result=await db.transaction(async (tx) => {
-      try {
-        // Handle delivery address (stores new address in `deliveryAddresses` table and returns details)
-      // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
-        let finalDeliveryAddressId = deliveryAddressId;
-        
-        // TypeScript Fix: Lat/Lng ko safe string cast kiya agar wo number hain
-        let finalDeliveryLat = newDeliveryAddress?.latitude != null ? String(newDeliveryAddress.latitude) : null;
-        let finalDeliveryLng = newDeliveryAddress?.longitude != null ? String(newDeliveryAddress.longitude) : null;
-        
-        let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
-        let finalCity = newDeliveryAddress?.city || "";
-        let finalState = newDeliveryAddress?.state || "";
-        let finalPincode = newDeliveryAddress?.postalCode || "";
-        
-        // 🎯 FIX: req.user mein 'firstName'/'lastName' nahi hai, sirf 'name' hai!
-        let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
-
-        if (!finalDeliveryAddressId && newDeliveryAddress) {
-          console.log("📌 [ADDRESS FIX]: Registering new delivery address inside DB directly...");
-          
-          // Direct insert query taaki table hamesha full rahe
-          const [insertedAddress] = await tx.insert(deliveryAddresses).values({
-            userId: userId,
-            fullName: finalCustomerName,
-            // 🎯 FIX: req.user mein 'phone' nahi hai, 'phoneNumber' hai!
-            phoneNumber: userPhoneNumberForUpdate || req.user?.phoneNumber || "N/A",
-            addressLine1: newDeliveryAddress.addressLine1 || "",
-            addressLine2: newDeliveryAddress.addressLine2 || null,
-            city: finalCity,
-            state: finalState,
-            postalCode: finalPincode,
-            latitude: finalDeliveryLat,
-            longitude: finalDeliveryLng,
-            isDefault: false,
-            createdAt: new Date(),
-            updatedAt: new Date()
-          } as any).returning({ id: deliveryAddresses.id });
-
-          if (insertedAddress) {
-            finalDeliveryAddressId = insertedAddress.id;
-            console.log(`✅ [ADDRESS FIX]: Saved in table with ID: ${finalDeliveryAddressId}`);
-          }
-        } else if (finalDeliveryAddressId) {
-          // Agar ID pehle se hai, toh safety ke liye details fetch kar lo
-          const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
-          if (existingAddr) {
-           let finalDeliveryLat: string | null = null;
-        let finalDeliveryLng: string | null = null;
-
-        if (newDeliveryAddress?.latitude !== undefined && newDeliveryAddress?.latitude !== null) {
-          finalDeliveryLat = String(newDeliveryAddress.latitude);
-        }
-        if (newDeliveryAddress?.longitude !== undefined && newDeliveryAddress?.longitude !== null) {
-          finalDeliveryLng = String(newDeliveryAddress.longitude);
-        }
-            finalDeliveryAddressJson = existingAddr.addressLine1;
-            finalCity = existingAddr.city;
-            finalState = existingAddr.state;
-            finalPincode = existingAddr.postalCode;
-            finalCustomerName = existingAddr.fullName || finalCustomerName;
-          }
-        }
-
-           if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
-            // हम यहाँ users टेबल को tx के माध्यम से अपडेट कर रहे हैं
-            await tx.update(users)
-                .set({
-                    phone: userPhoneNumberForUpdate,
-                    updatedAt: new Date(),
-                })
-                  .where(
-                    // 1. उपयोगकर्ता आईडी से मिलान करें
-                    eq(users.id, userId), 
-                    // 2. OPTIONAL: केवल तभी अपडेट करें जब फ़ोन नंबर अभी खाली हो
-                    // or(isNull(users.phone), eq(users.phone, '')) 
-                    // सुरक्षा के लिए, हम सीधे अपडेट कर सकते हैं।
-                );
-            console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
-           }
-        // --- Fetch product(s) and validate each item ---
-        let calculatedSubtotal = 0;
-        const validatedItems: Array<{
-          productId: number;
-          product: any;
-          unitPrice: number;
-          quantity: number;
-          itemTotal: number;
-        }> = [];
+   // Server-side transaction
+const result = await db.transaction(async (tx) => {
+  try {
+    // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
+    let finalDeliveryAddressId = deliveryAddressId;
     
-        for (const it of normalizedItems) {
-            const productId = Number(it.productId);
-            const quantity = Number(it.quantity ?? 1);
-            if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
-            if (!quantity || Number.isNaN(quantity) || quantity <= 0) { throw new Error("Invalid quantity in item."); }
-            const [product] = await tx.select().from(products).where(eq(products.id, productId));
-            if (!product) { throw new Error(`Product ${productId} not found.`); }
-            if (product.approvalStatus !== "approved") { throw new Error(`Product ${productId} is not available or not approved.`); }
-            if (product.minOrderQty && quantity < product.minOrderQty) { throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`); }
-            if (product.maxOrderQty && quantity > product.maxOrderQty) { throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`); }
-            const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
-            if (Number.isNaN(unitPrice)) { throw new Error(`Invalid unit price for product ${productId}.`); }
-            const itemTotalPrice = unitPrice * quantity;
-            calculatedSubtotal += itemTotalPrice;
+    // Variables ko top-level declare kiya taaki pooray transaction mein access rahe
+    let finalDeliveryLat: string | null = null;
+    let finalDeliveryLng: string | null = null;
+    
+    if (newDeliveryAddress?.latitude != null) {
+      finalDeliveryLat = String(newDeliveryAddress.latitude);
+    }
+    if (newDeliveryAddress?.longitude != null) {
+      finalDeliveryLng = String(newDeliveryAddress.longitude);
+    }
+    
+    let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
+    let finalCity = newDeliveryAddress?.city || "";
+    let finalState = newDeliveryAddress?.state || "";
+    let finalPincode = newDeliveryAddress?.postalCode || "";
+    
+    // req.user logic fix (name and phoneNumber mapping)
+    let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
+    let finalPhone = userPhoneNumberForUpdate || newDeliveryAddress?.phoneNumber || req.user?.phoneNumber || "N/A";
 
-            validatedItems.push({
-                productId,
-                product,
-                unitPrice,
-                quantity,
-                itemTotal: itemTotalPrice,
-            });
-        }
+    if (!finalDeliveryAddressId && newDeliveryAddress) {
+      console.log("📌 [ADDRESS FIX]: Registering new delivery address inside DB directly...");
+      
+      // Direct insert query taaki table hamesha full rahe
+      const [insertedAddress] = await tx.insert(deliveryAddresses).values({
+        userId: userId,
+        fullName: finalCustomerName,
+        phoneNumber: finalPhone,
+        addressLine1: finalDeliveryAddressJson,
+        addressLine2: newDeliveryAddress.addressLine2 || null,
+        city: finalCity,
+        state: finalState,
+        postalCode: finalPincode,
+        latitude: finalDeliveryLat,
+        longitude: finalDeliveryLng,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any).returning({ id: deliveryAddresses.id });
+
+      if (insertedAddress) {
+        finalDeliveryAddressId = insertedAddress.id;
+        console.log(`✅ [ADDRESS FIX]: Saved in table with ID: ${finalDeliveryAddressId}`);
+      }
+    } else if (finalDeliveryAddressId) {
+      // Agar ID pehle se hai, toh safety ke liye details fetch kar lo
+      const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+      if (existingAddr) {
+        // 🎯 FIXED: Idhar se duplicate 'let' hata kar direct main variables ko update kiya hai
+        if (existingAddr.latitude != null) finalDeliveryLat = String(existingAddr.latitude);
+        if (existingAddr.longitude != null) finalDeliveryLng = String(existingAddr.longitude);
         
+        finalDeliveryAddressJson = existingAddr.addressLine1 || "";
+        finalCity = existingAddr.city || "";
+        finalState = existingAddr.state || "";
+        finalPincode = existingAddr.postalCode || "";
+        finalCustomerName = existingAddr.fullName || finalCustomerName;
+        finalPhone = existingAddr.phoneNumber || finalPhone;
+      }
+    }
+
+    // --- Users Table Phone Sync ---
+    if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
+      await tx.update(users)
+        .set({
+          phone: userPhoneNumberForUpdate,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
+    }
+
+    // --- Fetch product(s) and validate each item ---
+    let calculatedSubtotal = 0;
+    const validatedItems: Array<{
+      productId: number;
+      product: any;
+      unitPrice: number;
+      quantity: number;
+      itemTotal: number;
+    }> = [];
+
+    for (const it of normalizedItems) {
+      const productId = Number(it.productId);
+      const quantity = Number(it.quantity ?? 1);
+      if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
+      if (!quantity || Number.isNaN(quantity) || quantity <= 0) { throw new Error("Invalid quantity in item."); }
+      
+      const [product] = await tx.select().from(products).where(eq(products.id, productId));
+      if (!product) { throw new Error(`Product ${productId} not found.`); }
+      if (product.approvalStatus !== "approved") { throw new Error(`Product ${productId} is not available or not approved.`); }
+      if (product.minOrderQty && quantity < product.minOrderQty) { throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`); }
+      if (product.maxOrderQty && quantity > product.maxOrderQty) { throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`); }
+      
+      const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
+      if (Number.isNaN(unitPrice)) { throw new Error(`Invalid unit price for product ${productId}.`); }
+      
+      const itemTotalPrice = unitPrice * quantity;
+      calculatedSubtotal += itemTotalPrice;
+
+      validatedItems.push({
+        productId,
+        product,
+        unitPrice,
+        quantity,
+        itemTotal: itemTotalPrice,
+      });
+    }
         // Compare calculatedSubtotal with client-provided subtotal
         if (Math.abs(calculatedSubtotal - subtotal) > 0.01) {
           throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
@@ -721,28 +720,82 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
 const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
     
     // Server-side transaction
-    const result = await db.transaction(async (tx) => {
-        // Handle delivery address
-        const {
-            id: finalDeliveryAddressId,
-            lat: finalDeliveryLat,
-            lng: finalDeliveryLng,
-            fullAddress: finalDeliveryAddressJson,
-            city: finalCity,
-            state: finalState,
-            pincode: finalPincode,
-        } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
-  if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
-            await tx.update(users)
-                .set({
-                    phone: userPhoneNumberForUpdate,
-                    updatedAt: new Date(),
-                })
-                .where(
-                    eq(users.id, userId), 
-                );
-            console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
-  }
+  // Server-side transaction
+const result = await db.transaction(async (tx) => {
+  try {
+    // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
+    let finalDeliveryAddressId = deliveryAddressId;
+    
+    // Top-level block scope variables declaration
+    let finalDeliveryLat: string | null = null;
+    let finalDeliveryLng: string | null = null;
+    
+    if (newDeliveryAddress?.latitude != null) {
+      finalDeliveryLat = String(newDeliveryAddress.latitude);
+    }
+    if (newDeliveryAddress?.longitude != null) {
+      finalDeliveryLng = String(newDeliveryAddress.longitude);
+    }
+    
+    let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
+    let finalCity = newDeliveryAddress?.city || "";
+    let finalState = newDeliveryAddress?.state || "";
+    let finalPincode = newDeliveryAddress?.postalCode || "";
+    
+    // req.user logic mapping fallback (TypeScript safe)
+    let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
+    let finalPhone = userPhoneNumberForUpdate || newDeliveryAddress?.phoneNumber || req.user?.phoneNumber || "N/A";
+
+    if (!finalDeliveryAddressId && newDeliveryAddress) {
+      console.log("📌 [ADDRESS FIX - CART]: Registering new delivery address inside DB directly...");
+      
+      // Direct insertion query taaki table bhari rahe aur data 'Unknown' na ho
+      const [insertedAddress] = await tx.insert(deliveryAddresses).values({
+        userId: userId,
+        fullName: finalCustomerName,
+        phoneNumber: finalPhone,
+        addressLine1: finalDeliveryAddressJson,
+        addressLine2: newDeliveryAddress.addressLine2 || null,
+        city: finalCity,
+        state: finalState,
+        postalCode: finalPincode,
+        latitude: finalDeliveryLat,
+        longitude: finalDeliveryLng,
+        isDefault: false,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any).returning({ id: deliveryAddresses.id });
+
+      if (insertedAddress) {
+        finalDeliveryAddressId = insertedAddress.id;
+        console.log(`✅ [ADDRESS FIX - CART]: Saved in table with ID: ${finalDeliveryAddressId}`);
+      }
+    } else if (finalDeliveryAddressId) {
+      // Agar ID pehle se hai, toh direct database row se safe fetch lo
+      const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+      if (existingAddr) {
+        if (existingAddr.latitude != null) finalDeliveryLat = String(existingAddr.latitude);
+        if (existingAddr.longitude != null) finalDeliveryLng = String(existingAddr.longitude);
+        
+        finalDeliveryAddressJson = existingAddr.addressLine1 || "";
+        finalCity = existingAddr.city || "";
+        finalState = existingAddr.state || "";
+        finalPincode = existingAddr.postalCode || "";
+        finalCustomerName = existingAddr.fullName || finalCustomerName;
+        finalPhone = existingAddr.phoneNumber || finalPhone;
+      }
+    }
+
+    // --- Users Table Phone Sync ---
+    if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
+      await tx.update(users)
+        .set({
+          phone: userPhoneNumberForUpdate,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, userId));
+      console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
+    }
         const userCartItems = await tx.query.cartItems.findMany({
           where: eq(cartItems.userId, userId),
           with: {
@@ -857,7 +910,7 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
             orderNumber: `ORD-${Date.now()}-${userId}`,
             customerId: userId,
             deliveryAddressId: finalDeliveryAddressId,
-            deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
+            deliveryAddress: finalDeliveryAddressJson,
             deliveryCity: finalCity,
             deliveryState: finalState,
             deliveryPincode: finalPincode,
@@ -891,9 +944,14 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
         // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए (Create Sub-Orders first)
         let currentBatchGroup: (typeof tempSubOrders[number] & { subOrderId: number })[] = [];
         
-        nonSelfDeliverySubOrders.sort((a, b) => {
-            const distA = calculateDistance(finalDeliveryLat, finalDeliveryLng, a.storeLat, a.storeLng);
-            const distB = calculateDistance(finalDeliveryLat, finalDeliveryLng, b.storeLat, b.storeLng);
+       nonSelfDeliverySubOrders.sort((a, b) => {
+            // 🎯 TS FIX: String/Null ko safe number mein cast kiya taaki calculateDistance khush ho jaye
+            const lat = finalDeliveryLat ? Number(finalDeliveryLat) : 0;
+            const lng = finalDeliveryLng ? Number(finalDeliveryLng) : 0;
+
+            const distA = calculateDistance(lat, lng, Number(a.storeLat || 0), Number(a.storeLng || 0));
+            const distB = calculateDistance(lat, lng, Number(b.storeLat || 0), Number(b.storeLng || 0));
+            
             return distA - distB;
         });
 
@@ -953,149 +1011,152 @@ const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
 
             if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
 
-// 3. Order Items बनाएं (Self-Delivery)
-for (const item of subOrderData.items) {
-    // 🛑 HIGH-CLASS ADDITION: Update Inventory First
-    const [updatedProduct] = await tx
-        .update(products)
-        .set({ 
-            stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
-            updatedAt: new Date() 
-        })
-        .where(
-            and(
-                eq(products.id, item.product.id),
-                sql`${products.stock} >= ${Number((item as any).quantity)}`, // Stock Check
-                isNull(products.deletedAt) // Soft Delete Check
+// / 3. Order Items बनाएं (Self-Delivery)
+    for (const item of subOrderData.items) {
+        // 🛑 HIGH-CLASS ADDITION: Update Inventory First
+        const [updatedProduct] = await tx
+            .update(products)
+            .set({ 
+                stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+                updatedAt: new Date() 
+            })
+            .where(
+                and(
+                    eq(products.id, item.product.id),
+                    sql`${products.stock} >= ${Number((item as any).quantity)}`, // Stock Check
+                    isNull(products.deletedAt) // Soft Delete Check
+                )
             )
-        )
-        .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId, name: products.name });
+            .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId, name: products.name });
 
-    if (!updatedProduct) {
-        throw new Error(`Maaf kijiye, ${item.product.name} ka paryapt stock nahi hai.`);
-    }
-
-    // 🔥 Trigger Low Stock Alert
-    if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
-        ProductService.checkLowStockAndNotify(
-            updatedProduct.id, 
-            updatedProduct.stock as number, 
-            updatedProduct.sellerId as number
-        ).catch(err => console.error("Low Stock Alert Error:", err));
-    }
-
-    // Now insert the order item
-    await tx.insert(orderItems).values({
-        subOrderId: subOrder.id,
-        orderId: masterOrder.id, 
-        sellerId: subOrderData.sellerId,
-        userId: userId,
-        productId: item.product.id,
-        productName: item.product.name,
-        productImage: item.product.image,
-        productPrice: (item as any).priceAtAdded,
-        productUnit: item.product.unit,
-        quantity: (item as any).quantity,
-        itemTotal: (item as any).totalPrice,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    } as any);
-}
-}
-
-        // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
-        for (const batch of batchesToCreate) {
-          //  const assignedDeliveryBoyId = await assignDeliveryBoy(tx, masterOrder.id, finalDeliveryLat, finalDeliveryLng);
-
-            // a) डिलीवरी बैच बनाएं
-            const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-                masterOrderId: masterOrder.id,
-                deliveryBoyId:null,// assignedDeliveryBoyId,
-                customerDeliveryAddressId: finalDeliveryAddressId,
-                status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
-                estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),
-                deliveryOtp:null,// Math.floor(1000 + Math.random() * 9000).toString(),
-              deliveryOtpSentAt: null,
-                createdAt: new Date(),
-                updatedAt: new Date(),
-            }).returning({ id: deliveryBatches.id });
-
-            if (!deliveryBatch) throw new Error('Failed to create delivery batch.');
-
-            // b) संबंधित सब-ऑर्डर को बैच ID के साथ अपडेट करें
-            const subOrderIdsToUpdate = (batch.subOrdersData || []).map(s => s.subOrderId);
-            if (subOrderIdsToUpdate.length > 0) {
-                await tx.update(subOrders)
-                    .set({
-                        deliveryBatchId: deliveryBatch.id,
-                    })
-                    .where(inArray(subOrders.id, subOrderIdsToUpdate));
-            }
-
-            // c) Order Items बनाएं (Non-Self-Delivery)
-            for (const subOrderData of batch.subOrdersData) {
-             // ... c) Order Items बनाएं (Non-Self-Delivery) loop ke andar ...
-for (const item of subOrderData.items) {
-    // 🛑 HIGH-CLASS ADDITION: Update Inventory
-    const [updatedProduct] = await tx
-        .update(products)
-        .set({ 
-            stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
-            updatedAt: new Date() 
-        })
-        .where(
-            and(
-                eq(products.id, item.product.id),
-                sql`${products.stock} >= ${Number((item as any).quantity)}`,
-                isNull(products.deletedAt)
-            )
-        )
-        .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId });
-
-    if (!updatedProduct) {
-        throw new Error(`Maaf kijiye, ${item.product.name} out of stock ho gaya hai.`);
-    }
-
-    // 🔥 Alert
-    if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
-        ProductService.checkLowStockAndNotify(updatedProduct.id, updatedProduct.stock, updatedProduct.sellerId).catch(e => {});
-    }
-
-   
-                    await tx.insert(orderItems).values({
-                        subOrderId: subOrderData.subOrderId,
-                        orderId: masterOrder.id, 
-                        sellerId: subOrderData.sellerId,
-                        userId: userId,
-                        productId: item.product.id,
-                        productName: item.product.name,
-                        productImage: item.product.image,
-                        productPrice: (item as any).priceAtAdded,
-                        productUnit: item.product.unit,
-                        quantity: (item as any).quantity,
-                        itemTotal: (item as any).totalPrice,
-                        createdAt: new Date(),
-                        updatedAt: new Date(),
-                    }as any);
-                }
-            }
+        if (!updatedProduct) {
+            throw new Error(`Maaf kijiye, ${item.product.name} ka paryapt stock nahi hai.`);
         }
 
-         // 4. कार्ट को खाली करें
-        await tx.delete(cartItems).where(eq(cartItems.userId, userId));
-        console.log("✅ Cart items deleted from cartItems table.");
-        
-        return { masterOrder, tempSubOrders }; 
-        
-    }); // end transaction
-    
-    // 🛑 Transaction result ko result variable se assign karein
-     transactionResult = result;
+        // 🔥 Trigger Low Stock Alert
+        if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
+            ProductService.checkLowStockAndNotify(
+                updatedProduct.id, 
+                updatedProduct.stock as number, 
+                updatedProduct.sellerId as number
+            ).catch(err => console.error("Low Stock Alert Error:", err));
+        }
 
-    if (!transactionResult || !transactionResult.masterOrder) {
-        return res.status(500).json({ message: "Failed to place order due to an unknown transaction error." });
+        // Now insert the order item
+        await tx.insert(orderItems).values({
+            subOrderId: subOrder.id,
+            orderId: masterOrder.id, 
+            sellerId: subOrderData.sellerId,
+            userId: userId,
+            productId: item.product.id,
+            productName: item.product.name,
+            productImage: item.product.image,
+            productPrice: (item as any).priceAtAdded,
+            productUnit: item.product.unit,
+            quantity: (item as any).quantity,
+            itemTotal: (item as any).totalPrice,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        } as any);
+    } // 👈 Self-Delivery Item Loop Ends
+} // 👈 Self-Delivery Main Block Ends
+
+// 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
+for (const batch of batchesToCreate) {
+    // a) डिलीवरी बैच बनाएं
+    const [deliveryBatch] = await tx.insert(deliveryBatches).values({
+        masterOrderId: masterOrder.id,
+        deliveryBoyId: null,
+        customerDeliveryAddressId: finalDeliveryAddressId,
+        status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+        estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000),
+        deliveryOtp: null,
+        deliveryOtpSentAt: null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    }).returning({ id: deliveryBatches.id });
+
+    if (!deliveryBatch) throw new Error('Failed to create delivery batch.');
+
+    // b) संबंधित सब-ऑर्डर को बैच ID के साथ अपडेट करें
+    const subOrderIdsToUpdate = (batch.subOrdersData || []).map(s => s.subOrderId);
+    if (subOrderIdsToUpdate.length > 0) {
+        await tx.update(subOrders)
+            .set({ deliveryBatchId: deliveryBatch.id })
+            .where(inArray(subOrders.id, subOrderIdsToUpdate));
     }
 
+    // c) Order Items बनाएं (Non-Self-Delivery)
+    for (const subOrderData of batch.subOrdersData) {
+        for (const item of subOrderData.items) {
+            // 🛑 Update Inventory
+            const [updatedProduct] = await tx
+                .update(products)
+                .set({ 
+                    stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+                    updatedAt: new Date() 
+                })
+                .where(
+                    and(
+                        eq(products.id, item.product.id),
+                        sql`${products.stock} >= ${Number((item as any).quantity)}`,
+                        isNull(products.deletedAt)
+                    )
+                )
+                .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId });
+
+            if (!updatedProduct) {
+                throw new Error(`Maaf kijiye, ${item.product.name} out of stock ho gaya hai.`);
+            }
+
+            // 🔥 Low Stock Alert
+            if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
+                ProductService.checkLowStockAndNotify(
+                    updatedProduct.id, 
+                    updatedProduct.stock as number, 
+                    updatedProduct.sellerId as number
+                ).catch(e => {});
+            }
+
+            // 🎯 Item Insert Query
+            await tx.insert(orderItems).values({
+                subOrderId: subOrderData.subOrderId,
+                orderId: masterOrder.id, 
+                sellerId: subOrderData.sellerId,
+                userId: userId,
+                productId: item.product.id,
+                productName: item.product.name,
+                productImage: item.product.image,
+                productPrice: (item as any).priceAtAdded,
+                productUnit: item.product.unit,
+                quantity: (item as any).quantity,
+                itemTotal: (item as any).totalPrice,
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as any);
+        } // 👈 Non-Self Item Loop Ends Here Safe
+    } // 👈 SubOrdersData Loop Ends Here Safe
+} // 👈 BatchesToCreate Loop Ends Here Safe
+
+// 🎯 4. कार्ट को खाली करें (Saare loops perfectly khatam hone ke baad execute hoga)
+await tx.delete(cartItems).where(eq(cartItems.userId, userId));
+console.log("✅ Cart items deleted from cartItems table.");
+
+return { masterOrder, tempSubOrders }; 
+
+// Transaction try block close and catch handle
+  } catch (error: any) {
+    console.error("❌ Error during transaction processing:", error);
+    throw error; 
+  }
+}); // end transaction
+
+// 🛑 Transaction result assignment
+transactionResult = result;
+
+if (!transactionResult || !transactionResult.masterOrder) {
+    return res.status(500).json({ message: "Failed to place order due to an unknown transaction error." });
+}
     // 🛑 [TRING TRING LOGIC] - High Class Notification Flow
     // 🔥 TRING TRING LOGIC (Cart Order - 100% Non-Blocking & Safe Direct DB Fetch)
     try {
