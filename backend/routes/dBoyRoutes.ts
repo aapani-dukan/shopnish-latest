@@ -175,7 +175,42 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+// PUT /api/delivery/update-location
+// Isko delivery boy ki app har 1-2 minute mein call karegi
+router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
+    try {
+        const userId = req.user?.id;
+        const { latitude, longitude } = req.body; // App se direct lat-lng aayenge
 
+        if (!latitude || !longitude) {
+            return res.status(400).json({ error: 'Latitude and Longitude are required.' });
+        }
+
+        // 1. Delivery boy ki profile dhoondho
+        const boyProfile = await db.query.deliveryBoys.findFirst({
+            where: eq(deliveryBoys.userId, userId)
+        });
+
+        if (!boyProfile) {
+            return res.status(404).json({ error: 'Delivery boy profile not found.' });
+        }
+
+        // 2. Database mein 'null' ko real coordinates se replace karo
+        await db.update(deliveryBoys)
+            .set({
+                currentLat: String(latitude),
+                currentLng: String(longitude),
+                updatedAt: new Date()
+            })
+            .where(eq(deliveryBoys.id, boyProfile.id));
+
+        console.log(`📌 [GPS SYNC]: Delivery Boy ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
+        return res.status(200).json({ success: true, message: 'Location updated successfully.' });
+    } catch (error: any) {
+        console.error('❌ Error updating delivery boy location:', error);
+        return res.status(500).json({ error: 'Failed to update location.' });
+    }
+});
 
 /**
  * 🟡 GET Available Delivery Batches for Claiming

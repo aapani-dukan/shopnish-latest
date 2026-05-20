@@ -1432,6 +1432,9 @@ sellerRouter.patch(
             console.log(`📍 [FILTER] Seller Live Location: (${sellerLat}, ${sellerLng})`);
 
             // Safe Database call (Bina active transaction block lagaye pure system se load karein)
+         // --- 🚨 LIVE BUSINESS FAIL-SAFE SIREN LOGIC 🚨 ---
+            console.log(`📍 [FILTER] Seller Live Location: (${sellerLat}, ${sellerLng})`);
+
             const eligibleDeliveryBoys = await db
               .select({
                 id: deliveryBoys.id,
@@ -1448,42 +1451,58 @@ sellerRouter.patch(
             let notificationCount = 0;
 
             for (const boy of eligibleDeliveryBoys) {
-              if (!boy.fcmToken || !boy.currentLat || !boy.currentLng) continue;
+              if (!boy.fcmToken) continue; // Agar FCM token hi nahi hai, toh hi skip karenge
 
-              const boyLat = parseFloat(boy.currentLat);
-              const boyLng = parseFloat(boy.currentLng);
+              let isEligible = false;
+              let displayDistance = "Nearby";
 
-              const R = 6371; 
-              const dLat = ((boyLat - sellerLat) * Math.PI) / 180;
-              const dLng = ((boyLng - sellerLng) * Math.PI) / 180;
-              
-              const a =
-                Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                Math.cos((sellerLat * Math.PI) / 180) *
-                  Math.cos((boyLat * Math.PI) / 180) *
-                  Math.sin(dLng / 2) *
-                  Math.sin(dLng / 2);
-              
-              const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-              const distance = R * c; 
+              // 📍 LAYER 1: Agar live location mil rahi hai, toh 5 KM ka perfect radius check karo
+              if (boy.currentLat && boy.currentLng) {
+                const boyLat = parseFloat(boy.currentLat);
+                const boyLng = parseFloat(boy.currentLng);
 
-              if (distance <= maxRadiusKm) {
+                const R = 6371; 
+                const dLat = ((boyLat - sellerLat) * Math.PI) / 180;
+                const dLng = ((boyLng - sellerLng) * Math.PI) / 180;
+                
+                const a =
+                  Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos((sellerLat * Math.PI) / 180) *
+                    Math.cos((boyLat * Math.PI) / 180) *
+                    Math.sin(dLng / 2) *
+                    Math.sin(dLng / 2);
+                
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                const distance = R * c; 
+
+                if (distance <= maxRadiusKm) {
+                  isEligible = true;
+                  displayDistance = `${distance.toFixed(1)} KM`;
+                }
+              } else {
+                // 🌆 LAYER 2: APP BAND BACKUP - Agar app band hone se location NULL hai,
+                // toh delivery boy ko drop mat karo, use direct notification bhej do!
+                isEligible = true; 
+                displayDistance = "Active Zone";
+              }
+
+              // 🚀 Agar delivery boy eligible hai (ya toh range me hai ya active area me hai)
+              if (isEligible) {
                 notificationCount++;
                 
-                // 🚨 FORCED SIREN CHANNEL FIX: Hum direct admin sdk payload check parameters ensure kar rahe hain
                 sendNotification(
                   boy.fcmToken, 
                   "🚚 Naya Delivery Task Taiyar Hai!", 
-                  `Batch ${batchAlertData.batchNumber} pickup karein. Doori: ${distance.toFixed(1)} KM`, 
+                  `Batch ${batchAlertData.batchNumber} pickup karein. (${displayDistance})`, 
                   { 
                     batchId: String(existingSubOrder.deliveryBatch.id),
-                    channelId: "delivery_siren_v10", // 👈 Yeh exact payload string pass karna zaroori hai bhai
-                    sound: "siren"
+                    channelId: "delivery_siren_v10", // Mobile app ka strict custom channel
+                    sound: "siren" // Background custom ringtone trigger
                   }, 
                   'delivery' 
                 ).catch(err => console.error("❌ Delivery Push Error:", err));
               }
-            }
+            }  
 
             console.log(`🚀 [DELIVERY SIREN]: Total ${notificationCount} delivery boys ko 5 KM ke andar siren bheja gaya.`);
           } 
