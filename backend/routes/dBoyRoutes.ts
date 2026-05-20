@@ -289,10 +289,10 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             },
             orderBy: desc(deliveryBatches.createdAt),
         });
-     const formattedBatches = availableBatches.map(batch => {
+    const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
-            // 1. Pickup Details (Shops & Addresses)
+            // 1. Pickup Details
             const pickupPoints = currentSubOrders.map(so => ({
                 shopName: so.seller?.businessName || "Unknown Shop",
                 address: so.seller?.businessAddress || "Address Not Available",
@@ -302,49 +302,40 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
             const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-            // 🎯 MASTER ORDER DETAILED EXTRACTION (Drizzle lateral join response parsing)
             const mOrder = batch.masterOrder as any;
             
-            // Logs ke mutabik customer data ek custom structure ya object me ho sakta hai
-            // Hum dono formats (Direct relation aur nested layer) ko check kar rahe hain
-            const customerObj = mOrder?.customer;
-            const addressObj = mOrder?.deliveryAddress;
+            // 🎯 FIXED: CamelCase aur Snake_case dono ka safety check laga diya bhai
+            const customerObj = mOrder?.customer || mOrder?.customer_user || {};
+            const addressObj = mOrder?.deliveryAddress || mOrder?.delivery_address || {};
 
             // 👤 2. Customer Name Safe Fallback
-            let firstName = customerObj?.firstName || customerObj?.first_name || '';
-            let lastName = customerObj?.lastName || customerObj?.last_name || '';
+            let firstName = customerObj?.firstName || customerObj?.first_name || mOrder?.first_name || '';
+            let lastName = customerObj?.lastName || customerObj?.last_name || mOrder?.last_name || '';
             
-            // Agar nested object me na mile, toh check karenge ki kya mOrder ke andar direct array response hai
-            if (!firstName && Array.isArray(mOrder)) {
-                // Drizzle lateral layers fallback
-                const potentialCust = mOrder.find((el: any) => el && (el.firstName || el.first_name));
-                if (potentialCust) {
-                    firstName = potentialCust.firstName || potentialCust.first_name || '';
-                    lastName = potentialCust.lastName || potentialCust.last_name || '';
-                }
-            }
-
-            // Agar database me direct columns hain master order table me:
             let finalCustomerName = `${firstName} ${lastName}`.trim();
+            
+            // Agar address object ke andar full name save hai
             if (!finalCustomerName) {
-                finalCustomerName = mOrder?.delivery_address?.full_name || mOrder?.full_name || "Customer";
+                finalCustomerName = addressObj?.fullName || addressObj?.full_name || mOrder?.delivery_address?.full_name || "Customer";
             }
 
-            // 📍 3. Delivery Address Safe Fallback (Logs me 'delivery_address' text column bhi hai aur object bhi)
+            // 📍 3. Delivery Address Safe Fallback
             let finalAddress = "Local Address";
             let finalCity = "";
 
-            if (addressObj && typeof addressObj === 'object') {
+            if (addressObj && typeof addressObj === 'object' && (addressObj.addressLine1 || addressObj.address_line1)) {
                 finalAddress = addressObj.addressLine1 || addressObj.address_line1 || "Local Address";
+                if (addressObj.addressLine2 || addressObj.address_line2) {
+                    finalAddress += `, ${addressObj.addressLine2 || addressObj.address_line2}`;
+                }
                 finalCity = addressObj.city || "";
             } else if (mOrder?.delivery_address) {
-                // Agar direct string text save hai table me
                 finalAddress = typeof mOrder.delivery_address === 'string' ? mOrder.delivery_address : "Local Address";
                 finalCity = mOrder.delivery_city || "";
             }
 
             // 📞 4. Phone Number Safe Fallback
-            const finalPhone = customerObj?.phone || mOrder?.customerPhone || mOrder?.phone_number || "N/A";
+            const finalPhone = customerObj?.phone || addressObj?.phoneNumber || addressObj?.phone_number || mOrder?.customerPhone || mOrder?.phone_number || "N/A";
 
             return {
                 id: batch.id,
@@ -355,7 +346,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 pickupAddresses: shopAddresses, 
                 pickupPoints: pickupPoints,
 
-                // Mobile App standard fields mapping (Jo aapki screen code se match karti hain)
+                // Mobile App Ke Liye Ekdum Sateek Mapped Fields
                 customerName: finalCustomerName,
                 customerPhone: finalPhone, 
                 deliveryAddress: finalAddress, 
@@ -365,7 +356,6 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 totalItems: currentSubOrders.length
             };
         });
-
         return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
