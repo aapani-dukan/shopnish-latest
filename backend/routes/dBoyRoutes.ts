@@ -289,7 +289,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             },
             orderBy: desc(deliveryBatches.createdAt),
         });
-   const formattedBatches = availableBatches.map(batch => {
+  const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
             // 1. Pickup Details
@@ -304,15 +304,13 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
 
             const mOrder = batch.masterOrder as any;
             
-            // 🎯 कस्टमाइज्ड ऑब्जेक्ट्स एक्सट्रैक्शन (लॉग के अनुसार)
+            // 🎯 Customer object extraction for name/phone fallback
             const customerObj = mOrder?.customer || mOrder?.customer_user || {};
-            const addressObj = mOrder?.deliveryAddress || mOrder?.delivery_address || {};
 
-            // 👤 2. CUSTOMER NAME FIX: snake_case और camelCase दोनों का तगड़ा फॉलबैक
+            // 👤 2. CUSTOMER NAME FIX
             let firstName = mOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
             let lastName = mOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
             
-            // अगर लैटरल जॉइन एरे के रूप में रिस्पॉन्स दे रहा हो
             if (Array.isArray(mOrder)) {
                 const foundCust = mOrder.find((el: any) => el && (el.first_name || el.firstName));
                 if (foundCust) {
@@ -323,34 +321,37 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
 
             let finalCustomerName = `${firstName} ${lastName}`.trim();
             if (!finalCustomerName) {
-                // अगर ऊपर कुछ न मिले तो आर्डर लेवल या एड्रेस का नाम उठाओ
-                finalCustomerName = mOrder?.customerName || addressObj?.fullName || addressObj?.full_name || "Customer";
+                finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
             }
 
-            // 📍 3. DELIVERY ADDRESS FIX: डायरेक्ट कॉलम और रिलेशन दोनों को निचोड़ लिया
+            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY)
             let finalAddress = "";
-            let finalCity = mOrder?.delivery_city || addressObj?.city || "";
+            let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
 
-            // प्राथमिकता 1: मुख्य आर्डर टेबल का डायरेक्ट 'delivery_address' स्ट्रिंग कॉलम (जो लॉग में साफ दिख रहा है)
-            if (mOrder && typeof mOrder === 'object' && ('delivery_address' in mOrder || 'deliveryAddress' in mOrder)) {
-                finalAddress = mOrder.delivery_address || mOrder.deliveryAddress || "";
-            }
-
-            // प्राथमिकता 2: अगर वो नहीं है, तो जॉइन वाले एड्रेस ऑब्जेक्ट से उठाओ
-            if (!finalAddress && addressObj && typeof addressObj === 'object') {
-                finalAddress = addressObj.addressLine1 || addressObj.address_line1 || "";
-                if (addressObj.addressLine2 || addressObj.address_line2) {
-                    finalAddress += `, ${addressObj.addressLine2 || addressObj.address_line2}`;
+            // 🚨 DIRECT STRIKE: Agar mOrder mein direct 'delivery_address' text column hai, toh wahi lo
+            if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string') {
+                finalAddress = mOrder.delivery_address;
+            } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string') {
+                finalAddress = mOrder.deliveryAddress;
+            } 
+            
+            // Fallback: Agar upar string nahi mili aur address kisi wajah se object ya JSON string hai
+            if (!finalAddress && mOrder?.deliveryAddress) {
+                try {
+                    const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
+                    finalAddress = parsedAddr?.addressLine1 || parsedAddr?.address || "";
+                } catch (e) {
+                    finalAddress = String(mOrder.deliveryAddress);
                 }
             }
 
-            // फाइनल सेफ्टी चेक
-            if (!finalAddress || typeof finalAddress !== 'string') {
+            // Final safety check
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
                 finalAddress = "Local Address";
             }
 
             // 📞 4. PHONE NUMBER SAFE EXTRACTION
-            const finalPhone = customerObj?.phone || mOrder?.phone || mOrder?.customerPhone || mOrder?.delivery_address?.phone_number || "N/A";
+            const finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || customerObj?.phone || customerObj?.phoneNumber || "N/A";
 
             return {
                 id: batch.id,
@@ -364,13 +365,14 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                 // मोबाइल ऐप की स्क्रीन के लिए एकदम फ्लैट कीज (Keys)
                 customerName: finalCustomerName,
                 customerPhone: finalPhone, 
-                deliveryAddress: finalAddress, 
+                deliveryAddress: finalAddress, // 👈 Ab isme 100% poora text address jayega
                 deliveryCity: finalCity,       
                 
                 deliveryCharge: Number(batch.deliveryFee || 40), 
                 totalItems: currentSubOrders.length
             };
         });
+        
         return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
