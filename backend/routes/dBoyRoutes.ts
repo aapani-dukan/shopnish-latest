@@ -212,6 +212,34 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
     }
 });
 
+// 📌 PATCH /api/delivery/update-fcm-token
+// Mobile app se aane wale FCM token ko permanently database mein save karne ke liye
+router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: Response) => {
+    try {
+        const userId = req.user?.id; // Auth middleware se nikaali gayi logged-in user ID
+        const { fcmToken } = req.body;
+
+        if (!fcmToken) {
+            return res.status(400).json({ error: 'FCM Token is required.' });
+        }
+
+        // Database mein users table ke andar fcmToken column ko update karein
+        await db.update(users)
+            .set({ 
+                fcmToken: fcmToken,
+                updatedAt: new Date()
+            })
+            .where(eq(users.id, userId));
+
+        console.log(`🚀 [FCM SYNC SUCCESS]: User ID ${userId} ka FCM Token successfully save ho gaya.`);
+        return res.status(200).json({ success: true, message: 'FCM Token updated successfully.' });
+
+    } catch (error: any) {
+        console.error('❌ Error in /update-fcm-token:', error);
+        return res.status(500).json({ error: 'Failed to update FCM token.' });
+    }
+});
+
 /**
  * 🟡 GET Available Delivery Batches for Claiming
  * /api/delivery-boys/available-batches
