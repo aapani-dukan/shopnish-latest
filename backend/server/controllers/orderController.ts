@@ -253,15 +253,66 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
    const result=await db.transaction(async (tx) => {
       try {
         // Handle delivery address (stores new address in `deliveryAddresses` table and returns details)
-        const {
-          id: finalDeliveryAddressId,
-          lat: finalDeliveryLat,
-          lng: finalDeliveryLng,
-          fullAddress: finalDeliveryAddressJson,
-          city: finalCity,
-          state: finalState,
-          pincode: finalPincode,
-        } = await handleDeliveryAddress(tx, userId, deliveryAddressId, newDeliveryAddress, req.user);
+      // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
+        let finalDeliveryAddressId = deliveryAddressId;
+        
+        // TypeScript Fix: Lat/Lng ko safe string cast kiya agar wo number hain
+        let finalDeliveryLat = newDeliveryAddress?.latitude != null ? String(newDeliveryAddress.latitude) : null;
+        let finalDeliveryLng = newDeliveryAddress?.longitude != null ? String(newDeliveryAddress.longitude) : null;
+        
+        let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
+        let finalCity = newDeliveryAddress?.city || "";
+        let finalState = newDeliveryAddress?.state || "";
+        let finalPincode = newDeliveryAddress?.postalCode || "";
+        
+        // 🎯 FIX: req.user mein 'firstName'/'lastName' nahi hai, sirf 'name' hai!
+        let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
+
+        if (!finalDeliveryAddressId && newDeliveryAddress) {
+          console.log("📌 [ADDRESS FIX]: Registering new delivery address inside DB directly...");
+          
+          // Direct insert query taaki table hamesha full rahe
+          const [insertedAddress] = await tx.insert(deliveryAddresses).values({
+            userId: userId,
+            fullName: finalCustomerName,
+            // 🎯 FIX: req.user mein 'phone' nahi hai, 'phoneNumber' hai!
+            phoneNumber: userPhoneNumberForUpdate || req.user?.phoneNumber || "N/A",
+            addressLine1: newDeliveryAddress.addressLine1 || "",
+            addressLine2: newDeliveryAddress.addressLine2 || null,
+            city: finalCity,
+            state: finalState,
+            postalCode: finalPincode,
+            latitude: finalDeliveryLat,
+            longitude: finalDeliveryLng,
+            isDefault: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          } as any).returning({ id: deliveryAddresses.id });
+
+          if (insertedAddress) {
+            finalDeliveryAddressId = insertedAddress.id;
+            console.log(`✅ [ADDRESS FIX]: Saved in table with ID: ${finalDeliveryAddressId}`);
+          }
+        } else if (finalDeliveryAddressId) {
+          // Agar ID pehle se hai, toh safety ke liye details fetch kar lo
+          const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+          if (existingAddr) {
+           let finalDeliveryLat: string | null = null;
+        let finalDeliveryLng: string | null = null;
+
+        if (newDeliveryAddress?.latitude !== undefined && newDeliveryAddress?.latitude !== null) {
+          finalDeliveryLat = String(newDeliveryAddress.latitude);
+        }
+        if (newDeliveryAddress?.longitude !== undefined && newDeliveryAddress?.longitude !== null) {
+          finalDeliveryLng = String(newDeliveryAddress.longitude);
+        }
+            finalDeliveryAddressJson = existingAddr.addressLine1;
+            finalCity = existingAddr.city;
+            finalState = existingAddr.state;
+            finalPincode = existingAddr.postalCode;
+            finalCustomerName = existingAddr.fullName || finalCustomerName;
+          }
+        }
 
            if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
             // हम यहाँ users टेबल को tx के माध्यम से अपडेट कर रहे हैं
@@ -332,7 +383,7 @@ const [masterOrder] = await tx.insert(orders).values({
     deliveryAddressId: finalDeliveryAddressId,
     
     // FIX: एड्रेस को स्ट्रिंग बनाकर डालना एकदम सही है (JSON.stringify)
-    deliveryAddress: JSON.stringify(finalDeliveryAddressJson),
+    deliveryAddress:finalDeliveryAddressJson,
     deliveryCity: finalCity,
     deliveryState: finalState,
     deliveryPincode: finalPincode,
