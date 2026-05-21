@@ -427,7 +427,6 @@ router.patch(
                     .for('update'); 
 
                 if (!existingBatch) {
-                    // अगर बैच पहले ही क्लेम हो चुका है
                     throw new Error('BATCH_ALREADY_CLAIMED');
                 }
 
@@ -441,6 +440,7 @@ router.patch(
                     })
                     .where(eq(deliveryBatches.id, batchId))
                     .returning();
+
                 await tx.update(orders)
                     .set({ updatedAt: new Date().toISOString() })
                     .where(eq(orders.id, updatedBatch.masterOrderId));
@@ -453,17 +453,15 @@ router.patch(
                     updatedByUserId: userId,
                     updatedByUserRole: 'delivery-boy',
                     timestamp: new Date(),
-                    message: `Delivery partner ${deliveryBoyProfile.name} has accepted your order.`,
+                    message: `Delivery partner ${deliveryBoyProfile.name || 'Assigned'} has accepted your order.`,
                 } as any);
 
                 return updatedBatch;
             });
 
-            // 3. Socket.io Events (Real-time updates)
-            // अन्य डिलीवरी बॉय को बताएं कि यह बैच अब लिस्ट से हटा दें
+            // 3. Socket.io Events
             getIO().emit(`available-batches:claimed`, { batchId });
             
-            // कस्टमर को बताएं कि डिलीवरी पार्टनर मिल गया है
             getIO().emit(`order:${result.masterOrderId}:status`, {
                 status: 'assigned',
                 deliveryBoyName: deliveryBoyProfile.name,
@@ -478,19 +476,19 @@ router.patch(
 
         } catch (error: any) {
             console.error('❌ Claim Error:', error);
-            
             if (error.message === 'BATCH_ALREADY_CLAIMED') {
                 return res.status(409).json({ error: 'This batch has already been claimed by someone else.' });
             }
-            
             return res.status(500).json({ error: 'Failed to claim delivery batch.' });
         }
     }
 );
 
 
- // ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
- 
+/**
+ * ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
+ * /api/delivery-boys/batches
+ */
 router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -508,70 +506,114 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
     }
     const deliveryBoyId = deliveryBoyProfile.id;
 
-   const assignedBatches = await db.query.deliveryBatches.findMany({
-  where: and(
-    eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
-    // ✅ String check ekdum sahi hai aapka
-    not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
-  ),
-  with: {
-    subOrders: {
+    // 🎯 QUERY RE-ARCHITECTED: डेटाबेस से रिलेशंस को मजबूती से खींचना
+    const assignedBatches = await db.query.deliveryBatches.findMany({
+      where: and(
+        eq(deliveryBatches.deliveryBoyId, deliveryBoyId),
+        not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
+      ),
       with: {
+        // डायरेक्ट मास्टर आर्डर का रिलेशन भी लोड करें ताकि पंगे न हों
         masterOrder: {
           with: {
-            deliveryAddress: true,
             customer: {
-              // ✅ Phone number zaroori hai delivery boy ke liye
               columns: { id: true, firstName: true, lastName: true, phone: true }
-            },
+            }
           }
         },
-        seller: {
-          // ✅ Business phone zaroori hai pickup ke liye
-          columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
-        },
-        orderItems: {
+        subOrders: {
           with: {
-            product: {
-              columns: { id: true, name: true, image: true, price: true, unit: true }
+            masterOrder: {
+              with: {
+                customer: {
+                  columns: { id: true, firstName: true, lastName: true, phone: true }
+                },
+              }
+            },
+            seller: {
+              columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
+            },
+            orderItems: {
+              with: {
+                product: {
+                  columns: { id: true, name: true, image: true, price: true, unit: true }
+                }
+              }
             }
           }
         }
-      }
-    }
-  },
-  orderBy: desc(deliveryBatches.createdAt),
-});
-    const formattedBatches = assignedBatches.map(batch => {
-      // 1. Saare sub-orders se shop names aur addresses nikalna
-      const shopNames = batch.subOrders.map(so => so.seller?.businessName).filter(Boolean);
-      const shopAddresses = batch.subOrders.map(so => so.seller?.businessAddress).filter(Boolean);
+      },
+      orderBy: desc(deliveryBatches.createdAt),
+    });
 
-      // 2. Total delivery charge calculate karna
-      // const totalDeliveryFee = batch.subOrders.reduce((sum, so) => sum + Number(so.deliveryCharge || 0), 0);
+    // 🎯 MAPPING TRANSFORMATION (100% Matching with MyTasksScreen & BatchDetails)
+    const formattedBatches = assignedBatches.map(batch => {
+      const currentSubOrders = batch.subOrders || [];
+      
+      // 1. Pickup Details Array (Har shop ka naam, address aur phone number alag se)
+      const pickupPoints = currentSubOrders.map(so => ({
+        shopName: so.seller?.businessName || "Unknown Shop",
+        address: so.seller?.businessAddress || "Address Not Available",
+        phone: so.seller?.businessPhone || "N/A",
+      }));
+
+      const shopNames = pickupPoints.map(p => p.shopName).filter(Boolean).join(" + ");
+      const shopAddresses = pickupPoints.map(p => p.address).filter(Boolean).join(" | ");
+
+      // 2. Customer Profile Extraction (Deep Safe Fallback)
+      const directMaster = batch.masterOrder as any;
+      const nestedMaster = currentSubOrders[0]?.masterOrder as any;
+      
+      const customerObj = directMaster?.customer || nestedMaster?.customer || {};
+      
+      let firstName = directMaster?.first_name || nestedMaster?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+      let lastName = directMaster?.last_name || nestedMaster?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+      let finalCustomerName = `${firstName} ${lastName}`.trim();
+      
+      if (!finalCustomerName) {
+        finalCustomerName = directMaster?.customerName || nestedMaster?.customerName || "Customer";
+      }
+
+      // 3. DIRECT CUSTOMER PHONE & ADDRESS (Direct Orders Table Target)
+      const finalPhone = directMaster?.phone || nestedMaster?.phone || directMaster?.customerPhone || customerObj?.phone || "N/A";
+      
+      // 🚨 DIRECT STRIKE: सीधा orders टेबल के 'delivery_address' टेक्स्ट कॉलम को टारगेट किया
+      let finalAddress = directMaster?.delivery_address || directMaster?.deliveryAddress || 
+                         nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
+
+      // अगर एड्रेस ऑब्जेक्ट आ रहा हो, तो उसे स्ट्रिंग में बदलें
+      if (finalAddress && typeof finalAddress === 'object') {
+         finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+      }
 
       return {
-        ...batch,
-        pickupShops: shopNames.join(" + ") || "Unknown Shop",
-        pickupAddresses: shopAddresses.join(" | "),
-        totalSubOrders: batch.subOrders.length,
-       
+        id: batch.id,
+        batchNumber: `BTCH-${batch.id}`,
+        status: batch.status,
+        createdAt: batch.createdAt,
+        
+        // 🎯 FLAT KEYS जो फ्रंटएंड तुरंत रेंडर कर लेगा
+        pickupShops: shopNames || "Unknown Shop",
+        pickupAddresses: shopAddresses,
+        pickupPoints: pickupPoints, // 👈 यह ऐरे 'BatchDetails' में दुकान का नंबर दिखाएगा
+        
+        customerName: finalCustomerName,
+        customerPhone: finalPhone,      // 👈 कस्टमर का असली फोन नंबर
+        deliveryAddress: finalAddress,   // 👈 कस्टमर का पूरा असली पता
+        deliveryCity: directMaster?.delivery_city || nestedMaster?.delivery_city || "Bundi",
+        
         deliveryCharge: Number(batch.deliveryFee || 40),
-        // 💡 Customer Details (Pehle sub-order se le rahe hain kyunki batch ek hi customer ka hai)
-        customerName: batch.subOrders[0]?.masterOrder?.customer?.firstName || "Customer",
-        customerPhone: batch.subOrders[0]?.masterOrder?.customer?.phone || "",
-        deliveryAddress: batch.subOrders[0]?.masterOrder?.deliveryAddress || null
+        totalItems: currentSubOrders.length
       };
     });
 
-    return res.status(200).json({ batches: formattedBatches }); // ✅ formattedBatches bhejein
+    return res.status(200).json({ batches: formattedBatches });
 
   } catch (error: any) {
     console.error('❌ Error in GET /api/delivery-boys/batches:', error);
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
 });
-
 /**
  * ✅ Send OTP to Customer (Final Version)
  * POST /api/delivery/batches/:batchId/send-otp
