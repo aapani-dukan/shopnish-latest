@@ -306,6 +306,19 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             const firstSubOrder = currentSubOrders[0];
             const mOrder = firstSubOrder?.masterOrder as any;
             
+            // 🎯 100% सटीक अमाउंट कैलकुलेशन: एरे और ऑब्जेक्ट दोनों ढांचों को सपोर्ट करता है
+            let calculatedTotalBill = 0;
+            currentSubOrders.forEach((so: any) => {
+                if (so) {
+                    if (Array.isArray(so)) {
+                        // SQL json_build_array के अनुसार Index [8] पर sub_orders.total स्टोर है
+                        calculatedTotalBill += Number(so[8] || so[6] || 0);
+                    } else if (typeof so === 'object') {
+                        calculatedTotalBill += Number(so.total || so.subtotal || 0);
+                    }
+                }
+            });
+
             // 🎯 Customer object extraction for name/phone fallback
             const customerObj = mOrder?.customer || mOrder?.customer_user || {};
 
@@ -320,8 +333,6 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                     lastName = foundCust.last_name || foundCust.lastName || '';
                 }
             }
-            
-            
 
             let finalCustomerName = `${firstName} ${lastName}`.trim();
             if (!finalCustomerName) {
@@ -332,14 +343,12 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             let finalAddress = "";
             let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
 
-            // 🚨 DIRECT STRIKE: Agar mOrder mein direct 'delivery_address' text column hai, toh wahi lo
             if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string') {
                 finalAddress = mOrder.delivery_address;
             } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string') {
                 finalAddress = mOrder.deliveryAddress;
             } 
             
-            // Fallback: Agar upar string nahi mili aur address kisi wajah se object ya JSON string hai
             if (!finalAddress && mOrder?.deliveryAddress) {
                 try {
                     const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
@@ -349,7 +358,6 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 }
             }
 
-            // Final safety check
             if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
                 finalAddress = "Local Address";
             }
@@ -366,15 +374,16 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 pickupAddresses: shopAddresses, 
                 pickupPoints: pickupPoints,
 
-                // मोबाइल ऐप की स्क्रीन के लिए एकदम फ्लैट कीज (Keys)
                 customerName: finalCustomerName,
                 customerPhone: finalPhone, 
-                deliveryAddress: finalAddress, // 👈 Ab isme 100% poora text address jayega
+                deliveryAddress: finalAddress, 
                 deliveryCity: finalCity,       
                 
                 deliveryCharge: Number(batch.deliveryFee || 40), 
                 totalItems: currentSubOrders.length,
-                totalToCollect: Number(mOrder?.total || 0)
+                
+                // 🔥 सुधार: अब यहाँ शून्य नहीं जाएगा, सीधे एरे से जुड़ा हुआ असली बिल अमाउंट फ्रंटएंड को ट्रांसफर होगा
+                totalToCollect: calculatedTotalBill
             };
         });
         
