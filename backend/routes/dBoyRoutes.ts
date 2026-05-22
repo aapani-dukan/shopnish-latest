@@ -17,7 +17,7 @@ import {
   userRoleEnum,
   adminSettings,
 } from '../shared/backend/schema';
-import { eq, and, or, not, desc, asc, inArray, isNull,exists,sql } from 'drizzle-orm';
+import { eq, and, or, not, desc, asc, inArray, isNull,exists,sql,lt } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
 import { requireDeliveryBoyAuth } from '../server/middleware/authMiddleware';
 import { getIO } from '../server/socket';
@@ -627,6 +627,77 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
     console.error('❌ Error in GET /api/delivery-boys/batches:', error);
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
+});
+// 🎯 आपके बताए नियम के अनुसार 100% सटीक बैच प्राइस API
+router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res: Response) => {
+    try {
+        const { batchId } = req.params;
+
+        // 1. इस बैच के सभी सब-ऑर्डर्स और उनके मास्टर ऑर्डर का डेटा मंगाएं
+        const batchSubOrders = await db.query.subOrders.findMany({
+            where: eq(subOrders.deliveryBatchId, Number(batchId)),
+            with: {
+                masterOrder: true // मास्टर ऑर्डर से डिलीवरी चार्ज निकालने के लिए
+            }
+        });
+
+        if (!batchSubOrders || batchSubOrders.length === 0) {
+            return res.status(200).json({ totalToCollect: 0, msg: "No suborders found in this batch" });
+        }
+
+        // 🎯 नियम 1: sub_orders टेबल के केवल 'subtotal' कॉलम से ही प्राइस लेनी है
+        let pureSubOrdersSum = 0;
+        batchSubOrders.forEach((so: any) => {
+            if (Array.isArray(so)) {
+                // अगर Drizzle ने इसे एरे बनाया है, तो लॉग्स के हिसाब से subtotal इंडेक्स [6] पर है
+                pureSubOrdersSum += Number(so[6] || 0);
+            } else {
+                pureSubOrdersSum += Number(so.subtotal || 0);
+            }
+        });
+
+        // 🎯 नियम 2: orders टेबल से सिर्फ 'delivery_charge' कॉलम से ही चार्ज उठाना है
+        const firstSubOrder = batchSubOrders[0];
+        let mOrder = Array.isArray(firstSubOrder) ? firstSubOrder[14] : firstSubOrder?.masterOrder;
+        
+        let deliveryChargeToApply = 0;
+
+        if (mOrder) {
+            // चेक करें कि क्या इस मास्टर ऑर्डर का कोई और बैच इससे पहले प्रोसेस हो चुका है
+            const earlierBatches = await db.query.deliveryBatches.findMany({
+                where: and(
+                    eq(deliveryBatches.masterOrderId, Array.isArray(mOrder) ? mOrder[2] : mOrder.id),
+                    lt(deliveryBatches.id, Number(batchId))
+                )
+            });
+
+            // अगर यह पहला बैच है, तो मास्टर ऑर्डर का डिलीवरी चार्ज जोड़ेंगे, वरना '0'
+            if (earlierBatches.length === 0) {
+                if (Array.isArray(mOrder)) {
+                    // SQL json_build_array के अनुसार masterOrder का delivery_charge इंडेक्स [21] पर है
+                    deliveryChargeToApply = Number(mOrder[21] || 0);
+                } else {
+                    deliveryChargeToApply = Number(mOrder.delivery_charge || mOrder.deliveryCharge || 0);
+                }
+            } else {
+                deliveryChargeToApply = 0; // अगले बैच के लिए डिलीवरी चार्ज '0'
+            }
+        }
+
+        // 💸 फाइनल कलेक्ट करने योग्य शुद्ध रकम
+        const finalBatchPrice = pureSubOrdersSum + deliveryChargeToApply;
+
+        return res.status(200).json({
+            batchId: Number(batchId),
+            subOrdersSubtotalSum: pureSubOrdersSum,
+            masterOrderDeliveryCharge: deliveryChargeToApply,
+            totalToCollect: finalBatchPrice // 👈 यह वैल्यू फ्रंटएंड पर बिना किसी गलती के चमकेगी
+        });
+
+    } catch (error: any) {
+        console.error('❌ Error in GET /batch-price:', error);
+        return res.status(500).json({ error: 'Failed to calculate batch price.' });
+    }
 });
 /**
  * ✅ Send OTP to Customer (Final Version)
