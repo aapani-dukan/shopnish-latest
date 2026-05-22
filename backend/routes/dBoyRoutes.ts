@@ -252,32 +252,30 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             return res.status(401).json({ error: 'Unauthorized.' });
         }
 
-        // 🎯 Dono shartein puri karne wali sateek query
-       const availableBatches = await db.query.deliveryBatches.findMany({
-            where: and(
-                isNull(deliveryBatches.deliveryBoyId), 
-                eq(deliveryBatches.status, 'pending'),
-                
-                // 🎯 CONFLICT FIXED: Pure SQL parameter se exact alias inject kar diya hai
-                exists(
-                    db.select()
-                      .from(subOrders)
-                      .where(
-                          and(
-                              sql`"sub_orders"."delivery_batch_id" = "deliveryBatches"."id"`, // ✨ Ekdum sateek alias mapping
-                              eq(subOrders.status, 'ready_for_pickup')
-                          )
-                      )
-                )
-            ),
+   // ✅ बिल्कुल सही और रिलेशंस से भरपूर क्वेरी:
+const availableBatches = await db.query.deliveryBatches.findMany({
+    where: and(
+        isNull(deliveryBatches.deliveryBoyId), 
+        eq(deliveryBatches.status, 'pending'),
+        exists(
+            db.select()
+              .from(subOrders)
+              .where(
+                  and(
+                      sql`"sub_orders"."delivery_batch_id" = "deliveryBatches"."id"`, 
+                      eq(subOrders.status, 'ready_for_pickup')
+                  )
+              )
+        )
+    ),
+    // 🎯 यहाँ से पूरा खेल बदलेगा:
+    with: {
+        subOrders: {
             with: {
-                subOrders: {
-                    with: {
-                        seller: {
-                            columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
-                        }
-                    }
+                seller: {
+                    columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
                 },
+                // 🔥 जादुई फिक्स: subOrders के अंदर masterOrder को लोड करें ताकि पेमेंट मोड मिल सके!
                 masterOrder: {
                     with: {
                         deliveryAddress: true, 
@@ -286,10 +284,12 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                         }
                     }
                 }
-            },
-            orderBy: desc(deliveryBatches.createdAt),
-        });
-  const formattedBatches = availableBatches.map(batch => {
+            }
+        }
+    },
+    orderBy: desc(deliveryBatches.createdAt),
+});
+ const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
             // 1. Pickup Details
@@ -302,7 +302,9 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
             const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-            const mOrder = batch.masterOrder as any;
+            // 🎯 जादुई फिक्स: 'batch.masterOrder' के बजाय पहले subOrder से masterOrder निकालें
+            const firstSubOrder = currentSubOrders[0];
+            const mOrder = firstSubOrder?.masterOrder as any;
             
             // 🎯 Customer object extraction for name/phone fallback
             const customerObj = mOrder?.customer || mOrder?.customer_user || {};
@@ -318,6 +320,8 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                     lastName = foundCust.last_name || foundCust.lastName || '';
                 }
             }
+            
+            
 
             let finalCustomerName = `${firstName} ${lastName}`.trim();
             if (!finalCustomerName) {
