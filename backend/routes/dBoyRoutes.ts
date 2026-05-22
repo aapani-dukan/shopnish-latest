@@ -798,10 +798,14 @@ router.patch(
 
       // 5. Delivery OTP Verification
       if (newStatus === 'delivered') {
-        if (!otp || otp !== existingBatch.deliveryOtp) {
-          return res.status(401).json({ error: 'Invalid OTP for delivery verification.' });
-        }
-      }
+  // अगर ओटीपी की वैल्यू फ्रंटएंड से 'BYPASS_BY_RIDER' आई है, तो सीधा बाईपास होने दें
+  if (otp === 'BYPASS_BY_RIDER') {
+    console.log(`⚠️ [OTP BYPASS]: Batch #${batchId} is being delivered without OTP by Rider.`);
+  } else if (!otp || otp !== existingBatch.deliveryOtp) {
+    // नॉर्मल केस में अभी भी ओटीपी मैच होना ज़रूरी है
+    return res.status(401).json({ error: 'Invalid OTP for delivery verification.' });
+  }
+}
 
       const masterOrderId = existingBatch.subOrders[0].masterOrder.id;
       const customerId = existingBatch.subOrders[0].masterOrder.customerId;
