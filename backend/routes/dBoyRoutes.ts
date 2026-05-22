@@ -373,7 +373,8 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 deliveryCity: finalCity,       
                 
                 deliveryCharge: Number(batch.deliveryFee || 40), 
-                totalItems: currentSubOrders.length
+                totalItems: currentSubOrders.length,
+                totalToCollect: Number(mOrder?.total || 0)
             };
         });
         
