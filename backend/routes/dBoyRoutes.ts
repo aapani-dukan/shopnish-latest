@@ -319,27 +319,31 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 }
             });
 
-            // 🎯 Customer object extraction for name/phone fallback
-            const customerObj = mOrder?.customer || mOrder?.customer_user || {};
-
-            // 👤 2. CUSTOMER NAME FIX
-            let firstName = mOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-            let lastName = mOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+          // 👤 2. CUSTOMER NAME & PHONE FIX (DIRECT DATABASE COLUMN PRIORITY)
+         // ==================== 👤 2. CUSTOMER NAME FIX ====================
+            // 🎯 कस्टमर का नाम सीधे deliveryAddress के full_name कॉलम से उठाएं
+            const addressObj = mOrder?.deliveryAddress;
             
-            if (Array.isArray(mOrder)) {
-                const foundCust = mOrder.find((el: any) => el && (el.first_name || el.firstName));
-                if (foundCust) {
-                    firstName = foundCust.first_name || foundCust.firstName || '';
-                    lastName = foundCust.last_name || foundCust.lastName || '';
-                }
+            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
+            
+            if (addressObj && addressObj.full_name) {
+                finalCustomerName = addressObj.full_name.trim(); // टेबल से असली नाम
+            } else if (addressObj && addressObj.fullName) {
+                finalCustomerName = addressObj.fullName.trim(); // कैमलकेस सेफ्टी
+            } else {
+                // अगर किसी वजह से एड्रेस ऑब्जेक्ट न मिले, तो पुराना फॉलबैक काम करेगा
+                const customerTableObj = mOrder?.customer || mOrder?.customer_user || {};
+                const firstName = mOrder?.first_name || customerTableObj?.firstName || customerTableObj?.first_name || '';
+                const lastName = mOrder?.last_name || customerTableObj?.lastName || customerTableObj?.last_name || '';
+                finalCustomerName = `${firstName} ${lastName}`.trim() || mOrder?.customerName || mOrder?.customer_name || "Customer";
             }
 
-            let finalCustomerName = `${firstName} ${lastName}`.trim();
-            if (!finalCustomerName) {
-                finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
-            }
+            // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
+            // 🎯 फिक्स: यहाँ से 'customerObj' हटाकर सीधे mOrder और addressObj के रीयल फ़ील्ड्स रख दिए हैं
+           let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressObj?.phone_number || addressObj?.phoneNumber || "N/A";
 
-            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY)
+
+            // ==================== 📍 3. DELIVERY ADDRESS FIX ====================
             let finalAddress = "";
             let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
 
@@ -358,13 +362,11 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 }
             }
 
-            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
-                finalAddress = "Local Address";
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A" || finalAddress === "Local Address") {
+                finalAddress = "N/A";
             }
 
-            // 📞 4. PHONE NUMBER SAFE EXTRACTION
-            const finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || customerObj?.phone || customerObj?.phoneNumber || "N/A";
-
+            // ==================== 🏁 RETURN OBJECT ====================
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
