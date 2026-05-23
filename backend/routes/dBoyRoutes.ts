@@ -289,7 +289,7 @@ const availableBatches = await db.query.deliveryBatches.findMany({
     },
     orderBy: desc(deliveryBatches.createdAt),
 });
- const formattedBatches = availableBatches.map(batch => {
+const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
             // 1. Pickup Details
@@ -302,10 +302,6 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
             const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-            // 🎯 जादुई फिक्स: 'batch.masterOrder' के बजाय पहले subOrder से masterOrder निकालें
-            const firstSubOrder = currentSubOrders[0];
-            const mOrder = firstSubOrder?.masterOrder as any;
-            
             // 🎯 100% सटीक अमाउंट कैलकुलेशन: एरे और ऑब्जेक्ट दोनों ढांचों को सपोर्ट करता है
             let calculatedTotalBill = 0;
             currentSubOrders.forEach((so: any) => {
@@ -319,60 +315,76 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 }
             });
 
-          // 👤 2. CUSTOMER NAME & PHONE FIX (DIRECT DATABASE COLUMN PRIORITY)
-    const addressObj = mOrder?.deliveryAddress;
-        const customerTableObj = mOrder?.customer;
-
-        // ==================== 👤 2. CUSTOMER NAME FIX (DIRECT FROM DB) ====================
-        let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
-        
-        if (addressObj && addressObj.full_name) {
-            finalCustomerName = addressObj.full_name.trim(); // delivery_addresses टेबल का असली full_name
-        } else if (addressObj && addressObj.fullName) {
-            finalCustomerName = addressObj.fullName.trim();
-        } else if (customerTableObj) {
-            // अगर एड्रेस टेबल में नाम न मिले तो users टेबल से फर्स्ट/लास्ट नेम उठाएं
-            const firstName = customerTableObj.firstName || customerTableObj.first_name || '';
-            const lastName = customerTableObj.lastName || customerTableObj.last_name || '';
-            finalCustomerName = `${firstName} ${lastName}`.trim() || "Customer";
-        } else {
-            // सेफ़्टी फॉलबैक अगर कुछ भी न मिले
-            finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
-        }
-
-        // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
-        let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressObj?.phone_number || addressObj?.phoneNumber || customerTableObj?.phone || "N/A";
-
-        // ==================== 📍 3. DELIVERY ADDRESS FIX ====================
-        let finalAddress = "N/A";
-        let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
-
-        // 1. अगर जॉइन की हुई addressObj टेबल में सीधा डेटा उपलब्ध है (सबसे बेस्ट तरीका)
-        if (addressObj && addressObj.addressLine1) {
-            finalAddress = addressObj.addressLine1;
-            if (addressObj.addressLine2) finalAddress += `, ${addressObj.addressLine2}`;
-        }
-        // 2. अगर orders टेबल के कॉलम में सीधे टेक्स्ट स्टोर है
-        else if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string' && mOrder.delivery_address !== "N/A") {
-            finalAddress = mOrder.delivery_address;
-        } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string' && mOrder.deliveryAddress !== "N/A") {
-            finalAddress = mOrder.deliveryAddress;
-        } 
-        // 3. अगर वो भी न मिले तो JSON पार्स करने की कोशिश करें
-        else if (mOrder?.deliveryAddress) {
-            try {
-                const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
-                finalAddress = parsedAddr?.addressLine1 || parsedAddr?.address || "N/A";
-            } catch (e) {
-                finalAddress = String(mOrder.deliveryAddress);
+            // ==================== 🎯 मास्टर ऑर्डर को नेस्टेड स्ट्रक्चर से निकालें ====================
+            const firstSubOrder = currentSubOrders[0];
+            
+            // 🚨 फिक्स: डुप्लिकेट हटाकर सीधे एरे और ऑब्जेक्ट दोनों का सेफ़्टी चेक लगाया
+            let mOrder = firstSubOrder?.masterOrder as any;
+            if (Array.isArray(mOrder)) {
+                mOrder = mOrder[0];
             }
-        }
 
-        if (!finalAddress || finalAddress.trim() === "" || finalAddress === "Local Address") {
-            finalAddress = "N/A";
-        }
+            // 🚨 एरे फिक्स: अगर deliveryAddress एक एरे है, तो उसका पहला Element लें
+            let addressObj = mOrder?.deliveryAddress;
+            if (Array.isArray(addressObj)) {
+                addressObj = addressObj[0];
+            }
 
-            // ==================== 🏁 RETURN OBJECT ====================
+            // 🚨 एरे फिक्स: अगर customer एक एरे है, तो उसका पहला Element लें
+            let customerTableObj = mOrder?.customer;
+            if (Array.isArray(customerTableObj)) {
+                customerTableObj = customerTableObj[0];
+            }
+
+            // ==================== 👤 2. CUSTOMER NAME FIX (DIRECT FROM DB) ====================
+            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
+            
+            if (addressObj && (addressObj.full_name || addressObj.fullName)) {
+                finalCustomerName = (addressObj.full_name || addressObj.fullName || "").trim(); // delivery_addresses का असली नाम
+            } else if (customerTableObj && (customerTableObj.first_name || customerTableObj.firstName)) {
+                const firstName = customerTableObj.firstName || customerTableObj.first_name || '';
+                const lastName = customerTableObj.lastName || customerTableObj.last_name || '';
+                finalCustomerName = `${firstName} ${lastName}`.trim();
+            } else {
+                finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
+            }
+
+            // सेफ़्टी चेक: अगर नाम फिर भी खाली या स्ट्रिंग "null" रह जाए
+            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null") {
+                finalCustomerName = "Customer";
+            }
+
+            // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
+            let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressObj?.phone_number || addressObj?.phoneNumber || customerTableObj?.phone || "N/A";
+
+            // ==================== 📍 3. DELIVERY ADDRESS FIX ====================
+            let finalAddress = "N/A";
+            let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
+
+            // 1. अगर जॉइन की हुई addressObj टेबल में सीधा डेटा उपलब्ध है (सबसे बेस्ट तरीका)
+            if (addressObj && addressObj.addressLine1) {
+                finalAddress = addressObj.addressLine1;
+                if (addressObj.addressLine2) finalAddress += `, ${addressObj.addressLine2}`;
+            }
+            // 2. अगर orders टेबल के कॉलम में सीधे टेक्स्ट स्टोर है
+            else if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string' && mOrder.delivery_address !== "N/A") {
+                finalAddress = mOrder.delivery_address;
+            } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string' && mOrder.deliveryAddress !== "N/A") {
+                finalAddress = mOrder.deliveryAddress;
+            } 
+            // 3. अगर वो भी न मिले तो JSON पार्स करने की कोशिश करें
+            else if (mOrder?.deliveryAddress) {
+                try {
+                    const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
+                    finalAddress = parsedAddr?.addressLine1 || parsedAddr?.address || "N/A";
+                } catch (e) {
+                    finalAddress = String(mOrder.deliveryAddress);
+                }
+            }
+
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "Local Address") {
+                finalAddress = "N/A";
+            }
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
