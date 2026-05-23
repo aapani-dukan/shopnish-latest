@@ -314,76 +314,101 @@ const formattedBatches = availableBatches.map(batch => {
                     }
                 }
             });
-// ==================== 🎯 मास्टर ऑर्डर और एड्रेस रिलेशन निकालना ====================
+// ==================== 🎯 1. मास्टर ऑर्डर को सुरक्षित निकालना ====================
             const firstSubOrder = currentSubOrders[0] as any;
             let mOrder = firstSubOrder?.masterOrder;
             
-            // Drizzle लैटरल जॉइन सेफ्टी चेक (अगर एरे फॉर्मेट में हो तो पहला एलिमेंट लें)
-            if (Array.isArray(mOrder)) {
-                mOrder = mOrder[0];
+            // अगर masterOrder एक एरे है (Drizzle लैटरल जॉइन के कारण), तो उसका पहला एलिमेंट लें
+            let isMOrderArray = Array.isArray(mOrder);
+            let rawOrderObj = isMOrderArray ? mOrder[0] : mOrder;
+
+            // ==================== 👤 2. CUSTOMER NAME (DIRECT FROM delivery_addresses.full_name) ====================
+            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
+            let addressTableObj = null;
+
+            if (rawOrderObj) {
+                // अगर पूरा mOrder एरे है, तो लॉग्स के मुताबिक इंडेक्स [27] पर एड्रेस टेबल का डेटा है
+                if (isMOrderArray && Array.isArray(mOrder)) {
+                    addressTableObj = mOrder[27];
+                } else {
+                    addressTableObj = rawOrderObj.deliveryAddress;
+                }
             }
 
-            // delivery_addresses टेबल का रिलेशन ऑब्जेक्ट (नाम के लिए)
-            let addressTableObj = mOrder?.deliveryAddress;
+            // अगर एड्रेस टेबल का डेटा खुद एरे में लिपटा हुआ है, तो उसे बाहर निकालें
             if (Array.isArray(addressTableObj)) {
                 addressTableObj = addressTableObj[0];
             }
 
-            // ==================== 👤 2. CUSTOMER NAME (DIRECT FROM delivery_addresses.full_name) ====================
-            // 🎯 आपका लॉजिक: नाम सिर्फ और सिर्फ delivery_addresses टेबल के full_name कॉलम से ही उठाना है
-            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
-            
-            if (addressTableObj && addressTableObj.full_name) {
-                finalCustomerName = String(addressTableObj.full_name).trim();
-            } else if (addressTableObj && addressTableObj.fullName) {
-                finalCustomerName = String(addressTableObj.fullName).trim();
-            } else {
-                // अगर किसी वजह से रिलेशन न मिले, तो सेफ्टी के लिए पुराना फॉलबैक
-                const customerTableObj = Array.isArray(mOrder?.customer) ? mOrder?.customer[0] : mOrder?.customer;
+            // 🎯 नाम निकालने का अचूक लॉजिक (ऑब्जेक्ट और एरे दोनों के लिए)
+            if (addressTableObj) {
+                if (Array.isArray(addressTableObj)) {
+                    // एरे के इंडेक्स [2] पर 'full_name' कॉलम है
+                    finalCustomerName = String(addressTableObj[2] || "").trim();
+                } else {
+                    // सीधे ऑब्जेक्ट का full_name या fullName कॉलम
+                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+                }
+            }
+
+            // अगर किसी भी वजह से नाम खाली रह जाए, तो यूजर्स टेबल का बैकअप लेंगे
+            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                let customerTableObj = isMOrderArray && Array.isArray(mOrder) ? mOrder[28] : rawOrderObj?.customer;
+                if (Array.isArray(customerTableObj)) customerTableObj = customerTableObj[0];
+
                 if (customerTableObj) {
-                    const firstName = customerTableObj.firstName || customerTableObj.first_name || '';
-                    const lastName = customerTableObj.lastName || customerTableObj.last_name || '';
+                    const firstName = customerTableObj.firstName || customerTableObj.first_name || customerTableObj[0] || '';
+                    const lastName = customerTableObj.lastName || customerTableObj.last_name || customerTableObj[1] || '';
                     finalCustomerName = `${firstName} ${lastName}`.trim();
                 }
             }
 
-            // फाइनल स्क्रीन सेफ्टी चेक
+            // फाइनल स्क्रीन सेफ़्टी चेक
             if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
                 finalCustomerName = "Customer";
             }
 
-            // ==================== 📞 4. PHONE NUMBER EXTRACTION ====================
-            let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressTableObj?.phone_number || addressTableObj?.phoneNumber || "N/A";
+            // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
+            let finalPhone = "N/A";
+            if (rawOrderObj) {
+                if (Array.isArray(mOrder)) {
+                    finalPhone = mOrder[6] || "N/A"; // आर्डर टेबल का फोन नंबर इंडेक्स
+                } else {
+                    finalPhone = rawOrderObj.phone || rawOrderObj.customerPhone || rawOrderObj.customer_phone || "N/A";
+                }
+            }
+            if ((finalPhone === "N/A" || !finalPhone) && addressTableObj) {
+                finalPhone = addressTableObj.phone_number || addressTableObj.phoneNumber || addressTableObj[3] || "N/A";
+            }
 
             // ==================== 📍 3. DELIVERY ADDRESS (DIRECT FROM orders.delivery_address) ====================
-            // 🎯 आपका लॉजिक: एड्रेस सीधे orders टेबल के अंदर जो delivery_address कॉलम है, वहाँ से उठाना है
             let finalAddress = "N/A";
-            let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
+            let finalCity = "Bundi";
 
             if (mOrder) {
-                // orders टेबल का सीधा टेक्स्ट कॉलम चेक करें
-                const rawOrderAddress = mOrder.delivery_address || mOrder.deliveryAddress;
-                
-                if (rawOrderAddress && typeof rawOrderAddress === 'string' && rawOrderAddress !== "N/A") {
-                    finalAddress = rawOrderAddress.trim();
-                } 
-                // अगर आर्डर टेबल में स्ट्रिंग की जगह ऑब्जेक्ट आ गया हो (जैसे एरे इंडेक्स), तो उसे स्ट्रिंग में बदलें
-                else if (Array.isArray(rawOrderAddress)) {
-                    finalAddress = String(rawOrderAddress[0]);
+                if (Array.isArray(mOrder)) {
+                    // 🎯 लॉग्स के अनुसार: orders टेबल के json_build_array में इंडेक्स [4] पर 'delivery_address' है
+                    finalAddress = String(mOrder[4] || "N/A").trim();
+                    finalCity = String(mOrder[5] || "Bundi").trim();
+                } else if (typeof mOrder === 'object') {
+                    // सीधे ऑब्जेक्ट का टेक्स्ट कॉलम
+                    finalAddress = String(mOrder.delivery_address || mOrder.deliveryAddress || "N/A").trim();
+                    finalCity = mOrder.deliveryCity || mOrder.delivery_city || "Bundi";
                 }
             }
 
-            // अगर orders टेबल वाला कॉलम खाली मिले, तब ही बैकअप के तौर पर एड्रेस टेबल को छुएँगे
-            if ((!finalAddress || finalAddress === "N/A") && addressTableObj) {
-                const line1 = addressTableObj.addressLine1 || "";
-                const line2 = addressTableObj.addressLine2 || "";
-                finalAddress = `${line1} ${line2}`.trim();
+            // फॉलबैक: अगर orders का कॉलम खाली मिले, तभी बैकअप के तौर पर एड्रेस टेबल को जोड़ेंगे
+            if ((!finalAddress || finalAddress === "N/A" || finalAddress === "undefined") && addressTableObj) {
+                if (Array.isArray(addressTableObj)) {
+                    finalAddress = `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim();
+                } else {
+                    finalAddress = `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
+                }
             }
 
-            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "Local Address") {
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A" || finalAddress === "undefined" || finalAddress === "Local Address") {
                 finalAddress = "N/A";
             }
-          
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
