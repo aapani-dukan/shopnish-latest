@@ -906,29 +906,51 @@ const result = await db.transaction(async (tx) => {
         }
 
        // 🎯 कार्ट चेकआउट (placeOrderFromCart) के अंदर मास्टर ऑर्डर इंसर्ट को ऐसे अपडेट करें:
-const [masterOrder] = await tx.insert(orders).values({
-    orderNumber: `ORD-${Date.now()}-${userId}`,
-    customerId: userId,
-    deliveryAddressId: finalDeliveryAddressId,
+// ==================== 🎯 एड्रेस और डिलीवरी चार्ज का अचूक उपाय ====================
     
-    // 🎯 असली जादू: ये कॉलम्स कार्ट वाले इंसर्ट में गायब थे, इन्हें अब जोड़ दिया है
-    deliveryAddress: finalDeliveryAddressJson, // इसमें आपका पूरा 'C-233, Navjeevan Colony' जाएगा
-    deliveryCity: finalCity,
-    deliveryState: finalState,
-    deliveryPincode: finalPincode,
-    deliveryLat: finalDeliveryLat,
-    deliveryLng: finalDeliveryLng,
-    
-    subtotal: masterOrderCalculatedSubtotal, // जो भी आपका कार्ट का सबटोटल वेरिएबल हो
-    total: masterOrderCalculatedTotal,       // जो भी आपका कार्ट का टोटल वेरिएबल हो
-    
-    paymentMethod: paymentMethod.toUpperCase(),
-    paymentStatus: 'pending',
-    status: 'pending',
-    deliveryInstructions: deliveryInstructions || null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-} as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
+    // अगर किसी वजह से फ्रंटएंड से addressLine1 खाली आया है, तो पहले से मौजूद ID से पूरा पता निकालें
+    if ((!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") && finalDeliveryAddressId) {
+        const [dbAddress] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+        if (dbAddress) {
+            finalDeliveryAddressJson = dbAddress.addressLine1 || "";
+            finalCity = dbAddress.city || finalCity;
+            finalState = dbAddress.state || finalState;
+            finalPincode = dbAddress.postalCode || finalPincode;
+        }
+    }
+
+    // 🚨 सेफ़्टी फॉलबैक: अगर फिर भी खाली रह जाए, तो N/A रखें (गलत या ब्लैंक डेटाबेस एंट्री रोकने के लिए)
+    if (!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") {
+        finalDeliveryAddressJson = "N/A"; 
+    }
+
+    // 🎯 मास्टर ऑर्डर बनाएं (सिंक्रोनाइज्ड SQL मैपिंग)
+    const [masterOrder] = await tx.insert(orders).values({
+        orderNumber: `ORD-${Date.now()}-${userId}`,
+        customerId: userId,
+        deliveryAddressId: finalDeliveryAddressId,
+        
+        // अब यहाँ कभी भी खाली "" नहीं जाएगा भाई!
+        deliveryAddress: finalDeliveryAddressJson, 
+        deliveryCity: finalCity || "Bundi",
+        deliveryState: finalState || "Rajasthan",
+        deliveryPincode: finalPincode || null,
+        deliveryLat: finalDeliveryLat,
+        deliveryLng: finalDeliveryLng,
+        
+        subtotal: subtotal, 
+        total: total,
+        
+        // 🎯 स्पेलिंग एरर फिक्स: डेटाबेस कॉलम 'delivery_charge' को सही वेरिएबल असाइन किया
+        deliveryCharge: deliveryCharge, 
+        
+        paymentMethod: paymentMethod.toUpperCase(),
+        paymentStatus: 'pending',
+        status: 'pending',
+        deliveryInstructions: deliveryInstructions || null,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+    } as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
 if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
