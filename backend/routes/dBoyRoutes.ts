@@ -320,30 +320,32 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             });
 
           // 👤 2. CUSTOMER NAME & PHONE FIX (DIRECT DATABASE COLUMN PRIORITY)
-         // ==================== 👤 2. CUSTOMER NAME FIX ====================
-            // 🎯 कस्टमर का नाम सीधे deliveryAddress के full_name कॉलम से उठाएं
-            const addressObj = mOrder?.deliveryAddress;
-            
-            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
-            
-            if (addressObj && addressObj.full_name) {
-                finalCustomerName = addressObj.full_name.trim(); // टेबल से असली नाम
-            } else if (addressObj && addressObj.fullName) {
-                finalCustomerName = addressObj.fullName.trim(); // कैमलकेस सेफ्टी
-            } else {
-                // अगर किसी वजह से एड्रेस ऑब्जेक्ट न मिले, तो पुराना फॉलबैक काम करेगा
-                const customerTableObj = mOrder?.customer || mOrder?.customer_user || {};
-                const firstName = mOrder?.first_name || customerTableObj?.firstName || customerTableObj?.first_name || '';
-                const lastName = mOrder?.last_name || customerTableObj?.lastName || customerTableObj?.last_name || '';
-                finalCustomerName = `${firstName} ${lastName}`.trim() || mOrder?.customerName || mOrder?.customer_name || "Customer";
+       const customerObj = mOrder?.customer || mOrder?.customer_user || {};
+
+            // 👤 2. CUSTOMER NAME FIX (DIRECTLY TARGETING FULL_NAME FROM DELIVERY ADDRESS)
+            let finalCustomerName = "";
+
+            // Agar delivery_address direct ek object hai (Jaise Sequelize/TypeORM ke relation mein aata hai)
+            if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'object') {
+                finalCustomerName = mOrder.delivery_address.full_name || "";
+            } 
+            // Agar deliveryAddress stringified JSON ke roop mein save ho raha hai
+            else if (typeof mOrder?.deliveryAddress === 'string') {
+                try {
+                    const parsedAddr = JSON.parse(mOrder.deliveryAddress);
+                    finalCustomerName = parsedAddr?.full_name || "";
+                } catch (e) {
+                    // JSON parse fail hone par blank rahega
+                }
             }
 
-            // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
-            // 🎯 फिक्स: यहाँ से 'customerObj' हटाकर सीधे mOrder और addressObj के रीयल फ़ील्ड्स रख दिए हैं
-           let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressObj?.phone_number || addressObj?.phoneNumber || "N/A";
+            // Agar upar dono jagah se naam nahi mila (safe side backup, taaki UI khali na dikhe)
+            finalCustomerName = finalCustomerName.trim();
+            if (!finalCustomerName) {
+                finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
+            }
 
-
-            // ==================== 📍 3. DELIVERY ADDRESS FIX ====================
+            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY) - NO CHANGES HERE
             let finalAddress = "";
             let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
 
@@ -362,10 +364,11 @@ const availableBatches = await db.query.deliveryBatches.findMany({
                 }
             }
 
-            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A" || finalAddress === "Local Address") {
-                finalAddress = "N/A";
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
+                finalAddress = "Local Address";
             }
-
+// 📞 4. PHONE NUMBER SAFE EXTRACTION
+            const finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || customerObj?.phone || customerObj?.phoneNumber || "N/A";
             // ==================== 🏁 RETURN OBJECT ====================
             return {
                 id: batch.id,
