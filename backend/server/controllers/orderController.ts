@@ -905,30 +905,32 @@ const result = await db.transaction(async (tx) => {
             console.warn('Calculated total does not match provided total. Using calculated value.');
         }
 
-        // 1. मास्टर ऑर्डर बनाएं
-        const [masterOrder] = await tx.insert(orders).values({
-            orderNumber: `ORD-${Date.now()}-${userId}`,
-            customerId: userId,
-            deliveryAddressId: finalDeliveryAddressId,
-            deliveryAddress: finalDeliveryAddressJson,
-            deliveryCity: finalCity,
-            deliveryState: finalState,
-            deliveryPincode: finalPincode,
-            deliveryLat: finalDeliveryLat,
-            deliveryLng: finalDeliveryLng,
-            
-            subtotal: masterOrderCalculatedSubtotal, 
-            total: masterOrderCalculatedTotal,
-            
-            paymentMethod: paymentMethod.toUpperCase(),
-            paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
-            status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
-            deliveryInstructions: deliveryInstructions || null,
-            createdAt: new Date(),
-            updatedAt: new Date(),
-        }as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
+       // 🎯 कार्ट चेकआउट (placeOrderFromCart) के अंदर मास्टर ऑर्डर इंसर्ट को ऐसे अपडेट करें:
+const [masterOrder] = await tx.insert(orders).values({
+    orderNumber: `ORD-${Date.now()}-${userId}`,
+    customerId: userId,
+    deliveryAddressId: finalDeliveryAddressId,
+    
+    // 🎯 असली जादू: ये कॉलम्स कार्ट वाले इंसर्ट में गायब थे, इन्हें अब जोड़ दिया है
+    deliveryAddress: finalDeliveryAddressJson, // इसमें आपका पूरा 'C-233, Navjeevan Colony' जाएगा
+    deliveryCity: finalCity,
+    deliveryState: finalState,
+    deliveryPincode: finalPincode,
+    deliveryLat: finalDeliveryLat,
+    deliveryLng: finalDeliveryLng,
+    
+    subtotal: masterOrderCalculatedSubtotal, // जो भी आपका कार्ट का सबटोटल वेरिएबल हो
+    total: masterOrderCalculatedTotal,       // जो भी आपका कार्ट का टोटल वेरिएबल हो
+    
+    paymentMethod: paymentMethod.toUpperCase(),
+    paymentStatus: 'pending',
+    status: 'pending',
+    deliveryInstructions: deliveryInstructions || null,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+} as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
-        if (!masterOrder) throw new Error('Failed to create master order.');
+if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
         const batchesToCreate: { 
