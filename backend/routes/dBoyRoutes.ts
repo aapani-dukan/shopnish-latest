@@ -320,32 +320,27 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             });
 
           // 👤 2. CUSTOMER NAME & PHONE FIX (DIRECT DATABASE COLUMN PRIORITY)
-       const customerObj = mOrder?.customer || mOrder?.customer_user || {};
+     // 🎯 Customer object extraction for name/phone fallback
+            const customerObj = mOrder?.customer || mOrder?.customer_user || {};
 
-            // 👤 2. CUSTOMER NAME FIX (DIRECTLY TARGETING FULL_NAME FROM DELIVERY ADDRESS)
-            let finalCustomerName = "";
-
-            // Agar delivery_address direct ek object hai (Jaise Sequelize/TypeORM ke relation mein aata hai)
-            if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'object') {
-                finalCustomerName = mOrder.delivery_address.full_name || "";
-            } 
-            // Agar deliveryAddress stringified JSON ke roop mein save ho raha hai
-            else if (typeof mOrder?.deliveryAddress === 'string') {
-                try {
-                    const parsedAddr = JSON.parse(mOrder.deliveryAddress);
-                    finalCustomerName = parsedAddr?.full_name || "";
-                } catch (e) {
-                    // JSON parse fail hone par blank rahega
+            // 👤 2. CUSTOMER NAME FIX
+            let firstName = mOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+            let lastName = mOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+            
+            if (Array.isArray(mOrder)) {
+                const foundCust = mOrder.find((el: any) => el && (el.first_name || el.firstName));
+                if (foundCust) {
+                    firstName = foundCust.first_name || foundCust.firstName || '';
+                    lastName = foundCust.last_name || foundCust.lastName || '';
                 }
             }
 
-            // Agar upar dono jagah se naam nahi mila (safe side backup, taaki UI khali na dikhe)
-            finalCustomerName = finalCustomerName.trim();
+            let finalCustomerName = `${firstName} ${lastName}`.trim();
             if (!finalCustomerName) {
                 finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
             }
 
-            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY) - NO CHANGES HERE
+            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY)
             let finalAddress = "";
             let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
 
@@ -367,6 +362,7 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
                 finalAddress = "Local Address";
             }
+
 // 📞 4. PHONE NUMBER SAFE EXTRACTION
             const finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || customerObj?.phone || customerObj?.phoneNumber || "N/A";
             // ==================== 🏁 RETURN OBJECT ====================
