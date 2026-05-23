@@ -320,51 +320,58 @@ const availableBatches = await db.query.deliveryBatches.findMany({
             });
 
           // 👤 2. CUSTOMER NAME & PHONE FIX (DIRECT DATABASE COLUMN PRIORITY)
-     // 🎯 Customer object extraction for name/phone fallback
-            const customerObj = mOrder?.customer || mOrder?.customer_user || {};
+    const addressObj = mOrder?.deliveryAddress;
+        const customerTableObj = mOrder?.customer;
 
-            // 👤 2. CUSTOMER NAME FIX
-            let firstName = mOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-            let lastName = mOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
-            
-            if (Array.isArray(mOrder)) {
-                const foundCust = mOrder.find((el: any) => el && (el.first_name || el.firstName));
-                if (foundCust) {
-                    firstName = foundCust.first_name || foundCust.firstName || '';
-                    lastName = foundCust.last_name || foundCust.lastName || '';
-                }
+        // ==================== 👤 2. CUSTOMER NAME FIX (DIRECT FROM DB) ====================
+        let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
+        
+        if (addressObj && addressObj.full_name) {
+            finalCustomerName = addressObj.full_name.trim(); // delivery_addresses टेबल का असली full_name
+        } else if (addressObj && addressObj.fullName) {
+            finalCustomerName = addressObj.fullName.trim();
+        } else if (customerTableObj) {
+            // अगर एड्रेस टेबल में नाम न मिले तो users टेबल से फर्स्ट/लास्ट नेम उठाएं
+            const firstName = customerTableObj.firstName || customerTableObj.first_name || '';
+            const lastName = customerTableObj.lastName || customerTableObj.last_name || '';
+            finalCustomerName = `${firstName} ${lastName}`.trim() || "Customer";
+        } else {
+            // सेफ़्टी फॉलबैक अगर कुछ भी न मिले
+            finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
+        }
+
+        // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
+        let finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || addressObj?.phone_number || addressObj?.phoneNumber || customerTableObj?.phone || "N/A";
+
+        // ==================== 📍 3. DELIVERY ADDRESS FIX ====================
+        let finalAddress = "N/A";
+        let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
+
+        // 1. अगर जॉइन की हुई addressObj टेबल में सीधा डेटा उपलब्ध है (सबसे बेस्ट तरीका)
+        if (addressObj && addressObj.addressLine1) {
+            finalAddress = addressObj.addressLine1;
+            if (addressObj.addressLine2) finalAddress += `, ${addressObj.addressLine2}`;
+        }
+        // 2. अगर orders टेबल के कॉलम में सीधे टेक्स्ट स्टोर है
+        else if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string' && mOrder.delivery_address !== "N/A") {
+            finalAddress = mOrder.delivery_address;
+        } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string' && mOrder.deliveryAddress !== "N/A") {
+            finalAddress = mOrder.deliveryAddress;
+        } 
+        // 3. अगर वो भी न मिले तो JSON पार्स करने की कोशिश करें
+        else if (mOrder?.deliveryAddress) {
+            try {
+                const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
+                finalAddress = parsedAddr?.addressLine1 || parsedAddr?.address || "N/A";
+            } catch (e) {
+                finalAddress = String(mOrder.deliveryAddress);
             }
+        }
 
-            let finalCustomerName = `${firstName} ${lastName}`.trim();
-            if (!finalCustomerName) {
-                finalCustomerName = mOrder?.customerName || mOrder?.customer_name || "Customer";
-            }
+        if (!finalAddress || finalAddress.trim() === "" || finalAddress === "Local Address") {
+            finalAddress = "N/A";
+        }
 
-            // 📍 3. DELIVERY ADDRESS FIX (DIRECT TEXT COLUMN PRIORITY)
-            let finalAddress = "";
-            let finalCity = mOrder?.deliveryCity || mOrder?.delivery_city || "Bundi";
-
-            if (mOrder?.delivery_address && typeof mOrder.delivery_address === 'string') {
-                finalAddress = mOrder.delivery_address;
-            } else if (mOrder?.deliveryAddress && typeof mOrder.deliveryAddress === 'string') {
-                finalAddress = mOrder.deliveryAddress;
-            } 
-            
-            if (!finalAddress && mOrder?.deliveryAddress) {
-                try {
-                    const parsedAddr = typeof mOrder.deliveryAddress === 'string' ? JSON.parse(mOrder.deliveryAddress) : mOrder.deliveryAddress;
-                    finalAddress = parsedAddr?.addressLine1 || parsedAddr?.address || "";
-                } catch (e) {
-                    finalAddress = String(mOrder.deliveryAddress);
-                }
-            }
-
-            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A") {
-                finalAddress = "Local Address";
-            }
-
-// 📞 4. PHONE NUMBER SAFE EXTRACTION
-            const finalPhone = mOrder?.phone || mOrder?.customerPhone || mOrder?.customer_phone || customerObj?.phone || customerObj?.phoneNumber || "N/A";
             // ==================== 🏁 RETURN OBJECT ====================
             return {
                 id: batch.id,
