@@ -315,100 +315,110 @@ const formattedBatches = availableBatches.map(batch => {
                 }
             });
 // ==================== 🎯 1. मास्टर ऑर्डर को सुरक्षित निकालना ====================
+          // ==================== 🎯 1. मास्टर ऑर्डर को सुरक्षित निकालना ====================
             const firstSubOrder = currentSubOrders[0] as any;
-            let mOrder = firstSubOrder?.masterOrder;
+            let mOrderRaw = firstSubOrder?.masterOrder;
             
-            // अगर masterOrder एक एरे है (Drizzle लैटरल जॉइन के कारण), तो उसका पहला एलिमेंट लें
-            let isMOrderArray = Array.isArray(mOrder);
-            let rawOrderObj = isMOrderArray ? mOrder[0] : mOrder;
+            // अगर masterOrder एक एरे है (Drizzle json_agg के कारण), तो अंदर का रीयल ऑब्जेक्ट/एरे बाहर निकालें
+            let mOrder = Array.isArray(mOrderRaw) ? mOrderRaw[0] : mOrderRaw;
 
-            // ==================== 👤 2. CUSTOMER NAME (DIRECT FROM delivery_addresses.full_name) ====================
-            let finalCustomerName = "Customer"; // डिफ़ॉल्ट फॉलबैक
+            // ==================== 📦 एड्रेस और कस्टमर डेटा स्ट्रक्चर को संभालना ====================
             let addressTableObj = null;
+            let customerTableObj = null;
 
-            if (rawOrderObj) {
-                // अगर पूरा mOrder एरे है, तो लॉग्स के मुताबिक इंडेक्स [27] पर एड्रेस टेबल का डेटा है
-                if (isMOrderArray && Array.isArray(mOrder)) {
+            if (mOrder) {
+                if (Array.isArray(mOrder)) {
+                    // लॉग्स के लैटरल जॉइन के सटीक इंडेक्स के अनुसार:
                     addressTableObj = mOrder[27];
+                    customerTableObj = mOrder[28];
                 } else {
-                    addressTableObj = rawOrderObj.deliveryAddress;
+                    addressTableObj = mOrder.deliveryAddress || mOrder.delivery_address;
+                    customerTableObj = mOrder.customer;
                 }
             }
 
-            // अगर एड्रेस टेबल का डेटा खुद एरे में लिपटा हुआ है, तो उसे बाहर निकालें
-            if (Array.isArray(addressTableObj)) {
-                addressTableObj = addressTableObj[0];
-            }
+            // अगर रिलेशन टेबल्स खुद एरे में लिपटी हुई आ रही हैं
+            if (Array.isArray(addressTableObj)) addressTableObj = addressTableObj[0];
+            if (Array.isArray(customerTableObj)) customerTableObj = customerTableObj[0];
 
-            // 🎯 नाम निकालने का अचूक लॉजिक (ऑब्जेक्ट और एरे दोनों के लिए)
+            // ==================== 👤 2. CUSTOMER NAME (DIRECT FROM DB COLUMN) ====================
+            let finalCustomerName = "Customer"; 
+            
             if (addressTableObj) {
                 if (Array.isArray(addressTableObj)) {
-                    // एरे के इंडेक्स [2] पर 'full_name' कॉलम है
+                    // delivery_addresses एरे के इंडेक्स [2] पर 'full_name' कॉलम का टेक्स्ट है
                     finalCustomerName = String(addressTableObj[2] || "").trim();
                 } else {
-                    // सीधे ऑब्जेक्ट का full_name या fullName कॉलम
                     finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
                 }
             }
-
-            // अगर किसी भी वजह से नाम खाली रह जाए, तो यूजर्स टेबल का बैकअप लेंगे
-            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                let customerTableObj = isMOrderArray && Array.isArray(mOrder) ? mOrder[28] : rawOrderObj?.customer;
-                if (Array.isArray(customerTableObj)) customerTableObj = customerTableObj[0];
-
+            
+            // फॉलबैक: अगर एड्रेस टेबल में नाम न मिले, तो users टेबल से नाम उठाएं
+            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
                 if (customerTableObj) {
-                    const firstName = customerTableObj.firstName || customerTableObj.first_name || customerTableObj[0] || '';
-                    const lastName = customerTableObj.lastName || customerTableObj.last_name || customerTableObj[1] || '';
-                    finalCustomerName = `${firstName} ${lastName}`.trim();
+                    if (Array.isArray(customerTableObj)) {
+                        finalCustomerName = `${customerTableObj[0] || ""} ${customerTableObj[1] || ""}`.trim();
+                    } else {
+                        const firstName = customerTableObj.firstName || customerTableObj.first_name || '';
+                        const lastName = customerTableObj.lastName || customerTableObj.last_name || '';
+                        finalCustomerName = `${firstName} ${lastName}`.trim();
+                    }
                 }
             }
 
-            // फाइनल स्क्रीन सेफ़्टी चेक
+            // स्क्रीन सेफ्टी क्लीनर
             if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
                 finalCustomerName = "Customer";
             }
 
-            // ==================== 📞 4. PHONE NUMBER SAFE EXTRACTION ====================
+            // ==================== 📞 4. PHONE NUMBER EXTRACTION ====================
             let finalPhone = "N/A";
-            if (rawOrderObj) {
+            if (mOrder) {
                 if (Array.isArray(mOrder)) {
-                    finalPhone = mOrder[6] || "N/A"; // आर्डर टेबल का फोन नंबर इंडेक्स
+                    finalPhone = String(mOrder[6] || "N/A"); // orders टेबल का फोन नंबर इंडेक्स
                 } else {
-                    finalPhone = rawOrderObj.phone || rawOrderObj.customerPhone || rawOrderObj.customer_phone || "N/A";
+                    finalPhone = mOrder.phone || mOrder.customerPhone || mOrder.customer_phone || "N/A";
                 }
             }
             if ((finalPhone === "N/A" || !finalPhone) && addressTableObj) {
-                finalPhone = addressTableObj.phone_number || addressTableObj.phoneNumber || addressTableObj[3] || "N/A";
+                finalPhone = Array.isArray(addressTableObj) ? addressTableObj[3] : (addressTableObj.phone_number || addressTableObj.phoneNumber || "N/A");
             }
 
-            // ==================== 📍 3. DELIVERY ADDRESS (DIRECT FROM orders.delivery_address) ====================
+            // ==================== 📍 3. DELIVERY ADDRESS (DIRECT FROM TEXT COLUMN) ====================
             let finalAddress = "N/A";
             let finalCity = "Bundi";
 
             if (mOrder) {
                 if (Array.isArray(mOrder)) {
-                    // 🎯 लॉग्स के अनुसार: orders टेबल के json_build_array में इंडेक्स [4] पर 'delivery_address' है
-                    finalAddress = String(mOrder[4] || "N/A").trim();
+                    const indexFour = mOrder[4];
+                    // अगर इंडेक्स 4 पर पूरा ऑब्जेक्ट आ गया है, तो उसके अंदर से स्ट्रिंग निकालें ताकि [object Object] न बने
+                    if (indexFour && typeof indexFour === 'object') {
+                        finalAddress = indexFour.delivery_address || indexFour.deliveryAddress || indexFour.addressLine1 || String(indexFour);
+                    } else if (indexFour) {
+                        finalAddress = String(indexFour);
+                    }
                     finalCity = String(mOrder[5] || "Bundi").trim();
-                } else if (typeof mOrder === 'object') {
-                    // सीधे ऑब्जेक्ट का टेक्स्ट कॉलम
+                } else {
                     finalAddress = String(mOrder.delivery_address || mOrder.deliveryAddress || "N/A").trim();
                     finalCity = mOrder.deliveryCity || mOrder.delivery_city || "Bundi";
                 }
             }
 
-            // फॉलबैक: अगर orders का कॉलम खाली मिले, तभी बैकअप के तौर पर एड्रेस टेबल को जोड़ेंगे
-            if ((!finalAddress || finalAddress === "N/A" || finalAddress === "undefined") && addressTableObj) {
-                if (Array.isArray(addressTableObj)) {
-                    finalAddress = `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim();
-                } else {
-                    finalAddress = `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
+            // फॉलबैक: अगर किसी वजह से orders टेबल का मुख्य कॉलम खाली या [object Object] रह जाए
+            if (!finalAddress || finalAddress === "N/A" || finalAddress.includes("[object Object]") || finalAddress === "undefined") {
+                if (addressTableObj) {
+                    if (Array.isArray(addressTableObj)) {
+                        finalAddress = `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim();
+                    } else {
+                        finalAddress = `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
+                    }
                 }
             }
 
-            if (!finalAddress || finalAddress.trim() === "" || finalAddress === "N/A" || finalAddress === "undefined" || finalAddress === "Local Address") {
+            if (!finalAddress || finalAddress.trim() === "" || finalAddress.includes("[object Object]") || finalAddress === "undefined" || finalAddress === "Local Address") {
                 finalAddress = "N/A";
             }
+
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
@@ -425,12 +435,9 @@ const formattedBatches = availableBatches.map(batch => {
                 
                 deliveryCharge: Number(batch.deliveryFee || 40), 
                 totalItems: currentSubOrders.length,
-                
-                // 🔥 सुधार: अब यहाँ शून्य नहीं जाएगा, सीधे एरे से जुड़ा हुआ असली बिल अमाउंट फ्रंटएंड को ट्रांसफर होगा
                 totalToCollect: calculatedTotalBill
             };
         });
-        
         return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
