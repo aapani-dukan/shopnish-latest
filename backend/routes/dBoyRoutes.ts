@@ -375,6 +375,18 @@ const formattedBatches = availableBatches.map(batch => {
                         : `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
                 }
             }
+            // 🎯 NEAR BY FIELD FIX: आपके कहे अनुसार सीधे delivery_instructions को ही Target किया है
+            let finalNearBy = "Not Provided";
+            if (targetOrder) {
+                // अगर एरे फॉर्मेट हो तो लॉग्स के मुताबिक इंडेक्स [11] पर instructions हैं, अन्यथा सीधे ऑब्जेक्ट की की (Key)
+                const instructions = Array.isArray(targetOrder) 
+                    ? targetOrder[11] 
+                    : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
+                
+                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
+                    finalNearBy = instructions.trim();
+                }
+            }
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
@@ -387,8 +399,8 @@ const formattedBatches = availableBatches.map(batch => {
                 customerName: finalCustomerName,
                 customerPhone: finalPhone, 
                 deliveryAddress: finalAddress, 
-                       
-                
+                deliveryInstructions: finalNearBy,
+
                 deliveryCharge: Number(batch.deliveryFee || 40), 
                 totalItems: currentSubOrders.length,
                 totalToCollect: calculatedTotalBill
@@ -581,32 +593,76 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       const shopNames = pickupPoints.map(p => p.shopName).filter(Boolean).join(" + ");
       const shopAddresses = pickupPoints.map(p => p.address).filter(Boolean).join(" | ");
 
-      // 2. Customer Profile Extraction (Deep Safe Fallback)
+     // 2. Customer Profile Extraction (Deep Safe Fallback)
       const directMaster = batch.masterOrder as any;
       const nestedMaster = currentSubOrders[0]?.masterOrder as any;
       
-      const customerObj = directMaster?.customer || nestedMaster?.customer || {};
+      const mOrder = directMaster || nestedMaster;
+      let targetOrder = Array.isArray(mOrder) ? mOrder[0] : mOrder;
+
+      // नाम के लिए रिलेशन टेबल को बाहर निकाला
+      let addressTableObj = targetOrder?.deliveryAddress;
+      if (Array.isArray(addressTableObj)) {
+          addressTableObj = addressTableObj[0];
+      }
+
+      const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
       
-      let firstName = directMaster?.first_name || nestedMaster?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-      let lastName = directMaster?.last_name || nestedMaster?.last_name || customerObj?.lastName || customerObj?.last_name || '';
-      let finalCustomerName = `${firstName} ${lastName}`.trim();
+      // 👤 CUSTOMER NAME EXTRACTION (अब असाइन्ड वाले में भी नाम सीधे delivery_addresses से आएगा)
+      let finalCustomerName = "Customer"; 
+
+      if (addressTableObj) {
+          if (Array.isArray(addressTableObj)) {
+              finalCustomerName = String(addressTableObj[2] || "").trim();
+          } else {
+              finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+          }
+      }
+
+      if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+          let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+          let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+          finalCustomerName = `${firstName} ${lastName}`.trim();
+      }
       
       if (!finalCustomerName) {
         finalCustomerName = directMaster?.customerName || nestedMaster?.customerName || "Customer";
       }
 
-      // 3. DIRECT CUSTOMER PHONE & ADDRESS (Direct Orders Table Target)
+      // 📞 PHONE NUMBER EXTRACTION (आपका पुराना वर्किंग)
       const finalPhone = directMaster?.phone || nestedMaster?.phone || directMaster?.customerPhone || customerObj?.phone || "N/A";
       
-      // 🚨 DIRECT STRIKE: सीधा orders टेबल के 'delivery_address' टेक्स्ट कॉलम को टारगेट किया
+      // 📍 DELIVERY ADDRESS EXTRACTION (आपका पुराना वर्किंग)
       let finalAddress = directMaster?.delivery_address || directMaster?.deliveryAddress || 
                          nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
 
-      // अगर एड्रेस ऑब्जेक्ट आ रहा हो, तो उसे स्ट्रिंग में बदलें
       if (finalAddress && typeof finalAddress === 'object') {
-         finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+         if (Array.isArray(finalAddress)) {
+             finalAddress = String(finalAddress[4] || "Local Address");
+         } else {
+             finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+         }
       }
 
+      if (typeof finalAddress === 'string' && finalAddress.includes("[object Object]")) {
+          if (addressTableObj) {
+              finalAddress = Array.isArray(addressTableObj) 
+                  ? `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim()
+                  : `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
+          }
+      }
+
+      // 🎯 NEAR BY FIELD FIX: असाइन्ड वाले में भी सीधे delivery_instructions को ही Target किया है
+      let finalNearBy = "Not Provided";
+      if (targetOrder) {
+          const instructions = Array.isArray(targetOrder) 
+              ? targetOrder[11] 
+              : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
+          
+          if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
+              finalNearBy = instructions.trim();
+          }
+      }
       return {
         id: batch.id,
         batchNumber: `BTCH-${batch.id}`,
@@ -621,8 +677,9 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
         customerName: finalCustomerName,
         customerPhone: finalPhone,      // 👈 कस्टमर का असली फोन नंबर
         deliveryAddress: finalAddress,   // 👈 कस्टमर का पूरा असली पता
-        deliveryCity: directMaster?.delivery_city || nestedMaster?.delivery_city || "Bundi",
-        
+        deliveryCity: directMaster?.delivery_city || nestedMaster?.delivery_city || "Unknown City", // 👈 अगर शहर का डेटा हो तो दिखाएं
+        deliveryInstructions: finalNearBy, // 👈 निकटवर्ती निर्देश
+
         deliveryCharge: Number(batch.deliveryFee || 40),
         totalItems: currentSubOrders.length
       };
