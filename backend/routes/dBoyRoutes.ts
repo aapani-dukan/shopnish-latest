@@ -239,7 +239,104 @@ router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: 
         return res.status(500).json({ error: 'Failed to update FCM token.' });
     }
 });
+// 🎯 100% सटीक बैच डिटेल्स एंडपॉइंट जो 404 को हमेशा के लिए खत्म करेगा
+router.get('/batch-details/:id', async (req, res) => {
+    try {
+        const batchId = parseInt(req.params.id);
+        if (isNaN(batchId)) {
+            return res.status(400).json({ success: false, message: "Invalid Batch ID" });
+        }
 
+        // आपके डेटाबेस से बैच का डेटा निकालना (Drizzle / SQL के अनुसार)
+        // ध्यान दें: यहाँ हम वही उपलब्ध बैच वाला पूरा रिलेशनल डेटा खींच रहे हैं
+        const batchData = await db.query.deliveryBatches.findFirst({
+            where: eq(deliveryBatches.id, batchId),
+            with: {
+                subOrders: {
+                    with: {
+                        seller: true,
+                        masterOrder: {
+                            with: {
+                                deliveryAddress: true,
+                                customer: true
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        if (!batchData) {
+            return res.status(404).json({ success: false, message: "Batch not found" });
+        }
+
+        const currentSubOrders = batchData.subOrders || [];
+        
+        // 1. Pickup Details
+        const pickupPoints = currentSubOrders.map(so => ({
+            shopName: so.seller?.businessName || "Unknown Shop",
+            address: so.seller?.businessAddress || "Address Not Available",
+            phone: so.seller?.businessPhone || "",
+        }));
+
+        const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
+        const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
+
+        let calculatedTotalBill = 0;
+        currentSubOrders.forEach((so: any) => {
+            if (so) {
+                calculatedTotalBill += Number(so.total || so.subtotal || 0);
+            }
+        });
+
+        const nestedMaster = currentSubOrders[0]?.masterOrder as any;
+
+        // 👤 CUSTOMER NAME EXTRACTION
+        let finalCustomerName = "Customer";
+        const addressTableObj = nestedMaster?.deliveryAddress;
+        if (addressTableObj) {
+            finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "Customer").trim();
+        }
+
+        // 📞 PHONE NUMBER
+        const finalPhone = nestedMaster?.phone || nestedMaster?.customerPhone || "N/A";
+        
+        // 📍 DELIVERY ADDRESS
+        const finalAddress = nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
+
+        // 🎯 NEAR BY FIX (11वां कॉलम यानी delivery_instructions)
+        const finalNearBy = nestedMaster?.delivery_instructions || nestedMaster?.deliveryInstructions || "Not Provided";
+
+        // फ्रंटएंड के लिए बिल्कुल चकाचक फ्लैट पेलोड तैयार
+        const formattedBatch = {
+            id: batchData.id,
+            batchNumber: `BTCH-${batchData.id}`,
+            status: batchData.status,
+            createdAt: batchData.createdAt,
+            pickupShops: shopNames,
+            pickupAddresses: shopAddresses,
+            pickupPoints: pickupPoints,
+            customerName: finalCustomerName,
+            customerPhone: finalPhone,
+            deliveryAddress: finalAddress,
+            nearBy: finalNearBy === "null" ? "Not Provided" : finalNearBy,
+            deliveryCity: nestedMaster?.delivery_city || "Bundi",
+            deliveryCharge: Number(batchData.deliveryFee || 40),
+            totalItems: currentSubOrders.length,
+            totalToCollect: calculatedTotalBill,
+            subOrders: currentSubOrders
+        };
+
+        return res.json({
+            success: true,
+            batch: formattedBatch
+        });
+
+    } catch (error: any) {
+        console.error("🚨 Error in batch-details API:", error);
+        return res.status(500).json({ success: false, message: error.message });
+    }
+});
 /**
  * 🟡 GET Available Delivery Batches for Claiming
  * /api/delivery-boys/available-batches
