@@ -378,9 +378,9 @@ const formattedBatches = availableBatches.map(batch => {
             // 🎯 NEAR BY FIELD FIX: आपके कहे अनुसार सीधे delivery_instructions को ही Target किया है
             let finalNearBy = "Not Provided";
             if (targetOrder) {
-                // अगर एरे फॉर्मेट हो तो लॉग्स के मुताबिक इंडेक्स [11] पर instructions हैं, अन्यथा सीधे ऑब्जेक्ट की की (Key)
+                // अगर एरे फॉर्मेट हो तो लॉग्स के मुताबिक इंडेक्स [10] पर instructions हैं, अन्यथा सीधे ऑब्जेक्ट की की (Key)
                 const instructions = Array.isArray(targetOrder) 
-                    ? targetOrder[11] 
+                    ? targetOrder[10] 
                     : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
                 
                 if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
@@ -656,7 +656,7 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       let finalNearBy = "Not Provided";
       if (targetOrder) {
           const instructions = Array.isArray(targetOrder) 
-              ? targetOrder[11] 
+              ? targetOrder[10] 
               : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
           
           if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
