@@ -375,15 +375,14 @@ const formattedBatches = availableBatches.map(batch => {
                         : `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
                 }
             }
-            // 🎯 NEAR BY FIELD FIX: आपके कहे अनुसार सीधे delivery_instructions को ही Target किया है
             let finalNearBy = "Not Provided";
-            if (targetOrder) {
-                // अगर एरे फॉर्मेट हो तो लॉग्स के मुताबिक इंडेक्स [10] पर instructions हैं, अन्यथा सीधे ऑब्जेक्ट की की (Key)
-                const instructions = Array.isArray(targetOrder) 
-                    ? targetOrder[10] 
-                    : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
+            if (nestedMaster) {
+                // लॉग्स प्रूफ: अगर एरे है तो सीधे बिना किसी कंडीशनल लेयर के इंडेक्स [10] से वैल्यू उठाएं
+                const instructions = Array.isArray(nestedMaster) 
+                    ? nestedMaster[10] 
+                    : (nestedMaster.delivery_instructions || nestedMaster.deliveryInstructions);
                 
-                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
+                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null" && instructions !== "undefined") {
                     finalNearBy = instructions.trim();
                 }
             }
@@ -607,28 +606,33 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       }
 
       const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
+
+            // 👤 CUSTOMER NAME EXTRACTION: पहली प्रायोरिटी delivery_addresses.full_name को
+            let finalCustomerName = "Customer"; 
+
+            if (addressTableObj) {
+                if (Array.isArray(addressTableObj)) {
+                    // अगर डेटाबेस से एरे बंडल आ रहा हो तो इंडेक्स [2] पर full_name है
+                    finalCustomerName = String(addressTableObj[2] || "").trim();
+                } else {
+                    // अगर नॉर्मल ऑब्जेक्ट फॉर्मेट में आ रहा हो
+                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+                }
+            }
+
+            // फॉलबैक: अगर एड्रेस टेबल में नाम न मिले, तो पुराना फर्स्ट/लास्ट नेम वाला लॉजिक काम करेगा
+            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+                let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+                finalCustomerName = `${firstName} ${lastName}`.trim();
+            }
+
+            // फाइनल सेफ़्टी चेक
+            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                finalCustomerName = targetOrder?.customerName || targetOrder?.customer_name || "Customer";
+            }
       
-      // 👤 CUSTOMER NAME EXTRACTION (अब असाइन्ड वाले में भी नाम सीधे delivery_addresses से आएगा)
-      let finalCustomerName = "Customer"; 
-
-      if (addressTableObj) {
-          if (Array.isArray(addressTableObj)) {
-              finalCustomerName = String(addressTableObj[2] || "").trim();
-          } else {
-              finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
-          }
-      }
-
-      if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-          let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-          let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
-          finalCustomerName = `${firstName} ${lastName}`.trim();
-      }
       
-      if (!finalCustomerName) {
-        finalCustomerName = directMaster?.customerName || nestedMaster?.customerName || "Customer";
-      }
-
       // 📞 PHONE NUMBER EXTRACTION (आपका पुराना वर्किंग)
       const finalPhone = directMaster?.phone || nestedMaster?.phone || directMaster?.customerPhone || customerObj?.phone || "N/A";
       
