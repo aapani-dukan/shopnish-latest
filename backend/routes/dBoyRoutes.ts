@@ -239,7 +239,7 @@ router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: 
         return res.status(500).json({ error: 'Failed to update FCM token.' });
     }
 });
-// 🎯 100% सटीक बैच डिटेल्स एंडपॉइंट जो 404 को हमेशा के लिए खत्म करेगा
+// 🎯 Batch Details API - एरे पार्सिंग और इंडेक्सिंग के साथ 100% फिक्स
 router.get('/batch-details/:id', async (req, res) => {
     try {
         const batchId = parseInt(req.params.id);
@@ -247,14 +247,11 @@ router.get('/batch-details/:id', async (req, res) => {
             return res.status(400).json({ success: false, message: "Invalid Batch ID" });
         }
 
-        // आपके डेटाबेस से बैच का डेटा निकालना (Drizzle / SQL के अनुसार)
-        // ध्यान दें: यहाँ हम वही उपलब्ध बैच वाला पूरा रिलेशनल डेटा खींच रहे हैं
         const batchData = await db.query.deliveryBatches.findFirst({
             where: eq(deliveryBatches.id, batchId),
             with: {
                 subOrders: {
                     with: {
-                        seller: true,
                         masterOrder: {
                             with: {
                                 deliveryAddress: true,
@@ -272,64 +269,90 @@ router.get('/batch-details/:id', async (req, res) => {
 
         const currentSubOrders = batchData.subOrders || [];
         
-        // 1. Pickup Details
-        const pickupPoints = currentSubOrders.map(so => ({
-            shopName: so.seller?.businessName || "Unknown Shop",
-            address: so.seller?.businessAddress || "Address Not Available",
-            phone: so.seller?.businessPhone || "",
-        }));
+        // 🎯 प्रत्येक सब-ऑर्डर को पार्स करके फ्रंटएंड के 'orders' एरे के लिए तैयार करना
+        const formattedOrders = currentSubOrders.map((so: any) => {
+            const nestedMaster = so.masterOrder as any;
+            
+            // 🚨 अवेलेबल बैच की तरह एरे लेयर सेफ्टी चेक किया
+            let targetOrder = Array.isArray(nestedMaster) ? nestedMaster[0] : nestedMaster;
 
-        const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
-        const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
-
-        let calculatedTotalBill = 0;
-        currentSubOrders.forEach((so: any) => {
-            if (so) {
-                calculatedTotalBill += Number(so.total || so.subtotal || 0);
+            // 🎯 नाम के लिए एड्रेस टेबल निकालना
+            let addressTableObj = targetOrder?.deliveryAddress || nestedMaster?.deliveryAddress;
+            if (Array.isArray(addressTableObj)) {
+                addressTableObj = addressTableObj[0];
             }
+
+            const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
+
+            // 👤 CUSTOMER NAME EXTRACTION (हूबहू अवेलेबल बैच वाला कड़क लॉजिक)
+            let finalCustomerName = "Customer"; 
+
+            if (addressTableObj) {
+                if (Array.isArray(addressTableObj)) {
+                    // अगर एरे बंडल आ रहा हो तो इंडेक्स [2] पर full_name है
+                    finalCustomerName = String(addressTableObj[2] || "").trim();
+                } else {
+                    // अगर नॉर्मल ऑब्जेक्ट फॉर्मेट में हो
+                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+                }
+            }
+
+            // फॉलबैक नाम चेक
+            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+                let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+                finalCustomerName = `${firstName} ${lastName}`.trim();
+            }
+
+            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                finalCustomerName = "Customer";
+            }
+
+            // 📞 PHONE NUMBER EXTRACTION
+            const finalPhone = nestedMaster?.phone || nestedMaster?.customerPhone || customerObj?.phone || "N/A";
+
+            // 📍 DELIVERY ADDRESS EXTRACTION (100% सेफ़ एरे और ऑब्जेक्ट दोनों के लिए)
+            let finalAddress = nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
+            if (finalAddress && typeof finalAddress === 'object') {
+                if (Array.isArray(finalAddress)) {
+                    finalAddress = String(finalAddress[4] || "Local Address");
+                } else {
+                    finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+                }
+            }
+
+            // 🎯 NEAR BY FIX (11वां कॉलम यानी इंडेक्स 10)
+            let finalNearBy = "Not Provided";
+            if (nestedMaster) {
+                const instructions = Array.isArray(nestedMaster) 
+                    ? nestedMaster[10] 
+                    : (nestedMaster.delivery_instructions || nestedMaster.deliveryInstructions);
+                
+                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null" && instructions !== "undefined") {
+                    finalNearBy = instructions.trim();
+                }
+            }
+
+            const city = nestedMaster?.delivery_city || "Bundi";
+            const finalFullAddress = (typeof finalAddress === 'string' && finalAddress.includes(city)) 
+                ? finalAddress 
+                : `${finalAddress}, ${city}`;
+
+            return {
+                id: so.id,
+                status: so.status,
+                totalAmount: Number(so.total || so.subtotal || 0),
+                customerName: finalCustomerName,       // 👈 अब यहाँ असली नाम पैक होकर जाएगा
+                customerPhone: finalPhone,             
+                shippingAddress: finalFullAddress,     
+                nearBy: finalNearBy === "null" ? "Not Provided" : finalNearBy // 👈 और यहाँ नियरबाय
+            };
         });
 
-        const nestedMaster = currentSubOrders[0]?.masterOrder as any;
-
-        // 👤 CUSTOMER NAME EXTRACTION
-        let finalCustomerName = "Customer";
-        const addressTableObj = nestedMaster?.deliveryAddress;
-        if (addressTableObj) {
-            finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "Customer").trim();
-        }
-
-        // 📞 PHONE NUMBER
-        const finalPhone = nestedMaster?.phone || nestedMaster?.customerPhone || "N/A";
-        
-        // 📍 DELIVERY ADDRESS
-        const finalAddress = nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
-
-        // 🎯 NEAR BY FIX (11वां कॉलम यानी delivery_instructions)
-        const finalNearBy = nestedMaster?.delivery_instructions || nestedMaster?.deliveryInstructions || "Not Provided";
-
-        // फ्रंटएंड के लिए बिल्कुल चकाचक फ्लैट पेलोड तैयार
-        const formattedBatch = {
-            id: batchData.id,
-            batchNumber: `BTCH-${batchData.id}`,
-            status: batchData.status,
-            createdAt: batchData.createdAt,
-            pickupShops: shopNames,
-            pickupAddresses: shopAddresses,
-            pickupPoints: pickupPoints,
-            customerName: finalCustomerName,
-            customerPhone: finalPhone,
-            deliveryAddress: finalAddress,
-            nearBy: finalNearBy === "null" ? "Not Provided" : finalNearBy,
-            deliveryCity: nestedMaster?.delivery_city || "Bundi",
-            deliveryCharge: Number(batchData.deliveryFee || 40),
-            totalItems: currentSubOrders.length,
-            totalToCollect: calculatedTotalBill,
-            subOrders: currentSubOrders
-        };
-
         return res.json({
-            success: true,
-            batch: formattedBatch
+            id: batchData.id,
+            status: batchData.status,
+            orders: formattedOrders
         });
 
     } catch (error: any) {
