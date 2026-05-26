@@ -176,11 +176,11 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
   }
 });
 // PUT /api/delivery/update-location
-// Isko delivery boy ki app har 1-2 minute mein call karegi
+
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { latitude, longitude } = req.body; // App se direct lat-lng aayenge
+        const { latitude, longitude } = req.body;
 
         if (!latitude || !longitude) {
             return res.status(400).json({ error: 'Latitude and Longitude are required.' });
@@ -195,7 +195,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             return res.status(404).json({ error: 'Delivery boy profile not found.' });
         }
 
-        // 2. Database mein 'null' ko real coordinates se replace karo
+        // 2. Database mein current location update karo
         await db.update(deliveryBoys)
             .set({
                 currentLat: String(latitude),
@@ -207,31 +207,36 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         console.log(`📌 [GPS SYNC]: Delivery Boy ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
 
         // =======================================================================
-        // 🚀 असली जादू: यहाँ से डेटा को सॉकेट के ज़रिए कस्टमर ऐप तक फ़ॉरवर्ड करो
+        // 🚀 100% प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (नो हार्डकोडिंग, नो बैकअप)
         // =======================================================================
-        // पक्का करें कि आपके backend में 'req.app.get("io")' या 'global.io' उपलब्ध हो
-        const io = req.app.get('io') || (global as any).io;
+        try {
+            const io = getIO(); // 🔌 असली Socket.IOInstance यहाँ से उठाया
 
-        if (io) {
-          const socketPayload = {
-            orderId: 181, // 🚨 टेस्टिंग के लिए फिक्स आर्डर आईडी जो कस्टमर ऐप में खुली है
-            deliveryBoyId: boyProfile.id,
-            latitude: Number(latitude),
-            longitude: Number(longitude),
-            heading: 0
-          };
+            // 🔍 डेटाबेस से ऑटोमैटिक ढूंढो कि इस डिलीवरी बॉय का कौन सा बैच अभी एक्टिव है
+            const activeBatch = await db.query.deliveryBatches.findFirst({
+                where: eq(deliveryBatches.deliveryBoyId, boyProfile.id)
+            });
 
-          // घेरा A: सीधे टेस्टिंग ऑर्डर आईडी वाले रूम में ब्लास्ट करो
-          io.to(`order_181`).emit("delivery:location-update", socketPayload);
+            // 🎯 सिर्फ और सिर्फ तभी ब्रॉडकास्ट करो जब डेटाबेस में असली एक्टिव ऑर्डर मौजूद हो!
+            if (activeBatch && activeBatch.masterOrderId) {
+                
+                // कमरे का नाम बिल्कुल सॉकेट फ़ाइल के नियमों के अनुसार: `order:${masterOrderId}`
+                io.to(`order:${activeBatch.masterOrderId}`).emit("order:delivery_location", {
+                    lat: Number(latitude),
+                    lng: Number(longitude),
+                    batchId: activeBatch.id,
+                    timestamp: new Date().toISOString(),
+                });
 
-          // घेरा B: डिलीवरी बॉय के अपने पर्सनल रूम में भी ब्लास्ट करो (सेफ्टी के लिए)
-          io.to(`delivery_boy_${boyProfile.id}`).emit("delivery:location-update", socketPayload);
-
-          console.log(`📡 [SERVER SOCKET]: Broadcasted successfully to order_181 and delivery_boy_${boyProfile.id}`);
-        } else {
-          console.log("⚠️ [SOCKET WARNING]: 'io' instance backend me nahi mila! Global.io ya app.get check karein.");
+                console.log(`📡 [AUTO-SOCKET SUCCESS]: Forwarded to order:${activeBatch.masterOrderId}`);
+            } else {
+                // अगर डिलीवरी बॉय अभी ड्यूटी पर नहीं है या कोई एक्टिव बैच नहीं है, तो चुपचाप लॉग प्रिंट कर दो
+                console.log(`ℹ️ [SOCKET INFO]: Rider ${boyProfile.id} is active but has no assigned active batch right now.`);
+            }
+        } catch (socketErr) {
+            console.error("❌ Socket broadcast failed:", socketErr);
         }
-        // ========================================== END ========================
+        // =======================================================================
 
         return res.status(200).json({ success: true, message: 'Location updated successfully.' });
     } catch (error: any) {
@@ -239,6 +244,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         return res.status(500).json({ error: 'Failed to update location.' });
     }
 });
+
 // 📌 PATCH /api/delivery/update-fcm-token
 // Mobile app se aane wale FCM token ko permanently database mein save karne ke liye
 router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: Response) => {
