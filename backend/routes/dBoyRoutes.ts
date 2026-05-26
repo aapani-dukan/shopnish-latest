@@ -205,13 +205,40 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             .where(eq(deliveryBoys.id, boyProfile.id));
 
         console.log(`📌 [GPS SYNC]: Delivery Boy ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
+
+        // =======================================================================
+        // 🚀 असली जादू: यहाँ से डेटा को सॉकेट के ज़रिए कस्टमर ऐप तक फ़ॉरवर्ड करो
+        // =======================================================================
+        // पक्का करें कि आपके backend में 'req.app.get("io")' या 'global.io' उपलब्ध हो
+        const io = req.app.get('io') || (global as any).io;
+
+        if (io) {
+          const socketPayload = {
+            orderId: 181, // 🚨 टेस्टिंग के लिए फिक्स आर्डर आईडी जो कस्टमर ऐप में खुली है
+            deliveryBoyId: boyProfile.id,
+            latitude: Number(latitude),
+            longitude: Number(longitude),
+            heading: 0
+          };
+
+          // घेरा A: सीधे टेस्टिंग ऑर्डर आईडी वाले रूम में ब्लास्ट करो
+          io.to(`order_181`).emit("delivery:location-update", socketPayload);
+
+          // घेरा B: डिलीवरी बॉय के अपने पर्सनल रूम में भी ब्लास्ट करो (सेफ्टी के लिए)
+          io.to(`delivery_boy_${boyProfile.id}`).emit("delivery:location-update", socketPayload);
+
+          console.log(`📡 [SERVER SOCKET]: Broadcasted successfully to order_181 and delivery_boy_${boyProfile.id}`);
+        } else {
+          console.log("⚠️ [SOCKET WARNING]: 'io' instance backend me nahi mila! Global.io ya app.get check karein.");
+        }
+        // ========================================== END ========================
+
         return res.status(200).json({ success: true, message: 'Location updated successfully.' });
     } catch (error: any) {
         console.error('❌ Error updating delivery boy location:', error);
         return res.status(500).json({ error: 'Failed to update location.' });
     }
 });
-
 // 📌 PATCH /api/delivery/update-fcm-token
 // Mobile app se aane wale FCM token ko permanently database mein save karne ke liye
 router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: Response) => {
