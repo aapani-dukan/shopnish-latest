@@ -180,13 +180,14 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
-        const { latitude, longitude } = req.body;
+        // 1. 🎯 मोबाइल ऐप से आ रही activeBatchId को यहाँ रिसीव करें
+        const { latitude, longitude, activeBatchId } = req.body;
 
         if (!latitude || !longitude) {
             return res.status(400).json({ error: 'Latitude and Longitude are required.' });
         }
 
-        // 1. Delivery boy ki profile dhoondho
+        // 2. Delivery boy ki profile dhoondho
         const boyProfile = await db.query.deliveryBoys.findFirst({
             where: eq(deliveryBoys.userId, userId)
         });
@@ -195,7 +196,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             return res.status(404).json({ error: 'Delivery boy profile not found.' });
         }
 
-        // 2. Database mein current location update karo
+        // 3. Database mein current location update karo
         await db.update(deliveryBoys)
             .set({
                 currentLat: String(latitude),
@@ -207,15 +208,24 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         console.log(`📌 [GPS SYNC]: Delivery Boy ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
 
         // =======================================================================
-        // 🚀 100% प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (नो हार्डकोडिंग, नो बैकअप)
+        // 🚀 100% प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (अब बिल्कुल सही बैच आईडी के साथ)
         // =======================================================================
         try {
-            const io = getIO(); // 🔌 असली Socket.IOInstance यहाँ से उठाया
+            const io = getIO(); // 🔌 असली Socket.IO Instance
 
-            // 🔍 डेटाबेस से ऑटोमैटिक ढूंढो कि इस डिलीवरी बॉय का कौन सा बैच अभी एक्टिव है
-            const activeBatch = await db.query.deliveryBatches.findFirst({
-                where: eq(deliveryBatches.deliveryBoyId, boyProfile.id)
-            });
+            let activeBatch = null;
+
+            // 🎯 जादू यहाँ है: अगर मोबाइल ने स्पेसिफिक बैच आईडी भेजी है, तो सीधा उसे ही ढूंढो भाई
+            if (activeBatchId) {
+                activeBatch = await db.query.deliveryBatches.findFirst({
+                    where: eq(deliveryBatches.id, Number(activeBatchId)) // सीधे उसी 172 वाले बैच को पकड़ेगा
+                });
+            } else {
+                // बैकअप: अगर कभी मोबाइल आईडी न भेज पाए, तो पुराना लॉजिक (पर इसमें डिलीवरी बॉय आईडी और आर्डर स्टेटस भी डालना सेफ़ रहता है)
+                activeBatch = await db.query.deliveryBatches.findFirst({
+                    where: eq(deliveryBatches.deliveryBoyId, boyProfile.id)
+                });
+            }
 
             // 🎯 सिर्फ और सिर्फ तभी ब्रॉडकास्ट करो जब डेटाबेस में असली एक्टिव ऑर्डर मौजूद हो!
             if (activeBatch && activeBatch.masterOrderId) {
@@ -228,10 +238,9 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
                     timestamp: new Date().toISOString(),
                 });
 
-                console.log(`📡 [AUTO-SOCKET SUCCESS]: Forwarded to order:${activeBatch.masterOrderId}`);
+                console.log(`📡 [AUTO-SOCKET SUCCESS]: Forwarded to exact room: order:${activeBatch.masterOrderId}`);
             } else {
-                // अगर डिलीवरी बॉय अभी ड्यूटी पर नहीं है या कोई एक्टिव बैच नहीं है, तो चुपचाप लॉग प्रिंट कर दो
-                console.log(`ℹ️ [SOCKET INFO]: Rider ${boyProfile.id} is active but has no assigned active batch right now.`);
+                console.log(`ℹ️ [SOCKET INFO]: Rider ${boyProfile.id} is active but no matching batch found for ID ${activeBatchId}`);
             }
         } catch (socketErr) {
             console.error("❌ Socket broadcast failed:", socketErr);
@@ -244,7 +253,6 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         return res.status(500).json({ error: 'Failed to update location.' });
     }
 });
-
 // 📌 PATCH /api/delivery/update-fcm-token
 // Mobile app se aane wale FCM token ko permanently database mein save karne ke liye
 router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: Response) => {
