@@ -53,7 +53,10 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
       );
       uploadStream.end(processedBuffer);
     });
-  } catch (error) { return null; }
+  } catch (error) { 
+  console.error("PROCESS UPLOAD ERROR:", error);
+  return null; 
+}
 }
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
 // --- 1. MASTER SYNC (Ab ye sirf Master Table chamkayega) ---
@@ -64,7 +67,8 @@ export const syncMasterTableOnly = async () => {
       like(masterProducts.image, `%placehold%`),
       like(masterProducts.image, `%placeholder%`),
       like(masterProducts.image, `%freeiconspng%`),
-      like(masterProducts.image, `%no-image%`)
+      like(masterProducts.image, `%no-image%`),
+      like(masterProducts.image, `%t4.ftcdn.net%`)
     ))
     .limit(20); 
 
@@ -74,10 +78,14 @@ export const syncMasterTableOnly = async () => {
     try {
       console.log(`🔎 Scraping HD Image for Master: ${item.name}`);
       const urls = await getGoogleImages(item.name);
-      
+      console.log("GOOGLE URLS:", urls);
       if (urls.length > 0) {
         // SafeName fix ke sath upload
         const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
+        console.log("CLOUDINARY URL:", cloudinaryUrl);
+    console.log(`🌐 Google Result:`, urls[0]);
+
+console.log(`☁️ Uploaded To Cloudinary:`, cloudinaryUrl);
         if (cloudinaryUrl) {
           await db.update(masterProducts)
             .set({ image: cloudinaryUrl })
