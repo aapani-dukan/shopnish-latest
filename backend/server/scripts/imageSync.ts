@@ -19,10 +19,20 @@ const DUMMY_KEYWORD = 'placehold';
 
 async function getGoogleImages(query: string) {
   try {
-    const res = await GOOGLE_IMG_SCRAP({ search: query, limit: 5 });
+    console.log("🔍 Searching:", query);
+
+    const res = await GOOGLE_IMG_SCRAP({
+      search: query,
+      limit: 5
+    });
+
+    console.log("FULL RESPONSE:");
+    console.log(JSON.stringify(res, null, 2));
+
     return res.result.map(img => img.url).filter(Boolean);
+
   } catch (err) {
-    console.error(`❌ Google Scraping failed for: ${query}`, err);
+    console.error("GOOGLE SCRAP ERROR:", err);
     return [];
   }
 }
