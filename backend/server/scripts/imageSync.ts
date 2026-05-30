@@ -54,10 +54,20 @@ export async function scrapePixabayImage(productName: string): Promise<string[]>
 }
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
-    const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 12000 });
+    // 🎯 FIX: Pixabay को असली क्रोम ब्राउज़र का झांसा देने के लिए हेडर्स जोड़े
+    const response = await axios.get(imageUrl, { 
+      responseType: 'arraybuffer', 
+      timeout: 12000,
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
+        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "Referer": "https://pixabay.com/"
+      }
+    });
 
     const buffer = await sharp(Buffer.from(response.data))
       .resize(800, 800, { fit: 'contain', background: '#fff' })
+      .flatten({ background: '#ffffff' }) // JPEG के लिए बैकग्राउंड फ़्लैटेन ज़रूरी है
       .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
@@ -77,12 +87,11 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
           else resolve(result?.secure_url || '');
         }
       );
-
       stream.end(buffer);
     });
 
-  } catch (err) {
-    console.error("UPLOAD ERROR:", err);
+  } catch (err: any) {
+    console.error(`❌ UPLOAD ERROR [Status: ${err?.response?.status || 'Unknown'}]:`, err?.message || err);
     return null;
   }
 }
@@ -178,34 +187,41 @@ export const syncProductGalleriesOnly = async () => {
     .where(or(isNull(products.images), eq(products.images, [])))
     .limit(20);
 
+  console.log(`📦 Found ${items.length} products to generate galleries.`);
+
   for (const item of items) {
     try {
       const sourceUrls = await scrapePixabayImage(item.name);
 
       if (!sourceUrls.length) continue;
 
-      // 🚀 parallel upload (FAST)
-      const uploadPromises = sourceUrls.map((url, i) =>
-        processAndUpload(url, item.name, `gallery_${i}`)
-      );
+      const galleryUrls: string[] = [];
+      const maxImages = Math.min(sourceUrls.length, 3);
 
-      const uploaded = await Promise.all(uploadPromises);
-const gallery = uploaded
-  .filter((url): url is string => typeof url === "string")
-  .slice(0, 3);
+      // 🎯 FIX: Parallel (Promise.all) के बजाय एक-एक करके डाउनलोड करेंगे ताकि Pixabay ब्लॉक न करे
+      for (let i = 0; i < maxImages; i++) {
+        console.log(`   ⏳ Downloading gallery image ${i + 1}/${maxImages} for: ${item.name}`);
+        const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
+        if (url) {
+          galleryUrls.push(url);
+        }
+        // हर गैलरी इमेज के बीच आधा सेकंड का छोटा सा सांस लेने का गैप
+        await new Promise(r => setTimeout(r, 500));
+      }
       
-      if (gallery.length) {
+      if (galleryUrls.length > 0) {
         await db.update(products)
-          .set({ images: gallery })
+          .set({ images: galleryUrls })
           .where(eq(products.id, item.id));
 
         console.log("✅ Gallery Updated:", item.name);
       }
 
-      await new Promise(r => setTimeout(r, 1000));
+      // 🎯 बटन का सेफ़ गैप: ताकि अगले प्रोडक्ट पर जाने से पहले पिक्सबे शांत रहे
+      await new Promise(r => setTimeout(r, 1500));
 
     } catch (err) {
-      console.error(err);
+      console.error(`❌ Error in Gallery Sync for ${item.name}:`, err);
     }
   }
 
