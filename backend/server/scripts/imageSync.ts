@@ -22,7 +22,7 @@ async function getGoogleImages(query: string) {
     const res = await GOOGLE_IMG_SCRAP({ search: query, limit: 5 });
     return res.result.map(img => img.url).filter(Boolean);
   } catch (err) {
-    console.error(`❌ Google Scraping failed for: ${query}`);
+    console.error(`❌ Google Scraping failed for: ${query}`, err);
     return [];
   }
 }
