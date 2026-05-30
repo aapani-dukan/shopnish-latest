@@ -19,20 +19,29 @@ const DUMMY_KEYWORD = 'placehold';
 
 async function getGoogleImages(query: string) {
   try {
-    console.log("🔍 Searching:", query);
+    const url =
+      `https://www.googleapis.com/customsearch/v1` +
+      `?key=${process.env.GOOGLE_SEARCH_API_KEY}` +
+      `&cx=${process.env.GOOGLE_SEARCH_ENGINE_ID}` +
+      `&searchType=image` +
+      `&num=5` +
+      `&q=${encodeURIComponent(query)}`;
 
-    const res = await GOOGLE_IMG_SCRAP({
-      search: query,
-      limit: 5
-    });
+    console.log("🔍 API URL:", query);
 
-    console.log("FULL RESPONSE:");
-    console.log(JSON.stringify(res, null, 2));
+    const response = await axios.get(url);
 
-    return res.result.map(img => img.url).filter(Boolean);
+    const images =
+      response.data.items?.map((item: any) => item.link) || [];
 
-  } catch (err) {
-    console.error("GOOGLE SCRAP ERROR:", err);
+    console.log("📸 Images Found:", images.length);
+
+    return images;
+  } catch (err: any) {
+    console.error(
+      "GOOGLE CUSTOM SEARCH ERROR:",
+      err?.response?.data || err.message
+    );
     return [];
   }
 }
