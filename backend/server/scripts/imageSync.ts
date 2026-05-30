@@ -6,6 +6,7 @@ import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import { GOOGLE_IMG_SCRAP } from 'google-img-scrap';
 import { sql } from 'drizzle-orm';
+
 // Cloudinary Configuration
 cloudinary.config({
   cloud_name: 'dcah0b2jy',
@@ -17,35 +18,52 @@ const DUMMY_KEYWORD = 'placehold';
 
 // --- HELPER FUNCTIONS (RE-USABLE) ---
 
-async function getGoogleImages(query: string) {
+
+
+export async function scrapeDuckDuckGoImage(productName: string): Promise<string[]> {
   try {
-    const url =
-      `https://www.googleapis.com/customsearch/v1` +
-      `?key=${process.env.GOOGLE_SEARCH_API_KEY}` +
-      `&cx=${process.env.GOOGLE_SEARCH_ENGINE_ID}` +
-      `&searchType=image` +
-      `&num=5` +
-      `&q=${encodeURIComponent(query)}`;
+    console.log(`📡 [DDG SCRAPER]: इमेज खोज रहे हैं -> ${productName}`);
 
-    console.log("🔍 API URL:", query);
+    const tokenUrl = `https://duckduckgo.com/?q=${encodeURIComponent(productName)}&iax=images&ia=images`;
+    
+    const tokenResponse = await axios.get(tokenUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
+      }
+    });
 
-    const response = await axios.get(url);
+    const vqdRegex = /vqd=([\d-]+)\&/;
+    const match = tokenResponse.data.match(vqdRegex);
+    
+    if (!match) {
+      console.error("❌ DDG Token (vqd) नहीं मिला!");
+      return [];
+    }
 
-    const images =
-      response.data.items?.map((item: any) => item.link) || [];
+    const vqd = match[1];
+    const apiUrl = `https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(productName)}&vqd=${vqd}&f=,,,`;
 
-    console.log("📸 Images Found:", images.length);
+    const apiResponse = await axios.get(apiUrl, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
+        "Referer": "https://duckduckgo.com/"
+      }
+    });
 
-    return images;
-  } catch (err: any) {
-    console.error(
-      "GOOGLE CUSTOM SEARCH ERROR:",
-      err?.response?.data || err.message
-    );
+    const results = apiResponse.data?.results;
+    if (results && results.length > 0) {
+      // 🎯 सुधार: यहाँ से सीधे सभी इमेजेस के लिंक्स का ऐरे (List) बाहर भेजेंगे
+      return results.map((item: any) => item.image).filter(Boolean);
+    }
+
+    console.log(`⚠️ [DDG NOT FOUND]: ${productName} की कोई इमेज नहीं मिली`);
+    return [];
+
+  } catch (error: any) {
+    console.error(`❌ [DDG ERROR] ${productName}:`, error?.message || error);
     return [];
   }
 }
-
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 12000 });
@@ -78,9 +96,10 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
 }
 }
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
-// --- 1. MASTER SYNC (Ab ye sirf Master Table chamkayega) ---
+// --- 1. MASTER SYNC (अब ये DuckDuckGo से बिना कोटे के धड़ाधड़ सिंक करेगा) ---
 export const syncMasterTableOnly = async () => {
-  console.log("🚀 Deep Syncing Master Catalog...");
+  console.log("🚀 Deep Syncing Master Catalog via DuckDuckGo...");
+  
   const items = await db.select().from(masterProducts)
     .where(or(
       like(masterProducts.image, `%placehold%`),
@@ -90,37 +109,39 @@ export const syncMasterTableOnly = async () => {
       like(masterProducts.image, `%t4.ftcdn.net%`)
     ))
     .orderBy(sql`RANDOM()`)
-  .limit(20);
-  console.log(`📦 Found ${items.length} Master items to search on Google.`);
+    .limit(20);
+    
+  console.log(`📦 Found ${items.length} Master items to search.`);
 
   for (const item of items) {
     try {
       console.log(`🔎 Scraping HD Image for Master: ${item.name}`);
-      const urls = await getGoogleImages(item.name);
-      console.log("GOOGLE URLS:", urls);
-      if (urls.length > 0) {
-        // SafeName fix ke sath upload
-        const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
-        console.log("CLOUDINARY URL:", cloudinaryUrl);
-    console.log(`🌐 Google Result:`, urls[0]);
-
-console.log(`☁️ Uploaded To Cloudinary:`, cloudinaryUrl);
+      
+      // 🎯 FIX 1: पुराने गूगल की जगह सीधे DuckDuckGo से सिंगल HD इमेज यूआरएल लाएं
+    const urls = await scrapeDuckDuckGoImage(item.name);
+if (urls.length > 0) {
+  const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
+  // ... बाकी आपका पुराना कोड वैसा का वैसा ही रहेगा
+        
         if (cloudinaryUrl) {
           await db.update(masterProducts)
             .set({ image: cloudinaryUrl })
             .where(eq(masterProducts.id, item.id));
-          console.log(`✅ Master Table Updated: ${item.name}`);
+          console.log(`✅ Master Table Updated: ${item.name} -> ${cloudinaryUrl}`);
         }
+      } else {
+        console.log(`⚠️ No image found on DDG for: ${item.name}`);
       }
-    } catch (err) {
-      console.error(`❌ Error with ${item.name}`);
+    } catch (err: any) {
+      console.error(`❌ Error with ${item.name}:`, err?.message || err);
     }
-    // 4 second gap taaki Google block na kare
-    await new Promise(r => setTimeout(r, 4000));
+    
+    // 🎯 FIX 3: DuckDuckGo के लिए 4 सेकंड का लंबा इंतजार ज़रूरी नहीं है, 2 सेकंड (2000ms) काफी है।
+    console.log("⏱️ Taking a 2-second safety break...");
+    await new Promise(r => setTimeout(r, 2000));
   }
-  console.log("🎯 Master Sync Batch Finished!");
+  console.log("🎯 Master Sync Batch Finished Successfully!");
 };
-
 // --- 2. seller product SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
 export const syncManualProductsOnly = async () => {
   console.log("🚀 Fast Transfer Started: Copying Master links to Products...");
@@ -171,28 +192,52 @@ export const syncManualProductsOnly = async () => {
 
 
 // --- BUTTON 3: GALLERY SYNC ---
-// Isse keval Product Table ka 'images' column update hoga (Extra photos)
 export const syncProductGalleriesOnly = async () => {
-  console.log("🚀 Filling Product Galleries...");
-  // Wo products jinki gallery khali hai ya dummy hai
+  console.log("🚀 Filling Product Galleries via DuckDuckGo...");
+  
   const items = await db.select().from(products)
     .where(or(isNull(products.images), eq(products.images, [])))
     .limit(10);
 
+  console.log(`📦 Found ${items.length} products with empty galleries.`);
+
   for (const item of items) {
-    console.log(`📸 Generating Gallery for: ${item.name}`);
-    const sourceUrls = await getGoogleImages(item.name);
-    if (sourceUrls.length > 0) {
-      const galleryUrls: string[] = [];
-      for (let i = 0; i < Math.min(sourceUrls.length, 3); i++) {
-        const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
-        if (url) galleryUrls.push(url);
+    try {
+      console.log(`📸 Generating 3-Image Gallery for: ${item.name}`);
+      
+      // 🎯 सुधार: अब यहाँ पूरी लिस्ट (Array) आएगी
+      const sourceUrls = await scrapeDuckDuckGoImage(item.name);
+      
+      if (sourceUrls.length > 0) {
+        const galleryUrls: string[] = [];
+        
+        // 🎯 सुधार: लूप चलाकर शुरू की अधिकतम 3 अलग-अलग इमेजेस को अपलोड करें
+        const maxImages = Math.min(sourceUrls.length, 3);
+        for (let i = 0; i < maxImages; i++) {
+          console.log(`   ⏳ Processing gallery image ${i+1}/${maxImages}...`);
+          const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
+          if (url) {
+            galleryUrls.push(url);
+          }
+        }
+
+        // अगर गैलरी में इमेजेस मिल गई हैं, तो डेटाबेस में अपडेट मारें
+        if (galleryUrls.length > 0) {
+          await db.update(products)
+            .set({ images: galleryUrls })
+            .where(eq(products.id, item.id));
+          console.log(`✅ Gallery Fixed with ${galleryUrls.length} images for: ${item.name}`);
+        }
+      } else {
+        console.log(`⚠️ No images found on DDG for gallery: ${item.name}`);
       }
-      if (galleryUrls.length > 0) {
-        await db.update(products).set({ images: galleryUrls }).where(eq(products.id, item.id));
-        console.log(`✅ Gallery Fixed: ${item.name}`);
-      }
+      
+    } catch (err: any) {
+      console.error(`❌ Error filling gallery for ${item.name}:`, err?.message || err);
     }
+
+    console.log("⏱️ Taking a 2-second safety break...");
     await new Promise(r => setTimeout(r, 2000));
   }
+  console.log("🎯 Product Galleries Batch Finished!");
 };
