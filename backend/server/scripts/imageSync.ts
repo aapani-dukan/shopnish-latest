@@ -19,136 +19,108 @@ const DUMMY_KEYWORD = 'placehold';
 // --- HELPER FUNCTIONS (RE-USABLE) ---
 
 
-export async function scrapeDuckDuckGoImage(productName: string): Promise<string[]> {
+export async function scrapePixabayImage(productName: string): Promise<string[]> {
   try {
-    const antApiKey = process.env.SCRAPINGANT_API_KEY;
-    if (!antApiKey) {
-      console.error("❌ SCRAPINGANT_API_KEY is missing in .env");
+    const pixabayKey = process.env.PIXABAY_API_KEY;
+    if (!pixabayKey) {
+      console.error("❌ PIXABAY_API_KEY missing");
       return [];
     }
 
-    console.log(`📡 [ANT-PROXIED DDG]: इमेज खोज रहे हैं -> ${productName}`);
+    const url = `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(productName)}&image_type=photo&safesearch=true&per_page=20`;
 
-    // 1. पहले DuckDuckGo का नॉर्मल पेज निकालें ताकि vqd टोकन मिल सके
-    const targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(productName)}&iax=images&ia=images`;
-    
-    // 🎯 जादू: अब हम ScrapingAnt के गेटवे को हिट कर रहे हैं, जो IP ब्लॉक होने ही नहीं देगा
-    const proxyUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(targetUrl)}&x-api-key=${antApiKey}&proxy_type=residential`;
-    
-    const tokenResponse = await axios.get(proxyUrl, { timeout: 15000 });
+    const { data } = await axios.get(url, { timeout: 10000 });
 
-    const vqdRegex = /vqd=([\d-]+)\&/;
-    const match = tokenResponse.data.match(vqdRegex);
-    
-    if (!match) {
-      console.error("❌ DDG Token (vqd) नहीं मिला थ्रू प्रॉक्सी!");
-      return [];
-    }
+    if (!data?.hits?.length) return [];
 
-    const vqd = match[1];
+    const ranked = data.hits.map((hit: any) => ({
+      url: hit.largeImageURL || hit.webformatURL,
+      score:
+        (hit.likes || 0) * 3 +
+        (hit.views || 0) * 0.01 +
+        (hit.downloads || 0) * 0.02 +
+        (hit.imageWidth * hit.imageHeight) * 0.000001
+    }));
 
-    // 2. अब असली JSON API को भी इसी प्रॉक्सी के ज़रिए सेफली हिट करें
-    const ddgApiUrl = `https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(productName)}&vqd=${vqd}&f=,,,`;
-    const proxyApiUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(ddgApiUrl)}&x-api-key=${antApiKey}&proxy_type=residential`;
+    return ranked
+      .sort((a: any, b: any) => b.score - a.score)
+      .slice(0, 3)
+      .map((i: any) => i.url);
 
-    const apiResponse = await axios.get(proxyApiUrl, { timeout: 15000 });
-
-    // ScrapingAnt कभी-कभी स्ट्रिंग रिस्पॉन्स देता है, उसे JSON में पार्स कर लें
-    const data = typeof apiResponse.data === 'string' ? JSON.parse(apiResponse.data) : apiResponse.data;
-
-    const results = data?.results;
-    if (results && results.length > 0) {
-      const urls = results.map((item: any) => item.image).filter(Boolean);
-      console.log(`✅ [PROXIED SUCCESS]: ${urls.length} इमेजेस की लिस्ट मिल गई!`);
-      return urls;
-    }
-
-    console.log(`⚠️ [DDG NOT FOUND]: ${productName} की कोई इमेज नहीं मिली`);
-    return [];
-
-  } catch (error: any) {
-    console.error(`❌ [PROXIED ERROR] ${productName}:`, error?.message || error);
+  } catch (err: any) {
+    console.error("PIXABAY ERROR:", err?.message);
     return [];
   }
 }
-
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 12000 });
-    const processedBuffer = await sharp(Buffer.from(response.data))
-      .resize(800, 800, { fit: 'contain', background: '#ffffff' })
-      .flatten({ background: '#ffffff' })
+
+    const buffer = await sharp(Buffer.from(response.data))
+      .resize(800, 800, { fit: 'contain', background: '#fff' })
       .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
-    // 🚀 SPECIAL CHARACTERS FIX (Like '&', '%', etc.)
-    // Hum sirf letters, numbers aur underscore hi rehne denge
     const safeName = productName
-      .replace(/[^\w\s]/gi, '') // Sabhi special characters hata do
-      .replace(/\s+/g, '_')     // Spaces ko underscore bana do
+      .replace(/[^\w\s]/gi, '')
+      .replace(/\s+/g, '_')
       .toLowerCase();
 
-    return new Promise<string>((resolve, reject) => {
-      const uploadStream = cloudinary.uploader.upload_stream(
-        { 
-          folder: 'shopnish_products', 
-          public_id: `${safeName}_${suffix}_${Date.now()}` 
+    return await new Promise<string>((resolve, reject) => {
+      const stream = cloudinary.uploader.upload_stream(
+        {
+          folder: 'shopnish_products',
+          public_id: `${safeName}_${suffix}_${Date.now()}`
         },
-        (error, result) => { if (error) reject(error); else resolve(result?.secure_url || ""); }
+        (err, result) => {
+          if (err) reject(err);
+          else resolve(result?.secure_url || '');
+        }
       );
-      uploadStream.end(processedBuffer);
+
+      stream.end(buffer);
     });
-  } catch (error) { 
-  console.error("PROCESS UPLOAD ERROR:", error);
-  return null; 
-}
+
+  } catch (err) {
+    console.error("UPLOAD ERROR:", err);
+    return null;
+  }
 }
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
-// --- 1. MASTER SYNC (अब ये DuckDuckGo से बिना कोटे के धड़ाधड़ सिंक करेगा) ---
 export const syncMasterTableOnly = async () => {
-  console.log("🚀 Deep Syncing Master Catalog via DuckDuckGo...");
-  
+  console.log("🚀 Pixabay Master Sync Started...");
+
   const items = await db.select().from(masterProducts)
     .where(or(
       like(masterProducts.image, `%placehold%`),
-      like(masterProducts.image, `%placeholder%`),
-      like(masterProducts.image, `%freeiconspng%`),
-      like(masterProducts.image, `%no-image%`),
-      like(masterProducts.image, `%t4.ftcdn.net%`)
+      like(masterProducts.image, `%no-image%`)
     ))
-    .orderBy(sql`RANDOM()`)
     .limit(20);
-    
-  console.log(`📦 Found ${items.length} Master items to search.`);
 
   for (const item of items) {
     try {
-      console.log(`🔎 Scraping HD Image for Master: ${item.name}`);
-      
-      // 🎯 FIX 1: पुराने गूगल की जगह सीधे DuckDuckGo से सिंगल HD इमेज यूआरएल लाएं
-    const urls = await scrapeDuckDuckGoImage(item.name);
-if (urls.length > 0) {
-  const cloudinaryUrl = await processAndUpload(urls[0], item.name, 'master');
-  // ... बाकी आपका पुराना कोड वैसा का वैसा ही रहेगा
-        
-        if (cloudinaryUrl) {
+      const urls = await scrapePixabayImage(item.name);
+
+      if (urls.length > 0) {
+        const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
+
+        if (cloudUrl) {
           await db.update(masterProducts)
-            .set({ image: cloudinaryUrl })
+            .set({ image: cloudUrl })
             .where(eq(masterProducts.id, item.id));
-          console.log(`✅ Master Table Updated: ${item.name} -> ${cloudinaryUrl}`);
+
+          console.log("✅ Updated:", item.name);
         }
-      } else {
-        console.log(`⚠️ No image found on DDG for: ${item.name}`);
       }
+
+      await new Promise(r => setTimeout(r, 1000)); // fast now
+
     } catch (err: any) {
-      console.error(`❌ Error with ${item.name}:`, err?.message || err);
+      console.error(err);
     }
-    
-    // 🎯 FIX 3: DuckDuckGo के लिए 4 सेकंड का लंबा इंतजार ज़रूरी नहीं है, 2 सेकंड (2000ms) काफी है।
-    console.log("⏱️ Taking a 2-second safety break...");
-    await new Promise(r => setTimeout(r, 2000));
   }
-  console.log("🎯 Master Sync Batch Finished Successfully!");
+
+  console.log("🎯 Master Sync Done");
 };
 // --- 2. seller product SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
 export const syncManualProductsOnly = async () => {
@@ -199,53 +171,43 @@ export const syncManualProductsOnly = async () => {
 
 
 
-// --- BUTTON 3: GALLERY SYNC ---
 export const syncProductGalleriesOnly = async () => {
-  console.log("🚀 Filling Product Galleries via DuckDuckGo...");
-  
+  console.log("🚀 Pixabay Gallery Sync Started...");
+
   const items = await db.select().from(products)
     .where(or(isNull(products.images), eq(products.images, [])))
-    .limit(10);
-
-  console.log(`📦 Found ${items.length} products with empty galleries.`);
+    .limit(20);
 
   for (const item of items) {
     try {
-      console.log(`📸 Generating 3-Image Gallery for: ${item.name}`);
-      
-      // 🎯 सुधार: अब यहाँ पूरी लिस्ट (Array) आएगी
-      const sourceUrls = await scrapeDuckDuckGoImage(item.name);
-      
-      if (sourceUrls.length > 0) {
-        const galleryUrls: string[] = [];
-        
-        // 🎯 सुधार: लूप चलाकर शुरू की अधिकतम 3 अलग-अलग इमेजेस को अपलोड करें
-        const maxImages = Math.min(sourceUrls.length, 3);
-        for (let i = 0; i < maxImages; i++) {
-          console.log(`   ⏳ Processing gallery image ${i+1}/${maxImages}...`);
-          const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
-          if (url) {
-            galleryUrls.push(url);
-          }
-        }
+      const sourceUrls = await scrapePixabayImage(item.name);
 
-        // अगर गैलरी में इमेजेस मिल गई हैं, तो डेटाबेस में अपडेट मारें
-        if (galleryUrls.length > 0) {
-          await db.update(products)
-            .set({ images: galleryUrls })
-            .where(eq(products.id, item.id));
-          console.log(`✅ Gallery Fixed with ${galleryUrls.length} images for: ${item.name}`);
-        }
-      } else {
-        console.log(`⚠️ No images found on DDG for gallery: ${item.name}`);
+      if (!sourceUrls.length) continue;
+
+      // 🚀 parallel upload (FAST)
+      const uploadPromises = sourceUrls.map((url, i) =>
+        processAndUpload(url, item.name, `gallery_${i}`)
+      );
+
+      const uploaded = await Promise.all(uploadPromises);
+const gallery = uploaded
+  .filter((url): url is string => typeof url === "string")
+  .slice(0, 3);
+      
+      if (gallery.length) {
+        await db.update(products)
+          .set({ images: gallery })
+          .where(eq(products.id, item.id));
+
+        console.log("✅ Gallery Updated:", item.name);
       }
-      
-    } catch (err: any) {
-      console.error(`❌ Error filling gallery for ${item.name}:`, err?.message || err);
-    }
 
-    console.log("⏱️ Taking a 2-second safety break...");
-    await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1000));
+
+    } catch (err) {
+      console.error(err);
+    }
   }
-  console.log("🎯 Product Galleries Batch Finished!");
+
+  console.log("🎯 Gallery Sync Done");
 };
