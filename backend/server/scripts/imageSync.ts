@@ -5,7 +5,7 @@ import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
 import { GOOGLE_IMG_SCRAP } from 'google-img-scrap';
-
+import { sql } from 'drizzle-orm';
 // Cloudinary Configuration
 cloudinary.config({
   cloud_name: 'dcah0b2jy',
@@ -70,8 +70,8 @@ export const syncMasterTableOnly = async () => {
       like(masterProducts.image, `%no-image%`),
       like(masterProducts.image, `%t4.ftcdn.net%`)
     ))
-    .limit(20); 
-
+    .orderBy(sql`RANDOM()`)
+  .limit(20);
   console.log(`📦 Found ${items.length} Master items to search on Google.`);
 
   for (const item of items) {
