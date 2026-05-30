@@ -19,7 +19,7 @@ const DUMMY_KEYWORD = 'placehold';
 // -----------------------------
 // 🔥 GLOBAL SAFE DELAY HELPER
 // -----------------------------
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+//const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // -----------------------------
 // 🔥 PIXABAY SAFE CALL LIMITER
@@ -76,59 +76,90 @@ export async function scrapePixabayImage(productName: string): Promise<string[]>
 
 // -----------------------------
 // 🔥 PROCESS & UPLOAD (UNCHANGED LOGIC)
-// -----------------------------
-async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+
+export async function processAndUpload(
+  imageUrl: string,
+  productName: string,
+  suffix: string = 'main'
+) {
   try {
+    // 🔥 RATE LIMIT SAFE DELAY (IMPORTANT)
+    await sleep(800);
+
     const userAgents = [
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
-      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
-      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Firefox/123.0"
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/124",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X) Safari/605.1",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Firefox/123)"
     ];
 
-    const randomAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+    const randomAgent =
+      userAgents[Math.floor(Math.random() * userAgents.length)];
 
-    const response = await axios.get(imageUrl, {
-      responseType: 'arraybuffer',
-      timeout: 15000,
-      headers: {
-        "User-Agent": randomAgent,
-        "Accept": "image/*,*/*;q=0.8",
-        "Referer": "https://pixabay.com/"
+    // 🔥 RETRY LOGIC for image download
+    let response: any = null;
+
+    for (let i = 0; i < 3; i++) {
+      try {
+        response = await axios.get(imageUrl, {
+          responseType: "arraybuffer",
+          timeout: 15000,
+          headers: {
+            "User-Agent": randomAgent,
+            "Referer": "https://pixabay.com/"
+          }
+        });
+        break;
+      } catch (err: any) {
+        if (i === 2) throw err;
+        await sleep(1500 * (i + 1));
       }
-    });
+    }
+
+    if (!response?.data) return null;
 
     const buffer = await sharp(Buffer.from(response.data))
-      .resize(800, 800, { fit: 'contain', background: '#fff' })
-      .flatten({ background: '#ffffff' })
-      .toFormat('jpeg', { quality: 85 })
+      .resize(800, 800, { fit: "contain", background: "#fff" })
+      .flatten({ background: "#fff" })
+      .jpeg({ quality: 85 })
       .toBuffer();
 
     const safeName = productName
-      .replace(/[^\w\s]/gi, '')
-      .replace(/\s+/g, '_')
+      .replace(/[^\w\s]/gi, "")
+      .replace(/\s+/g, "_")
       .toLowerCase();
 
-    return await new Promise<string>((resolve, reject) => {
-      const stream = cloudinary.uploader.upload_stream(
-        {
-          folder: 'shopnish_products',
-          public_id: `${safeName}_${suffix}_${Date.now()}`
-        },
-        (err, result) => {
-          if (err) reject(err);
-          else resolve(result?.secure_url || '');
-        }
-      );
+    // 🔥 Cloudinary retry
+    for (let i = 0; i < 2; i++) {
+      try {
+        return await new Promise<string>((resolve, reject) => {
+          const stream = cloudinary.uploader.upload_stream(
+            {
+              folder: "shopnish_products",
+              public_id: `${safeName}_${suffix}_${Date.now()}`
+            },
+            (err, result) => {
+              if (err) reject(err);
+              else resolve(result?.secure_url || "");
+            }
+          );
+          stream.end(buffer);
+        });
+      } catch (err) {
+        if (i === 1) throw err;
+        await sleep(2000);
+      }
+    }
 
-      stream.end(buffer);
-    });
-
+    return null;
   } catch (err: any) {
-    console.error(`❌ UPLOAD ERROR [Status: ${err?.response?.status || 'Unknown'}]:`, err?.message || err);
+    console.error(
+      `❌ UPLOAD ERROR [Status: ${err?.response?.status || "Unknown"}]:`,
+      err?.message || err
+    );
     return null;
   }
 }
-
 // -----------------------------
 // 🔥 MASTER SYNC
 // -----------------------------
@@ -145,36 +176,33 @@ export const syncMasterTableOnly = async () => {
   console.log(`📦 Processing ${items.length} master items slowly to avoid 429...`);
 
   for (const item of items) {
-    try {
-      console.log(`🔎 Searching image for: ${item.name}`);
+  try {
+    console.log(`🔎 Searching image for: ${item.name}`);
 
-      const urls = await safePixabayRequest(() =>
-        scrapePixabayImage(item.name)
-      );
+    const urls = await scrapePixabayImage(item.name);
 
-      if (urls.length > 0) {
-        await sleep(500);
+    // 🔥 RATE LIMIT BREAK
+    await new Promise(r => setTimeout(r, 3000));
 
-        const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
+    if (urls && urls.length > 0) {
+      const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
 
-        if (cloudUrl) {
-          await db.update(masterProducts)
-            .set({ image: cloudUrl })
-            .where(eq(masterProducts.id, item.id));
+      // 🔥 ANOTHER SAFE GAP
+      await new Promise(r => setTimeout(r, 3000));
 
-          console.log(`✅ Successfully Updated: ${item.name}`);
-        }
-      } else {
-        console.log(`⚠️ No image found for: ${item.name}`);
+      if (cloudUrl) {
+        await db.update(masterProducts)
+          .set({ image: cloudUrl })
+          .where(eq(masterProducts.id, item.id));
       }
-
-    } catch (err: any) {
-      console.error(`❌ Error processing ${item.name}:`, err?.message || err);
     }
-
-    console.log("⏱️ Taking a 5-second safe break...");
-    await sleep(5000);
+  } catch (err) {
+    console.error(err);
   }
+
+  // 🔥 VERY IMPORTANT GAP BETWEEN PRODUCTS
+  await new Promise(r => setTimeout(r, 5000));
+}
 
   console.log("🎯 Master Sync Done");
 };
