@@ -19,51 +19,59 @@ const DUMMY_KEYWORD = 'placehold';
 // --- HELPER FUNCTIONS (RE-USABLE) ---
 
 
-
 export async function scrapeDuckDuckGoImage(productName: string): Promise<string[]> {
   try {
-    console.log(`📡 [DDG SCRAPER]: इमेज खोज रहे हैं -> ${productName}`);
+    const antApiKey = process.env.SCRAPINGANT_API_KEY;
+    if (!antApiKey) {
+      console.error("❌ SCRAPINGANT_API_KEY is missing in .env");
+      return [];
+    }
 
-    const tokenUrl = `https://duckduckgo.com/?q=${encodeURIComponent(productName)}&iax=images&ia=images`;
+    console.log(`📡 [ANT-PROXIED DDG]: इमेज खोज रहे हैं -> ${productName}`);
+
+    // 1. पहले DuckDuckGo का नॉर्मल पेज निकालें ताकि vqd टोकन मिल सके
+    const targetUrl = `https://duckduckgo.com/?q=${encodeURIComponent(productName)}&iax=images&ia=images`;
     
-    const tokenResponse = await axios.get(tokenUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36"
-      }
-    });
+    // 🎯 जादू: अब हम ScrapingAnt के गेटवे को हिट कर रहे हैं, जो IP ब्लॉक होने ही नहीं देगा
+    const proxyUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(targetUrl)}&x-api-key=${antApiKey}&proxy_type=residential`;
+    
+    const tokenResponse = await axios.get(proxyUrl, { timeout: 15000 });
 
     const vqdRegex = /vqd=([\d-]+)\&/;
     const match = tokenResponse.data.match(vqdRegex);
     
     if (!match) {
-      console.error("❌ DDG Token (vqd) नहीं मिला!");
+      console.error("❌ DDG Token (vqd) नहीं मिला थ्रू प्रॉक्सी!");
       return [];
     }
 
     const vqd = match[1];
-    const apiUrl = `https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(productName)}&vqd=${vqd}&f=,,,`;
 
-    const apiResponse = await axios.get(apiUrl, {
-      headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36",
-        "Referer": "https://duckduckgo.com/"
-      }
-    });
+    // 2. अब असली JSON API को भी इसी प्रॉक्सी के ज़रिए सेफली हिट करें
+    const ddgApiUrl = `https://duckduckgo.com/i.js?l=wt-wt&o=json&q=${encodeURIComponent(productName)}&vqd=${vqd}&f=,,,`;
+    const proxyApiUrl = `https://api.scrapingant.com/v2/general?url=${encodeURIComponent(ddgApiUrl)}&x-api-key=${antApiKey}&proxy_type=residential`;
 
-    const results = apiResponse.data?.results;
+    const apiResponse = await axios.get(proxyApiUrl, { timeout: 15000 });
+
+    // ScrapingAnt कभी-कभी स्ट्रिंग रिस्पॉन्स देता है, उसे JSON में पार्स कर लें
+    const data = typeof apiResponse.data === 'string' ? JSON.parse(apiResponse.data) : apiResponse.data;
+
+    const results = data?.results;
     if (results && results.length > 0) {
-      // 🎯 सुधार: यहाँ से सीधे सभी इमेजेस के लिंक्स का ऐरे (List) बाहर भेजेंगे
-      return results.map((item: any) => item.image).filter(Boolean);
+      const urls = results.map((item: any) => item.image).filter(Boolean);
+      console.log(`✅ [PROXIED SUCCESS]: ${urls.length} इमेजेस की लिस्ट मिल गई!`);
+      return urls;
     }
 
     console.log(`⚠️ [DDG NOT FOUND]: ${productName} की कोई इमेज नहीं मिली`);
     return [];
 
   } catch (error: any) {
-    console.error(`❌ [DDG ERROR] ${productName}:`, error?.message || error);
+    console.error(`❌ [PROXIED ERROR] ${productName}:`, error?.message || error);
     return [];
   }
 }
+
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
     const response = await axios.get(imageUrl, { responseType: 'arraybuffer', timeout: 12000 });
