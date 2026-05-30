@@ -97,7 +97,7 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
 }
 // --- BUTTON 1: MASTER PRODUCT SYNC ---
 export const syncMasterTableOnly = async () => {
-  console.log("🚀 Pixabay Master Sync Started...");
+  console.log("🚀 Pixabay Master Sync Started (Safe Mode)...");
 
   const items = await db.select().from(masterProducts)
     .where(or(
@@ -106,11 +106,17 @@ export const syncMasterTableOnly = async () => {
     ))
     .limit(20);
 
+  console.log(`📦 Processing ${items.length} master items slowly to avoid 429...`);
+
   for (const item of items) {
     try {
+      console.log(`🔎 Searching image for: ${item.name}`);
       const urls = await scrapePixabayImage(item.name);
 
-      if (urls.length > 0) {
+      if (urls && urls.length > 0) {
+        // थोड़ा सा सांस लेने का गैप इमेज मिलने और अपलोड करने के बीच में
+        await new Promise(r => setTimeout(r, 500));
+
         const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
 
         if (cloudUrl) {
@@ -118,15 +124,20 @@ export const syncMasterTableOnly = async () => {
             .set({ image: cloudUrl })
             .where(eq(masterProducts.id, item.id));
 
-          console.log("✅ Updated:", item.name);
+          console.log(`✅ Successfully Updated: ${item.name}`);
         }
+      } else {
+        console.log(`⚠️ No image found for: ${item.name}`);
       }
 
-      await new Promise(r => setTimeout(r, 1000)); // fast now
-
     } catch (err: any) {
-      console.error(err);
+      console.error(`❌ Error processing ${item.name}:`, err?.message || err);
     }
+
+    // 🎯 FIX: 1 सेकंड का गैप बहुत कम था, इसे बढ़ाकर 3.5 सेकंड (3500ms) कर दिया है
+    // इससे पिक्सबे और क्लाउडिनरी दोनों को लगेगा कि कोई इंसान आराम से काम कर रहा है
+    console.log("⏱️ Taking a 3.5-second safe break to avoid 429 Rate Limit...");
+    await new Promise(r => setTimeout(r, 3500));
   }
 
   console.log("🎯 Master Sync Done");
