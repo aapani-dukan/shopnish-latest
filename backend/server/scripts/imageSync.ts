@@ -16,8 +16,29 @@ cloudinary.config({
 
 const DUMMY_KEYWORD = 'placehold';
 
-// --- HELPER FUNCTIONS (RE-USABLE) ---
+// -----------------------------
+// 🔥 GLOBAL SAFE DELAY HELPER
+// -----------------------------
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
+// -----------------------------
+// 🔥 PIXABAY SAFE CALL LIMITER
+// -----------------------------
+let lastPixabayCall = 0;
+
+async function safePixabayRequest<T>(fn: () => Promise<T>): Promise<T> {
+  const now = Date.now();
+  const wait = Math.max(0, 1500 - (now - lastPixabayCall));
+
+  await sleep(wait);
+  lastPixabayCall = Date.now();
+
+  return fn();
+}
+
+// -----------------------------
+// --- HELPER FUNCTIONS
+// -----------------------------
 
 export async function scrapePixabayImage(productName: string): Promise<string[]> {
   try {
@@ -52,22 +73,33 @@ export async function scrapePixabayImage(productName: string): Promise<string[]>
     return [];
   }
 }
+
+// -----------------------------
+// 🔥 PROCESS & UPLOAD (UNCHANGED LOGIC)
+// -----------------------------
 async function processAndUpload(imageUrl: string, productName: string, suffix: string = 'main') {
   try {
-    // 🎯 FIX: Pixabay को असली क्रोम ब्राउज़र का झांसा देने के लिए हेडर्स जोड़े
-    const response = await axios.get(imageUrl, { 
-      responseType: 'arraybuffer', 
-      timeout: 12000,
+    const userAgents = [
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/124",
+      "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) Safari/605.1.15",
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:123.0) Firefox/123.0"
+    ];
+
+    const randomAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
+
+    const response = await axios.get(imageUrl, {
+      responseType: 'arraybuffer',
+      timeout: 15000,
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36",
-        "Accept": "image/avif,image/webp,image/apng,image/*,*/*;q=0.8",
+        "User-Agent": randomAgent,
+        "Accept": "image/*,*/*;q=0.8",
         "Referer": "https://pixabay.com/"
       }
     });
 
     const buffer = await sharp(Buffer.from(response.data))
       .resize(800, 800, { fit: 'contain', background: '#fff' })
-      .flatten({ background: '#ffffff' }) // JPEG के लिए बैकग्राउंड फ़्लैटेन ज़रूरी है
+      .flatten({ background: '#ffffff' })
       .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
@@ -87,6 +119,7 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
           else resolve(result?.secure_url || '');
         }
       );
+
       stream.end(buffer);
     });
 
@@ -95,7 +128,10 @@ async function processAndUpload(imageUrl: string, productName: string, suffix: s
     return null;
   }
 }
-// --- BUTTON 1: MASTER PRODUCT SYNC ---
+
+// -----------------------------
+// 🔥 MASTER SYNC
+// -----------------------------
 export const syncMasterTableOnly = async () => {
   console.log("🚀 Pixabay Master Sync Started (Safe Mode)...");
 
@@ -111,11 +147,13 @@ export const syncMasterTableOnly = async () => {
   for (const item of items) {
     try {
       console.log(`🔎 Searching image for: ${item.name}`);
-      const urls = await scrapePixabayImage(item.name);
 
-      if (urls && urls.length > 0) {
-        // थोड़ा सा सांस लेने का गैप इमेज मिलने और अपलोड करने के बीच में
-        await new Promise(r => setTimeout(r, 500));
+      const urls = await safePixabayRequest(() =>
+        scrapePixabayImage(item.name)
+      );
+
+      if (urls.length > 0) {
+        await sleep(500);
 
         const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
 
@@ -134,18 +172,19 @@ export const syncMasterTableOnly = async () => {
       console.error(`❌ Error processing ${item.name}:`, err?.message || err);
     }
 
-    // 🎯 FIX: 1 सेकंड का गैप बहुत कम था, इसे बढ़ाकर 3.5 सेकंड (3500ms) कर दिया है
-    // इससे पिक्सबे और क्लाउडिनरी दोनों को लगेगा कि कोई इंसान आराम से काम कर रहा है
-    console.log("⏱️ Taking a 3.5-second safe break to avoid 429 Rate Limit...");
-    await new Promise(r => setTimeout(r, 3500));
+    console.log("⏱️ Taking a 5-second safe break...");
+    await sleep(5000);
   }
 
   console.log("🎯 Master Sync Done");
 };
-// --- 2. seller product SYNC (Ab ye Fast Transfer karega: Master -> Product) ---
+
+// -----------------------------
+// 🔥 SELLER SYNC (UNCHANGED LOGIC)
+// -----------------------------
 export const syncManualProductsOnly = async () => {
-  console.log("🚀 Fast Transfer Started: Copying Master links to Products...");
-  
+  console.log("🚀 Fast Transfer Started...");
+
   const dummyProducts = await db.select().from(products)
     .where(and(
       isNotNull(products.masterProductId),
@@ -157,40 +196,38 @@ export const syncManualProductsOnly = async () => {
         isNull(products.image)
       )
     ))
-    .limit(100); // Scraping nahi hai, isliye limit 100 rakhi hai
-
-  console.log(`📦 Found ${dummyProducts.length} dummy products to fix via Master Table.`);
+    .limit(100);
 
   let updatedCount = 0;
 
   for (const prod of dummyProducts) {
-    // Master table se is product ki photo check karo
     const [masterData] = await db.select({ image: masterProducts.image })
       .from(masterProducts)
       .where(eq(masterProducts.id, prod.masterProductId!));
 
-    // Agar Master table mein asli photo mil gayi (dummy nahi hai), toh copy karo
-    if (masterData?.image && 
-        !masterData.image.includes('placehold') && 
+    if (masterData?.image &&
+        !masterData.image.includes('placehold') &&
         !masterData.image.includes('no-image') &&
         !masterData.image.includes('freeiconspng')) {
-      
+
       await db.update(products)
-        .set({ 
-          image: masterData.image, 
-          updatedAt: new Date() 
+        .set({
+          image: masterData.image,
+          updatedAt: new Date()
         })
         .where(eq(products.id, prod.id));
-      
+
       updatedCount++;
       console.log(`⚡ Fast Fixed: ${prod.name}`);
     }
   }
+
   console.log(`🎯 Fast Transfer Complete! Total ${updatedCount} products updated.`);
 };
 
-
-
+// -----------------------------
+// 🔥 GALLERY SYNC
+// -----------------------------
 export const syncProductGalleriesOnly = async () => {
   console.log("🚀 Pixabay Gallery Sync Started...");
 
@@ -202,24 +239,25 @@ export const syncProductGalleriesOnly = async () => {
 
   for (const item of items) {
     try {
-      const sourceUrls = await scrapePixabayImage(item.name);
+      const sourceUrls = await safePixabayRequest(() =>
+        scrapePixabayImage(item.name)
+      );
 
       if (!sourceUrls.length) continue;
 
       const galleryUrls: string[] = [];
       const maxImages = Math.min(sourceUrls.length, 3);
 
-      // 🎯 FIX: Parallel (Promise.all) के बजाय एक-एक करके डाउनलोड करेंगे ताकि Pixabay ब्लॉक न करे
       for (let i = 0; i < maxImages; i++) {
-        console.log(`   ⏳ Downloading gallery image ${i + 1}/${maxImages} for: ${item.name}`);
+        console.log(`⏳ Processing image ${i + 1}/${maxImages} for ${item.name}`);
+
         const url = await processAndUpload(sourceUrls[i], item.name, `gallery_${i}`);
-        if (url) {
-          galleryUrls.push(url);
-        }
-        // हर गैलरी इमेज के बीच आधा सेकंड का छोटा सा सांस लेने का गैप
-        await new Promise(r => setTimeout(r, 500));
+
+        if (url) galleryUrls.push(url);
+
+        await sleep(500);
       }
-      
+
       if (galleryUrls.length > 0) {
         await db.update(products)
           .set({ images: galleryUrls })
@@ -228,11 +266,10 @@ export const syncProductGalleriesOnly = async () => {
         console.log("✅ Gallery Updated:", item.name);
       }
 
-      // 🎯 बटन का सेफ़ गैप: ताकि अगले प्रोडक्ट पर जाने से पहले पिक्सबे शांत रहे
-      await new Promise(r => setTimeout(r, 1500));
+      await sleep(1500);
 
-    } catch (err) {
-      console.error(`❌ Error in Gallery Sync for ${item.name}:`, err);
+    } catch (err: any) {
+      console.error(`❌ Gallery Error ${item.name}:`, err?.message || err);
     }
   }
 
