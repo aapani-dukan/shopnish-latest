@@ -1,10 +1,9 @@
 import { db } from '../db';
 import { products, masterProducts } from '../../shared/backend/schema'; 
-import { eq, like, or, and, isNull,isNotNull } from 'drizzle-orm';
+import { eq, like, or, and, isNull, isNotNull } from 'drizzle-orm';
 import axios from 'axios';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary';
-import { GOOGLE_IMG_SCRAP } from 'google-img-scrap';
 import { sql } from 'drizzle-orm';
 
 // Cloudinary Configuration
@@ -17,9 +16,9 @@ cloudinary.config({
 const DUMMY_KEYWORD = 'placehold';
 
 // -----------------------------
-// 🔥 GLOBAL SAFE DELAY HELPER
+// 🔥 GLOBAL SAFE DELAY HELPER (ऊपर शिफ्ट किया ताकि एरर न आए)
 // -----------------------------
-//const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
 
 // -----------------------------
 // 🔥 PIXABAY SAFE CALL LIMITER
@@ -75,16 +74,15 @@ export async function scrapePixabayImage(productName: string): Promise<string[]>
 }
 
 // -----------------------------
-// 🔥 PROCESS & UPLOAD (UNCHANGED LOGIC)
-const sleep = (ms: number) => new Promise(r => setTimeout(r, ms));
-
+// 🔥 PROCESS & UPLOAD (STEALTH MODE WITH RETRY)
+// -----------------------------
 export async function processAndUpload(
   imageUrl: string,
   productName: string,
   suffix: string = 'main'
 ) {
   try {
-    // 🔥 RATE LIMIT SAFE DELAY (IMPORTANT)
+    // 🔥 RATE LIMIT SAFE DELAY
     await sleep(800);
 
     const userAgents = [
@@ -93,8 +91,7 @@ export async function processAndUpload(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64; Firefox/123)"
     ];
 
-    const randomAgent =
-      userAgents[Math.floor(Math.random() * userAgents.length)];
+    const randomAgent = userAgents[Math.floor(Math.random() * userAgents.length)];
 
     // 🔥 RETRY LOGIC for image download
     let response: any = null;
@@ -118,10 +115,11 @@ export async function processAndUpload(
 
     if (!response?.data) return null;
 
+    // 🎯 सुधार: sharp का सिंटैक्स स्टैंडर्ड किया ताकि पुरानी नोड वर्जन्स पर क्रैश न हो
     const buffer = await sharp(Buffer.from(response.data))
       .resize(800, 800, { fit: "contain", background: "#fff" })
       .flatten({ background: "#fff" })
-      .jpeg({ quality: 85 })
+      .toFormat('jpeg', { quality: 85 })
       .toBuffer();
 
     const safeName = productName
@@ -160,55 +158,77 @@ export async function processAndUpload(
     return null;
   }
 }
+
 // -----------------------------
-// 🔥 MASTER SYNC
+// 🔥 BUTTON 1: MASTER SYNC
 // -----------------------------
+let isSyncRunning = false;
+
 export const syncMasterTableOnly = async () => {
-  console.log("🚀 Pixabay Master Sync Started (Safe Mode)...");
-
-  const items = await db.select().from(masterProducts)
-    .where(or(
-      like(masterProducts.image, `%placehold%`),
-      like(masterProducts.image, `%no-image%`)
-    ))
-    .limit(20);
-
-  console.log(`📦 Processing ${items.length} master items slowly to avoid 429...`);
-
-  for (const item of items) {
-  try {
-    console.log(`🔎 Searching image for: ${item.name}`);
-
-    const urls = await scrapePixabayImage(item.name);
-
-    // 🔥 RATE LIMIT BREAK
-    await new Promise(r => setTimeout(r, 3000));
-
-    if (urls && urls.length > 0) {
-      const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
-
-      // 🔥 ANOTHER SAFE GAP
-      await new Promise(r => setTimeout(r, 3000));
-
-      if (cloudUrl) {
-        await db.update(masterProducts)
-          .set({ image: cloudUrl })
-          .where(eq(masterProducts.id, item.id));
-      }
-    }
-  } catch (err) {
-    console.error(err);
+  if (isSyncRunning) {
+    console.log("⚠️ Sync already running, skipping duplicate execution...");
+    return;
   }
 
-  // 🔥 VERY IMPORTANT GAP BETWEEN PRODUCTS
-  await new Promise(r => setTimeout(r, 5000));
-}
+  isSyncRunning = true;
 
-  console.log("🎯 Master Sync Done");
+  try {
+    console.log("🚀 Pixabay Master Sync Started (Safe Mode)...");
+    
+    const items = await db.select().from(masterProducts)
+      .where(or(
+        like(masterProducts.image, `%placehold%`),
+        like(masterProducts.image, `%placeholder%`),
+        like(masterProducts.image, `%freeiconspng%`),
+        like(masterProducts.image, `%no-image%`),
+        like(masterProducts.image, `%t4.ftcdn.net%`)
+      ))
+      .limit(20);
+
+    console.log(`📦 Found ${items.length} Master items to search.`);
+
+    for (const item of items) {
+      try {
+        console.log(`🔎 Searching image for: ${item.name}`);
+
+        // 🎯 सुधार: मास्टर लूप में भी safePixabayRequest रैपर का इस्तेमाल किया ताकि API सेफ रहे
+        const urls = await safePixabayRequest(() => scrapePixabayImage(item.name));
+
+        if (urls && urls.length > 0) {
+          await sleep(500);
+
+          const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
+
+          if (cloudUrl) {
+            await db.update(masterProducts)
+              .set({ image: cloudUrl })
+              .where(eq(masterProducts.id, item.id));
+              
+            console.log(`✅ Successfully Updated: ${item.name} -> ${cloudUrl}`);
+          }
+        } else {
+          console.log(`⚠️ Pixabay के पास इसकी फोटो नहीं है: ${item.name}`);
+        }
+
+      } catch (err: any) {
+        console.error(`❌ Error processing ${item.name}:`, err?.message || err);
+      }
+
+      // 🎯 पिक्सबे और क्लाउडिनरी दोनों के लिए एकदम परफेक्ट 4.5 सेकंड का सेफ़ गैप
+      console.log("⏱️ Taking a 4.5-second safe break to avoid 429 Rate Limit...");
+      await sleep(4500);
+    }
+
+  } catch (globalErr) {
+    console.error("❌ Global Master Sync Error:", globalErr);
+  } finally {
+    isSyncRunning = false;
+    console.log("🎯 Master Sync Done & Lock Released.");
+  }
 };
 
 // -----------------------------
-// 🔥 SELLER SYNC (UNCHANGED LOGIC)
+// 🔥 BUTTON 2: SELLER SYNC (Fast Copy)
 // -----------------------------
 export const syncManualProductsOnly = async () => {
   console.log("🚀 Fast Transfer Started...");
@@ -218,6 +238,7 @@ export const syncManualProductsOnly = async () => {
       isNotNull(products.masterProductId),
       or(
         like(products.image, `%placehold%`),
+        like(products.image, `%placeholder%`), // 🎯 सुधार: यहाँ भी 'placeholder' कीवर्ड बढ़ा दिया है
         like(products.image, `%no-image%`),
         like(products.image, `%freeiconspng%`),
         eq(products.image, ''),
@@ -235,6 +256,7 @@ export const syncManualProductsOnly = async () => {
 
     if (masterData?.image &&
         !masterData.image.includes('placehold') &&
+        !masterData.image.includes('placeholder') &&
         !masterData.image.includes('no-image') &&
         !masterData.image.includes('freeiconspng')) {
 
@@ -254,7 +276,7 @@ export const syncManualProductsOnly = async () => {
 };
 
 // -----------------------------
-// 🔥 GALLERY SYNC
+// 🔥 BUTTON 3: GALLERY SYNC
 // -----------------------------
 export const syncProductGalleriesOnly = async () => {
   console.log("🚀 Pixabay Gallery Sync Started...");
@@ -267,11 +289,12 @@ export const syncProductGalleriesOnly = async () => {
 
   for (const item of items) {
     try {
-      const sourceUrls = await safePixabayRequest(() =>
-        scrapePixabayImage(item.name)
-      );
+      const sourceUrls = await safePixabayRequest(() => scrapePixabayImage(item.name));
 
-      if (!sourceUrls.length) continue;
+      if (!sourceUrls.length) {
+        console.log(`⚠️ No gallery images found on Pixabay for: ${item.name}`);
+        continue;
+      }
 
       const galleryUrls: string[] = [];
       const maxImages = Math.min(sourceUrls.length, 3);
