@@ -177,17 +177,20 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
 });
 // PUT /api/delivery/update-location
 
+// PUT /api/delivery/update-location
+
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
-        // 1. 🎯 मोबाइल ऐप से आ रही activeBatchId को यहाँ रिसीव करें
-        const { latitude, longitude, activeBatchId } = req.body;
+        
+        // 🎯 सुधार 1: सिंगल आईडी की जगह अब हम मोबाइल ऐप से आ रही 'activeBatchIds' की लिस्ट ले रहे हैं
+        const { latitude, longitude, activeBatchIds } = req.body;
 
         if (!latitude || !longitude) {
             return res.status(400).json({ error: 'Latitude and Longitude are required.' });
         }
 
-        // 2. Delivery boy ki profile dhoondho
+        // 1. Delivery boy ki profile dhoondho
         const boyProfile = await db.query.deliveryBoys.findFirst({
             where: eq(deliveryBoys.userId, userId)
         });
@@ -196,7 +199,44 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             return res.status(404).json({ error: 'Delivery boy profile not found.' });
         }
 
-        // 3. Database mein current location update karo
+        // अगर मोबाइल से कोई एक्टिव आईडी लिस्ट नहीं आई है, तो यहीं से रिस्पॉन्स क्लोज कर दो भाई
+        if (!activeBatchIds || !Array.isArray(activeBatchIds) || activeBatchIds.length === 0) {
+            return res.status(200).json({ success: true, message: 'No active batches provided for sync.' });
+        }
+
+        // =======================================================================
+        // 🎯 सुधार 2: 1 घंटे का सेफ्टी गेट और 'out_for_delivery' स्टेटस वैलिडेशन
+        // =======================================================================
+        const now = new Date();
+        const ONE_HOUR_MS = 60 * 60 * 1000; // 1 घंटा मिलीसेकंड में
+
+        // इन-ऑपरेटर (inArray) का उपयोग करके सीधे डेटाबेस से उन सभी बैचेस को एक बार में निकालें भाई
+        const dbBatches = await db.query.deliveryBatches.findMany({
+            where: inArray(deliveryBatches.id, activeBatchIds.map(id => Number(id)))
+        });
+
+        // सिर्फ़ उन्हीं बैचेस को छांटें जो 'out_for_delivery' हैं और जिन्हें 1 घंटे से कम समय हुआ है
+        const validBatches = dbBatches.filter((batch: any) => {
+           // 🎯 अब सामान पिकअप होते ही (picked_up) या रास्ते में होने पर (out_for_delivery) दोनों समय लोकेशन जाएगी भाई!
+if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return false;
+
+            // 'updatedAt' कॉलम से 1 घंटे का हिसाब निकालो भाई
+            const batchUpdateTime = new Date(batch.updatedAt).getTime();
+            const timeElapsed = now.getTime() - batchUpdateTime;
+
+            return timeElapsed < ONE_HOUR_MS;
+        });
+
+        // 🚨 ब्रह्मास्त्र चेक: अगर एक भी बैच 1 घंटे के टाइमर या स्टेटस नियम को पास नहीं कर पाया, 
+        // तो डेटाबेस अपडेट करने और सॉकेट चलाने की कोई ज़रूरत नहीं है! सर्वर लोड = ₹0
+        if (validBatches.length === 0) {
+            return res.status(200).json({ 
+                success: false, 
+                message: 'Location sync skipped. All batches are either expired (>1 hour) or not out_for_delivery.' 
+            });
+        }
+
+        // 2. Database mein current location update karo (सिर्फ़ वैलिड केस होने पर ही क्वेरी चलेगी)
         await db.update(deliveryBoys)
             .set({
                 currentLat: String(latitude),
@@ -205,49 +245,35 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             })
             .where(eq(deliveryBoys.id, boyProfile.id));
 
-        console.log(`📌 [GPS SYNC]: Delivery Boy ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
+        console.log(`📌 [GPS SYNC SUCCESS]: Rider ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
 
         // =======================================================================
-        // 🚀 100% प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (अब बिल्कुल सही बैच आईडी के साथ)
+        // 🚀 सुधार 3: मल्टी-रूम प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (सभी एक्टिव ऑर्डर्स के लिए)
         // =======================================================================
         try {
-            const io = getIO(); // 🔌 असली Socket.IO Instance
+            const io = getIO(); // 🔌 Socket.IO Instance
 
-            let activeBatch = null;
+            // लूप चलाकर उन सभी वैलिड बैचेस के कस्टमर रूम्स में लाइव लोकेशन पुश कर दो भाई!
+            for (const batch of validBatches) {
+                if (batch.masterOrderId) {
+                    
+                    // कमरे का नाम बिल्कुल सॉकेट नियमों के अनुसार: `order:${masterOrderId}`
+                    io.to(`order:${batch.masterOrderId}`).emit("order:delivery_location", {
+                        lat: Number(latitude),
+                        lng: Number(longitude),
+                        batchId: batch.id,
+                        timestamp: new Date().toISOString(),
+                    });
 
-            // 🎯 जादू यहाँ है: अगर मोबाइल ने स्पेसिफिक बैच आईडी भेजी है, तो सीधा उसे ही ढूंढो भाई
-            if (activeBatchId) {
-                activeBatch = await db.query.deliveryBatches.findFirst({
-                    where: eq(deliveryBatches.id, Number(activeBatchId)) // सीधे उसी 172 वाले बैच को पकड़ेगा
-                });
-            } else {
-                // बैकअप: अगर कभी मोबाइल आईडी न भेज पाए, तो पुराना लॉजिक (पर इसमें डिलीवरी बॉय आईडी और आर्डर स्टेटस भी डालना सेफ़ रहता है)
-                activeBatch = await db.query.deliveryBatches.findFirst({
-                    where: eq(deliveryBatches.deliveryBoyId, boyProfile.id)
-                });
-            }
-
-            // 🎯 सिर्फ और सिर्फ तभी ब्रॉडकास्ट करो जब डेटाबेस में असली एक्टिव ऑर्डर मौजूद हो!
-            if (activeBatch && activeBatch.masterOrderId) {
-                
-                // कमरे का नाम बिल्कुल सॉकेट फ़ाइल के नियमों के अनुसार: `order:${masterOrderId}`
-                io.to(`order:${activeBatch.masterOrderId}`).emit("order:delivery_location", {
-                    lat: Number(latitude),
-                    lng: Number(longitude),
-                    batchId: activeBatch.id,
-                    timestamp: new Date().toISOString(),
-                });
-
-                console.log(`📡 [AUTO-SOCKET SUCCESS]: Forwarded to exact room: order:${activeBatch.masterOrderId}`);
-            } else {
-                console.log(`ℹ️ [SOCKET INFO]: Rider ${boyProfile.id} is active but no matching batch found for ID ${activeBatchId}`);
+                    console.log(`📡 [AUTO-SOCKET]: Sent location to customer room: order:${batch.masterOrderId}`);
+                }
             }
         } catch (socketErr) {
             console.error("❌ Socket broadcast failed:", socketErr);
         }
         // =======================================================================
 
-        return res.status(200).json({ success: true, message: 'Location updated successfully.' });
+        return res.status(200).json({ success: true, message: 'Location updated successfully for valid active batches.' });
     } catch (error: any) {
         console.error('❌ Error updating delivery boy location:', error);
         return res.status(500).json({ error: 'Failed to update location.' });
