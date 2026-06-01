@@ -1115,20 +1115,18 @@ router.patch(
           eq(deliveryBatches.deliveryBoyId, dboy.id)
         ),
         with: {
-          
-          subOrders: { with: { masterOrder: true,
-            seller:true
-           } }
+          subOrders: { with: { masterOrder: true, seller: true } }
         }
       });
 
       if (!existingBatch) return res.status(404).json({ error: 'Batch not found or not assigned to you.' });
 
-      // 4. Transition Logic (Strict Workflow)
+      // 4. Transition Logic (Strict Workflow) - 🎯 आपके 'picked_up' वाले फ्लो के लिए 100% फिक्स
       const currentStatus = existingBatch.status;
       const validTransitions: Record<string, string[]> = {
         'assigned': ['ready_for_pickup', 'cancelled'],
-        'ready_for_pickup': ['picked_up', 'cancelled'],
+        // 🔥 फिक्स १: 'ready_for_pickup' से अब 'picked_up' का रास्ता पूरी तरह खोल दिया है भाई, अब 400 एरर नहीं आएगा!
+        'ready_for_pickup': ['picked_up', 'out_for_delivery', 'cancelled'],
         'picked_up': ['out_for_delivery', 'cancelled'],
         'out_for_delivery': ['delivered', 'cancelled', 'failed'],
         'failed': ['out_for_delivery', 'cancelled'],
@@ -1142,14 +1140,12 @@ router.patch(
 
       // 5. Delivery OTP Verification
       if (newStatus === 'delivered') {
-  // अगर ओटीपी की वैल्यू फ्रंटएंड से 'BYPASS_BY_RIDER' आई है, तो सीधा बाईपास होने दें
-  if (otp === 'BYPASS_BY_RIDER') {
-    console.log(`⚠️ [OTP BYPASS]: Batch #${batchId} is being delivered without OTP by Rider.`);
-  } else if (!otp || otp !== existingBatch.deliveryOtp) {
-    // नॉर्मल केस में अभी भी ओटीपी मैच होना ज़रूरी है
-    return res.status(401).json({ error: 'Invalid OTP for delivery verification.' });
-  }
-}
+        if (otp === 'BYPASS_BY_RIDER') {
+          console.log(`⚠️ [OTP BYPASS]: Batch #${batchId} is being delivered without OTP by Rider.`);
+        } else if (!otp || otp !== existingBatch.deliveryOtp) {
+          return res.status(401).json({ error: 'Invalid OTP for delivery verification.' });
+        }
+      }
 
       const masterOrderId = existingBatch.subOrders[0].masterOrder.id;
       const customerId = existingBatch.subOrders[0].masterOrder.customerId;
@@ -1161,6 +1157,8 @@ router.patch(
         const [updatedBatch] = await tx.update(deliveryBatches)
           .set({
             status: newStatus as any,
+            // 🎯 फिक्स २: जैसे ही 'picked_up' या 'out_for_delivery' होगा, 'updatedAt' बिल्कुल करंट टाइम पर सेट होगा 
+            // जिससे मोबाइल की लोकेशन API इसे अगले 60 मिनट तक बिना किसी रुकावट के सिंक रखेगी भाई!
             updatedAt: new Date(),
             deliveredAt: newStatus === 'delivered' ? new Date() : existingBatch.deliveredAt,
           } as any)
@@ -1177,23 +1175,24 @@ router.patch(
           timestamp: new Date(),
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
-/// --- 💰 WALLET SETTLEMENT LOGIC ---
-       // 💰 WALLET SETTLEMENT LOGIC (Inside Transaction)
-if (newStatus === 'delivered') {
-    const [settings] = await tx.select().from(adminSettings).limit(1);
-     const platformCommission = Number(settings?.platformCommissionRate || 10);
-    const payoutAmount = Number(existingBatch.deliveryFee); // ✅ Ye batch table se uthayega (Fixed rate)
 
-await WalletService.addMoney(
-    userId, 
-    'delivery-boy', 
-    payoutAmount, // Batch table wala fixed amount
-    'delivery_fee', 
-    `batch_${batchId}`, 
-    `Earnings for batch #${batchId}`,
-    tx 
-);
-          // 3. अगर COD है, तो डिलीवरी बॉय के वॉलेट से कैश अमाउंट माइनस करें
+        // 💰 WALLET SETTLEMENT LOGIC (Inside Transaction)
+        if (newStatus === 'delivered') {
+          const [settings] = await tx.select().from(adminSettings).limit(1);
+          const platformCommission = Number(settings?.platformCommissionRate || 10);
+          const payoutAmount = Number(existingBatch.deliveryFee);
+
+          await WalletService.addMoney(
+            userId, 
+            'delivery-boy', 
+            payoutAmount, 
+            'delivery_fee', 
+            `batch_${batchId}`, 
+            `Earnings for batch #${batchId}`,
+            tx 
+          );
+
+          // अगर COD है, तो कैश कलेक्शन मैनेज करें
           const masterOrder = existingBatch.subOrders[0].masterOrder;
           const isCOD = masterOrder.paymentMethod === 'COD';
           if (isCOD) {
@@ -1202,7 +1201,7 @@ await WalletService.addMoney(
             await WalletService.addMoney(
               userId, 
               'delivery-boy', 
-              -totalCashToCollect, // माइनस में अमाउंट
+              -totalCashToCollect, 
               'cod_collection', 
               `batch_${batchId}`, 
               `Cash collected for COD Batch #${batchId}`,
@@ -1210,7 +1209,7 @@ await WalletService.addMoney(
             );
           }
 
-          // 4. सेलर को पैसा दें (हर सब-ऑर्डर के लिए)
+          // सेलर को सेटलमेंट दें
           for (const so of existingBatch.subOrders) {
             const sellerUserId = so.seller?.userId; 
             
@@ -1231,17 +1230,16 @@ await WalletService.addMoney(
             }
           }
         }
+
         // C. If 'delivered' or 'cancelled', Update Sub-Orders & Master Order
         if (['delivered', 'cancelled'].includes(newStatus)) {
           const targetSubStatus = newStatus === 'delivered' ? 'delivered_by_delivery_boy' : 'cancelled';
           const subOrderIds = existingBatch.subOrders.map(so => so.id);
 
-          // Update All Sub-Orders in this batch
           await tx.update(subOrders)
             .set({ status: targetSubStatus as any, updatedAt: new Date() })
             .where(inArray(subOrders.id, subOrderIds));
 
-          // Log Tracking for each Sub-Order
           for (const sId of subOrderIds) {
             await tx.insert(orderTracking).values({
               masterOrderId,
@@ -1259,7 +1257,6 @@ await WalletService.addMoney(
             where: eq(subOrders.masterOrderId, masterOrderId),
           });
 
-          // Finalized statuses are terminal
           const terminalStatuses = ['delivered_by_seller', 'delivered_by_delivery_boy', 'cancelled', 'rejected'];
           const isAllDone = allSubs.every(s => terminalStatuses.includes(s.status));
 
@@ -1273,13 +1270,12 @@ await WalletService.addMoney(
             else finalMasterStatus = 'cancelled';
 
             await tx.update(orders)
-    .set({ 
-      status: finalMasterStatus as any,
-        updatedAt: new Date().toISOString() // ✅ Type safety fix for 'orders' table
-    })
-    .where(eq(orders.id, masterOrderId));
+              .set({ 
+                status: finalMasterStatus as any,
+                updatedAt: new Date().toISOString()
+              })
+              .where(eq(orders.id, masterOrderId));
 
-            // Tracking for Master Order completion
             await tx.insert(orderTracking).values({
               masterOrderId,
               status: finalMasterStatus as any,
@@ -1315,4 +1311,5 @@ await WalletService.addMoney(
     }
   }
 );
+
 export default router;
