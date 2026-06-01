@@ -175,7 +175,6 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
-// PUT /api/delivery/update-location
 
 // PUT /api/delivery/update-location
 
@@ -184,8 +183,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         const userId = req.user?.id;
         const { latitude, longitude, activeBatchIds } = req.body;
 
-        // 🚨 गेट-कीपर चेक: अगर मोबाइल से कोई बैच आईडी आई ही नहीं है, तो डेटाबेस की तरफ देखो भी मत!
-        // यहीं से सीधे रिस्पॉन्स क्लोज करो ताकि फालतू SQL Query न चले और लॉग्स शांत रहें।
+        // 🚨 गेट-कीपर चेक: अगर मोबाइल से कोई बैच आईडी आई ही नहीं है (या खाली ऐरे है), तो यहीं से लौट जाओ भाई
         if (!activeBatchIds || !Array.isArray(activeBatchIds) || activeBatchIds.length === 0) {
             return res.status(200).json({ success: true, message: 'No active batches to track. Sync ignored safely.' });
         }
@@ -203,26 +201,24 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             return res.status(404).json({ error: 'Delivery boy profile not found.' });
         }
 
-        // अगर मोबाइल से कोई एक्टिव आईडी लिस्ट नहीं आई है, तो यहीं से रिस्पॉन्स क्लोज कर दो भाई
-        if (!activeBatchIds || !Array.isArray(activeBatchIds) || activeBatchIds.length === 0) {
-            return res.status(200).json({ success: true, message: 'No active batches provided for sync.' });
-        }
-
         // =======================================================================
-        // 🎯 सुधार 2: 1 घंटे का सेफ्टी गेट और 'out_for_delivery' स्टेटस वैलिडेशन
+        // 🎯 सुधार 2: सुरक्षा ताला (Rider ID Validation) + 1 घंटे का सेफ्टी गेट
         // =======================================================================
         const now = new Date();
         const ONE_HOUR_MS = 60 * 60 * 1000; // 1 घंटा मिलीसेकंड में
 
-        // इन-ऑपरेटर (inArray) का उपयोग करके सीधे डेटाबेस से उन सभी बैचेस को एक बार में निकालें भाई
+        // 🔐 कड़क सुरक्षा: सिर्फ वही बैचेस डेटाबेस से निकलेंगे जो इसी विशिष्ट डिलीवरी बॉय के हैं भाई!
         const dbBatches = await db.query.deliveryBatches.findMany({
-            where: inArray(deliveryBatches.id, activeBatchIds.map(id => Number(id)))
+            where: and(
+                inArray(deliveryBatches.id, activeBatchIds.map(id => Number(id))),
+                eq(deliveryBatches.deliveryBoyId, boyProfile.id) // 👈 यह है असली ताला
+            )
         });
 
-        // सिर्फ़ उन्हीं बैचेस को छांटें जो 'out_for_delivery' हैं और जिन्हें 1 घंटे से कम समय हुआ है
+        // सिर्फ़ उन्हीं बैचेस को छांटें जो 'picked_up' या 'out_for_delivery' हैं और 1 घंटे से कम पुराने हैं
         const validBatches = dbBatches.filter((batch: any) => {
-           // 🎯 अब सामान पिकअप होते ही (picked_up) या रास्ते में होने पर (out_for_delivery) दोनों समय लोकेशन जाएगी भाई!
-if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return false;
+            // 🎯 हमारी नई समझ: सामान पिकअप होते ही या रास्ते में होने पर दोनों समय लोकेशन पास होगी
+            if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return false;
 
             // 'updatedAt' कॉलम से 1 घंटे का हिसाब निकालो भाई
             const batchUpdateTime = new Date(batch.updatedAt).getTime();
@@ -231,12 +227,11 @@ if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return 
             return timeElapsed < ONE_HOUR_MS;
         });
 
-        // 🚨 ब्रह्मास्त्र चेक: अगर एक भी बैच 1 घंटे के टाइमर या स्टेटस नियम को पास नहीं कर पाया, 
-        // तो डेटाबेस अपडेट करने और सॉकेट चलाने की कोई ज़रूरत नहीं है! सर्वर लोड = ₹0
+        // 🚨 ब्रह्मास्त्र चेक: अगर एक भी बैच नियमों को पास नहीं कर पाया, तो आगे की सारी फालतू प्रोसेस रोक दो
         if (validBatches.length === 0) {
             return res.status(200).json({ 
                 success: false, 
-                message: 'Location sync skipped. All batches are either expired (>1 hour) or not out_for_delivery.' 
+                message: 'Location sync skipped. All batches are either expired (>1 hour) or not in active transit state.' 
             });
         }
 
@@ -252,12 +247,11 @@ if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return 
         console.log(`📌 [GPS SYNC SUCCESS]: Rider ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
 
         // =======================================================================
-        // 🚀 सुधार 3: मल्टी-रूम प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (सभी एक्टिव ऑर्डर्स के लिए)
+        // 🚀 सुधार 3: मल्टी-ルーム प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (सभी एक्टिव ऑर्डर्स के लिए)
         // =======================================================================
         try {
             const io = getIO(); // 🔌 Socket.IO Instance
 
-            // लूप चलाकर उन सभी वैलिड बैचेस के कस्टमर रूम्स में लाइव लोकेशन पुश कर दो भाई!
             for (const batch of validBatches) {
                 if (batch.masterOrderId) {
                     
@@ -685,7 +679,8 @@ router.patch(
             // 3. Socket.io Events
             getIO().emit(`available-batches:claimed`, { batchId });
             
-            getIO().emit(`order:${result.masterOrderId}:status`, {
+            
+             getIO().to(`order:${result.masterOrderId}`).emit('ordersStatus', {
                 status: 'assigned',
                 deliveryBoyName: deliveryBoyProfile.name,
                 message: "Delivery partner assigned!"
@@ -1075,15 +1070,6 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
         return res.status(500).json({ success: false, message: error.message || "Internal server error." });
     }
 });
-// 🛑 महत्वपूर्ण: PATCH /status लॉजिक से WhatsApp OTP भेजने का कोड हटा दें 
-// (क्योंकि यह अब ऊपर दिए गए dedicated route द्वारा नियंत्रित किया जाएगा)
-
-
-// ---
-/**
- * ✅ Update Delivery Batch Status (Picked Up / In Transit / Delivered / Failed)
- * /api/delivery-boys/batches/:batchId/status
- */
 /**
  * ✅ Final & Solid Logic: Update Delivery Batch Status
  * /api/delivery-boys/batches/:batchId/status
@@ -1121,13 +1107,33 @@ router.patch(
 
       if (!existingBatch) return res.status(404).json({ error: 'Batch not found or not assigned to you.' });
 
-      // 4. Transition Logic (Strict Workflow) - 🎯 आपके 'picked_up' वाले फ्लो के लिए 100% फिक्स
+      
+// 4. Transition Logic (Strict Workflow) - 🎯 100% सटीक और एरर-फ्री फिक्स
       const currentStatus = existingBatch.status;
+      // 🎯 फिक्स: यहाँ से 'const { status: newStatus, otp } = req.body;' वाली लाइन हटा दी है, क्योंकि वह ऊपर पहले से मौजूद है भाई!
+
+      // Idempotency Check: अगर स्टेटस पहले से ही सेम है, तो सीधे आगे बढ़ा दो भाई
+      if (currentStatus === newStatus) {
+        console.log(`ℹ️ [STATUS MATCH]: Batch #${batchId} is already '${newStatus}'.`);
+        return res.status(200).json({
+          success: true,
+          message: 'Status is already up to date.',
+          batch: existingBatch
+        });
+      }
+
+      // 🗺️ यह है आपका असली, साफ़ और सही रास्ता:
       const validTransitions: Record<string, string[]> = {
-        'assigned': ['ready_for_pickup', 'cancelled'],
-        // 🔥 फिक्स १: 'ready_for_pickup' से अब 'picked_up' का रास्ता पूरी तरह खोल दिया है भाई, अब 400 एरर नहीं आएगा!
-        'ready_for_pickup': ['picked_up', 'out_for_delivery', 'cancelled'],
+        // १. जब बैच बना था तब 'pending' था, क्लेम करते ही सीधे 'assigned' होगा भाई
+        'pending': ['assigned', 'cancelled'],
+        
+        // २. 'assigned' (राइडर ने क्लेम कर लिया) से दुकान पर सामान लेते ही सीधे 'picked_up' होगा
+        'assigned': ['picked_up', 'cancelled'],
+        
+        // ३. 'picked_up' (सामान ले लिया, जीपीएस ऑन) से अब राइडर 'out_for_delivery' बटन दबाएगा
         'picked_up': ['out_for_delivery', 'cancelled'],
+        
+        // ४. 'out_for_delivery' से सीधे फाइनल 'delivered', 'failed' या 'cancelled'
         'out_for_delivery': ['delivered', 'cancelled', 'failed'],
         'failed': ['out_for_delivery', 'cancelled'],
         'delivered': [],
@@ -1137,7 +1143,6 @@ router.patch(
       if (!validTransitions[currentStatus]?.includes(newStatus)) {
         return res.status(400).json({ error: `Illegal transition: ${currentStatus} -> ${newStatus}` });
       }
-
       // 5. Delivery OTP Verification
       if (newStatus === 'delivered') {
         if (otp === 'BYPASS_BY_RIDER') {
