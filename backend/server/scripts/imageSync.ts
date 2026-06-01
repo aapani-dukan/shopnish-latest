@@ -46,11 +46,15 @@ export async function scrapePixabayImage(productName: string): Promise<string[]>
       console.error("❌ PIXABAY_API_KEY missing");
       return [];
     }
-
-    const url = `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(productName)}&image_type=photo&safesearch=true&per_page=20`;
+const cleanName = productName
+  .replace(/\([^)]*\)/g, '')
+  .trim();
+   const url = `https://pixabay.com/api/?key=${pixabayKey}&q=${encodeURIComponent(cleanName)}&image_type=photo&safesearch=true&per_page=20`;
 
     const { data } = await axios.get(url, { timeout: 10000 });
-
+console.log(
+  `📸 Pixabay found ${data?.hits?.length || 0} results for "${cleanName}"`
+);
     if (!data?.hits?.length) return [];
 
     const ranked = data.hits.map((hit: any) => ({
@@ -138,7 +142,12 @@ export async function processAndUpload(
             },
             (err, result) => {
               if (err) reject(err);
-              else resolve(result?.secure_url || "");
+             else {
+  console.log(
+    `☁️ Cloudinary Upload Success: ${result?.secure_url}`
+  );
+  resolve(result?.secure_url || "");
+}
             }
           );
           stream.end(buffer);
@@ -183,8 +192,11 @@ export const syncMasterTableOnly = async () => {
         like(masterProducts.image, `%no-image%`),
         like(masterProducts.image, `%t4.ftcdn.net%`)
       ))
+      .orderBy(sql`RANDOM()`)
       .limit(20);
-
+console.log(
+  `📦 Selected IDs: ${items.map(x => x.id).join(", ")}`
+);
     console.log(`📦 Found ${items.length} Master items to search.`);
 
     for (const item of items) {
@@ -199,13 +211,20 @@ export const syncMasterTableOnly = async () => {
 
           const cloudUrl = await processAndUpload(urls[0], item.name, 'master');
 
-          if (cloudUrl) {
-            await db.update(masterProducts)
-              .set({ image: cloudUrl })
-              .where(eq(masterProducts.id, item.id));
-              
-            console.log(`✅ Successfully Updated: ${item.name} -> ${cloudUrl}`);
-          }
+         if (cloudUrl) {
+
+  await db.update(masterProducts)
+    .set({ image: cloudUrl })
+    .where(eq(masterProducts.id, item.id));
+
+  console.log(
+    `✅ DB Updated: ID=${item.id} | ${item.name}`
+  );
+
+  console.log(
+    `☁️ Cloudinary URL: ${cloudUrl}`
+  );
+}
         } else {
           console.log(`⚠️ Pixabay के पास इसकी फोटो नहीं है: ${item.name}`);
         }
