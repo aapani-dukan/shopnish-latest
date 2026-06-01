@@ -182,9 +182,13 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
-        
-        // 🎯 सुधार 1: सिंगल आईडी की जगह अब हम मोबाइल ऐप से आ रही 'activeBatchIds' की लिस्ट ले रहे हैं
         const { latitude, longitude, activeBatchIds } = req.body;
+
+        // 🚨 गेट-कीपर चेक: अगर मोबाइल से कोई बैच आईडी आई ही नहीं है, तो डेटाबेस की तरफ देखो भी मत!
+        // यहीं से सीधे रिस्पॉन्स क्लोज करो ताकि फालतू SQL Query न चले और लॉग्स शांत रहें।
+        if (!activeBatchIds || !Array.isArray(activeBatchIds) || activeBatchIds.length === 0) {
+            return res.status(200).json({ success: true, message: 'No active batches to track. Sync ignored safely.' });
+        }
 
         if (!latitude || !longitude) {
             return res.status(400).json({ error: 'Latitude and Longitude are required.' });
