@@ -1,6 +1,6 @@
 import { z } from "zod";
 import {
-  users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
+  users, sellersPgTable, stores, categories, products,productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
   subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,wallets,walletTransactions,productHistory,notifications,masterOrderStatusEnum, subOrderStatusEnum,
@@ -8,7 +8,7 @@ import {
 } from './tables';
 
 import {
-  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
+  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,productVariantsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrdersRelations,deliveryBatchesRelations
@@ -160,13 +160,13 @@ export type InsertReview = z.infer<typeof insertReviewSchema>;
 // --- Exports ---
 export {
   // Tables
-  users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
+  users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
   subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,notifications,
 productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,productHistory,
   // Relations
-  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
+  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,productVariantsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrdersRelations,deliveryBatchesRelations,
@@ -184,12 +184,12 @@ insertSubOrderSchema, insertDeliveryBatchesSchema, insertCouponsPgTableSchema,
 
 export const schema = {
   // Tables
-  users, sellersPgTable, stores, categories, products, deliveryAreas, deliveryBoys, cartItems,
+  users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,walletTransactions,wallets,homeLayout,adminSettings,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,productHistory,notifications,
   
   // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
-  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,
+  usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations, productVariantsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, 

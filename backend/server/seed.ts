@@ -313,7 +313,7 @@ async function seedDatabase() {
     console.log(`✅ Inserted ${insertedProducts.length} products.`);
 
 
-    // 8️⃣ Insert Order
+   // 8️⃣ Insert Order (एड्रेस और कॉलम्स फिक्स भाई)
     console.log("➕ Inserting order...");
     const [order] = await db.insert(orders).values({
       customerId: customerUser.id,
@@ -323,44 +323,69 @@ async function seedDatabase() {
       deliveryCharge: "0.00",
       discount: "0.00",
       total: "0.00",
-      paymentMethod: "cod",
-      paymentStatus: "paid",
-      status: "placed",
-      deliveryAddress: {
-        address: "Customer Street",
-        city: "Indore",
-        pincode: "452001",
-      },
-    }).returning();
+      paymentMethod: "COD", // पक्का कैपिटल रखें भाई
+      paymentStatus: "pending",
+      status: "pending",
+      // 🎯 फिक्स: ऑब्जेक्ट के बजाय सीधे स्ट्रिंग्स और सही कॉलम्स में डेटा डाला भाई
+      deliveryAddress: "Customer Street, Near Indore Station", 
+      deliveryCity: "Indore",
+      deliveryState: "Madhya Pradesh",
+      deliveryPincode: "452001",
+      deliveryLat: "22.7196",
+      deliveryLng: "75.8577",
+      createdAt: new Date(),
+      updatedAt: new Date()
+    } as any).returning();
+    
     if (!order?.id) throw new Error("❌ Order insert failed! No order ID returned.");
     console.log("✅ Order inserted.");
 
 
-    // 9️⃣ Order Items
+    // 9️⃣ Order Items (नए वैरिएंट आर्किटेक्चर के साथ भाई)
     console.log("➕ Inserting order items...");
+    
+    // मान लेते हैं कि पहले जो वैरिएंट्स इंसर्ट हुए थे, उनमें से पहले 2 वैरिएंट्स का ऑर्डर बना रहे हैं भाई
+    // अगर आपके पास वैरिएंट का वेरिएबल अलग नाम से है, तो 'insertedVariants' की जगह वो नाम रख देना भाई!
+    const testVariants = (global as any).insertedVariants || insertedProducts; 
+
     let totalOrderValue = 0;
-    const items = insertedProducts.slice(0, 2).map(p => {
+    const items = testVariants.slice(0, 2).map((v: any, index: number) => {
       const qty = 2;
-      const unitPrice = parseFloat(p.price || "0");
-      const totalPrice = (unitPrice * qty).toFixed(2);
-      totalOrderValue += parseFloat(totalPrice);
+      // अगर वैरिएंट्स ऑब्जेक्ट है तो v.price यूज़ होगा, नहीं तो फॉलबैक 100 भाई
+      const unitPrice = v.price ? parseFloat(v.price) : 100; 
+      const totalPrice = unitPrice * qty;
+      totalOrderValue += totalPrice;
 
       return {
         orderId: order.id,
-        productId: p.id,
+        subOrderId: 1, // डमी सबऑर्डर आईडी भाई सीड्स के लिए
+        productId: v.productId || v.id, // मास्टर प्रोडक्ट आईडी
+        variantId: v.id, // 🎯 नया कॉलम: विशिष्ट वैरिएंट आईडी भाई!
         sellerId: insertedSeller.id,
+        userId: customerUser.id,
+        productName: v.name || "Test Product",
+        variantName: v.quantityValue ? `${v.quantityValue} ${v.unit}` : "Standard Size", // स्नैपशॉट नाम भाई
+        productImage: v.image || null,
+        productPrice: unitPrice,
+        productUnit: v.unit || "piece",
         quantity: qty,
-        unitPrice: unitPrice.toString(),
-        totalPrice: totalPrice.toString(),
+        itemTotal: totalPrice, // नए स्कीमा में 'totalPrice' का नाम 'itemTotal' हो सकता है भाई
+        status: 'pending',
+        createdAt: new Date(),
+        updatedAt: new Date(),
       };
     });
-    await db.insert(orderItems).values(items);
-    await db.update(orders).set({
-      subtotal: totalOrderValue.toFixed(2).toString(),
-      total: totalOrderValue.toFixed(2).toString()
-    }).where(eq(orders.id, order.id));
-    console.log(`✅ Inserted ${items.length} order items and updated order total.`);
 
+    await db.insert(orderItems).values(items as any);
+    
+    // मास्टर ऑर्डर का टोटल अपडेट करो भाई
+    await db.update(orders).set({
+      subtotal: totalOrderValue,
+      total: totalOrderValue,
+      updatedAt: new Date()
+    } as any).where(eq(orders.id, order.id));
+    
+    console.log(`✅ Inserted ${items.length} order items and updated order total in seeds.`);
 
     // 🔟 Reviews
     console.log("➕ Inserting reviews...");
@@ -387,14 +412,33 @@ async function seedDatabase() {
     }
 
 
-    // 🔁 Cart Items
+  // 🔁 Cart Items (नए वैरिएंट और प्राइजिंग आर्किटेक्चर के साथ भाई)
     console.log("➕ Inserting cart items...");
-    await db.insert(cartItems).values(insertedProducts.slice(0, 2).map(p => ({
-      userId: customerUser.id,
-      productId: p.id,
-      quantity: 1,
-    })));
-    console.log(`✅ Inserted ${insertedProducts.slice(0, 2).length} cart items.`);
+    
+    // मान लेते हैं कि पहले जो वैरिएंट्स इंसर्ट हुए थे, उनमें से पहले 2 वैरिएंट्स का टेस्ट डेटा बना रहे हैं भाई
+    // अगर आपके पास वैरिएंट्स का वेरिएबल अलग नाम से है, तो 'insertedVariants' की जगह वो नाम रख देना भाई!
+    const testVariantsForCart = (global as any).insertedVariants || insertedProducts;
+
+    const cartItemsEntries = testVariantsForCart.slice(0, 2).map((v: any) => {
+      const quantity = 1;
+      const priceAtAdded = v.price ? Number(v.price) : 100; // वैरिएंट की लाइव कीमत भाई
+      const totalPrice = priceAtAdded * quantity;
+
+      return {
+        userId: customerUser.id,
+        productId: v.productId || v.id,   // मास्टर प्रोडक्ट आईडी
+        variantId: v.id,                 // 🎯 नया कॉलम: विशिष्ट वैरिएंट आईडी भाई!
+        sellerId: insertedSeller.id,     // सेलर ट्रैकिंग भाई
+        quantity: quantity,
+        priceAtAdded: priceAtAdded.toString(),
+        totalPrice: totalPrice.toString(),
+        createdAt: new Date(),
+        updatedAt: new Date()
+      };
+    });
+
+    await db.insert(cartItems).values(cartItemsEntries as any);
+    console.log(`✅ Inserted ${cartItemsEntries.length} variant-aware cart items.`);
 
     console.log("🎉 Seed complete! Database is populated.");
 
@@ -404,4 +448,4 @@ async function seedDatabase() {
   }
 }
 
-seedDatabase();
+seedDatabase(); 

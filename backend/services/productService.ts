@@ -1,87 +1,118 @@
 // backend/src/services/productService.ts
 import { db } from '../server/db';
-import { products, productHistory,sellersPgTable, users, notifications} from '../shared/backend/schema';
+import { products, productHistory,sellersPgTable, users, notifications,productVariants} from '../shared/backend/schema';
 import { eq, and, isNull } from 'drizzle-orm';
 import { sendLowStockWhatsAppAlert } from '../server/lib/whatsappHelpers'; 
 export class ProductService {
   
-  // ✅ HIGH-CLASS UPDATE: Versioning + Price History
-  static async updateProduct(productId: number, sellerId: number, updateData: any) {
+ // ✅ HIGH-CLASS UPDATE: Versioning + Price History (Variant Aware Fix भाई)
+  static async updateProduct(productId: number, variantId: number, sellerId: number, updateData: any) {
     return await db.transaction(async (tx) => {
-      // 1. Pehle existing product check karo
-      const [existing] = await tx.select().from(products)
+      // 1. Pehle check karo ki product aur variant sahi hain ya nahi भाई
+      const [existingProduct] = await tx.select().from(products)
         .where(and(eq(products.id, productId), eq(products.sellerId, sellerId), isNull(products.deletedAt)));
 
-      if (!existing) throw new Error("Product not found or access denied.");
+      if (!existingProduct) throw new Error("Product not found or access denied.");
 
-      // 2. Versioning Logic: Agar price badla toh history record karo
-      if (updateData.price && Number(updateData.price) !== Number(existing.price)) {
+      const [existingVariant] = await tx.select().from(productVariants) // ध्यान दें भाई, स्कीमा के अनुसार productVariants नाम है
+        .where(eq(productVariants.id, variantId));
+
+      if (!existingVariant) throw new Error("Product Variant not found.");
+
+     // 2. Versioning Logic: Agar price badla toh variant level par history record karo भाई
+      if (updateData.price && Number(updateData.price) !== Number(existingVariant.price)) {
         await tx.insert(productHistory).values({
           productId: productId,
-          oldPrice: existing.price.toString(),
+          variantId: variantId,
+          oldPrice: existingVariant.price.toString(),
           newPrice: updateData.price.toString(),
-          changedBy: sellerId, // Seller ID
-          changeReason: updateData.changeReason || "Price updated",
-        });
-        updateData.version = (existing.version || 1) + 1;
-      }
+          changedBy: sellerId, 
+          changeReason: updateData.changeReason || "Variant Price updated",
+        } as any);
 
-      // 3. Final Update
-      const [updated] = await tx.update(products)
+        // 🎯 फिक्स: वर्जन को हमेशा मुख्य 'existingProduct' से उठाएं भाई!
+        const nextVersion = (existingProduct.version || 1) + 1;
+
+        // मुख्य प्रोडक्ट टेबल में भी नया वर्जन नंबर सिंक कर दो भाई
+        await tx.update(products)
+          .set({ version: nextVersion, updatedAt: new Date() })
+          .where(eq(products.id, productId));
+          
+        // अगर updateData में सेलर ने कुछ भेजा है तो उसे क्लीन रखें
+        delete updateData.version; 
+      }
+      // 3. Final Update: वैरिएंट की डिटेल्स को वैरिएंट टेबल में अपडेट करो भाई
+      const [updatedVariant] = await tx.update(productVariants)
         .set({ ...updateData, updatedAt: new Date() })
-        .where(eq(products.id, productId))
+        .where(eq(productVariants.id, variantId))
         .returning();
 
-      return updated;
+      return updatedVariant;
+    });
+  }
+ // ✅ SOFT DELETE: Database se gayab nahi hoga, bas product aur uske saare variants hide honge bhai
+  static async softDelete(productId: number, sellerId: number) {
+    return await db.transaction(async (tx) => {
+      // 1. मुख्य प्रोडक्ट को soft delete करो भाई
+      await tx.update(products)
+        .set({ 
+          deletedAt: new Date(), 
+          isActive: false 
+        })
+        .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
+
+      // 2. 🎯 मास्टरस्ट्रोक: उसके सारे वैरिएंट्स को भी पैरेलल में डीएक्टिवेट कर दो भाई
+      await tx.update(productVariants)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(productVariants.productId, productId));
+        
+      return { success: true };
     });
   }
 
-  // ✅ SOFT DELETE: Database se gayab nahi hoga, bas hide hoga
-  static async softDelete(productId: number, sellerId: number) {
-    return await db.update(products)
-      .set({ 
-        deletedAt: new Date(), 
-        isActive: false 
-      })
-      .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
-  }
-  // backend/src/services/productService.ts
-
-// ✅ 3. LOW STOCK NOTIFIER: Real-time Alert Logic
-  static async checkLowStockAndNotify(productId: number, currentStock: number | null, sellerId: number | null) {
+// ✅ 3. LOW STOCK NOTIFIER: Real-time Alert Logic (Variant Level Connected भाई)
+  static async checkLowStockAndNotify(productId: number, variantId: number, currentStock: number | null, sellerId: number | null) {
     if (currentStock === null || sellerId === null) return;
 
     const LOW_STOCK_THRESHOLD = 5;
 
     if (currentStock <= LOW_STOCK_THRESHOLD) {
       try {
-        // 1. Seller ka phone number nikalo (Users table se join karke)
+        // 1. 🎯 फिक्स: अब प्रोडक्ट नाम के साथ वैरिएंट की मात्रा और यूनिट भी जॉइन से निकालेंगे भाई
         const [sellerData] = await db
           .select({
             phone: users.phone,
             businessName: sellersPgTable.businessName,
-            name: products.name
+            productName: products.name,
+            variantQty: productVariants.quantityValue,
+            variantUnit: productVariants.unit
           })
           .from(products)
+          .innerJoin(productVariants, eq(products.id, productVariants.productId))
           .innerJoin(sellersPgTable, eq(products.sellerId, sellersPgTable.id))
           .innerJoin(users, eq(sellersPgTable.userId, users.id))
-          .where(eq(products.id, productId));
+          .where(and(eq(products.id, productId), eq(productVariants.id, variantId)));
+
+        // सुंदर नाम तैयार करो भाई, जैसे: "Colgate (250 Gram)"
+        const fullItemName = sellerData 
+          ? `${sellerData.productName} (${sellerData.variantQty} ${sellerData.variantUnit})`
+          : "Product Variant";
 
         if (sellerData && sellerData.phone) {
           // 2. WhatsApp Alert bhejo
           await sendLowStockWhatsAppAlert(
             sellerData.phone, 
-            sellerData.name, 
+            fullItemName, // ✅ अब साइज के साथ नाम जाएगा भाई
             currentStock
           );
-          console.log(`✅ WhatsApp Alert sent to seller for product: ${sellerData.name}`);
+          console.log(`✅ WhatsApp Alert sent to seller for variant: ${fullItemName}`);
         }
 
-        // 3. In-App Notification entry (Purana logic)
+        // 3. In-App Notification entry
         await db.insert(notifications).values({
           userId: sellerId,
           title: "Low Stock Alert! 📉",
-          message: `${sellerData?.name || 'Product'} ka stock sirf ${currentStock} bacha hai.`,
+          message: `${fullItemName} का स्टॉक सिर्फ ${currentStock} बचा है भाई। कृपया रीस्टॉक करें।`,
           type: "LOW_STOCK",
         } as any);
 

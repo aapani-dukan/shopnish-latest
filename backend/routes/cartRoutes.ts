@@ -1,21 +1,24 @@
 import { Router, Response, NextFunction } from "express";
-import { db } from "../server/db.ts";
+import { db } from "../server/db";
 import {
   users,
   cartItems,
   products,
   approvalStatusEnum,
+  productVariants,
   sellersPgTable,
-} from "../shared/backend/schema.ts";
+} from "../shared/backend/schema";
 import { eq, and } from "drizzle-orm";
-import { AuthenticatedRequest } from "../server/middleware/verifyToken.ts";
-import { requireAuth } from "../server/middleware/authMiddleware.ts";
-import { getIO } from "../server/socket.ts";
+import { AuthenticatedRequest } from "../server/middleware/verifyToken";
+import { requireAuth } from "../server/middleware/authMiddleware";
+import { getIO } from "../server/socket";
 
 const cartRouter = Router();
 
 /* ============================================
    🛒 1. GET /api/cart — Get User’s Cart
+==========/* ============================================
+   🛒 1. GET /api/cart — Get User’s Cart (Variant Aware)
 ============================================ */
 cartRouter.get(
   "/",
@@ -28,6 +31,7 @@ cartRouter.get(
         return res.status(401).json({ error: "Unauthorized: Missing user ID" });
       }
 
+      // 🎯 फिक्स: प्रोडक्ट के साथ-साथ अब कार्ट आइटम से जुड़ा विशिष्ट वैरिएंट भी लोड होगा भाई!
       const cartItemsWithDetails = await db.query.cartItems.findMany({
         where: eq(cartItems.userId, userId),
         with: {
@@ -36,15 +40,23 @@ cartRouter.get(
               id: true,
               name: true,
               description: true,
-              price: true,
               image: true,
               sellerId: true,
-              unit: true,
-              stock: true,
-              minOrderQty: true,
-              maxOrderQty: true,
               approvalStatus: true,
             },
+          },
+          // 🔥 नया रिलेशन जोड़ा गया भाई:
+          variant: {
+            columns: {
+              id: true,
+              quantityValue: true,
+              unit: true,
+              price: true, // लाइव सेलिंग प्राइस
+              stock: true, // लाइव वैरिएंट स्टॉक
+              minOrderQty: true,
+              maxOrderQty: true,
+              isActive: true
+            }
           },
           seller: {
             columns: {
@@ -58,34 +70,40 @@ cartRouter.get(
 
       let totalAmount = 0;
       const cleanedCartData = cartItemsWithDetails
-        .map((item) => {
+        .map((item: any) => {
+          // सुरक्षा चेक: प्रोडक्ट अप्रूव्ड होना चाहिए और वैरिएंट एक्टिव होना चाहिए भाई
           if (
             !item.product ||
-            item.product.approvalStatus !== approvalStatusEnum.enumValues[1]
+            item.product.approvalStatus !== approvalStatusEnum.enumValues[1] ||
+            !item.variant || 
+            !item.variant.isActive
           ) {
             return null;
           }
 
-          const effectivePrice = item.priceAtAdded;
-          const effectiveQuantity = Math.min(item.quantity, item.product.stock);
+          const effectivePrice = Number(item.variant.price);
+          // सेफ़्टी चेक: अगर कार्ट में क्वांटिटी स्टॉक से ज़्यादा हो गई है तो स्टॉक जितना ही दिखाओ
+          const effectiveQuantity = Math.min(item.quantity, item.variant.stock);
           const itemTotal = effectivePrice * effectiveQuantity;
           totalAmount += itemTotal;
 
           return {
             id: item.id,
             productId: item.productId,
+            variantId: item.variantId, // ✅ फ्रंटएंड के लिए वैरिएंट आईडी रिटर्न भाई
             quantity: effectiveQuantity,
-            priceAtAdded: item.priceAtAdded,
+            priceAtAdded: effectivePrice,
             itemTotal,
             product: {
               id: item.product.id,
               name: item.product.name,
-              price: item.product.price,
               image: item.product.image,
-              unit: item.product.unit,
-              stock: item.product.stock,
-              minOrderQty: item.product.minOrderQty,
-              maxOrderQty: item.product.maxOrderQty,
+              variantName: `${item.variant.quantityValue} ${item.variant.unit}`, // e.g. "250 Gram"
+              price: effectivePrice,
+              unit: item.variant.unit,
+              stock: item.variant.stock,
+              minOrderQty: item.variant.minOrderQty || 1,
+              maxOrderQty: item.variant.maxOrderQty || null,
             },
             seller: item.seller
               ? {
@@ -98,7 +116,7 @@ cartRouter.get(
         .filter((item) => item !== null);
 
       return res.status(200).json({
-        message: "Cart fetched successfully",
+        message: "Cart fetched successfully with variant snapshot",
         items: cleanedCartData,
         totalAmount,
       });
@@ -112,7 +130,7 @@ cartRouter.get(
 );
 
 /* ============================================
-   ➕ 2. POST /api/cart/add — Add Item to Cart
+   ➕ 2. POST /api/cart/add — Add Item to Cart (Variant Level Fix)
 ============================================ */
 cartRouter.post(
   "/add",
@@ -120,59 +138,72 @@ cartRouter.post(
   async (req: any, res: Response, next: NextFunction) => {
     try {
       const userId = req.user?.id;
-      const { productId, quantity } = req.body;
+      const { productId, variantId, quantity } = req.body; // 🔥 फ्रंटएंड से variantId आना अब अनिवार्य है भाई!
 
       if (!userId)
         return res.status(401).json({ error: "Unauthorized: Missing user ID" });
 
-      if (!productId || typeof quantity !== "number" || quantity <= 0) {
+      if (!productId || !variantId || typeof quantity !== "number" || quantity <= 0) {
         return res
           .status(400)
-          .json({ error: "Invalid productId or quantity." });
+          .json({ error: "Invalid productId, variantId or quantity." });
       }
 
+      // 1. मुख्य प्रोडक्ट चेक करें
       const [product] = await db
         .select()
         .from(products)
         .where(eq(products.id, productId))
         .limit(1);
 
-      if (!product)
-        return res.status(404).json({ error: "Product not found." });
-
+      if (!product) return res.status(404).json({ error: "Product not found." });
       if (product.approvalStatus !== approvalStatusEnum.enumValues[1]) {
-        return res
-          .status(400)
-          .json({ error: "Product is not approved for sale." });
+        return res.status(400).json({ error: "Product is not approved for sale." });
       }
 
-      if (product.stock < quantity) {
+      // 2. 🎯 विशिष्ट वैरिएंट का लाइव डेटा निकालें भाई
+      const [variant] = await db
+        .select()
+        .from(productVariants) // आपके स्कीमा का नाम 'productsVariants' है भाई
+        .where(and(eq(productVariants.id, variantId), eq(productVariants.productId, productId)))
+        .limit(1);
+
+      if (!variant) return res.status(404).json({ error: "Selected product variant not found." });
+      if (!variant.isActive) return res.status(400).json({ error: "This variant is currently inactive." });
+
+      // 3. लिमिट और स्टॉक चेक अब वैरिएंट टेबल से होगा भाई
+      if (variant.stock < quantity) {
         return res.status(400).json({
-          error: `Insufficient stock. Only ${product.stock} units available.`,
+          error: `Insufficient stock. Only ${variant.stock} units available for this size.`,
         });
       }
 
-      if (product.minOrderQty && quantity < product.minOrderQty) {
+      if (variant.minOrderQty && quantity < variant.minOrderQty) {
         return res.status(400).json({
-          error: `Minimum order quantity for ${product.name} is ${product.minOrderQty}.`,
+          error: `Minimum order quantity for this variant is ${variant.minOrderQty}.`,
         });
       }
 
-      if (product.maxOrderQty && quantity > product.maxOrderQty) {
+      if (variant.maxOrderQty && quantity > variant.maxOrderQty) {
         return res.status(400).json({
-          error: `Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`,
+          error: `Maximum order quantity for this variant is ${variant.maxOrderQty}.`,
         });
       }
 
-      const priceAtAdded = product.price;
+      const priceAtAdded = Number(variant.price);
       const sellerId = product.sellerId;
       const newTotalPrice = priceAtAdded * quantity;
 
+      // 4. 🔥 महा-फिक्स: अब पुराना आइटम चेक करते समय productId और variantId दोनों का मिलान होगा भाई!
       const [existingItem] = await db
         .select()
         .from(cartItems)
         .where(
-          and(eq(cartItems.userId, userId), eq(cartItems.productId, productId))
+          and(
+            eq(cartItems.userId, userId), 
+            eq(cartItems.productId, productId),
+            eq(cartItems.variantId, variantId) // वैरिएंट मैच होना ज़रूरी है!
+          )
         );
 
       let item;
@@ -180,21 +211,21 @@ cartRouter.post(
       if (existingItem) {
         const newQuantity = existingItem.quantity + quantity;
 
-        if (newQuantity > product.stock) {
+        if (newQuantity > variant.stock) {
           return res.status(400).json({
             error: `Cannot add ${quantity} units. Only ${
-              product.stock - existingItem.quantity
-            } units available.`,
+              variant.stock - existingItem.quantity
+            } units available in stock.`,
           });
         }
 
-        const newTotalPrice = priceAtAdded * newQuantity;
+        const updatedTotalPrice = priceAtAdded * newQuantity;
 
         const updatedItem = await db
           .update(cartItems)
           .set({
             quantity: newQuantity,
-            totalPrice: newTotalPrice,
+            totalPrice: updatedTotalPrice,
             updatedAt: new Date(),
           })
           .where(eq(cartItems.id, existingItem.id))
@@ -202,25 +233,27 @@ cartRouter.post(
 
         item = updatedItem[0];
       } else {
+        // नया आइटम इंसर्ट (variantId कॉलम के साथ भाई)
         const newItem = await db
           .insert(cartItems)
           .values({
             userId,
             productId,
+            variantId, // ✅ डेटाबेस में वैरिएंट रिकॉर्ड सिंक भाई!
             quantity,
             priceAtAdded,
             totalPrice: newTotalPrice,
             sellerId,
             createdAt: new Date(),
             updatedAt: new Date(),
-          }as any) // Type assertion to any to bypass type issues
+          } as any)
           .returning();
 
         item = newItem[0];
       }
 
       getIO().emit("cart:updated", { userId });
-      return res.status(200).json({ message: "Item added to cart.", item });
+      return res.status(200).json({ message: "Item added to cart successfully.", item });
     } catch (error: any) {
       console.error("❌ Error adding item to cart:", error);
       return res.status(500).json({ error: "Failed to add item to cart." });
@@ -229,7 +262,7 @@ cartRouter.post(
 );
 
 /* ============================================
-   ✏️ 3. PUT /api/cart/:id — Update Quantity
+   ✏️ 3. PUT /api/cart/:id — Update Quantity (Variant Aware)
 ============================================ */
 cartRouter.put(
   "/:cartItemId",
@@ -249,13 +282,16 @@ cartRouter.put(
           .json({ error: "Invalid cart item ID or quantity." });
       }
 
+      // 🎯 फिक्स: यहाँ भी रिलेशंस में 'product' के बजाय 'variant' लोड किया भाई!
       const [existingCartItem] = await db.query.cartItems.findMany({
         where: and(eq(cartItems.id, cartItemId), eq(cartItems.userId, userId)),
         with: {
           product: {
+            columns: { id: true, name: true }
+          },
+          variant: {
             columns: {
               id: true,
-              name: true,
               stock: true,
               price: true,
               minOrderQty: true,
@@ -265,27 +301,22 @@ cartRouter.put(
         },
       });
 
-      if (!existingCartItem || !existingCartItem.product) {
+      if (!existingCartItem || !existingCartItem.variant || !existingCartItem.product) {
         return res.status(404).json({
-          message:
-            "Cart item or associated product not found or does not belong to user.",
+          message: "Cart item or associated variant not found.",
         });
       }
 
+      const variant = existingCartItem.variant;
       const product = existingCartItem.product;
-      const priceAtAdded = existingCartItem.priceAtAdded;
+      const priceAtAdded = Number(variant.price);
 
+      // अगर क्वांटिटी 0 कर दी है तो कार्ट से हटा दो भाई
       if (quantity === 0) {
         const [deletedItem] = await db
           .delete(cartItems)
           .where(eq(cartItems.id, cartItemId))
           .returning();
-
-        if (!deletedItem) {
-          return res
-            .status(404)
-            .json({ message: "Cart item not found or failed to delete." });
-        }
 
         getIO().emit("cart:updated", { userId });
         return res.status(200).json({
@@ -294,31 +325,32 @@ cartRouter.put(
         });
       }
 
-      if (quantity > product.stock) {
+      // स्टॉक और लिमिट वैलिडेशन अब सीधा वैरिएंट से सिंक है भाई
+      if (quantity > variant.stock) {
         return res.status(400).json({
-          error: `Insufficient stock. Only ${product.stock} units available.`,
+          error: `Insufficient stock. Only ${variant.stock} units available for this size.`,
         });
       }
 
-      if (product.minOrderQty && quantity < product.minOrderQty) {
+      if (variant.minOrderQty && quantity < variant.minOrderQty) {
         return res.status(400).json({
-          error: `Minimum order quantity for ${product.name} is ${product.minOrderQty}.`,
+          error: `Minimum order quantity is ${variant.minOrderQty}.`,
         });
       }
 
-      if (product.maxOrderQty && quantity > product.maxOrderQty) {
+      if (variant.maxOrderQty && quantity > variant.maxOrderQty) {
         return res.status(400).json({
-          error: `Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`,
+          error: `Maximum order quantity is ${variant.maxOrderQty}.`,
         });
       }
 
-      const newTotalPrice = priceAtAdded * quantity;
+      const updatedTotalPrice = priceAtAdded * quantity;
 
       const [updatedItem] = await db
         .update(cartItems)
         .set({
           quantity,
-          totalPrice: newTotalPrice,
+          totalPrice: updatedTotalPrice,
           updatedAt: new Date(),
         })
         .where(eq(cartItems.id, cartItemId))
@@ -328,7 +360,7 @@ cartRouter.put(
 
       return res
         .status(200)
-        .json({ message: "Cart item updated successfully.", item: updatedItem });
+        .json({ message: "Cart item quantity updated successfully.", item: updatedItem });
     } catch (error: any) {
       console.error("❌ Error updating cart item:", error);
       return res.status(500).json({ error: "Failed to update cart item." });

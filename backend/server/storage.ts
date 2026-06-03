@@ -4,6 +4,7 @@ import {
   users,
   sellersPgTable as sellers,
   products,
+  productVariants,
   categories,
   deliveryBoys,
   orders,
@@ -142,22 +143,42 @@ async updateSellerApprovalStatus(
   }
 
  
-async createProduct(productData: z.infer<typeof insertProductSchema>) {
-  // ✅ डेटा को स्प्रेड करें और approvedAt को 'Date' में बदलें
-  const [newProduct] = await db.insert(products)
-    .values({
-      ...productData,
-      // अगर स्ट्रिंग आ रही है तो उसे Date बनाओ, वरना null रखो
-      approvedAt: productData.approvedAt ? new Date(productData.approvedAt) : null,
-      // पक्का करें कि price और stock नंबर ही रहें
-      price: Number(productData.price),
-      stock: Number(productData.stock),
-    } as any) // ✅ 'as any' लगाने से Drizzle की ओवरलोड एरर शांत हो जाएगी
-    .returning();
+async createProduct(productData: z.infer<typeof insertProductSchema> & { variants?: any[] }) {
+  return await db.transaction(async (tx) => {
+    // 1. मुख्य प्रोडक्ट की एंट्री (बिना प्राइस/स्टॉक के क्योंकि ये वैरिएंट में हैं भाई)
+    const { variants, ...pureProductData } = productData as any;
     
-  return newProduct;
+    const [newProduct] = await tx.insert(products)
+      .values({
+        ...pureProductData,
+        approvedAt: pureProductData.approvedAt ? new Date(pureProductData.approvedAt) : null,
+        createdAt: new Date(),
+        updatedAt: new Date()
+      } as any)
+      .returning();
+      
+    if (!newProduct) throw new Error("Failed to create master product.");
+
+    // 2. 🎯 मास्टरस्ट्रोक: अगर फ्रंटएंड से वैरिएंट्स आए हैं, तो उन्हें वैरिएंट्स टेबल में डालो भाई
+    if (variants && Array.isArray(variants)) {
+      for (const variant of variants) {
+        await tx.insert(productVariants).values({
+          productId: newProduct.id,
+          quantityValue: variant.quantityValue,
+          unit: variant.unit || 'piece',
+          price: Number(variant.price),
+          originalPrice: variant.originalPrice ? Number(variant.originalPrice) : null,
+          stock: Number(variant.stock || 0),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date()
+        } as any);
+      }
+    }
+    
+    return newProduct;
+  });
 }
-  
 
   // --- Delivery Boy Methods ---
   async createDeliveryBoy(deliveryBoyData: z.infer<typeof insertDeliveryBoySchema>) {
@@ -174,70 +195,85 @@ async createProduct(productData: z.infer<typeof insertProductSchema>) {
   return newDeliveryBoy;
 }
 
-  // --- Cart Items Methods ---
+ // 🎯 फिक्स: अब कार्ट आइटम्स को वैरिएंट्स टेबल के साथ जॉइन करके डेटा निकालेंगे भाई!
   async getCartItemsForUser(userId: number) {
     return await db.select({
       id: cartItems.id,
       productId: cartItems.productId,
+      variantId: cartItems.variantId, // ✅ नया वैरिएंट ट्रैकिंग कॉलम
       quantity: cartItems.quantity,
       productName: products.name,
       productImage: products.image,
-      productPrice: products.price,
+      variantPrice: productVariants.price, // ✅ अब प्राइस वैरिएंट से आ रही है भाई!
+      variantUnit: productVariants.unit,
+      variantQtyValue: productVariants.quantityValue
     })
     .from(cartItems)
     .leftJoin(products, eq(cartItems.productId, products.id))
+    .leftJoin(productVariants, eq(cartItems.variantId, productVariants.id)) // वैरिएंट जॉइन भाई
     .where(eq(cartItems.userId, userId))
     .execute();
   }
 
-  async addCartItem(userId: number, productId: number, quantity: number) {
-  // 1. पहले चेक करें कि क्या यह प्रोडक्ट पहले से कार्ट में है
-  const existingCartItem = await db.select().from(cartItems)
-    .where(and(eq(cartItems.userId, userId), eq(cartItems.productId, productId)))
-    .limit(1)
-    .execute();
+  // 🎯 फिक्स: कार्ट में माल जोड़ते समय 'variantId' होना 100% ज़रूरी है भाई!
+  async addCartItem(userId: number, productId: number, variantId: number, quantity: number) {
+    // 1. पहले चेक करें कि क्या यह विशिष्ट वैरिएंट पहले से कार्ट में है
+    const existingCartItem = await db.select().from(cartItems)
+      .where(and(
+        eq(cartItems.userId, userId), 
+        eq(cartItems.productId, productId),
+        eq(cartItems.variantId, variantId) // वैरिएंट आईडी चेक भाई
+      ))
+      .limit(1)
+      .execute();
 
-  // 2. प्रोडक्ट की करंट डिटेल्स निकालें (Price और SellerId के लिए)
-  const [product] = await db.select()
-    .from(products)
-    .where(eq(products.id, productId))
-    .limit(1);
+    // 2. वैरिएंट की करंट लाइव डिटेल्स निकालें (प्राइस के लिए भाई)
+    const [variant] = await db.select()
+      .from(productVariants)
+      .where(eq(productVariants.id, variantId))
+      .limit(1);
 
-  if (!product) {
-    throw new Error("Product not found");
+    const [product] = await db.select()
+      .from(products)
+      .where(eq(products.id, productId))
+      .limit(1);
+
+    if (!variant || !product) {
+      throw new Error("Product Variant or Master Product not found भाई!");
+    }
+
+    const currentPrice = Number(variant.price);
+
+    if (existingCartItem.length > 0) {
+      // ✅ केस ए: क्वांटिटी और टोटल प्राइस अपडेट करो भाई
+      const newQuantity = existingCartItem[0].quantity + quantity;
+      const [updatedItem] = await db.update(cartItems)
+        .set({ 
+          quantity: newQuantity,
+          totalPrice: (currentPrice * newQuantity).toString(),
+          updatedAt: new Date()
+        } as any)
+        .where(eq(cartItems.id, existingCartItem[0].id))
+        .returning();
+      return updatedItem;
+    } else {
+      // ✅ केस बी: बिलकुल नया वैरिएंट कार्ट में इंसर्ट करो भाई
+      const [newItem] = await db.insert(cartItems)
+        .values({ 
+          userId, 
+          productId, 
+          variantId, // ✅ सेव वैरिएंट आईडी
+          quantity,
+          sellerId: product.sellerId, 
+          priceAtAdded: currentPrice.toString(),
+          totalPrice: (currentPrice * quantity).toString(),
+          createdAt: new Date(),
+          updatedAt: new Date()
+        } as any)
+        .returning();
+      return newItem;
+    }
   }
-
-  const currentPrice = Number(product.price);
-
-  if (existingCartItem.length > 0) {
-    // ✅ अपडेट करें: नई क्वांटिटी और नया Total Price
-    const newQuantity = existingCartItem[0].quantity + quantity;
-    const [updatedItem] = await db.update(cartItems)
-      .set({ 
-        quantity: newQuantity,
-        totalPrice: (currentPrice * newQuantity).toString(), // अपडेटेड टोटल
-        updatedAt: new Date()
-      } as any)
-      .where(eq(cartItems.id, existingCartItem[0].id))
-      .returning();
-    return updatedItem;
-  } else {
-    // ✅ नया आइटम डालें: सभी Required Fields के साथ
-    const [newItem] = await db.insert(cartItems)
-      .values({ 
-        userId, 
-        productId, 
-        quantity,
-        sellerId: product.sellerId, // अब Error नहीं आएगी
-        priceAtAdded: currentPrice.toString(),
-        totalPrice: (currentPrice * quantity).toString(),
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as any)
-      .returning();
-    return newItem;
-  }
-}
   async updateCartItem(cartItemId: number, quantity: number) {
     const [updatedItem] = await db.update(cartItems)
       .set({ quantity })
@@ -285,7 +321,8 @@ async createProduct(productData: z.infer<typeof insertProductSchema>) {
   return newOrder;
 }
 
-  async createOrderItems(orderItemsData: z.infer<typeof insertOrderItemSchema>[]) {
+ async createOrderItems(orderItemsData: any[]) {
+    // orderItemsData में अब आपके पास { subOrderId, productId, variantId, quantity, itemTotal, ... } होना चाहिए
     return db.insert(orderItems).values(orderItemsData).returning().execute();
   }
 

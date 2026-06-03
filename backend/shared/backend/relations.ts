@@ -4,7 +4,7 @@ import { relations } from 'drizzle-orm';
 // ✅ सभी स्कीमा ऑब्जेक्ट्स को एक साथ इम्पोर्ट करें
 import { 
   users, sellersPgTable, orders, reviews, serviceProviders, 
-  serviceBookings, cartItems, stores, products, categories, 
+  serviceBookings, cartItems, stores, products,productVariants, categories, 
   deliveryBoys, couponsPgTable, deliveryAddresses, subOrders, 
   deliveryBatches, orderItems, orderTracking, promoCodes, 
   serviceCategories, services 
@@ -65,11 +65,17 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     fields: [products.categoryId],
     references: [categories.id],
   }),
+  variants: many(productVariants),
   cartItems: many(cartItems),
   orderItems: many(orderItems),
   reviews: many(reviews),
 }));
-
+export const productVariantsRelations = relations(productVariants, ({ one }) => ({
+  product: one(products, {
+    fields: [productVariants.productId],
+    references: [products.id],
+  }),
+}));
 export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => ({
   user: one(users, {
     fields: [deliveryBoys.userId],
@@ -92,6 +98,10 @@ export const cartItemsRelations = relations(cartItems, ({ one }) => ({
  product: one(products, { // ✅ यहाँ भी schema.products का उपयोग करें
    fields: [cartItems.productId],
     references: [products.id],
+ }),
+ variant: one(productVariants, {
+   fields: [cartItems.variantId],
+   references: [productVariants.id],
  }),
  seller: one(sellersPgTable, {
     fields: [cartItems.sellerId],
@@ -172,6 +182,10 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
   product: one(products, {
     fields: [orderItems.productId],
     references: [products.id],
+  }),
+  variant: one(productVariants, {
+    fields: [orderItems.variantId],
+    references: [productVariants.id],
   }),
 }));
 

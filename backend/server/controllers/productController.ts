@@ -2,6 +2,7 @@ import { Request, Response, NextFunction } from 'express';
 import { db } from '../db';
 import {
   products,
+  productVariants,
   masterProducts,
   categories as productCategories,
   sellersPgTable,
@@ -347,14 +348,29 @@ if (req.file) {
   }
 }
 
-    const validationErrors = validateProductInput(updateData, true);
+   const validationErrors = validateProductInput(updateData, true);
     if (validationErrors.length > 0) return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
 
-    // 🔥 Calling the High-Class Service
-    const updatedProduct = await ProductService.updateProduct(productId, sellerProfile.id, updateData);
-    if (updatedProduct.stock !== undefined) {
-  await ProductService.checkLowStockAndNotify(updatedProduct.id, updatedProduct.stock, sellerProfile.id);
-}
+    // 🎯 फिक्स: पहले रिक्वेस्ट बॉडी से मुख्य variantId निकालो भाई ताकि नीचे सर्विस कॉल खुश हो जाए!
+    const variantId = Number(updateData.variantId || req.body.variantId || updateData.id);
+
+    // 🔥 Calling the High-Class Service (अब पूरे 4 आर्गुमेंट्स के साथ भाई)
+    const updatedProduct = await ProductService.updateProduct(productId, variantId, sellerProfile.id, updateData);
+
+    // 🎯 जादुई फिक्स: अब हम प्रोडक्ट के बजाय उसके अपडेटेड वैरिएंट्स का स्टॉक चेक करेंगे भाई!
+    if (updateData.variants && Array.isArray(updateData.variants)) {
+      for (const variant of updateData.variants) {
+        if (variant.stock !== undefined) {
+          // 🎯 महा-फिक्स: यहाँ पूरे 4 आर्गुमेंट्स क्रम से पास कर दिए हैं और 'variant.id' को शामिल किया है भाई!
+          await ProductService.checkLowStockAndNotify(
+            productId,             // 1. मुख्य प्रोडक्ट आईडी
+            Number(variant.id),    // 2. विशिष्ट वैरिएंट आईडी (व्हाट्सएप अलर्ट के लिए भाई)
+            Number(variant.stock), // 3. उस वैरिएंट का नया स्टॉक
+            sellerProfile.id       // 4. सेलर आईडी
+          ).catch(err => console.error("Low Stock Alert Error inside Controller:", err));
+        }
+      }
+    }
 
     res.status(200).json({ message: "Product updated successfully.", product: updatedProduct });
   } catch (error) { next(error); }
@@ -375,43 +391,40 @@ export const deleteProduct = async (req: AuthenticatedRequest, res: Response, ne
   } catch (error) { next(error); }
 };
 
+// ✅ 1. सेलर के खुद के प्रोडक्ट्स निकालना (वैरिएंट्स के साथ भाई)
 export const getSellerProducts = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const userId = req.user?.id;
-  // Query se check karein ki kya user trash/deleted items dekhna chahta hai
   const showDeleted = req.query.trash === 'true'; 
   
   if (!userId) return res.status(401).json({ message: "Unauthorized: User ID missing" });
 
   try {
-    // 1. सेलर प्रोफाइल ढूँढें (Yahan sirf seller table ki conditions aayengi)
     const [sellerProfile] = await db
       .select()
       .from(sellersPgTable)
       .where(eq(sellersPgTable.userId, userId));
 
-    // 2. सुरक्षा चेक
     if (!sellerProfile || isNaN(Number(sellerProfile.id))) {
       console.warn(`⚠️ No valid seller profile for User: ${userId}`);
-      return res.status(200).json({ 
-        message: "No products found (Profile missing).", 
-        products: [] 
-      });
+      return res.status(200).json({ message: "No products found (Profile missing).", products: [] });
     }
 
-    // 3. सुरक्षित और "Soft-Delete Aware" क्वेरी
     const sellerProducts = await db.query.products.findMany({
       where: and(
         eq(products.sellerId, Number(sellerProfile.id)),
-        // Agar trash dekhna hai toh isNotNull, varna isNull
         showDeleted ? isNotNull(products.deletedAt) : isNull(products.deletedAt)
       ),
-      with: { category: true },
+      // 🔥 फिक्स: केटेगरी के साथ-साथ अब इसके सारे वैरिएंट्स भी उठकर आएंगे भाई!
+      with: { 
+        category: true,
+        variants: true 
+      },
       orderBy: [desc(products.createdAt)],
     });
 
     res.status(200).json({ 
       message: showDeleted ? "Trash items fetched." : "Active seller products fetched.", 
-      products: sellerProducts.map(p => formatProductWithOffers(p)) 
+      products: sellerProducts // फ़ॉर्मेटिंग अगर चेंज करनी हो तो वैरिएंट्स का ध्यान रखें भाई
     });
 
   } catch (error) { 
@@ -419,6 +432,8 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
     next(error); 
   }
 };
+
+// ✅ 2. सबसे मुख्य: कस्टमर और सर्च के लिए सारे प्रोडक्ट्स लोड करना (SMART FILTER)
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { 
@@ -431,31 +446,26 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
 
-    // 1. Location Data Extract Karein
     const effectivePincode = (pincode?.toString() || customerPincode?.toString() || "").trim();
     const effectiveLat = parseFloat(lat?.toString() || customerLat?.toString() || "");
     const effectiveLng = parseFloat(lng?.toString() || customerLng?.toString() || "");
 
-    // 2. Base Conditions (Approved, Active & NOT Deleted)
-    // ✅ High-Class Sudhar: isNull(products.deletedAt) ko yahan base filter mein dala hai
+    // बेस कंडीशन्स
     const whereClauses: any[] = [
       eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
       eq(products.isActive, true),
       isNull(products.deletedAt) 
     ];
 
-    // 3. ✅ SMART FILTERING LOGIC
+    // लोकेशन / सेलर फ़िल्टर
     if (sellerId) {
-      // CASE A: स्पेसिफिक दुकान के लिए - सीधा ID से फ़िल्टर (लोकेशन बाईपास)
       whereClauses.push(eq(products.sellerId, Number(sellerId)));
     } 
     else {
-      // CASE B: कैटेगरी या जनरल सर्च के लिए - लोकेशन अनिवार्य है!
       if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
         return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai." });
       }
 
-      // अपने एरिया (Bundi vs Kota) के सेलers ढूंढें
       const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
       const deliverableSellerIds: number[] = [];
       const distanceCheckPromises: Promise<void>[] = [];
@@ -480,35 +490,61 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       }
       await Promise.all(distanceCheckPromises);
 
-      // अगर एरिया में कोई सेलर नहीं है, तो खाली एरे भेजें
       if (deliverableSellerIds.length === 0) return res.json({ products: [], total: 0 });
-      
-      // सिर्फ उन सेलर्स के प्रोडक्ट दिखाएं जो आपके एरिया में डिलीवरी दे सकते हैं
       whereClauses.push(inArray(products.sellerId, deliverableSellerIds));
     }
 
-    // 4. Extra Filters (जैसे कैटेगरी, सर्च, प्राइस)
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
-    if (search) {
-      whereClauses.push(ilike(products.name, `%${search}%`));
+    if (search) whereClauses.push(ilike(products.name, `%${search}%`));
+
+    // 🎯 प्लान 2 (डिस्काउंट/प्राइस फ़िल्टर): अब मिन/मैक्स प्राइस वैरिएंट टेबल के हिसाब से तय होगी भाई!
+    // हम उन प्रोडक्ट्स को ढूँढेंगे जिनके पास कम से कम एक ऐसा वैरिएंट हो जो इस प्राइस रेंज में आता हो
+    if (minPrice || maxPrice) {
+      const min = Number(minPrice || 0);
+      const max = Number(maxPrice || 999999);
+      
+      whereClauses.push(
+        sql`exists (
+          select 1 from ${productVariants} 
+          where ${productVariants.productId} = ${products.id} 
+          and ${productVariants.price} >= ${min} 
+          and ${productVariants.price} <= ${max}
+          and ${productVariants.isActive} = true
+        )`
+      );
     }
-    if (minPrice) whereClauses.push(sql`${products.price} >= ${Number(minPrice)}`);
-    if (maxPrice) whereClauses.push(sql`${products.price} <= ${Number(maxPrice)}`);
 
-    // 5. Sorting Logic
+    // सॉर्टिंग लॉजिक
     const orderBy = [];
-    if (sortBy === 'price') orderBy.push(sortOrder === 'asc' ? asc(products.price) : desc(products.price));
-    else if (sortBy === 'name') orderBy.push(sortOrder === 'asc' ? asc(products.name) : desc(products.name));
-    else orderBy.push(desc(products.createdAt));
+    if (sortBy === 'name') {
+      orderBy.push(sortOrder === 'asc' ? asc(products.name) : desc(products.name));
+    } else if (sortBy === 'price') {
+      // 🔥 अगर प्राइस के आधार पर सॉर्ट करना है, तो हमें वैरिएंट के मिनिमम प्राइस के सबक्वेरी का सहारा लेना होगा भाई
+      orderBy.push(
+        sortOrder === 'asc' 
+          ? asc(sql`(select min(${productVariants.price}) from ${productVariants} where ${productVariants.productId} = ${products.id})`)
+          : desc(sql`(select min(${productVariants.price}) from ${productVariants} where ${productVariants.productId} = ${products.id})`)
+      );
+    } else {
+      orderBy.push(desc(products.createdAt));
+    }
 
-    // 6. Execute Queries
-    // ✅ Yahan and(...whereClauses) se sare filters ek sath apply hote hain
+    // कुल प्रोडक्ट्स की गिनती
     const [totalCountResult] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
     const totalCount = Number(totalCountResult?.count || 0);
     
+    // फाइनल डेटा फैचिंग
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
-      with: { category: true, seller: { with: { user: true } } },
+      // 🔥 जादुई रिलेशंस: कैटेगरी, सेलर और उसके सारे लाइव वैरिएंट्स एक साथ लोड होंगे!
+      with: { 
+        category: true, 
+        seller: { with: { user: true } },
+        variants: {
+          where: eq(productVariants.isActive, true),
+          orderBy: [asc(productVariants.price)] // सबसे कम कीमत वाला वैरिएंट पहले दिखेगा भाई
+        }
+      },
       orderBy: orderBy,
       limit: limitNum,
       offset: offset,
@@ -519,7 +555,7 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       limit: limitNum,
       total: totalCount,
       totalPages: Math.ceil(totalCount / limitNum),
-      products: productList.map(p => formatProductWithOffers(p)),
+      products: productList,
     });
 
   } catch (error) { 
@@ -527,17 +563,20 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     next(error); 
   }
 };
+
+// ✅ 3. एडमिन के लिए पेंडिंग प्रोडक्ट्स (वैरिएंट्स के साथ भाई)
 export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pending = await db.query.products.findMany({
       where: eq(products.approvalStatus, approvalStatusEnum.enumValues[0]),
-      with: { category: true, seller: true },
+      with: { category: true, seller: true, variants: true },
       orderBy: [desc(products.createdAt)],
     });
     res.status(200).json(pending);
   } catch (error) { next(error); }
 };
 
+// ✅ 4. प्रोडक्ट अप्रूव करना
 export const approveProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() })
@@ -546,6 +585,7 @@ export const approveProduct = async (req: Request, res: Response, next: NextFunc
   } catch (error) { next(error); }
 };
 
+// ✅ 5. प्रोडक्ट रिजेक्ट करना
 export const rejectProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[2], rejectionReason: req.body.reason, updatedAt: new Date() })
@@ -553,11 +593,12 @@ export const rejectProduct = async (req: Request, res: Response, next: NextFunct
     res.status(200).json({ message: "Rejected", product: updated });
   } catch (error) { next(error); }
 };
+
+// ✅ 6. आईडी से सिंगल प्रोडक्ट की पूरी कुंडली निकालना (Details Screen के लिए भाई)
 export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const productId = Number(req.params.id);
 
-    // 🛡️ सुरक्षा: अगर ID नंबर नहीं है (NaN), तो डेटाबेस क्वेरी न करें
     if (isNaN(productId)) {
       console.error("❌ Invalid Product ID received:", req.params.id);
       return res.status(400).json({ message: "Invalid product identifier." });
@@ -569,12 +610,19 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
         eq(products.isActive, true), 
         eq(products.approvalStatus, approvalStatusEnum.enumValues[1])
       ),
-      with: { category: true, seller: { with: { user: true } } }
+      // 🔥 यहाँ भी वैरिएंट्स लोड करना बेहद ज़रूरी है भाई, तभी तो कस्टमर ड्रॉपडाउन में साइज़ चुन पाएगा!
+      with: { 
+        category: true, 
+        seller: { with: { user: true } },
+        variants: {
+          where: eq(productVariants.isActive, true)
+        }
+      }
     });
 
     if (!product) return res.status(404).json({ message: "Product not found." });
     
-    res.status(200).json(formatProductWithOffers(product));
+    res.status(200).json(product);
 
   } catch (error) { 
     console.error("❌ getProductById Error:", error);

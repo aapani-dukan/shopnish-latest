@@ -13,6 +13,7 @@ import {
   cartItems,
   orderTracking,
   products,
+  productVariants,
   users,
   masterOrderStatusEnum, 
   subOrderStatusEnum, 
@@ -195,7 +196,7 @@ async function handleDeliveryAddress(
  * handles placing a direct "buy now" order.
  */
 export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log("🚀 [API] Received request to place buy now order.");
+  console.log("🚀 [API] Received request to place buy now order. Full Checkup Mode.");
   const userId = req.user?.id;
 
   if (!userId) {
@@ -247,122 +248,140 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
       return res.status(400).json({ message: "subtotal, total, and deliveryCharge must be valid numbers." });
     }
 
-     const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
+    const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
     
-   // Server-side transaction
-const result = await db.transaction(async (tx) => {
-  try {
-    // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
-    let finalDeliveryAddressId = deliveryAddressId;
-    
-    // Variables ko top-level declare kiya taaki pooray transaction mein access rahe
-    let finalDeliveryLat: string | null = null;
-    let finalDeliveryLng: string | null = null;
-    
-    if (newDeliveryAddress?.latitude != null) {
-      finalDeliveryLat = String(newDeliveryAddress.latitude);
-    }
-    if (newDeliveryAddress?.longitude != null) {
-      finalDeliveryLng = String(newDeliveryAddress.longitude);
-    }
-    
-    let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
-    let finalCity = newDeliveryAddress?.city || "";
-    let finalState = newDeliveryAddress?.state || "";
-    let finalPincode = newDeliveryAddress?.postalCode || "";
-    
-    // req.user logic fix (name and phoneNumber mapping)
-    let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
-    let finalPhone = userPhoneNumberForUpdate || newDeliveryAddress?.phoneNumber || req.user?.phoneNumber || "N/A";
-
-    if (!finalDeliveryAddressId && newDeliveryAddress) {
-      console.log("📌 [ADDRESS FIX]: Registering new delivery address inside DB directly...");
-      
-      // Direct insert query taaki table hamesha full rahe
-      const [insertedAddress] = await tx.insert(deliveryAddresses).values({
-        userId: userId,
-        fullName: finalCustomerName,
-        phoneNumber: finalPhone,
-        addressLine1: finalDeliveryAddressJson,
-        addressLine2: newDeliveryAddress.addressLine2 || null,
-        city: finalCity,
-        state: finalState,
-        postalCode: finalPincode,
-        latitude: finalDeliveryLat,
-        longitude: finalDeliveryLng,
-        isDefault: false,
-        createdAt: new Date(),
-        updatedAt: new Date()
-      } as any).returning({ id: deliveryAddresses.id });
-
-      if (insertedAddress) {
-        finalDeliveryAddressId = insertedAddress.id;
-        console.log(`✅ [ADDRESS FIX]: Saved in table with ID: ${finalDeliveryAddressId}`);
-      }
-    } else if (finalDeliveryAddressId) {
-      // Agar ID pehle se hai, toh safety ke liye details fetch kar lo
-      const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
-      if (existingAddr) {
-        // 🎯 FIXED: Idhar se duplicate 'let' hata kar direct main variables ko update kiya hai
-        if (existingAddr.latitude != null) finalDeliveryLat = String(existingAddr.latitude);
-        if (existingAddr.longitude != null) finalDeliveryLng = String(existingAddr.longitude);
+    // Server-side transaction
+    const result = await db.transaction(async (tx) => {
+      try {
+        // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
+        let finalDeliveryAddressId = deliveryAddressId;
         
-        finalDeliveryAddressJson = existingAddr.addressLine1 || "";
-        finalCity = existingAddr.city || "";
-        finalState = existingAddr.state || "";
-        finalPincode = existingAddr.postalCode || "";
-        finalCustomerName = existingAddr.fullName || finalCustomerName;
-        finalPhone = existingAddr.phoneNumber || finalPhone;
-      }
-    }
+        let finalDeliveryLat: string | null = null;
+        let finalDeliveryLng: string | null = null;
+        
+        if (newDeliveryAddress?.latitude != null) {
+          finalDeliveryLat = String(newDeliveryAddress.latitude);
+        }
+        if (newDeliveryAddress?.longitude != null) {
+          finalDeliveryLng = String(newDeliveryAddress.longitude);
+        }
+        
+        let finalDeliveryAddressJson = newDeliveryAddress?.addressLine1 || "";
+        let finalCity = newDeliveryAddress?.city || "";
+        let finalState = newDeliveryAddress?.state || "";
+        let finalPincode = newDeliveryAddress?.postalCode || "";
+        
+        let finalCustomerName = newDeliveryAddress?.fullName || req.user?.name || "Customer";
+        let finalPhone = userPhoneNumberForUpdate || newDeliveryAddress?.phoneNumber || req.user?.phoneNumber || "N/A";
 
-    // --- Users Table Phone Sync ---
-    if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
-      await tx.update(users)
-        .set({
-          phone: userPhoneNumberForUpdate,
-          updatedAt: new Date(),
-        })
-        .where(eq(users.id, userId));
-      console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
-    }
+        if (!finalDeliveryAddressId && newDeliveryAddress) {
+          console.log("📌 [ADDRESS FIX]: Registering new delivery address inside DB directly...");
+          
+          const [insertedAddress] = await tx.insert(deliveryAddresses).values({
+            userId: userId,
+            fullName: finalCustomerName,
+            phoneNumber: finalPhone,
+            addressLine1: finalDeliveryAddressJson,
+            addressLine2: newDeliveryAddress.addressLine2 || null,
+            city: finalCity,
+            state: finalState,
+            postalCode: finalPincode,
+            latitude: finalDeliveryLat,
+            longitude: finalDeliveryLng,
+            isDefault: false,
+            createdAt: new Date(),
+            updatedAt: new Date()
+          } as any).returning({ id: deliveryAddresses.id });
 
-    // --- Fetch product(s) and validate each item ---
-    let calculatedSubtotal = 0;
-    const validatedItems: Array<{
-      productId: number;
-      product: any;
-      unitPrice: number;
-      quantity: number;
-      itemTotal: number;
-    }> = [];
+          if (insertedAddress) {
+            finalDeliveryAddressId = insertedAddress.id;
+            console.log(`✅ [ADDRESS FIX]: Saved in table with ID: ${finalDeliveryAddressId}`);
+          }
+        } else if (finalDeliveryAddressId) {
+          const [existingAddr] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+          if (existingAddr) {
+            if (existingAddr.latitude != null) finalDeliveryLat = String(existingAddr.latitude);
+            if (existingAddr.longitude != null) finalDeliveryLng = String(existingAddr.longitude);
+            
+            finalDeliveryAddressJson = existingAddr.addressLine1 || "";
+            finalCity = existingAddr.city || "";
+            finalState = existingAddr.state || "";
+            finalPincode = existingAddr.postalCode || "";
+            finalCustomerName = existingAddr.fullName || finalCustomerName;
+            finalPhone = existingAddr.phoneNumber || finalPhone;
+          }
+        }
 
-    for (const it of normalizedItems) {
-      const productId = Number(it.productId);
-      const quantity = Number(it.quantity ?? 1);
-      if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
-      if (!quantity || Number.isNaN(quantity) || quantity <= 0) { throw new Error("Invalid quantity in item."); }
-      
-      const [product] = await tx.select().from(products).where(eq(products.id, productId));
-      if (!product) { throw new Error(`Product ${productId} not found.`); }
-      if (product.approvalStatus !== "approved") { throw new Error(`Product ${productId} is not available or not approved.`); }
-      if (product.minOrderQty && quantity < product.minOrderQty) { throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`); }
-      if (product.maxOrderQty && quantity > product.maxOrderQty) { throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`); }
-      
-      const unitPrice = Number(it.priceAtAdded ?? it.unitPrice ?? product.price);
-      if (Number.isNaN(unitPrice)) { throw new Error(`Invalid unit price for product ${productId}.`); }
-      
-      const itemTotalPrice = unitPrice * quantity;
-      calculatedSubtotal += itemTotalPrice;
+        // --- Users Table Phone Sync ---
+        if (userPhoneNumberForUpdate && typeof userPhoneNumberForUpdate === 'string' && userPhoneNumberForUpdate.length >= 10) {
+          await tx.update(users)
+            .set({
+              phone: userPhoneNumberForUpdate,
+              updatedAt: new Date(),
+            })
+            .where(eq(users.id, userId));
+          console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
+        }
 
-      validatedItems.push({
-        productId,
-        product,
-        unitPrice,
-        quantity,
-        itemTotal: itemTotalPrice,
-      });
-    }
+        // --- 🔥 Fetch product(s) and validate each item via VARIANT TABLE ---
+        let calculatedSubtotal = 0;
+        const validatedItems: Array<{
+          productId: number;
+          variantId: number;
+          productName: string;
+          productImage: string;
+          variantName: string; 
+          productUnit: string;
+          unitPrice: number;
+          quantity: number;
+          itemTotal: number;
+        }> = [];
+
+        for (const it of normalizedItems) {
+          const productId = Number(it.productId);
+          const variantId = Number(it.variantId); // 🔥 वैरिएंट आईडी मैपिंग भाई
+          const quantity = Number(it.quantity ?? 1);
+          
+          if (!productId || Number.isNaN(productId)) { throw new Error("Invalid productId in item."); }
+          if (!variantId || Number.isNaN(variantId)) { throw new Error("Invalid variantId in item. Variant choice is mandatory ভাই!"); }
+          if (!quantity || Number.isNaN(quantity) || quantity <= 0) { throw new Error("Invalid quantity in item."); }
+          
+          // मुख्य प्रोडक्ट से बेसिक नाम और इमेज निकालें भाई
+          const [product] = await tx.select().from(products).where(eq(products.id, productId));
+          if (!product) { throw new Error(`Product ${productId} not found.`); }
+          if (product.approvalStatus !== "approved") { throw new Error(`Product ${productId} is not available or not approved.`); }
+          
+          // 🎯 अब लिमिट और प्राइस सीधा वैरिएंट टेबल से वैलिडेट होगी भाई
+          const [variant] = await tx.select().from(productVariants).where(and(eq(productVariants.id, variantId), eq(productVariants.productId, productId)));
+          if (!variant) { throw new Error(`Product Variant not found for variantId: ${variantId}`); }
+          if (!variant.isActive) { throw new Error(`Selected variant is currently inactive.`); }
+
+          if (variant.minOrderQty && quantity < variant.minOrderQty) { 
+            throw new Error(`Minimum order quantity for ${product.name} (${variant.quantityValue} ${variant.unit}) is ${variant.minOrderQty}.`); 
+          }
+          if (variant.maxOrderQty && quantity > variant.maxOrderQty) { 
+            throw new Error(`Maximum order quantity for ${product.name} (${variant.quantityValue} ${variant.unit}) is ${variant.maxOrderQty}.`); 
+          }
+          
+          const unitPrice = Number(variant.price);
+          if (Number.isNaN(unitPrice)) { throw new Error(`Invalid unit price for product ${productId}.`); }
+          
+          const itemTotalPrice = unitPrice * quantity;
+          calculatedSubtotal += itemTotalPrice;
+
+          validatedItems.push({
+            productId,
+            variantId,
+            productName: product.name,
+            productImage: product.image,
+            variantName: `${variant.quantityValue} ${variant.unit}`, // "500 Gram" स्नैपशॉट लॉजिक भाई
+            productUnit: variant.unit,
+            unitPrice,
+            quantity,
+            itemTotal: itemTotalPrice,
+          });
+        }
+
         // Compare calculatedSubtotal with client-provided subtotal
         if (Math.abs(calculatedSubtotal - subtotal) > 0.01) {
           throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
@@ -373,46 +392,36 @@ const result = await db.transaction(async (tx) => {
           throw new Error('Calculated total (subtotal + deliveryCharge) does not match provided total.');
         }
 
-        // 1. Create master order
-const [masterOrder] = await tx.insert(orders).values({
-    
-    orderNumber: `SN-BND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, 
-    
-    customerId: userId,
-    deliveryAddressId: finalDeliveryAddressId,
-    
-    // FIX: एड्रेस को स्ट्रिंग बनाकर डालना एकदम सही है (JSON.stringify)
-    deliveryAddress:finalDeliveryAddressJson,
-    deliveryCity: finalCity,
-    deliveryState: finalState,
-    deliveryPincode: finalPincode,
-    deliveryLat: finalDeliveryLat,
-    deliveryLng: finalDeliveryLng,
-    subtotal: calculatedSubtotal,
-    deliveryCharge: deliveryCharge,
-    total: total,
-    
-    // FIX APPLIED: Payment method converted to uppercase
-    paymentMethod: paymentMethod.toUpperCase(), 
-    
-    paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
-    
-    // यह पहली बार है जब ये कीज़ परिभाषित की गई हैं
-    status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
-    deliveryInstructions: deliveryInstructions || null,
-    createdAt: new Date(),
-    updatedAt: new Date(),
-}as any).returning({ 
-    id: orders.id, 
-    orderNumber: orders.orderNumber, 
-    customerId: orders.customerId,
-    total: orders.total, 
-    status: orders.status, 
-    createdAt: orders.createdAt 
-});
+        // 1. Create master order (पूरे पेलोड के साथ भाई)
+        const [masterOrder] = await tx.insert(orders).values({
+            orderNumber: `SN-BND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, 
+            customerId: userId,
+            deliveryAddressId: finalDeliveryAddressId,
+            deliveryAddress: finalDeliveryAddressJson,
+            deliveryCity: finalCity,
+            deliveryState: finalState,
+            deliveryPincode: finalPincode,
+            deliveryLat: finalDeliveryLat,
+            deliveryLng: finalDeliveryLng,
+            subtotal: calculatedSubtotal,
+            deliveryCharge: deliveryCharge,
+            total: total,
+            paymentMethod: paymentMethod.toUpperCase(), 
+            paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
+            status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
+            deliveryInstructions: deliveryInstructions || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        } as any).returning({ 
+            id: orders.id, 
+            orderNumber: orders.orderNumber, 
+            customerId: orders.customerId,
+            total: orders.total, 
+            status: orders.status, 
+            createdAt: orders.createdAt 
+        });
 
-if (!masterOrder) throw new Error('Failed to create master order.');
-
+        if (!masterOrder) throw new Error('Failed to create master order.');
 
         // 2. Create sub-order for the seller (buy-now expects single seller)
         const [sellerStore] = await tx.select().from(stores).where(eq(stores.sellerId, sellerId)).limit(1);
@@ -437,109 +446,103 @@ if (!masterOrder) throw new Error('Failed to create master order.');
 
         if (!subOrder) throw new Error('Failed to create sub-order.');
 
-      // 3. Insert order items & Update Inventory
-for (const vItem of validatedItems) {
-    // A. Item Insert Karein
-    await tx.insert(orderItems).values({
-        subOrderId: subOrder.id,
-        orderId: masterOrder.id,
-        sellerId: sellerId,
-        userId: userId,
-        productId: vItem.productId,
-        productName: vItem.product.name,
-        productImage: vItem.product.image,
-        productPrice: vItem.unitPrice,
-        productUnit: vItem.product.unit,
-        quantity: vItem.quantity, // <--- Dynamic Quantity
-        itemTotal: vItem.itemTotal,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    } as any);
+        // 3. 🔥 Insert order items & Update Inventory (वैरिएंट टेबल के अनुसार भाई!)
+        for (const vItem of validatedItems) {
+            // A. Item Insert Karein (वैरिएंट आईडी और वैरिएंट नाम के साथ भाई)
+            await tx.insert(orderItems).values({
+                subOrderId: subOrder.id,
+                orderId: masterOrder.id,
+                sellerId: sellerId,
+                userId: userId,
+                productId: vItem.productId,
+                variantId: vItem.variantId, // ✅ नया कॉलम शामिल भाई
+                productName: vItem.productName,
+                variantName: vItem.variantName, // ✅ नया वैरिएंट स्नैपशॉट शामिल भाई
+                productImage: vItem.productImage,
+                productPrice: vItem.unitPrice,
+                productUnit: vItem.productUnit,
+                quantity: vItem.quantity, 
+                itemTotal: vItem.itemTotal,
+                status: 'pending',
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            } as any);
 
-    // B. Inventory Update (Loop ke andar taaki har item ka stock kam ho)
-    const [updatedProduct] = await tx
-      .update(products)
-      .set({ 
-        stock: sql`${products.stock} - ${vItem.quantity}`, // <--- Dynamic Quantity Minus
-        updatedAt: new Date() 
-      })
-      .where(
-        and(
-          eq(products.id, vItem.productId),
-          sql`${products.stock} >= ${vItem.quantity}`, // Stock check
-          isNull(products.deletedAt) // Soft delete check
-        )
-      )
-      .returning({
-        id: products.id,
-        stock: products.stock,
-        sellerId: products.sellerId,
-        name: products.name
-      });
+            // B. Inventory Update (अब विशिष्ट वैरिएंट का स्टॉक कम होगा भाई!)
+            const [updatedVariant] = await tx
+              .update(productVariants)
+              .set({ 
+                stock: sql`${productVariants.stock} - ${vItem.quantity}`, 
+                updatedAt: new Date() 
+              })
+              .where(
+                and(
+                  eq(productVariants.id, vItem.variantId),
+                  sql`${productVariants.stock} >= ${vItem.quantity}`,
+                  eq(productVariants.isActive, true)
+                )
+              )
+              .returning({
+                id: productVariants.id,
+                stock: productVariants.stock,
+              });
 
-    // C. Validation Check
-    if (!updatedProduct) {
-      throw new Error(`Maaf kijiye, ${vItem.product.name} ka paryapt stock nahi hai.`);
-    }
+            // C. Validation Check
+            if (!updatedVariant) {
+              throw new Error(`Maaf kijiye, ${vItem.productName} (${vItem.variantName}) ka paryapt stock nahi hai भाई!`);
+            }
 
-    // D. Trigger Low Stock Alert (Background Task)
-   // ✅ Check karein ki variables null nahi hain
-if (updatedProduct && updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
-    ProductService.checkLowStockAndNotify(
-      updatedProduct.id, 
-      updatedProduct.stock as number, // Force cast to number
-      updatedProduct.sellerId as number
-    ).catch(err => console.error("Low Stock Alert Error:", err));
-  }
-}
+            // D. Trigger Low Stock Alert for Variant (Background Task)
+            if (updatedVariant && updatedVariant.stock !== null) {
+              ProductService.checkLowStockAndNotify(
+                vItem.productId, 
+                vItem.variantId,
+                updatedVariant.stock as number, 
+                Number(sellerId)
+              ).catch(err => console.error("Low Stock Alert Error:", err));
+            }
+        }
 
-// 4. Delivery batching if not self-delivery
-if (!isSelfDelivery) {
-    // 🏦 A. Admin Settings se rates fetch karein
-    const [settings] = await tx.select().from(adminSettings).limit(1);
-    
-    const basePay = Number(settings?.baseDeliveryCharge || 20);
-    const kmRate = Number(settings?.chargePerKm || 5);
-    const extraShopBonus = Number(settings?.extraPickupCharge || 15);
-    
-    // 📍 B. Distance aur Shop count (Filhaal Buy Now mein 1 hi shop hogi)
-    const distance = Number(settings?.defaultDeliveryRadiusKm || 3); 
-    const shopCount = 1; // Buy Now order hai toh dukan ek hi hogi
+        // 4. 🚖 DELIVERY BATCHING LOGIC (आपकी पुरानी फ़ाइल से हुबहू शामिल भाई!)
+        if (!isSelfDelivery) {
+            // 🏦 Admin Settings se rates fetch karein
+            const [settings] = await tx.select().from(adminSettings).limit(1);
+            
+            const basePay = Number(settings?.baseDeliveryCharge || 20);
+            const kmRate = Number(settings?.chargePerKm || 5);
+            const extraShopBonus = Number(settings?.extraPickupCharge || 15);
+            
+            const distance = Number(settings?.defaultDeliveryRadiusKm || 3); 
+            const shopCount = 1; 
 
-    // 💰 C. FINAL EARNING CALCULATION
-    const calculatedFee = basePay + (distance * kmRate) + ((shopCount - 1) * extraShopBonus);
+            // 💰 FINAL EARNING CALCULATION
+            const calculatedFee = basePay + (distance * kmRate) + ((shopCount - 1) * extraShopBonus);
 
-    // 📝 D. Batch Insert (With Fixed Earning)
-    const [deliveryBatch] = await tx.insert(deliveryBatches).values({
-        masterOrderId: masterOrder.id,
-        deliveryBoyId: null,
-        customerDeliveryAddressId: finalDeliveryAddressId,
-        status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
-        
-        // ✅ Ye naye fields jo humne schema mein add kiye hain
-        deliveryFee: Math.round(calculatedFee), 
-        totalDistance: distance.toString(),
-        pickupCount: shopCount,
+            // 📝 Batch Insert
+            const [deliveryBatch] = await tx.insert(deliveryBatches).values({
+                masterOrderId: masterOrder.id,
+                deliveryBoyId: null,
+                customerDeliveryAddressId: finalDeliveryAddressId,
+                status: deliveryStatusEnum.enumValues?.[0] ?? 'pending',
+                deliveryFee: Math.round(calculatedFee), 
+                totalDistance: distance.toString(),
+                pickupCount: shopCount,
+                estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), 
+                createdAt: new Date(),
+                updatedAt: new Date(),
+            }).returning({ id: deliveryBatches.id });
 
-        estimatedDeliveryTime: new Date(Date.now() + 60 * 60 * 1000), 
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    }).returning({ id: deliveryBatches.id });
+            await tx.update(subOrders)
+                .set({ deliveryBatchId: deliveryBatch.id })
+                .where(eq(subOrders.id, subOrder.id));
+        }
 
-    await tx.update(subOrders)
-        .set({ deliveryBatchId: deliveryBatch.id })
-        .where(eq(subOrders.id, subOrder.id));
-}
-
-        // 🛑 FIX: subOrder par depend rehne ki bajaye seedha 'sellerId' use karein 
-        // jo function ke input arguments mein pehle se available hai.
         const [sellerUser] = await tx
             .select({ fcmToken: users.fcmToken })
             .from(users)
-            .where(eq(users.id, sellerId)) // sellerId seedha input se liya
+            .where(eq(users.id, sellerId)) 
             .limit(1);
 
-        // ✅ Sab kuch return karein
         return { 
             masterOrder, 
             subOrder, 
@@ -547,90 +550,67 @@ if (!isSelfDelivery) {
         };
 
       } catch (error: any) {
-        console.error("❌ Error placing buy now order:", error);
+        console.error("❌ Error placing buy now order inside transaction:", error);
         throw error; 
       }
     }); 
 
-    // 🔥 TRING TRING LOGIC
-    // 🔥 TRING TRING LOGIC (100% Non-Blocking & Safe Direct DB Fetch)
-const finalResult = result as any;
-const sellerIdForNotification = sellerId || finalResult.subOrder?.sellerId || finalResult.masterOrder?.sellerId;
+    // 🔥 BACKGROUND TRING TRING NOTIFICATION LOGIC
+    const finalResult = result as any;
+    const sellerIdForNotification = sellerId || finalResult.subOrder?.sellerId;
 
-if (sellerIdForNotification) {
-  // 🚨 YE ASYNC BLOCK APP KO SLOW HONE SE BACHAYEGA (Background Execution)
-  (async () => {
-    try {
-      // 1. Sellers table se userId nikaalein
-      const [sellerRow] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.id, Number(sellerIdForNotification)))
-        .limit(1);
+    if (sellerIdForNotification) {
+      (async () => {
+        try {
+          const [sellerRow] = await db
+            .select()
+            .from(sellersPgTable)
+            .where(eq(sellersPgTable.id, Number(sellerIdForNotification)))
+            .limit(1);
 
-      if (sellerRow && sellerRow.userId) {
-        // 2. Users table se fcm_token nikaalein
-        const [userRow] = await db
-          .select()
-          .from(users)
-          .where(eq(users.id, Number(sellerRow.userId)))
-          .limit(1);
+          if (sellerRow && sellerRow.userId) {
+            const [userRow] = await db
+              .select()
+              .from(users)
+              .where(eq(users.id, Number(sellerRow.userId)))
+              .limit(1);
 
-        if (userRow && userRow.fcmToken) {
-          console.log(`📡 [FCM PUSH]: Token found in DB! Sending siren to: ${userRow.fcmToken.substring(0, 15)}...`);
-          
-          // Helper function call kiya
-          await sendNotification(
-            userRow.fcmToken, 
-            "🚨 Naya Order Aaya Hai!",
-            `Order #${finalResult.masterOrder?.orderNumber || ''} mila hai. ₹${finalResult.masterOrder?.total || ''} ka dhandha!`,
-            { 
-              orderId: String(finalResult.masterOrder?.id || ''), 
-              type: "NEW_ORDER" 
+            if (userRow && userRow.fcmToken) {
+              await sendNotification(
+                userRow.fcmToken, 
+                "🚨 Naya Order Aaya Hai!",
+                `Order #${finalResult.masterOrder?.orderNumber || ''} mila hai. ₹${finalResult.masterOrder?.total || ''} ka dhandha!`,
+                { 
+                  orderId: String(finalResult.masterOrder?.id || ''), 
+                  type: "NEW_ORDER" 
+                }
+              );
             }
-          );
-          console.log("🔔 [FCM Success]: Background siren notification sent via DB Token!");
-        } else {
-          console.log("⚠️ [FCM Error]: Users table mein fcm_token khali (null) hai!");
+          }
+        } catch (dbFetchErr) {
+          console.error("❌ [FCM DB Fetch Error]:", dbFetchErr);
         }
-      } else {
-        console.log("⚠️ [FCM Error]: Sellers table mein id nahi mili ya userId missing hai!");
-      }
-    } catch (dbFetchErr) {
-      console.error("❌ [FCM DB Fetch Error]: Background notification bypass fail hua:", dbFetchErr);
+      })(); 
     }
-  })(); // 👈 Yeh parenthesis isko background mein turant chala deti hai
-} else {
-  console.log("⚠️ [FCM Error]: Id hi nahi mili, notification skip ho gaya.");
-}
-// 🌐 Socket.io Events
-    console.log("🔍 [SOCKET]: Starting targeted alert process...");
-    const io = getIO();
 
-    // 1. 👤 CUSTOMER KO UPDATE (Pehele ki tarah)
+    // 🌐 Realtime Sockets Sync
+    const io = getIO();
     io.emit(`user:${userId}`, { 
       type: 'order-placed', 
       order: finalResult.masterOrder, 
       subOrder: finalResult.subOrder 
     });
 
-    // 2. 🏪 SELLERS KO TARGETED ALERT (Direct Hit Logic)
-    const targetSellerId = sellerId || finalResult.subOrder?.sellerId;
-
-    if (targetSellerId) {
+    if (sellerIdForNotification) {
       const emitOrderAlert = async (sId: any) => {
         let sellerUserId = null;
-
         try {
           const [sellerInfo] = await db
             .select()
             .from(sellersPgTable)
             .where(eq(sellersPgTable.id, Number(sId)))
             .limit(1);
-          
-          if (sellerInfo) {
-            sellerUserId = sellerInfo.userId;
-          }
+          if (sellerInfo) sellerUserId = sellerInfo.userId;
         } catch (dbErr) {
           console.error("❌ [SOCKET DB ERROR]:", dbErr);
         }
@@ -644,30 +624,19 @@ if (sellerIdForNotification) {
           createdAt: finalResult.masterOrder?.createdAt,
         };
 
-        // A. Web Dashboard (Room logic - Backup)
         io.to(`seller_room_${sId}`).emit("new-order", orderData);
 
-        // B. Mobile App (🚨 Direct Event Hit - The Solution)
         if (sellerUserId) {
-         
           const userSpecificEvent = `new-order-user-${sellerUserId}`;
-          
           io.emit(userSpecificEvent, orderData); 
-          
-          console.log(`🎯 [DIRECT HIT]: Signal sent to ${userSpecificEvent}`);
-          console.log(`📱 [Socket]: Room backup also sent to user_room_${sellerUserId}`);
           io.to(`user_room_${sellerUserId}`).emit("new-order", orderData);
-        } else {
-          console.log("⚠️ [Socket Warning]: sellerUserId nahi mila.");
         }
       };
-
-      await emitOrderAlert(targetSellerId);
+      await emitOrderAlert(sellerIdForNotification);
     }
 
-    // ✅ Success Response
     return res.status(201).json({
-      message: "Order placed successfully!",
+      message: "Order placed successfully with all configurations!",
       orderId: finalResult.masterOrder.id,
       orderNumber: finalResult.masterOrder.orderNumber,
       data: finalResult.masterOrder,
@@ -796,19 +765,26 @@ const result = await db.transaction(async (tx) => {
         .where(eq(users.id, userId));
       console.log(`User ${userId} phone number updated to ${userPhoneNumberForUpdate} during order placement.`);
     }
+       // 🔥 पार्ट 1: कार्ट आइटम्स को लोड करना (वैरिएंट रिलेशन के साथ भाई)
         const userCartItems = await tx.query.cartItems.findMany({
           where: eq(cartItems.userId, userId),
           with: {
             product: {
               columns: {
-                id: true, name: true, price: true, sellerId: true, approvalStatus: true,
-                minOrderQty: true, maxOrderQty: true, image: true, unit: true,
+                id: true, name: true, sellerId: true, approvalStatus: true, image: true,
+              }
+            },
+            // यहाँ जादुई वैरिएंट्स टेबल को कनेक्ट कर दिया भाई
+            variant: {
+              columns: {
+                id: true, quantityValue: true, unit: true, price: true, 
+                minOrderQty: true, maxOrderQty: true, stock: true, isActive: true
               }
             },
             seller: {
-                columns: {
-                    id: true, businessName: true, isSelfDeliveryBySeller: true,
-                }
+              columns: {
+                id: true, businessName: true, isSelfDeliveryBySeller: true,
+              }
             }
           }
         });
@@ -820,28 +796,44 @@ const result = await db.transaction(async (tx) => {
         let masterOrderCalculatedSubtotal = 0;
         let masterOrderCalculatedDeliveryCharge = 0;
 
-        // --- ग्रुपिंग और प्रारंभिक वैलिडेशन ---
-        const groupedBySeller = new Map<number, (typeof cartItems.$inferSelect & { product: typeof products.$inferSelect })[]>();
+      // 🔥 पार्ट 2: लूप के अंदर वैरिएंट आधारित वैलिडेशन भाई
+        const groupedBySeller = new Map<number, any[]>();
 
         for (const cartItem of userCartItems) {
             const product = cartItem.product;
+            const variant = cartItem.variant; // कार्ट आइटम से जुड़ा वैरिएंट
+
             if (!product || product.approvalStatus !== 'approved') {
               console.warn(`[order_from_cart] Product ${cartItem.productId} not found or not approved, skipping.`);
               continue;
             }
-            if (product.minOrderQty && cartItem.quantity < product.minOrderQty) {
-              throw new Error(`Minimum order quantity for ${product.name} is ${product.minOrderQty}.`);
+            if (!variant || !variant.isActive) {
+              throw new Error(`Maaf kijiye, ${product.name} ka chuna hua size abhi upalabdh nahi hai भाई!`);
             }
-            if (product.maxOrderQty && cartItem.quantity > product.maxOrderQty) {
-              throw new Error(`Maximum order quantity for ${product.name} is ${product.maxOrderQty}.`);
+
+            // 🎯 लिमिट चेक अब सीधा वैरिएंट टेबल से होगी भाई
+            if (variant.minOrderQty && cartItem.quantity < variant.minOrderQty) {
+              throw new Error(`Minimum order quantity for ${product.name} (${variant.quantityValue} ${variant.unit}) is ${variant.minOrderQty}.`);
+            }
+            if (variant.maxOrderQty && cartItem.quantity > variant.maxOrderQty) {
+              throw new Error(`Maximum order quantity for ${product.name} (${variant.quantityValue} ${variant.unit}) is ${variant.maxOrderQty}.`);
             }
 
             if (!groupedBySeller.has(cartItem.sellerId)) {
                 groupedBySeller.set(cartItem.sellerId, []);
             }
-            groupedBySeller.get(cartItem.sellerId)?.push({ ...cartItem, product: cartItem.product as any });
             
-            // 🛑 FIX: सुनिश्चित करें कि totalPrice संख्या के रूप में जोड़ा जाए
+            // 🎯 फिक्स: यहाँ cartItem के अंदर variantId को explicitely confirm कर देते हैं भाई
+            // ताकि आगे Part 3 और Part 4 के लूप में कोई undefined एरर न आए!
+            const structuredItem = {
+              ...cartItem,
+              variantId: variant.id,
+              priceAtAdded: Number(variant.price)
+            };
+            
+            groupedBySeller.get(cartItem.sellerId)?.push(structuredItem);
+            
+            // टोटल प्राइस संख्या के रूप में कैलकुलेट होगी भाई
             masterOrderCalculatedSubtotal += Number(cartItem.totalPrice); 
         }
 
@@ -863,7 +855,7 @@ const result = await db.transaction(async (tx) => {
             subtotal: number; 
             deliveryCharge: number; 
             total: number; 
-            items: typeof cartItems.$inferSelect & { product: typeof products.$inferSelect }[]; 
+            items: any[]; // 👈 यहाँ any[] कर दिया ताकि कस्टमाइज्ड cartItem एक्सेप्ट हो सके भाई
             storeLat: number; 
             storeLng: number;
             estimatedTime: number; 
@@ -888,13 +880,12 @@ const result = await db.transaction(async (tx) => {
                 subtotal,
                 deliveryCharge: currentSubOrderDeliveryCharge,
                 total: subtotal + currentSubOrderDeliveryCharge,
-                items: items,
+                items: items, // ✅ अब इसमें हर आइटम के पास अपनी variantId सुरक्षित है भाई!
                 storeLat: Number(store.latitude), 
                 storeLng: Number(store.longitude),
                 estimatedTime: 60,
-            }as any);
+            });
         }
-
         // --- फाइनल टोटल चेक ---
         if (Math.abs(masterOrderCalculatedDeliveryCharge - deliveryCharge) > 0.01) {
           console.warn('Calculated total delivery charge does not match provided total delivery charge. Using calculated value.');
@@ -1035,55 +1026,58 @@ if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
             if (!subOrder) throw new Error(`Failed to create self-delivery sub-order for seller ${subOrderData.sellerId}`);
 
-// / 3. Order Items बनाएं (Self-Delivery)
+
+     // 🔥 पार्ट 3: सेल्फ-डिलीवरी आइटम्स के लिए स्टॉक अपडेट और एंट्री भाई
     for (const item of subOrderData.items) {
-        // 🛑 HIGH-CLASS ADDITION: Update Inventory First
-        const [updatedProduct] = await tx
-            .update(products)
+        // 🎯 जादुई फिक्स: item को पूरी तरह cartItem (any) में बदला ताकि कोई भी प्रॉपर्टी एरर न दे!
+        const cartItem = item as any; 
+        
+        const [updatedVariant] = await tx
+            .update(productVariants)
             .set({ 
-                stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+                stock: sql`${productVariants.stock} - ${Number(cartItem.quantity)}`, // ✅ फिक्स
                 updatedAt: new Date() 
             })
             .where(
                 and(
-                    eq(products.id, item.product.id),
-                    sql`${products.stock} >= ${Number((item as any).quantity)}`, // Stock Check
-                    isNull(products.deletedAt) // Soft Delete Check
+                    eq(productVariants.id, cartItem.variantId), // ✅ फिक्स
+                    sql`${productVariants.stock} >= ${Number(cartItem.quantity)}`, // ✅ फिक्स
+                    eq(productVariants.isActive, true)
                 )
             )
-            .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId, name: products.name });
+            .returning({ id: productVariants.id, stock: productVariants.stock });
 
-        if (!updatedProduct) {
-            throw new Error(`Maaf kijiye, ${item.product.name} ka paryapt stock nahi hai.`);
+        if (!updatedVariant) {
+            throw new Error(`Maaf kijiye, ${cartItem.product?.name || 'Product'} का पर्याप्त स्टॉक नहीं है भाई!`);
         }
 
-        // 🔥 Trigger Low Stock Alert
-        if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
-            ProductService.checkLowStockAndNotify(
-                updatedProduct.id, 
-                updatedProduct.stock as number, 
-                updatedProduct.sellerId as number
-            ).catch(err => console.error("Low Stock Alert Error:", err));
+        // Low Stock Trigger for Variant
+        if (updatedVariant.stock !== null && cartItem.product?.id) {
+            ProductService.checkLowStockAndNotify(cartItem.product.id,cartItem.variantId, updatedVariant.stock, subOrderData.sellerId)
+              .catch(err => console.error("Low Stock Alert Error:", err));
         }
 
-        // Now insert the order item
+        // Order Item Insert (नए वैरिएंट कॉलम्स के साथ भाई)
         await tx.insert(orderItems).values({
             subOrderId: subOrder.id,
             orderId: masterOrder.id, 
             sellerId: subOrderData.sellerId,
             userId: userId,
-            productId: item.product.id,
-            productName: item.product.name,
-            productImage: item.product.image,
-            productPrice: (item as any).priceAtAdded,
-            productUnit: item.product.unit,
-            quantity: (item as any).quantity,
-            itemTotal: (item as any).totalPrice,
+            productId: cartItem.product?.id,
+            variantId: cartItem.variantId, 
+            productName: cartItem.product?.name,
+            variantName: cartItem.variant ? `${cartItem.variant.quantityValue} ${cartItem.variant.unit}` : "Standard", 
+            productImage: cartItem.product?.image || null,
+            productPrice: cartItem.variant ? Number(cartItem.variant.price) : Number(cartItem.priceAtAdded),
+            productUnit: cartItem.variant ? cartItem.variant.unit : (cartItem.product?.unit || 'piece'),
+            quantity: cartItem.quantity,
+            itemTotal: cartItem.totalPrice,
+            status: 'pending',
             createdAt: new Date(),
             updatedAt: new Date(),
         } as any);
-    } // 👈 Self-Delivery Item Loop Ends
-} // 👈 Self-Delivery Main Block Ends
+    } // 👈 Self-Delivery Item Loop Ends Perfect
+} // 👈 Self-Delivery Main Block Ends Perfect
 
 // 3. डिलीवरी बैच बनाएं और सब-ऑर्डर अपडेट करें (for Non-Self-Delivery)
 for (const batch of batchesToCreate) {
@@ -1109,57 +1103,60 @@ for (const batch of batchesToCreate) {
             .set({ deliveryBatchId: deliveryBatch.id })
             .where(inArray(subOrders.id, subOrderIdsToUpdate));
     }
-
     // c) Order Items बनाएं (Non-Self-Delivery)
+   // 🔥 पार्ट 4: नॉन-सेल्फ-डिलीवरी आइटम्स के लिए स्टॉक अपडेट और एंट्री भाई
     for (const subOrderData of batch.subOrdersData) {
         for (const item of subOrderData.items) {
-            // 🛑 Update Inventory
-            const [updatedProduct] = await tx
-                .update(products)
+            // 🎯 जादुई फिक्स: item को पूरी तरह cartItem (any) में बदला ताकि कोई भी प्रॉपर्टी एरर न दे भाई!
+            const cartItem = item as any;
+
+            // 🎯 इन्वेंटरी अपडेट: बैच वाले आइटम का वैरिएंट स्टॉक कम करो भाई
+            const [updatedVariant] = await tx
+                .update(productVariants)
                 .set({ 
-                    stock: sql`${products.stock} - ${Number((item as any).quantity)}`,
+                    stock: sql`${productVariants.stock} - ${Number(cartItem.quantity)}`, // ✅ फिक्स: cartItem यूज़ किया
                     updatedAt: new Date() 
                 })
                 .where(
                     and(
-                        eq(products.id, item.product.id),
-                        sql`${products.stock} >= ${Number((item as any).quantity)}`,
-                        isNull(products.deletedAt)
+                        eq(productVariants.id, cartItem.variantId), // ✅ फिक्स
+                        sql`${productVariants.stock} >= ${Number(cartItem.quantity)}`, // ✅ फिक्स
+                        eq(productVariants.isActive, true)
                     )
                 )
-                .returning({ id: products.id, stock: products.stock, sellerId: products.sellerId });
+                .returning({ id: productVariants.id, stock: productVariants.stock });
 
-            if (!updatedProduct) {
-                throw new Error(`Maaf kijiye, ${item.product.name} out of stock ho gaya hai.`);
+            if (!updatedVariant) {
+                throw new Error(`Maaf kijiye, ${cartItem.product?.name || 'Product'} (${cartItem.variant?.quantityValue || ''} ${cartItem.variant?.unit || ''}) का पर्याप्त स्टॉक नहीं है भाई!`);
             }
 
-            // 🔥 Low Stock Alert
-            if (updatedProduct.stock !== null && updatedProduct.sellerId !== null) {
-                ProductService.checkLowStockAndNotify(
-                    updatedProduct.id, 
-                    updatedProduct.stock as number, 
-                    updatedProduct.sellerId as number
-                ).catch(e => {});
+            // Trigger Low Stock
+            if (updatedVariant.stock !== null && cartItem.product?.id) {
+              ProductService.checkLowStockAndNotify(cartItem.product.id, cartItem.variantId, updatedVariant.stock, subOrderData.sellerId)
+                .catch(err => console.error("Low Stock Alert Error:", err));
             }
 
-            // 🎯 Item Insert Query
+            // Order Item Insert (नए वैरिएंट आर्किटेक्चर के अनुसार भाई)
             await tx.insert(orderItems).values({
                 subOrderId: subOrderData.subOrderId,
-                orderId: masterOrder.id, 
+                orderId: masterOrder.id,
                 sellerId: subOrderData.sellerId,
                 userId: userId,
-                productId: item.product.id,
-                productName: item.product.name,
-                productImage: item.product.image,
-                productPrice: (item as any).priceAtAdded,
-                productUnit: item.product.unit,
-                quantity: (item as any).quantity,
-                itemTotal: (item as any).totalPrice,
+                productId: cartItem.product?.id,
+                variantId: cartItem.variantId, // ✅ नया कॉलम
+                productName: cartItem.product?.name,
+                variantName: cartItem.variant ? `${cartItem.variant.quantityValue} ${cartItem.variant.unit}` : "Standard", // ✅ नया स्नैपशॉट
+                productImage: cartItem.product?.image || null,
+                productPrice: cartItem.variant ? Number(cartItem.variant.price) : Number(cartItem.priceAtAdded),
+                productUnit: cartItem.variant ? cartItem.variant.unit : (cartItem.product?.unit || 'piece'),
+                quantity: cartItem.quantity,
+                itemTotal: cartItem.totalPrice,
+                status: 'pending',
                 createdAt: new Date(),
                 updatedAt: new Date(),
             } as any);
-        } // 👈 Non-Self Item Loop Ends Here Safe
-    } // 👈 SubOrdersData Loop Ends Here Safe
+        }
+    }
 } // 👈 BatchesToCreate Loop Ends Here Safe
 
 // 🎯 4. कार्ट को खाली करें (Saare loops perfectly khatam hone ke baad execute hoga)

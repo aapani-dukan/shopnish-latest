@@ -197,6 +197,20 @@
       "when": 1777227482756,
       "tag": "0027_petite_magdalene",
       "breakpoints": true
+    },
+    {
+      "idx": 28,
+      "version": "7",
+      "when": 1780500620074,
+      "tag": "0028_keen_korath",
+      "breakpoints": true
+    },
+    {
+      "idx": 29,
+      "version": "7",
+      "when": 1780515517597,
+      "tag": "0029_shocking_blink",
+      "breakpoints": true
     }
   ]
 }

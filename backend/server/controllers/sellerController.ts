@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db'; 
-import { sellersPgTable, stores, subOrders, products, orders } from '../../shared/backend/schema'; 
+import { sellersPgTable, stores, subOrders, products,productVariants, orders } from '../../shared/backend/schema'; 
 import { eq, and, gte, sql, desc, isNull, not, lte,or } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -60,12 +60,19 @@ const salesResult = await db.select({
         .where(and(eq(subOrders.sellerId, sellerId), eq(subOrders.status, 'pending')));
 
     // C. Low Stock Items (Threshold = 5)
-    const lowStockResult = await db.select({ count: sql<number>`count(*)` })
+   // 🎯 फिक्स: अब लो-स्टॉक काउंट सीधे वैरिएंट टेबल के अंदर जाकर चेक होगा भाई!
+    const lowStockResult = await db.select({ count: sql<number>`count(distinct ${products.id})` })
         .from(products)
         .where(and(
             eq(products.sellerId, sellerId), 
-            lte(products.stock, 5), 
-            isNull(products.deletedAt)
+            isNull(products.deletedAt),
+            // जादुई सबक्वेरी: चेक करो कि क्या इस प्रोडक्ट का कोई भी लाइव वैरिएंट 5 या उससे कम स्टॉक पर है भाई
+            sql`exists (
+              select 1 from ${productVariants} 
+              where ${productVariants.productId} = ${products.id} 
+              and ${productVariants.stock} <= 5
+              and ${productVariants.isActive} = true
+            )`
         ));
 
     // D. Recent Orders (Latest 5)

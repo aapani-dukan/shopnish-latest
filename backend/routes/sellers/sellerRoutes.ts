@@ -9,6 +9,7 @@ import {
   approvalStatusEnum,
   categories,
   products,
+  productVariants,
   stores,
   subOrders, 
   subOrderStatusEnum, 
@@ -859,7 +860,7 @@ sellerRouter.post(
         return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
       }
 
-      // 1. सेलर प्रोफाइल निकालें (ताकि डिफ़ॉल्ट सेटिंग्स ले सकें)
+      // 1. सेलर प्रोफाइल निकालें
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
@@ -871,40 +872,43 @@ sellerRouter.post(
 
       const sellerId = sellerProfile.id;
 
-      // 2. Request Body से डेटा निकालें
+      // 2. Request Body से डेटा निकालें (वैरिएंट्स के साथ भाई)
       const {
         name,
+        nameHindi,
         description,
-        price,
+        descriptionHindi,
         categoryId,
-        stock,
-        unit,
         brand,
-        minOrderQty,
-        maxOrderQty,
-        estimatedDeliveryTime // यूजर द्वारा भेजा गया टाइम
+        estimatedDeliveryTime,
+        variants // 🔥 फ्रंटएंड से यह JSON string या Array के रूप में आएगा भाई
       } = req.body;
 
       const file = req.file;
 
-      // 3. Basic Validation
-      if (!name || !price || !categoryId || !stock || !file) {
-        return res.status(400).json({ error: 'Missing required fields or image.' });
+      // 3. Basic Validation (अब मुख्य प्रोडक्ट के लिए प्राइस और स्टॉक की ज़रूरत यहाँ नहीं है भाई)
+      if (!name || !categoryId || !file || !variants) {
+        return res.status(400).json({ error: 'Missing required fields, image, or product variants.' });
       }
 
-      // 4. Data Parsing & Safety
+      // 4. वैरिएंट्स को सेफ़्ली पार्स करें (चूँकि multipart/form-data है, तो यह string में आ सकता है भाई)
+      let parsedVariants: any[] = [];
+      try {
+        parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
+      } catch (e) {
+        return res.status(400).json({ error: 'Invalid formats for variants data. Expected a valid array.' });
+      }
+
+      if (!Array.isArray(parsedVariants) || parsedVariants.length === 0) {
+        return res.status(400).json({ error: 'At least one product variant is required.' });
+      }
+
       const parsedCategoryId = parseInt(categoryId as string);
-      const parsedStock = parseInt(stock as string);
-      const parsedPrice = parseFloat(price as string);
-      const parsedMinOrderQty = minOrderQty ? parseInt(minOrderQty as string) : 1;
-      const parsedMaxOrderQty = maxOrderQty ? parseInt(maxOrderQty as string) : null;
-
-      if (isNaN(parsedCategoryId) || isNaN(parsedStock) || isNaN(parsedPrice)) {
-        return res.status(400).json({ error: 'Invalid numbers provided for price, stock, or category.' });
+      if (isNaN(parsedCategoryId)) {
+        return res.status(400).json({ error: 'Invalid category ID.' });
       }
 
-      // 5. 🔥 "High-Class" Delivery Time Logic
-      // प्राथमिकता: 1. Product specific time > 2. Seller's global time > 3. Default '1-2 hours'
+      // 5. Delivery Time Logic
       const finalDeliveryTime = estimatedDeliveryTime?.trim() || 
                                (sellerProfile as any).estimatedDeliveryTime || 
                                '1-2 hours';
@@ -920,44 +924,85 @@ sellerRouter.post(
         }
       }
 
-      // 7. Database Insertion
-      const [newProduct] = await db
-        .insert(products)
-        .values({
-          name: name.trim(),
-          description: description || null,
-          price: parsedPrice,
-          categoryId: parsedCategoryId,
-          stock: parsedStock,
-          image: imageUrl,
-          sellerId,
-          unit: unit || 'piece',
-          brand: brand || null,
-          minOrderQty: parsedMinOrderQty,
-          maxOrderQty: parsedMaxOrderQty as any,
-          estimatedDeliveryTime: finalDeliveryTime, // ✅ Updated Dynamic Value
-          approvalStatus: approvalStatusEnum.enumValues[0], // 'pending'
-          isActive: true, // डिफ़ॉल्ट रूप से एक्टिव
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        })
-        .returning();
+      // 🔒 7. डेटाबेस ट्रांजेक्शन: मुख्य प्रोडक्ट और वैरिएंट्स दोनों एक साथ सुरक्षित जाएँगे भाई
+      const finalResult = await db.transaction(async (tx) => {
+        
+        // A. पहले मुख्य प्रोडक्ट इन्सर्ट करो (इसमें प्राइस, स्टॉक, यूनिट नहीं है भाई!)
+        const [newProduct] = await tx
+          .insert(products)
+          .values({
+            name: name.trim(),
+            nameHindi: nameHindi || null,
+            description: description || null,
+            descriptionHindi: descriptionHindi || null,
+            categoryId: parsedCategoryId,
+            image: imageUrl,
+            sellerId,
+            brand: brand || null,
+            estimatedDeliveryTime: finalDeliveryTime,
+            approvalStatus: 'pending', // 'pending' डिफ़ॉल्ट
+          })
+          .returning();
+
+        // B. लूप चलाकर दोनों प्लान्स (प्लान 1: मात्रा/यूनिट + प्लान 2: डिस्काउंट गणित) को प्रोसेस करो भाई
+        const variantsToInsert = parsedVariants.map((v: any) => {
+          const origPrice = parseFloat(v.originalPrice as string) || 0;
+          const discValue = parseFloat(v.discountValue as string) || 0;
+          const dType = v.discountType || 'percentage'; // 'percentage' या 'fixed_amount'
+          
+          let sellingPrice = origPrice;
+
+          // 🎯 प्लान 2: डिस्काउंट टाइप के अनुसार फाइनल प्राइस कैलकुलेशन
+          if (dType === 'percentage') {
+            sellingPrice = origPrice - (origPrice * discValue / 100);
+          } else if (dType === 'fixed_amount') {
+            sellingPrice = origPrice - discValue;
+          }
+
+          if (sellingPrice < 0) sellingPrice = 0; // सुरक्षा जांच
+
+          // 🎯 प्लान 1: मात्रा और यूनिट मैपिंग
+          return {
+            productId: newProduct.id,
+            quantityValue: String(v.quantityValue), // e.g., "250", "Half", "9"
+            unit: v.unit || 'piece',               // e.g., "Gram", "Plate", "Size"
+            originalPrice: origPrice,              // MRP
+            discountType: dType,
+            discountValue: discValue,
+            price: sellingPrice,                   // 💰 फाइनल बिकने वाली प्राइस
+            stock: parseInt(v.stock as string) || 0,
+            minOrderQty: parseInt(v.minOrderQty as string) || 1,
+            maxOrderQty: parseInt(v.maxOrderQty as string) || 100,
+            sku: v.sku || null,
+            offerLabel: v.offerLabel || null,
+            isActive: true,
+          };
+        });
+
+        // C. अब सारे वैरिएंट्स को एक साथ 'product_variants' टेबल में ठोक दो भाई
+        await tx.insert(productVariants).values(variantsToInsert);
+
+        return newProduct;
+      });
 
       // 8. Real-time Notification
       getIO().emit("product:created", {
-        message: "New product waiting for approval",
-        product: newProduct
+        message: "New variant-based product waiting for approval",
+        product: finalResult
       });
 
-      return res.status(201).json(newProduct);
+      return res.status(201).json({
+        success: true,
+        message: "Product and all variants created successfully!",
+        product: finalResult
+      });
 
     } catch (error: any) {
       console.error('❌ Error in POST /api/sellers/products:', error);
-      return res.status(500).json({ error: 'Internal Server Error while creating product.' });
+      return res.status(500).json({ error: 'Internal Server Error while creating product structure.' });
     }
   }
 );
-
 // 📍 PATCH /api/sellers/toggle-status
 sellerRouter.patch(
   '/toggle-status',
@@ -1108,7 +1153,7 @@ sellerRouter.patch(
   }
 );
 
-// ✅ PATCH /api/sellers/products/:id (प्रोडक्ट अपडेट करें - Updated Logic)
+// ✅ PATCH /api/sellers/products/:id (प्रोडक्ट और वैरिएंट्स दोनों अपडेट करें भाई)
 sellerRouter.patch(
   '/products/:id',
   requireSellerAuth,
@@ -1121,7 +1166,7 @@ sellerRouter.patch(
         return res.status(400).json({ error: 'Invalid User or Product ID.' });
       }
 
-      // 1. Seller Profile Check (Get internal Seller ID)
+      // 1. Seller Profile Check
       const [sellerProfile] = await db
         .select()
         .from(sellersPgTable)
@@ -1143,64 +1188,108 @@ sellerRouter.patch(
 
       const {
         name,
+        nameHindi,
         description,
-        price,
+        descriptionHindi,
         categoryId,
-        stock,
-        unit,
         brand,
-        minOrderQty,
-        maxOrderQty,
         estimatedDeliveryTime,
-        imageUrl: newImageUrlFromClient 
+        imageUrl: newImageUrlFromClient,
+        variants // 🔥 हमारे दोनों प्लान्स के लिए वैरिएंट्स का नया डेटा आएगा भाई
       } = req.body;
 
-      // 🌟 Image Update & Cleanup Logic (Permanent Storage Management)
+      // 🌟 Image Update & Cleanup Logic
       let finalImageUrl = existingProduct.image;
-
       if (newImageUrlFromClient !== undefined && newImageUrlFromClient !== existingProduct.image) {
         if (existingProduct.image) {
           console.log(`[CLEANUP] Deleting old image: ${existingProduct.image}`);
           await deleteImage(existingProduct.image).catch(err => 
-            console.warn(`⚠️ Cloud delete failed for ${existingProduct.image}:`, err.message)
+            console.warn(`⚠️ Cloud delete failed:`, err.message)
           );
         }
-        finalImageUrl = newImageUrlFromClient; // ये null, empty string या नया URL हो सकता है
+        finalImageUrl = newImageUrlFromClient;
       }
 
-      // ✏️ Build Clean Update Payload
-      const updatePayload: any = {
+      // ✏️ A. मुख्य प्रोडक्ट का पेलोड तैयार करें (इसमें प्राइस/स्टॉक नहीं रहेगा भाई)
+      const productUpdatePayload: any = {
         updatedAt: new Date(),
         image: finalImageUrl
       };
 
-      // सिर्फ वही चीजें अपडेट करें जो क्लाइंट ने भेजी हैं
-      if (name !== undefined) updatePayload.name = name.trim();
-      if (description !== undefined) updatePayload.description = description;
-      if (price !== undefined) updatePayload.price = parseFloat(String(price));
-      if (categoryId !== undefined) updatePayload.categoryId = parseInt(String(categoryId));
-      if (stock !== undefined) updatePayload.stock = parseInt(String(stock));
-      if (unit !== undefined) updatePayload.unit = unit;
-      if (brand !== undefined) updatePayload.brand = brand;
-      if (minOrderQty !== undefined) updatePayload.minOrderQty = parseInt(String(minOrderQty));
-      if (maxOrderQty !== undefined) updatePayload.maxOrderQty = maxOrderQty ? parseInt(String(maxOrderQty)) : null;
-      if (estimatedDeliveryTime !== undefined) updatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
+      if (name !== undefined) productUpdatePayload.name = name.trim();
+      if (nameHindi !== undefined) productUpdatePayload.nameHindi = nameHindi;
+      if (description !== undefined) productUpdatePayload.description = description;
+      if (descriptionHindi !== undefined) productUpdatePayload.descriptionHindi = descriptionHindi;
+      if (categoryId !== undefined) productUpdatePayload.categoryId = parseInt(String(categoryId));
+      if (brand !== undefined) productUpdatePayload.brand = brand;
+      if (estimatedDeliveryTime !== undefined) productUpdatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
 
-      // ✅ Update Database
-      const [updatedProduct] = await db
-        .update(products)
-        .set(updatePayload)
-        .where(eq(products.id, productId))
-        .returning();
+      // 🔒 3. डेटाबेस ट्रांजेक्शन: मुख्य प्रोडक्ट और उसके वैरिएंट्स एक साथ अपडेट होंगे भाई
+      const finalUpdatedProduct = await db.transaction(async (tx) => {
+        
+        // Step 1: मुख्य प्रोडक्ट को अपडेट मारो भाई
+        const [updatedProduct] = await tx
+          .update(products)
+          .set(productUpdatePayload)
+          .where(eq(products.id, productId))
+          .returning();
 
-      if (!updatedProduct) {
-        return res.status(404).json({ error: 'Update failed or no changes detected.' });
-      }
+        // Step 2: अगर फ्रंटएंड से नए वैरिएंट्स की लिस्ट भेजी गई है, तो पुराने वालों को रीसेट करो भाई
+        if (variants && Array.isArray(variants) && variants.length > 0) {
+          
+          // पहले पुराने सारे वैरिएंट्स को साफ़ कर दो भाई (Clean Slate)
+          await tx.delete(productVariants).where(eq(productVariants.productId, productId));
+
+          // अब लूप चलाकर दोनों प्लान्स (मात्रा + डिस्काउंट टाइप) का नया गणित लगाओ
+          const variantsToInsert = variants.map((v: any) => {
+            const origPrice = parseFloat(v.originalPrice as string) || 0;
+            const discValue = parseFloat(v.discountValue as string) || 0;
+            const dType = v.discountType || 'percentage'; // 'percentage' या 'fixed_amount'
+            
+            let sellingPrice = origPrice;
+
+            // 🎯 प्लान 2: डिस्काउंट टाइप का ऑटोमैटिक कैलकुलेशन
+            if (dType === 'percentage') {
+              sellingPrice = origPrice - (origPrice * discValue / 100);
+            } else if (dType === 'fixed_amount') {
+              sellingPrice = origPrice - discValue;
+            }
+
+            if (sellingPrice < 0) sellingPrice = 0;
+
+            // 🎯 प्लान 1: मात्रा और यूनिट सेटिंग
+            return {
+              productId: productId,
+              quantityValue: String(v.quantityValue), // e.g., "500", "Full"
+              unit: v.unit || 'piece',               // e.g., "Gram", "Plate"
+              originalPrice: origPrice,              // MRP
+              discountType: dType,
+              discountValue: discValue,
+              price: sellingPrice,                   // 💰 डिस्काउंट के बाद की फाइनल सेलिंग प्राइस
+              stock: parseInt(v.stock as string) || 0,
+              minOrderQty: parseInt(v.minOrderQty as string) || 1,
+              maxOrderQty: parseInt(v.maxOrderQty as string) || 100,
+              sku: v.sku || null,
+              offerLabel: v.offerLabel || null,
+              isActive: true,
+            };
+          });
+
+          // नए वैरिएंट्स को ठोक दो टेबल में भाई
+          await tx.insert(productVariants).values(variantsToInsert);
+        }
+
+        return updatedProduct;
+      });
 
       // 🔊 Real-time Sync (Socket.io)
-      getIO().emit("product:updated", updatedProduct);
+      getIO().emit("product:updated", finalUpdatedProduct);
 
-      return res.status(200).json(updatedProduct);
+      return res.status(200).json({
+        success: true,
+        message: "Product and variants updated successfully!",
+        product: finalUpdatedProduct
+      });
 
     } catch (error: any) {
       console.error("❌ PATCH Product Error:", error);

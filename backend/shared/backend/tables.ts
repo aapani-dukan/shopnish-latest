@@ -254,7 +254,6 @@ export const stores = pgTable("stores", {
 
 
 // 11. products - sellersPgTable, stores, categories को संदर्भित करता है
-// 11. products - sellersPgTable, stores, categories को संदर्भित करता है
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
@@ -266,45 +265,57 @@ export const products = pgTable("products", {
   description: text("description"),
   descriptionHindi: text("description_hindi"),
   
-  // ✅ Badlav: Aapke purane discountTypeEnum ka use kiya hai
-  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(), // Selling Price
-  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).$type<number>(), // MRP (Strikethrough ke liye)
-  
-  discountType: discountTypeEnum("discount_type").default("percentage"), // percentage ya fixed_amount
-  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).default("0.00").$type<number>(),
-  offerLabel: text("offer_label"), // e.g., "Bestseller", "Deal of the Day"
-  
   image: text("image").notNull(),
   images: text("images").array().$type<string[]>(),
-  unit: text("unit").notNull().default("piece"),
   brand: text("brand"),
-  stock: integer("stock").notNull().default(0),
-  minOrderQty: integer("min_order_qty").default(1),
-  maxOrderQty: integer("max_order_qty").default(100),
-  isActive: boolean("is_active").default(true),
   
-  // Delivery related
+  // ये सब यहाँ रहेगा क्योंकि पूरे प्रोडक्ट (जैसे Colgate) का डिलीवरी एरिया और टैक्स एक ही होता है भाई
   deliveryScope: text("delivery_scope").notNull().default('LOCAL'),
   productDeliveryPincodes: text("product_delivery_pincodes").array().$type<string[]>(),
   productDeliveryRadiusKM: integer("product_delivery_radius_km").$type<number>(),
   estimatedDeliveryTime: text("estimated_delivery_time").default('1-2 hours'),
-  //other
-  sku: varchar("sku", { length: 50 }), // Seller's own SKU
-  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0.00"), // GST 5, 12, 18%
-  hsnCode: text("hsn_code"), // Essential for legal invoices
+  
+  taxRate: decimal("tax_rate", { precision: 5, scale: 2 }).default("0.00"), 
+  hsnCode: text("hsn_code"), 
   isReturnable: boolean("is_returnable").default(false),
   returnPeriodDays: integer("return_period_days").default(0),
   version: integer("version").default(1).notNull(),
   deletedAt: timestamp("deleted_at"),
-  // Status & Timestamps
+  
   approvalStatus: approvalStatusEnum("approval_status").notNull().default("pending"),
   approvedAt: timestamp("approved_at"),
   rejectionReason: text("rejection_reason"),
+  isActive: boolean("is_active").default(true).notNull(),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
-  
 });
-
+export const productVariants = pgTable("product_variants", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+  
+  // 📦 मात्रा और यूनिट (e.g., quantityValue: "250", unit: "Gram" या "Half", "Plate")
+  quantityValue: text("quantity_value").notNull(), 
+  unit: text("unit").notNull().default("piece"), // आपकी पुरानी डिफ़ॉल्ट वैल्यू
+  
+  // 💰 प्राइस का पूरा ढांचा
+  price: decimal("price", { precision: 10, scale: 2 }).notNull().$type<number>(), // Selling Price (डिस्काउंट के बाद की प्राइस)
+  originalPrice: decimal("original_price", { precision: 10, scale: 2 }).$type<number>(), // MRP (Strikethrough के लिए)
+  
+  // 🎯 डिस्काउंट का लाइव लॉजिक (आपके पुराने इनम के साथ)
+  discountType: discountTypeEnum("discount_type").default("percentage"), // percentage या fixed_amount
+  discountValue: decimal("discount_value", { precision: 10, scale: 2 }).default("0.00").$type<number>(),
+  offerLabel: text("offer_label"), // e.g., "Deal of the Day"
+  
+  // 📦 स्टॉक और लिमिट्स जो हर साइज़ के लिए अलग हो सकती हैं भाई
+  stock: integer("stock").notNull().default(0),
+  minOrderQty: integer("min_order_qty").default(1),
+  maxOrderQty: integer("max_order_qty").default(100),
+  sku: varchar("sku", { length: 50 }),
+  isActive: boolean("is_active").default(true),
+  
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow().$onUpdate(() => new Date()),
+});
 // 12. serviceProviders - users, services को संदर्भित करता है
 export const serviceProviders = pgTable("service_providers", {
   id: serial("id").primaryKey(),
@@ -420,6 +431,7 @@ export const cartItems = pgTable("cart_items", {
   id: serial("id").primaryKey(),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   productId: integer("product_id").notNull().references(() => products.id, { onDelete: 'cascade' }),
+   variantId: integer("variant_id").notNull().references(() => productVariants.id, { onDelete: 'cascade' }),
   sellerId: integer("seller_id").notNull().references(() => sellersPgTable.id),
   quantity: integer("quantity").notNull().default(1),
   priceAtAdded: decimal("price_at_added", { precision: 10, scale: 2 }).notNull().$type<number>(),
@@ -442,20 +454,31 @@ export const orderItems = pgTable("order_items", {
   sellerId: integer("seller_id").notNull().default(1).references(() => sellersPgTable.id),
   userId: integer("user_id").notNull().references(() => users.id, { onDelete: 'cascade' }),
   productId: integer("product_id").notNull().references(() => products.id),
+  
+  // 🔥 बदलाव 1: नया वैरिएंट आईडी कॉलम (ताकि पता रहे कौन सा साइज/मात्रा बुक हुई है)
+  variantId: integer("variant_id").notNull().references(() => productVariants.id),
+
   productName: text("product_name").notNull().default('Unknown Product'),
+  
+  // 🔥 बदलाव 2: वैरिएंट का नाम स्टोर करने के लिए (e.g., "250 Gram" या "Half Plate")
+  // बुकिंग के समय का नाम यहाँ स्नैपशॉट बन जाएगा ताकि बाद में सेलर बदले भी तो पुराना बिल न बिगड़े भाई
+  variantName: text("variant_name").notNull().default(''), 
+  
   productImage: text("product_image"),
+  
+  // ये दोनों प्राइस और यूनिट अब बुकिंग के समय वैरिएंट टेबल से उठाकर यहाँ सेव होंगे भाई
   productPrice: decimal("product_price", { precision: 10, scale: 2 })
-  .$type<number>()
-  .default(0)
-  .notNull(),
-
-
-  productUnit: text("product_unit").notNull().default('piece'),
+    .$type<number>()
+    .default(0)
+    .notNull(),
+  productUnit: text("product_unit").notNull().default('piece'), // e.g., "Gram", "Plate", "Size"
+  
   quantity: integer("quantity").notNull(),
   itemTotal: decimal("item_total", { precision: 10, scale: 2 })
-  .$type<number>()
-  .default(0)
-  .notNull(),
+    .$type<number>()
+    .default(0)
+    .notNull(),
+    
   status: orderItemStatusEnum("status").default('pending').notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
