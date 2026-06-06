@@ -177,13 +177,13 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
 });
 
 // PUT /api/delivery/update-location
-
+// 🎯 फिक्स: लोकेशन सिंक को 100% एरर-फ़्री और टाइप-सेफ़ बनाया भाई!
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
         const { latitude, longitude, activeBatchIds } = req.body;
 
-        // 🚨 गेट-कीपर चेक: अगर मोबाइल से कोई बैच आईडी आई ही नहीं है (या खाली ऐरे है), तो यहीं से लौट जाओ भाई
+        // 🚨 गेट-कीपर चेक
         if (!activeBatchIds || !Array.isArray(activeBatchIds) || activeBatchIds.length === 0) {
             return res.status(200).json({ success: true, message: 'No active batches to track. Sync ignored safely.' });
         }
@@ -201,33 +201,28 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             return res.status(404).json({ error: 'Delivery boy profile not found.' });
         }
 
-        // =======================================================================
-        // 🎯 सुधार 2: सुरक्षा ताला (Rider ID Validation) + 1 घंटे का सेफ्टी गेट
-        // =======================================================================
         const now = new Date();
-        const ONE_HOUR_MS = 60 * 60 * 1000; // 1 घंटा मिलीसेकंड में
+        const ONE_HOUR_MS = 60 * 60 * 1000; 
 
-        // 🔐 कड़क सुरक्षा: सिर्फ वही बैचेस डेटाबेस से निकलेंगे जो इसी विशिष्ट डिलीवरी बॉय के हैं भाई!
+        // 🔐 कड़क सुरक्षा + टाइप फिक्स: 'activeBatchIds' के मैप को 'as any' कास्ट कर दिया ताकि Drizzle बुरा न माने भाई!
         const dbBatches = await db.query.deliveryBatches.findMany({
             where: and(
-                inArray(deliveryBatches.id, activeBatchIds.map(id => Number(id))),
-                eq(deliveryBatches.deliveryBoyId, boyProfile.id) // 👈 यह है असली ताला
+                inArray(deliveryBatches.id, activeBatchIds.map(id => Number(id)) as any),
+                eq(deliveryBatches.deliveryBoyId, boyProfile.id) 
             )
         });
 
         // सिर्फ़ उन्हीं बैचेस को छांटें जो 'picked_up' या 'out_for_delivery' हैं और 1 घंटे से कम पुराने हैं
         const validBatches = dbBatches.filter((batch: any) => {
-            // 🎯 हमारी नई समझ: सामान पिकअप होते ही या रास्ते में होने पर दोनों समय लोकेशन पास होगी
             if (batch.status !== 'picked_up' && batch.status !== 'out_for_delivery') return false;
 
-            // 'updatedAt' कॉलम से 1 घंटे का हिसाब निकालो भाई
             const batchUpdateTime = new Date(batch.updatedAt).getTime();
             const timeElapsed = now.getTime() - batchUpdateTime;
 
             return timeElapsed < ONE_HOUR_MS;
         });
 
-        // 🚨 ब्रह्मास्त्र चेक: अगर एक भी बैच नियमों को पास नहीं कर पाया, तो आगे की सारी फालतू प्रोसेस रोक दो
+        // 🚨 ब्रह्मास्त्र चेक
         if (validBatches.length === 0) {
             return res.status(200).json({ 
                 success: false, 
@@ -235,7 +230,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
             });
         }
 
-        // 2. Database mein current location update karo (सिर्फ़ वैलिड केस होने पर ही क्वेरी चलेगी)
+        // 2. Database mein current location update karo
         await db.update(deliveryBoys)
             .set({
                 currentLat: String(latitude),
@@ -246,30 +241,23 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
 
         console.log(`📌 [GPS SYNC SUCCESS]: Rider ID ${boyProfile.id} updated to (${latitude}, ${longitude})`);
 
-        // =======================================================================
-        // 🚀 सुधार 3: मल्टी-ルーム प्योर ऑटोमैटिक सॉकेट ब्रॉडकास्ट (सभी एक्टिव ऑर्डर्स के लिए)
-        // =======================================================================
+        // 🚀 मल्टी-रूम सॉकेट ब्रॉडकास्ट
         try {
-            const io = getIO(); // 🔌 Socket.IO Instance
-
+            const io = getIO(); 
             for (const batch of validBatches) {
                 if (batch.masterOrderId) {
-                    
-                    // कमरे का नाम बिल्कुल सॉकेट नियमों के अनुसार: `order:${masterOrderId}`
                     io.to(`order:${batch.masterOrderId}`).emit("order:delivery_location", {
                         lat: Number(latitude),
                         lng: Number(longitude),
                         batchId: batch.id,
                         timestamp: new Date().toISOString(),
                     });
-
                     console.log(`📡 [AUTO-SOCKET]: Sent location to customer room: order:${batch.masterOrderId}`);
                 }
             }
         } catch (socketErr) {
             console.error("❌ Socket broadcast failed:", socketErr);
         }
-        // =======================================================================
 
         return res.status(200).json({ success: true, message: 'Location updated successfully for valid active batches.' });
     } catch (error: any) {
@@ -277,6 +265,7 @@ router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Res
         return res.status(500).json({ error: 'Failed to update location.' });
     }
 });
+
 // 📌 PATCH /api/delivery/update-fcm-token
 // Mobile app se aane wale FCM token ko permanently database mein save karne ke liye
 router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: Response) => {
@@ -305,6 +294,7 @@ router.patch('/update-fcm-token', requireDeliveryBoyAuth, async (req: any, res: 
     }
 });
 // 🎯 Batch Details API - एरे पार्सिंग और इंडेक्सिंग के साथ 100% फिक्स
+// 🎯 Batch Details API - JSON एड्रेस पार्सिंग और कॉम्पैटिबिलिटी के साथ 100% फिक्स भाई
 router.get('/batch-details/:id', async (req, res) => {
     try {
         const batchId = parseInt(req.params.id);
@@ -319,7 +309,7 @@ router.get('/batch-details/:id', async (req, res) => {
                     with: {
                         masterOrder: {
                             with: {
-                                deliveryAddress: true,
+                                // 🎯 फिक्स 1: 'deliveryAddress' अब टेबल रिलेशन नहीं है, इसलिए इसे 'with' से हटा दिया भाई!
                                 customer: true
                             }
                         }
@@ -334,83 +324,72 @@ router.get('/batch-details/:id', async (req, res) => {
 
         const currentSubOrders = batchData.subOrders || [];
         
-        // 🎯 प्रत्येक सब-ऑर्डर को पार्स करके फ्रंटएंड के 'orders' एरे के लिए तैयार करना
         const formattedOrders = currentSubOrders.map((so: any) => {
             const nestedMaster = so.masterOrder as any;
-            
-            // 🚨 अवेलेबल बैच की तरह एरे लेयर सेफ्टी चेक किया
-            let targetOrder = Array.isArray(nestedMaster) ? nestedMaster[0] : nestedMaster;
+            const customerObj = nestedMaster?.customer || {};
 
-            // 🎯 नाम के लिए एड्रेस टेबल निकालना
-            let addressTableObj = targetOrder?.deliveryAddress || nestedMaster?.deliveryAddress;
-            if (Array.isArray(addressTableObj)) {
-                addressTableObj = addressTableObj[0];
-            }
-
-            const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
-
-            // 👤 CUSTOMER NAME EXTRACTION (हूबहू अवेलेबल बैच वाला कड़क लॉजिक)
-            let finalCustomerName = "Customer"; 
-
-            if (addressTableObj) {
-                if (Array.isArray(addressTableObj)) {
-                    // अगर एरे बंडल आ रहा हो तो इंडेक्स [2] पर full_name है
-                    finalCustomerName = String(addressTableObj[2] || "").trim();
-                } else {
-                    // अगर नॉर्मल ऑब्जेक्ट फॉर्मेट में हो
-                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+            // 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
+            let parsedAddressObj: any = null;
+            if (nestedMaster?.deliveryAddress && typeof nestedMaster.deliveryAddress === 'string') {
+                try {
+                    parsedAddressObj = JSON.parse(nestedMaster.deliveryAddress);
+                } catch (e) {
+                    console.warn("Failed to parse deliveryAddress JSON inside batch details:", e);
                 }
             }
 
-            // फॉलबैक नाम चेक
-            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-                let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+            // 👤 CUSTOMER NAME EXTRACTION (पार्स किए हुए ऑब्जेक्ट से असली नाम भाई)
+            let finalCustomerName = "Customer"; 
+            if (parsedAddressObj?.fullName || parsedAddressObj?.fullNameHindi) {
+                finalCustomerName = String(parsedAddressObj.fullName || parsedAddressObj.fullNameHindi).trim();
+            } else {
+                let firstName = customerObj?.firstName || customerObj?.first_name || '';
+                let lastName = customerObj?.lastName || customerObj?.last_name || '';
                 finalCustomerName = `${firstName} ${lastName}`.trim();
             }
 
-            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
+            if (!finalCustomerName || finalCustomerName === "null" || finalCustomerName === "undefined") {
                 finalCustomerName = "Customer";
             }
 
             // 📞 PHONE NUMBER EXTRACTION
-            const finalPhone = nestedMaster?.phone || nestedMaster?.customerPhone || customerObj?.phone || "N/A";
+            const finalPhone = parsedAddressObj?.phone || customerObj?.phone || nestedMaster?.customerPhone || "N/A";
 
-            // 📍 DELIVERY ADDRESS EXTRACTION (100% सेफ़ एरे और ऑब्जेक्ट दोनों के लिए)
-            let finalAddress = nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
-            if (finalAddress && typeof finalAddress === 'object') {
-                if (Array.isArray(finalAddress)) {
-                    finalAddress = String(finalAddress[4] || "Local Address");
-                } else {
-                    finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+            // 📍 DELIVERY ADDRESS EXTRACTION (फ्लैट एड्रेस लाइन निकालना भाई)
+            let finalAddress = "Local Address";
+            if (parsedAddressObj) {
+                finalAddress = parsedAddressObj.addressLine1 || parsedAddressObj.address || "Local Address";
+                if (parsedAddressObj.addressLine2) {
+                    finalAddress += `, ${parsedAddressObj.addressLine2}`;
                 }
+            } else if (typeof nestedMaster?.deliveryAddress === 'string' && nestedMaster.deliveryAddress.trim() !== "") {
+                finalAddress = nestedMaster.deliveryAddress; // अगर पहले से ही प्लेन स्ट्रिंग हो भाई
             }
 
-            // 🎯 NEAR BY FIX (11वां कॉलम यानी इंडेक्स 10)
+            // 🎯 NEAR BY / LANDMARK FIX (एड्रेस ऑब्जेक्ट के लैंडमार्क से उठाएं भाई)
             let finalNearBy = "Not Provided";
-            if (nestedMaster) {
-                const instructions = Array.isArray(nestedMaster) 
-                    ? nestedMaster[10] 
-                    : (nestedMaster.delivery_instructions || nestedMaster.deliveryInstructions);
-                
-                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null" && instructions !== "undefined") {
-                    finalNearBy = instructions.trim();
-                }
+            if (parsedAddressObj?.addressLine2 && parsedAddressObj.addressLine2.trim() !== "") {
+                finalNearBy = parsedAddressObj.addressLine2.trim();
+            } else if (nestedMaster?.deliveryInstructions) {
+                finalNearBy = nestedMaster.deliveryInstructions;
             }
 
-            const city = nestedMaster?.delivery_city || "Bundi";
-            const finalFullAddress = (typeof finalAddress === 'string' && finalAddress.includes(city)) 
-                ? finalAddress 
-                : `${finalAddress}, ${city}`;
+            const city = parsedAddressObj?.city || nestedMaster?.deliveryCity || "Bundi";
+            const pincode = parsedAddressObj?.pincode || parsedAddressObj?.postalCode || "";
+            
+            // पूरा साफ़ सुथरा पता तैयार भाई ताकि डिलीवरी बॉय भटके नहीं
+            const finalFullAddress = finalAddress.includes(city) 
+                ? `${finalAddress} ${pincode}`.trim()
+                : `${finalAddress}, ${city} ${pincode}`.trim();
 
             return {
                 id: so.id,
                 status: so.status,
                 totalAmount: Number(so.total || so.subtotal || 0),
-                customerName: finalCustomerName,       // 👈 अब यहाँ असली नाम पैक होकर जाएगा
+                customerName: finalCustomerName,       
                 customerPhone: finalPhone,             
                 shippingAddress: finalFullAddress,     
-                nearBy: finalNearBy === "null" ? "Not Provided" : finalNearBy // 👈 और यहाँ नियरबाय
+                nearBy: finalNearBy === "null" ? "Not Provided" : finalNearBy 
             };
         });
 
@@ -430,6 +409,7 @@ router.get('/batch-details/:id', async (req, res) => {
  * /api/delivery-boys/available-batches
  */
 
+// ✅ उपलब्ध बैचेस ढूंढने की एपीआई - JSON एड्रेस पार्सिंग और न्यू स्कीमा कॉम्पैटिबिलिटी भाई
 router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -437,44 +417,43 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             return res.status(401).json({ error: 'Unauthorized.' });
         }
 
-   // ✅ बिल्कुल सही और रिलेशंस से भरपूर क्वेरी:
-const availableBatches = await db.query.deliveryBatches.findMany({
-    where: and(
-        isNull(deliveryBatches.deliveryBoyId), 
-        eq(deliveryBatches.status, 'pending'),
-        exists(
-            db.select()
-              .from(subOrders)
-              .where(
-                  and(
-                      sql`"sub_orders"."delivery_batch_id" = "deliveryBatches"."id"`, 
-                      eq(subOrders.status, 'ready_for_pickup')
-                  )
-              )
-        )
-    ),
-    // 🎯 यहाँ से पूरा खेल बदलेगा:
-    with: {
-        subOrders: {
+        // ✅ रिलेशंस से भरपूर और सुरक्षित क्वेरी:
+        const availableBatches = await db.query.deliveryBatches.findMany({
+            where: and(
+                isNull(deliveryBatches.deliveryBoyId), 
+                eq(deliveryBatches.status, 'pending'),
+                exists(
+                    db.select()
+                      .from(subOrders)
+                      .where(
+                          and(
+                              sql`"sub_orders"."delivery_batch_id" = "delivery_batches"."id"`, // टेबल नाम की केसिंग फिक्स भाई
+                              eq(subOrders.status, 'ready_for_pickup')
+                          )
+                      )
+                )
+            ),
             with: {
-                seller: {
-                    columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
-                },
-                // 🔥 जादुई फिक्स: subOrders के अंदर masterOrder को लोड करें ताकि पेमेंट मोड मिल सके!
-                masterOrder: {
+                subOrders: {
                     with: {
-                        deliveryAddress: true, 
-                        customer: {
-                            columns: { firstName: true, lastName: true, phone: true }
+                        seller: {
+                            columns: { id: true, businessName: true, businessAddress: true, businessPhone: true }
+                        },
+                        masterOrder: {
+                            with: {
+                                // 🎯 फिक्स 1: 'deliveryAddress' अब कोई रिलेशन नहीं रहा भाई, इसलिए इसे 'with' से हटा दिया।
+                                customer: {
+                                    columns: { firstName: true, lastName: true, phone: true }
+                                }
+                            }
                         }
                     }
                 }
-            }
-        }
-    },
-    orderBy: desc(deliveryBatches.createdAt),
-});
-const formattedBatches = availableBatches.map(batch => {
+            },
+            orderBy: (deliveryBatches, { desc }) => [desc(deliveryBatches.createdAt)],
+        });
+
+        const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
             // 1. Pickup Details
@@ -487,90 +466,74 @@ const formattedBatches = availableBatches.map(batch => {
             const shopNames = pickupPoints.map(p => p.shopName).join(" + ");
             const shopAddresses = pickupPoints.map(p => p.address).join(" | ");
 
-            // 🎯 100% सटीक अमाउंट कैलकुलेशन: एरे और ऑब्जेक्ट दोनों ढांचों को सपोर्ट करता है
+            // 🎯 अमाउंट कैलकुलेशन
             let calculatedTotalBill = 0;
             currentSubOrders.forEach((so: any) => {
                 if (so) {
                     if (Array.isArray(so)) {
-                        // SQL json_build_array के अनुसार Index [8] पर sub_orders.total स्टोर है
                         calculatedTotalBill += Number(so[8] || so[6] || 0);
                     } else if (typeof so === 'object') {
                         calculatedTotalBill += Number(so.total || so.subtotal || 0);
                     }
                 }
             });
-// 🎯 आपके Assigned वाले कोड के लॉजिक के आधार पर मास्टर ऑर्डर को टारगेट किया
+
             const nestedMaster = currentSubOrders[0]?.masterOrder as any;
-            
-            // Drizzle लैटरल जॉइन सेफ्टी: अगर masterOrder खुद एक एरे की लेयर में आ रहा हो
-            let targetOrder = Array.isArray(nestedMaster) ? nestedMaster[0] : nestedMaster;
+            const customerObj = nestedMaster?.customer || {};
 
-            // 🎯 जादुई फिक्स: नाम के लिए सीधे delivery_addresses टेबल का रिलेशन ऑब्जेक्ट निकालें
-            let addressTableObj = targetOrder?.deliveryAddress;
-            if (Array.isArray(addressTableObj)) {
-                addressTableObj = addressTableObj[0];
-            }
-
-            const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
-
-            // 👤 CUSTOMER NAME EXTRACTION: पहली प्रायोरिटी delivery_addresses.full_name को
-            let finalCustomerName = "Customer"; 
-
-            if (addressTableObj) {
-                if (Array.isArray(addressTableObj)) {
-                    // अगर डेटाबेस से एरे बंडल आ रहा हो तो इंडेक्स [2] पर full_name है
-                    finalCustomerName = String(addressTableObj[2] || "").trim();
-                } else {
-                    // अगर नॉर्मल ऑब्जेक्ट फॉर्मेट में आ रहा हो
-                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
+            // 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
+            let parsedAddressObj: any = null;
+            if (nestedMaster?.deliveryAddress && typeof nestedMaster.deliveryAddress === 'string') {
+                try {
+                    parsedAddressObj = JSON.parse(nestedMaster.deliveryAddress);
+                } catch (e) {
+                    console.warn("Failed to parse deliveryAddress JSON inside available batches:", e);
                 }
             }
 
-            // फॉलबैक: अगर एड्रेस टेबल में नाम न मिले, तो पुराना फर्स्ट/लास्ट नेम वाला लॉजिक काम करेगा
-            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-                let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+            // 👤 CUSTOMER NAME EXTRACTION
+            let finalCustomerName = "Customer"; 
+            if (parsedAddressObj?.fullName) {
+                finalCustomerName = String(parsedAddressObj.fullName).trim();
+            } else {
+                let firstName = customerObj?.firstName || '';
+                let lastName = customerObj?.lastName || '';
                 finalCustomerName = `${firstName} ${lastName}`.trim();
             }
 
-            // फाइनल सेफ़्टी चेक
-            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                finalCustomerName = targetOrder?.customerName || targetOrder?.customer_name || "Customer";
+            if (!finalCustomerName || finalCustomerName === "null" || finalCustomerName === "undefined") {
+                finalCustomerName = "Customer";
             }
 
-            // 📞 PHONE NUMBER EXTRACTION (हूबहू आपके वर्किंग कोड की तरह)
-            const finalPhone = nestedMaster?.phone || nestedMaster?.customerPhone || customerObj?.phone || "N/A";
+            // 📞 PHONE NUMBER EXTRACTION
+            const finalPhone = parsedAddressObj?.phone || customerObj?.phone || "N/A";
             
-            // 📍 DELIVERY ADDRESS EXTRACTION (हूबहू आपके वर्किंग कोड की तरह - सीधे orders.delivery_address)
-            let finalAddress = nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
-
-            if (finalAddress && typeof finalAddress === 'object') {
-                if (Array.isArray(finalAddress)) {
-                    finalAddress = String(finalAddress[4] || "Local Address");
+            // 📍 DELIVERY ADDRESS EXTRACTION (फ्लैट एड्रेस लाइन और सिटी-पिनकोड कॉम्बिनेशन भाई)
+            let finalAddress = "Local Address";
+            if (parsedAddressObj) {
+                finalAddress = parsedAddressObj.addressLine1 || parsedAddressObj.address || "Local Address";
+                if (parsedAddressObj.addressLine2) {
+                    finalAddress += `, ${parsedAddressObj.addressLine2}`;
+                }
+                const city = parsedAddressObj.city || "Bundi";
+                const pincode = parsedAddressObj.pincode || parsedAddressObj.postalCode || "";
+                if (!finalAddress.includes(city)) {
+                    finalAddress = `${finalAddress}, ${city} ${pincode}`.trim();
                 } else {
-                    finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
+                    finalAddress = `${finalAddress} ${pincode}`.trim();
                 }
+            } else if (typeof nestedMaster?.deliveryAddress === 'string' && nestedMaster.deliveryAddress.trim() !== "") {
+                finalAddress = nestedMaster.deliveryAddress;
             }
 
-            // स्क्रीन सेफ्टी क्लीनर (ताकि कभी [object Object] न दिखे)
-            if (typeof finalAddress === 'string' && finalAddress.includes("[object Object]")) {
-                if (addressTableObj) {
-                    finalAddress = Array.isArray(addressTableObj) 
-                        ? `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim()
-                        : `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
-                }
-            }
+            // 🎯 NEAR BY / LANDMARK
             let finalNearBy = "Not Provided";
-            if (nestedMaster) {
-                // लॉग्स प्रूफ: अगर एरे है तो सीधे बिना किसी कंडीशनल लेयर के इंडेक्स [10] से वैल्यू उठाएं
-                const instructions = Array.isArray(nestedMaster) 
-                    ? nestedMaster[10] 
-                    : (nestedMaster.delivery_instructions || nestedMaster.deliveryInstructions);
-                
-                if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null" && instructions !== "undefined") {
-                    finalNearBy = instructions.trim();
-                }
+            if (parsedAddressObj?.addressLine2 && parsedAddressObj.addressLine2.trim() !== "") {
+                finalNearBy = parsedAddressObj.addressLine2.trim();
+            } else if (nestedMaster?.deliveryInstructions) {
+                finalNearBy = nestedMaster.deliveryInstructions;
             }
+
             return {
                 id: batch.id,
                 batchNumber: `BTCH-${batch.id}`,
@@ -590,6 +553,7 @@ const formattedBatches = availableBatches.map(batch => {
                 totalToCollect: calculatedTotalBill
             };
         });
+
         return res.status(200).json({ batches: formattedBatches });
 
     } catch (error: any) {
@@ -707,6 +671,7 @@ router.patch(
  * ✅ GET My Assigned Delivery Batches (Replaces "GET My Orders")
  * /api/delivery-boys/batches
  */
+// 🎯 1. असाइन्ड बैचेस ढूंढने की एपीआई - JSON एड्रेस पार्सिंग और न्यू स्कीमा कॉम्पैटिबिलिटी भाई
 router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) => {
   try {
     const userId = req.user?.id;
@@ -731,9 +696,9 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
         not(inArray(deliveryBatches.status, ['delivered', 'cancelled', 'failed'])) 
       ),
       with: {
-        // डायरेक्ट मास्टर आर्डर का रिलेशन भी लोड करें ताकि पंगे न हों
         masterOrder: {
           with: {
+            // 🎯 फिक्स 1: 'deliveryAddress' अब टेबल रिलेशन नहीं है, इसलिए इसे 'with' से हटा दिया भाई!
             customer: {
               columns: { id: true, firstName: true, lastName: true, phone: true }
             }
@@ -754,21 +719,21 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
             orderItems: {
               with: {
                 product: {
-                  columns: { id: true, name: true, image: true, price: true, unit: true }
+                  columns: { id: true, name: true, image: true, price: true }
                 }
               }
             }
           }
         }
       },
-      orderBy: desc(deliveryBatches.createdAt),
+      orderBy: (deliveryBatches, { desc }) => [desc(deliveryBatches.createdAt)],
     });
 
-    // 🎯 MAPPING TRANSFORMATION (100% Matching with MyTasksScreen & BatchDetails)
+    // 🎯 MAPPING TRANSFORMATION
     const formattedBatches = assignedBatches.map(batch => {
       const currentSubOrders = batch.subOrders || [];
       
-      // 1. Pickup Details Array (Har shop ka naam, address aur phone number alag se)
+      // 1. Pickup Details Array
       const pickupPoints = currentSubOrders.map(so => ({
         shopName: so.seller?.businessName || "Unknown Shop",
         address: so.seller?.businessAddress || "Address Not Available",
@@ -778,97 +743,82 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       const shopNames = pickupPoints.map(p => p.shopName).filter(Boolean).join(" + ");
       const shopAddresses = pickupPoints.map(p => p.address).filter(Boolean).join(" | ");
 
-     // 2. Customer Profile Extraction (Deep Safe Fallback)
+      // 2. Customer Profile Extraction (Deep Safe Fallback)
       const directMaster = batch.masterOrder as any;
       const nestedMaster = currentSubOrders[0]?.masterOrder as any;
-      
       const mOrder = directMaster || nestedMaster;
       let targetOrder = Array.isArray(mOrder) ? mOrder[0] : mOrder;
 
-      // नाम के लिए रिलेशन टेबल को बाहर निकाला
-      let addressTableObj = targetOrder?.deliveryAddress;
-      if (Array.isArray(addressTableObj)) {
-          addressTableObj = addressTableObj[0];
+      // 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
+      let parsedAddressObj: any = null;
+      if (targetOrder?.deliveryAddress && typeof targetOrder.deliveryAddress === 'string') {
+          try {
+              parsedAddressObj = JSON.parse(targetOrder.deliveryAddress);
+          } catch (e) {
+              console.warn("Failed to parse deliveryAddress JSON inside assigned batches:", e);
+          }
       }
 
       const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
 
-            // 👤 CUSTOMER NAME EXTRACTION: पहली प्रायोरिटी delivery_addresses.full_name को
-            let finalCustomerName = "Customer"; 
-
-            if (addressTableObj) {
-                if (Array.isArray(addressTableObj)) {
-                    // अगर डेटाबेस से एरे बंडल आ रहा हो तो इंडेक्स [2] पर full_name है
-                    finalCustomerName = String(addressTableObj[2] || "").trim();
-                } else {
-                    // अगर नॉर्मल ऑब्जेक्ट फॉर्मेट में आ रहा हो
-                    finalCustomerName = String(addressTableObj.full_name || addressTableObj.fullName || "").trim();
-                }
-            }
-
-            // फॉलबैक: अगर एड्रेस टेबल में नाम न मिले, तो पुराना फर्स्ट/लास्ट नेम वाला लॉजिक काम करेगा
-            if (!finalCustomerName || finalCustomerName === "Customer" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
-                let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
-                finalCustomerName = `${firstName} ${lastName}`.trim();
-            }
-
-            // फाइनल सेफ़्टी चेक
-            if (!finalCustomerName || finalCustomerName.trim() === "" || finalCustomerName === "null" || finalCustomerName === "undefined") {
-                finalCustomerName = targetOrder?.customerName || targetOrder?.customer_name || "Customer";
-            }
-      
-      
-      // 📞 PHONE NUMBER EXTRACTION (आपका पुराना वर्किंग)
-      const finalPhone = directMaster?.phone || nestedMaster?.phone || directMaster?.customerPhone || customerObj?.phone || "N/A";
-      
-      // 📍 DELIVERY ADDRESS EXTRACTION (आपका पुराना वर्किंग)
-      let finalAddress = directMaster?.delivery_address || directMaster?.deliveryAddress || 
-                         nestedMaster?.delivery_address || nestedMaster?.deliveryAddress || "Local Address";
-
-      if (finalAddress && typeof finalAddress === 'object') {
-         if (Array.isArray(finalAddress)) {
-             finalAddress = String(finalAddress[4] || "Local Address");
-         } else {
-             finalAddress = (finalAddress as any).addressLine1 || (finalAddress as any).address || "Local Address";
-         }
+      // 👤 CUSTOMER NAME EXTRACTION
+      let finalCustomerName = "Customer"; 
+      if (parsedAddressObj?.fullName) {
+          finalCustomerName = String(parsedAddressObj.fullName).trim();
+      } else {
+          let firstName = targetOrder?.first_name || customerObj?.firstName || customerObj?.first_name || '';
+          let lastName = targetOrder?.last_name || customerObj?.lastName || customerObj?.last_name || '';
+          finalCustomerName = `${firstName} ${lastName}`.trim();
       }
 
-      if (typeof finalAddress === 'string' && finalAddress.includes("[object Object]")) {
-          if (addressTableObj) {
-              finalAddress = Array.isArray(addressTableObj) 
-                  ? `${addressTableObj[4] || ""} ${addressTableObj[5] || ""}`.trim()
-                  : `${addressTableObj.addressLine1 || ""} ${addressTableObj.addressLine2 || ""}`.trim();
+      if (!finalCustomerName || finalCustomerName === "null" || finalCustomerName === "undefined") {
+          finalCustomerName = "Customer";
+      }
+      
+      // 📞 PHONE NUMBER EXTRACTION
+      const finalPhone = parsedAddressObj?.phone || directMaster?.phone || nestedMaster?.phone || customerObj?.phone || "N/A";
+      
+      // 📍 DELIVERY ADDRESS EXTRACTION (फ्लैट एड्रेस लाइन और सिटी-पिनकोड कॉम्बिनेशन भाई)
+      let finalAddress = "Local Address";
+      if (parsedAddressObj) {
+          finalAddress = parsedAddressObj.addressLine1 || parsedAddressObj.address || "Local Address";
+          if (parsedAddressObj.addressLine2) {
+              finalAddress += `, ${parsedAddressObj.addressLine2}`;
           }
+          const city = parsedAddressObj.city || "Bundi";
+          const pincode = parsedAddressObj.pincode || parsedAddressObj.postalCode || "";
+          if (!finalAddress.includes(city)) {
+              finalAddress = `${finalAddress}, ${city} ${pincode}`.trim();
+          } else {
+              finalAddress = `${finalAddress} ${pincode}`.trim();
+          }
+      } else if (typeof targetOrder?.deliveryAddress === 'string' && targetOrder.deliveryAddress.trim() !== "") {
+          finalAddress = targetOrder.deliveryAddress;
       }
 
-      // 🎯 NEAR BY FIELD FIX: असाइन्ड वाले में भी सीधे delivery_instructions को ही Target किया है
+      // 🎯 NEAR BY / LANDMARK
       let finalNearBy = "Not Provided";
-      if (targetOrder) {
-          const instructions = Array.isArray(targetOrder) 
-              ? targetOrder[10] 
-              : (targetOrder.delivery_instructions || targetOrder.deliveryInstructions);
-          
-          if (instructions && typeof instructions === 'string' && instructions.trim() !== "" && instructions !== "null") {
-              finalNearBy = instructions.trim();
-          }
+      if (parsedAddressObj?.addressLine2 && parsedAddressObj.addressLine2.trim() !== "") {
+          finalNearBy = parsedAddressObj.addressLine2.trim();
+      } else if (targetOrder?.deliveryInstructions) {
+          finalNearBy = targetOrder.deliveryInstructions;
       }
+
       return {
         id: batch.id,
         batchNumber: `BTCH-${batch.id}`,
         status: batch.status,
         createdAt: batch.createdAt,
         
-        // 🎯 FLAT KEYS जो फ्रंटएंड तुरंत रेंडर कर लेगा
         pickupShops: shopNames || "Unknown Shop",
         pickupAddresses: shopAddresses,
-        pickupPoints: pickupPoints, // 👈 यह ऐरे 'BatchDetails' में दुकान का नंबर दिखाएगा
+        pickupPoints: pickupPoints, 
         
         customerName: finalCustomerName,
-        customerPhone: finalPhone,      // 👈 कस्टमर का असली फोन नंबर
-        deliveryAddress: finalAddress,   // 👈 कस्टमर का पूरा असली पता
-        deliveryCity: directMaster?.delivery_city || nestedMaster?.delivery_city || "Unknown City", // 👈 अगर शहर का डेटा हो तो दिखाएं
-        deliveryInstructions: finalNearBy, // 👈 निकटवर्ती निर्देश
+        customerPhone: finalPhone,      
+        deliveryAddress: finalAddress,   
+        deliveryCity: parsedAddressObj?.city || directMaster?.delivery_city || nestedMaster?.delivery_city || "Unknown City",
+        deliveryInstructions: finalNearBy, 
 
         deliveryCharge: Number(batch.deliveryFee || 40),
         totalItems: currentSubOrders.length
@@ -882,16 +832,16 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
     return res.status(500).json({ error: 'Failed to fetch delivery batches.' });
   }
 });
-// 🎯 आपके बताए नियम के अनुसार 100% सटीक बैच प्राइस API
+
+// 🎯 2. बैच प्राइस कैलकुलेशन एपीआई - एरे लेयर हैंडलिंग के साथ 100% फिक्स भाई
 router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const { batchId } = req.params;
 
-        // 1. इस बैच के सभी सब-ऑर्डर्स और उनके मास्टर ऑर्डर का डेटा मंगाएं
         const batchSubOrders = await db.query.subOrders.findMany({
             where: eq(subOrders.deliveryBatchId, Number(batchId)),
             with: {
-                masterOrder: true // मास्टर ऑर्डर से डिलीवरी चार्ज निकालने के लिए
+                masterOrder: true 
             }
         });
 
@@ -899,25 +849,23 @@ router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res
             return res.status(200).json({ totalToCollect: 0, msg: "No suborders found in this batch" });
         }
 
-        // 🎯 नियम 1: sub_orders टेबल के केवल 'subtotal' कॉलम से ही प्राइस लेनी है
+        // 🎯 नियम 1: केवल 'subtotal' कॉलम से ही प्राइस लेनी है भाई
         let pureSubOrdersSum = 0;
         batchSubOrders.forEach((so: any) => {
             if (Array.isArray(so)) {
-                // अगर Drizzle ने इसे एरे बनाया है, तो लॉग्स के हिसाब से subtotal इंडेक्स [6] पर है
                 pureSubOrdersSum += Number(so[6] || 0);
             } else {
                 pureSubOrdersSum += Number(so.subtotal || 0);
             }
         });
 
-        // 🎯 नियम 2: orders टेबल से सिर्फ 'delivery_charge' कॉलम से ही चार्ज उठाना है
+        // 🎯 नियम 2: केवल 'delivery_charge' या 'deliveryCharge' को उठाना है भाई
         const firstSubOrder = batchSubOrders[0];
         let mOrder = Array.isArray(firstSubOrder) ? firstSubOrder[14] : firstSubOrder?.masterOrder;
         
         let deliveryChargeToApply = 0;
 
         if (mOrder) {
-            // चेक करें कि क्या इस मास्टर ऑर्डर का कोई और बैच इससे पहले प्रोसेस हो चुका है
             const earlierBatches = await db.query.deliveryBatches.findMany({
                 where: and(
                     eq(deliveryBatches.masterOrderId, Array.isArray(mOrder) ? mOrder[2] : mOrder.id),
@@ -928,24 +876,22 @@ router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res
             // अगर यह पहला बैच है, तो मास्टर ऑर्डर का डिलीवरी चार्ज जोड़ेंगे, वरना '0'
             if (earlierBatches.length === 0) {
                 if (Array.isArray(mOrder)) {
-                    // SQL json_build_array के अनुसार masterOrder का delivery_charge इंडेक्स [21] पर है
                     deliveryChargeToApply = Number(mOrder[21] || 0);
                 } else {
-                    deliveryChargeToApply = Number(mOrder.delivery_charge || mOrder.deliveryCharge || 0);
+                    deliveryChargeToApply = Number(mOrder.deliveryCharge || mOrder.delivery_charge || 0);
                 }
             } else {
-                deliveryChargeToApply = 0; // अगले बैच के लिए डिलीवरी चार्ज '0'
+                deliveryChargeToApply = 0; 
             }
         }
 
-        // 💸 फाइनल कलेक्ट करने योग्य शुद्ध रकम
         const finalBatchPrice = pureSubOrdersSum + deliveryChargeToApply;
 
         return res.status(200).json({
             batchId: Number(batchId),
             subOrdersSubtotalSum: pureSubOrdersSum,
             masterOrderDeliveryCharge: deliveryChargeToApply,
-            totalToCollect: finalBatchPrice // 👈 यह वैल्यू फ्रंटएंड पर बिना किसी गलती के चमकेगी
+            totalToCollect: finalBatchPrice 
         });
 
     } catch (error: any) {
@@ -957,6 +903,7 @@ router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res
  * ✅ Send OTP to Customer (Final Version)
  * POST /api/delivery/batches/:batchId/send-otp
  */
+// 🎯 1. ओटीपी भेजने की एपीआई - JSON एड्रेस पार्सिंग और कड़क मैसेजिंग फिक्स भाई
 router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     try {
         const userId = req.user?.id;
@@ -968,7 +915,7 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
 
         // 1. सबसे पहले डिलीवरी बॉय की ID डेटाबेस से निकालें (Type Safety)
         const [dboyProfile] = await db
-            .select({ id: deliveryBoys.id })
+            .select({ id: deliveryBoys.id, name: deliveryBoys.name }) // 🎯 फिक्स: नाम भी यहीं से उठा लिया भाई
             .from(deliveryBoys)
             .where(eq(deliveryBoys.userId, userId));
 
@@ -976,6 +923,7 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
             return res.status(404).json({ success: false, message: "Delivery Boy profile not found." });
         }
         const deliveryBoyId = dboyProfile.id;
+        const deliveryBoyName = dboyProfile.name || "Shopnish Partner";
 
         // 2. बैच ढूंढें और सुनिश्चित करें कि यह इसी डिलीवरी बॉय का है
         const batch = await db.query.deliveryBatches.findFirst({
@@ -989,7 +937,7 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
                         masterOrder: {
                             with: {
                                 customer: { columns: { id: true, firstName: true, phone: true } },
-                                deliveryAddress: true 
+                                // 🎯 फिक्स: 'deliveryAddress' अब टेबल रिलेशन नहीं है, इसलिए इसे 'with' से हटा दिया भाई!
                             }
                         }
                     }
@@ -1001,10 +949,20 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
             return res.status(404).json({ success: false, message: "Batch not found or not assigned to you." });
         }
 
-        // 3. फोन नंबर प्राप्त करें (Address Table को प्राथमिकता दें क्योंकि ऑर्डर उसी नंबर पर जाना चाहिए)
         const masterOrder = batch.subOrders[0].masterOrder;
-        const customerPhone = masterOrder.deliveryAddress?.phoneNumber || masterOrder.customer?.phone;
-        const customerName = masterOrder.customer?.firstName || 'Customer';
+
+        // 🎯 फिक्स: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
+        let parsedAddressObj: any = null;
+        if (masterOrder?.deliveryAddress && typeof masterOrder.deliveryAddress === 'string') {
+            try {
+                parsedAddressObj = JSON.parse(masterOrder.deliveryAddress);
+            } catch (e) {
+                console.warn("Failed to parse deliveryAddress JSON inside send-otp:", e);
+            }
+        }
+
+        // 3. फोन नंबर प्राप्त करें (पार्स किए हुए ऑब्जेक्ट से असली नंबर)
+        const customerPhone = parsedAddressObj?.phone || parsedAddressObj?.phoneNumber || masterOrder.customer?.phone;
 
         if (!customerPhone) {
             return res.status(400).json({ success: false, message: "Customer contact info missing." });
@@ -1012,7 +970,8 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
         
         // 4. OTP जनरेट करें
         const otp = generateOTP(4);
-        const otpMessage = `आपका ऑर्डर डिलीवरी OTP है: ${otp}. कृपया इसे डिलीवरी पार्टनर ${customerName} को प्रदान करें।`;
+        // 🎯 महा-फिक्स: मैसेज में राइडर का असली नाम जाएगा, जिससे कस्टमर को पता रहे कि कौन आ रहा है भाई!
+        const otpMessage = `आपका ऑर्डर डिलीवरी OTP है: ${otp}. कृपया इसे डिलीवरी पार्टनर ${deliveryBoyName} को प्रदान करें।`;
 
         // 5. Transaction: OTP सेव करें और स्टेटस सिंक करें
         await db.transaction(async (tx) => {
@@ -1029,7 +988,7 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
             // मास्टर ऑर्डर को भी 'out_for_delivery' की तरफ बढ़ाएं
             await tx.update(orders)
                 .set({ 
-                    updatedAt: new Date().toISOString() // String type fix
+                    updatedAt: new Date().toISOString() 
                 })
                 .where(eq(orders.id, masterOrder.id));
 
@@ -1050,7 +1009,6 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
             await sendWhatsAppMessage(customerPhone, otpMessage);
         } catch (wsError) {
             console.error("⚠️ WhatsApp Notify Failed:", wsError);
-            // हम यहाँ से एरर रिटर्न नहीं करेंगे क्योंकि OTP डेटाबेस में सेव हो चुका है
         }
 
         // 7. Real-time Socket Update
@@ -1070,10 +1028,9 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
         return res.status(500).json({ success: false, message: error.message || "Internal server error." });
     }
 });
-/**
- * ✅ Final & Solid Logic: Update Delivery Batch Status
- * /api/delivery-boys/batches/:batchId/status
- */
+
+
+// 🎯 2. बैच स्टेटस अपडेट करने की एपीआई - आटोमैटिक क्लीनर और सिंक फिक्स भाई
 router.patch(
   '/batches/:batchId/status',
   requireDeliveryBoyAuth,
@@ -1106,13 +1063,10 @@ router.patch(
       });
 
       if (!existingBatch) return res.status(404).json({ error: 'Batch not found or not assigned to you.' });
-
       
-// 4. Transition Logic (Strict Workflow) - 🎯 100% सटीक और एरर-फ्री फिक्स
       const currentStatus = existingBatch.status;
-      // 🎯 फिक्स: यहाँ से 'const { status: newStatus, otp } = req.body;' वाली लाइन हटा दी है, क्योंकि वह ऊपर पहले से मौजूद है भाई!
 
-      // Idempotency Check: अगर स्टेटस पहले से ही सेम है, तो सीधे आगे बढ़ा दो भाई
+      // Idempotency Check
       if (currentStatus === newStatus) {
         console.log(`ℹ️ [STATUS MATCH]: Batch #${batchId} is already '${newStatus}'.`);
         return res.status(200).json({
@@ -1122,18 +1076,11 @@ router.patch(
         });
       }
 
-      // 🗺️ यह है आपका असली, साफ़ और सही रास्ता:
+      // Workflows Transitions
       const validTransitions: Record<string, string[]> = {
-        // १. जब बैच बना था तब 'pending' था, क्लेम करते ही सीधे 'assigned' होगा भाई
         'pending': ['assigned', 'cancelled'],
-        
-        // २. 'assigned' (राइडर ने क्लेम कर लिया) से दुकान पर सामान लेते ही सीधे 'picked_up' होगा
         'assigned': ['picked_up', 'cancelled'],
-        
-        // ३. 'picked_up' (सामान ले लिया, जीपीएस ऑन) से अब राइडर 'out_for_delivery' बटन दबाएगा
         'picked_up': ['out_for_delivery', 'cancelled'],
-        
-        // ४. 'out_for_delivery' से सीधे फाइनल 'delivered', 'failed' या 'cancelled'
         'out_for_delivery': ['delivered', 'cancelled', 'failed'],
         'failed': ['out_for_delivery', 'cancelled'],
         'delivered': [],
@@ -1143,6 +1090,7 @@ router.patch(
       if (!validTransitions[currentStatus]?.includes(newStatus)) {
         return res.status(400).json({ error: `Illegal transition: ${currentStatus} -> ${newStatus}` });
       }
+
       // 5. Delivery OTP Verification
       if (newStatus === 'delivered') {
         if (otp === 'BYPASS_BY_RIDER') {
@@ -1155,22 +1103,20 @@ router.patch(
       const masterOrderId = existingBatch.subOrders[0].masterOrder.id;
       const customerId = existingBatch.subOrders[0].masterOrder.customerId;
 
-      // --- Database Transaction: Ensuring Data Integrity ---
+      // --- Database Transaction ---
       const finalBatch = await db.transaction(async (tx) => {
         
         // A. Update Delivery Batch
         const [updatedBatch] = await tx.update(deliveryBatches)
           .set({
             status: newStatus as any,
-            // 🎯 फिक्स २: जैसे ही 'picked_up' या 'out_for_delivery' होगा, 'updatedAt' बिल्कुल करंट टाइम पर सेट होगा 
-            // जिससे मोबाइल की लोकेशन API इसे अगले 60 मिनट तक बिना किसी रुकावट के सिंक रखेगी भाई!
-            updatedAt: new Date(),
+            updatedAt: new Date(), // 🎯 फिक्स: ताकि लोकेशन API 60 मिनट तक एक्टिव सिंक रखे भाई!
             deliveredAt: newStatus === 'delivered' ? new Date() : existingBatch.deliveredAt,
           } as any)
           .where(eq(deliveryBatches.id, batchId))
           .returning();
 
-        // B. Add Tracking Entry (Batch Level)
+        // B. Add Tracking Entry
         await tx.insert(orderTracking).values({
           masterOrderId,
           deliveryBatchId: batchId,
@@ -1181,57 +1127,28 @@ router.patch(
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
 
-        // 💰 WALLET SETTLEMENT LOGIC (Inside Transaction)
+        // 💰 WALLET SETTLEMENT LOGIC
         if (newStatus === 'delivered') {
           const [settings] = await tx.select().from(adminSettings).limit(1);
           const platformCommission = Number(settings?.platformCommissionRate || 10);
           const payoutAmount = Number(existingBatch.deliveryFee);
 
-          await WalletService.addMoney(
-            userId, 
-            'delivery-boy', 
-            payoutAmount, 
-            'delivery_fee', 
-            `batch_${batchId}`, 
-            `Earnings for batch #${batchId}`,
-            tx 
-          );
+          await WalletService.addMoney(userId, 'delivery-boy', payoutAmount, 'delivery_fee', `batch_${batchId}`, `Earnings for batch #${batchId}`, tx);
 
-          // अगर COD है, तो कैश कलेक्शन मैनेज करें
           const masterOrder = existingBatch.subOrders[0].masterOrder;
           const isCOD = masterOrder.paymentMethod === 'COD';
           if (isCOD) {
             const totalCashToCollect = existingBatch.subOrders.reduce((sum, so) => sum + Number(so.total), 0);
-            
-            await WalletService.addMoney(
-              userId, 
-              'delivery-boy', 
-              -totalCashToCollect, 
-              'cod_collection', 
-              `batch_${batchId}`, 
-              `Cash collected for COD Batch #${batchId}`,
-              tx
-            );
+            await WalletService.addMoney(userId, 'delivery-boy', -totalCashToCollect, 'cod_collection', `batch_${batchId}`, `Cash collected for COD Batch #${batchId}`, tx);
           }
 
-          // सेलर को सेटलमेंट दें
           for (const so of existingBatch.subOrders) {
             const sellerUserId = so.seller?.userId; 
-            
             if (sellerUserId) {
               const orderTotal = Number(so.total);
               const commissionAmount = (orderTotal * platformCommission) / 100;
               const sellerEarning = orderTotal - commissionAmount;
-
-              await WalletService.addMoney(
-                sellerUserId, 
-                'seller', 
-                sellerEarning, 
-                'order_earning', 
-                `order_${so.id}`, 
-                `Earning for Order #${so.id}`,
-                tx
-              );
+              await WalletService.addMoney(sellerUserId, 'seller', sellerEarning, 'order_earning', `order_${so.id}`, `Earning for Order #${so.id}`, tx);
             }
           }
         }
@@ -1257,7 +1174,6 @@ router.patch(
             } as any);
           }
 
-          // D. Finalize Master Order Logic
           const allSubs = await tx.query.subOrders.findMany({
             where: eq(subOrders.masterOrderId, masterOrderId),
           });
@@ -1316,5 +1232,3 @@ router.patch(
     }
   }
 );
-
-export default router;

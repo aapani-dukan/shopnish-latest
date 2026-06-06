@@ -38,37 +38,27 @@ console.log({
 });
 import { ProductService } from "../../services/productService";
 import { sendNotification } from '../../services/notificationService';
+// 🎯 रेडियन कनवर्टर को एक बार डिक्लेयर कर दिया भाई ताकि बार-बार कैलकुलेशन का लोड न पड़े
+const TO_RAD = Math.PI / 180;
 
-const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
-  if (lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0) return 9999; // यदि कोई अमान्य समन्वय है तो बड़ी दूरी लौटाएं
+export const calculateDistance = (lat1: number, lon1: number, lat2: number, lon2: number): number => {
+  if (lat1 === 0 || lon1 === 0 || lat2 === 0 || lon2 === 0 || !lat1 || !lon1 || !lat2 || !lon2) {
+    return 9999; // यदि कोई अमान्य लोकेशन है तो बड़ी दूरी लौटाएं ताकि डिलीवरी स्कोप से बाहर रहे भाई
+  }
 
   const R = 6371; // पृथ्वी की त्रिज्या किलोमीटर में
-  const dLat = (lat2 - lat1) * Math.PI / 180;
-  const dLon = (lon2 - lon1) * Math.PI / 180;
+  const dLat = (lat2 - lat1) * TO_RAD;
+  const dLon = (lon2 - lon1) * TO_RAD;
+  
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.cos(lat1 * TO_RAD) * Math.cos(lat2 * TO_RAD) *
     Math.sin(dLon / 2) * Math.sin(dLon / 2);
+    
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   const distance = R * c; // किलोमीटर में दूरी
   return distance;
 };
-
-// एक डमी डिलीवरी बॉय असाइनमेंट फंक्शन
-// वास्तविक कार्यान्वयन में, यह उपलब्धता, स्थान, लोड आदि के आधार पर एक डिलीवरी बॉय ढूंढेगा।
-//async function assignDeliveryBoy(tx: any, masterOrderId: number, customerLat: number, customerLng: number): Promise<number | null> {
-    // यहाँ आप डेटाबेस से उपलब्ध डिलीवरी बॉय को क्वेरी कर सकते हैं
-    // उदाहरण के लिए, 5 किमी के भीतर और उपलब्ध
-  //  const availableDeliveryBoys = await tx.select()
-    //    .from(deliveryBoys)
-    //    .where(eq(deliveryBoys.isAvailable, true));
-    
-    // सरल बनाने के लिए, बस पहला उपलब्ध डिलीवरी बॉय लौटा दें
-  //  if (availableDeliveryBoys.length > 0) {
-   //     return availableDeliveryBoys[0].id;
- //   }
- //   return null;
-// }
 
 /**
  * helper function to validate delivery address or create a new one.
@@ -84,23 +74,22 @@ async function handleDeliveryAddress(
   id: number; 
   lat: number; 
   lng: number; 
-  fullAddress: any;
+  fullAddress: string; // 🎯 फिक्स: अब यह हमेशा पक्का JSON स्ट्रिंग ही रिटर्न करेगा भाई!
   city: string; 
   state: string; 
-  pincode: string 
+  pincode: string; 
 }> {
   
   let finalDeliveryAddressId: number;
   let finalDeliveryLat: number;
   let finalDeliveryLng: number;
-  let finalFullAddress: any;
+  let finalFullAddressObj: any;
   let finalCity: string;
   let finalState: string;
   let finalPincode: string;
 
   // ------------------------ NEW ADDRESS ---------------------------
   if (newDeliveryAddress) {
-
     const safe = newDeliveryAddress || {};
 
     const fullAddressObj = {
@@ -124,26 +113,23 @@ async function handleDeliveryAddress(
       city: fullAddressObj.city,
       state: fullAddressObj.state,
       postalCode: fullAddressObj.pincode,
-      latitude: fullAddressObj.latitude,
-      longitude: fullAddressObj.longitude,
+      latitude: String(fullAddressObj.latitude), // डेटाबेस स्कीमा सपोर्ट के लिए स्ट्रिंग या नंबर मैच रखें भाई
+      longitude: String(fullAddressObj.longitude),
       isDefault: false,
       createdAt: new Date(),
-    }).returning();
+    } as any).returning();
 
     finalDeliveryAddressId = inserted.id;
     finalDeliveryLat = Number(inserted.latitude);
     finalDeliveryLng = Number(inserted.longitude);
-
     finalCity = inserted.city;
     finalState = inserted.state;
     finalPincode = inserted.postalCode;
-
-    finalFullAddress = fullAddressObj;
+    finalFullAddressObj = fullAddressObj;
   }
 
   // ------------------------ EXISTING ADDRESS ---------------------------
   else if (deliveryAddressId) {
-
     const [existing] = await tx.select()
       .from(deliveryAddresses)
       .where(and(
@@ -151,7 +137,7 @@ async function handleDeliveryAddress(
         eq(deliveryAddresses.userId, userId)
       ));
 
-    if (!existing) throw new Error("Delivery address not found.");
+    if (!existing) throw new Error("Delivery address not found भाई।");
 
     const fullAddressObj = {
       fullName: existing.fullName,
@@ -168,23 +154,22 @@ async function handleDeliveryAddress(
     finalDeliveryAddressId = existing.id;
     finalDeliveryLat = Number(existing.latitude);
     finalDeliveryLng = Number(existing.longitude);
-
     finalCity = existing.city;
     finalState = existing.state;
     finalPincode = existing.postalCode;
-
-    finalFullAddress = fullAddressObj;
+    finalFullAddressObj = fullAddressObj;
   }
 
   else {
-    throw new Error("No delivery address provided.");
+    throw new Error("No delivery address provided भाई।");
   }
 
   return {
     id: finalDeliveryAddressId,
     lat: finalDeliveryLat,
     lng: finalDeliveryLng,
-    fullAddress: finalFullAddress,
+    // 🎯 मास्टरस्ट्रोक फिक्स: इसे यहीं पर JSON.stringify कर दिया भाई ताकि orders टेबल में जाते समय डेटा का टाइप कभी मिसमैच न हो!
+    fullAddress: JSON.stringify(finalFullAddressObj), 
     city: finalCity,
     state: finalState,
     pincode: finalPincode,
@@ -1334,7 +1319,7 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
     const masterOrders = await db.query.orders.findMany({
       where: eq(orders.customerId, userId),
       with: {
-        deliveryAddress: true, 
+        // 🎯 फिक्स 1: 'deliveryAddress' अब टेबल रिलेशन नहीं, बल्कि सीधा टेक्स्ट कॉलम है भाई! इसलिए इसे 'with' से हटा दिया।
         subOrders: {
           with: {
             seller: {
@@ -1343,7 +1328,7 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
             store: {
               columns: { id: true, storeName: true, address: true, latitude: true, longitude: true },
             },
-            deliveryBatch: { // सब-ऑर्डर से डिलीवरी बैच को पॉपुलेट करें
+            deliveryBatch: { 
               columns: { id: true, status: true, estimatedDeliveryTime: true, actualDeliveryTime: true },
               with: {
                 deliveryBoy: {
@@ -1354,12 +1339,12 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
           },
         },
       },
-      orderBy: [desc(orders.createdAt)],
+      orderBy: (orders, { desc }) => [desc(orders.createdAt)],
     });
 
     const formattedOrders = masterOrders.map(masterOrder => {
       
-      // 🟢 FIX 1: अद्वितीय बैचेस (Unique Batches) को इकट्ठा करें
+      // 🟢 अद्वितीय बैचेस (Unique Batches) को इकट्ठा करें
       const uniqueBatchesMap = new Map();
       (masterOrder.subOrders || []).forEach(subOrder => {
           if (subOrder.deliveryBatch) {
@@ -1368,29 +1353,24 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
       });
       const uniqueBatches = Array.from(uniqueBatchesMap.values());
 
-      // 🟢 FIX 2: मास्टर ऑर्डर के लिए समग्र डिलीवरी स्टेटस निर्धारित करें
+      // 🟢 मास्टर ऑर्डर के लिए समग्र डिलीवरी स्टेटस निर्धारित करें
       let overallDeliveryStatus = masterOrder.status; 
 
-if (uniqueBatches.length > 0) {
-    // 1. यदि सभी बैचेस 'delivered' हैं, तो मास्टर स्टेटस 'fulfilled' (मतलब ऑर्डर पूरा हुआ)
-    if (uniqueBatches.every(b => b.status === 'delivered')) {
-        overallDeliveryStatus = 'fulfilled';
-    } 
-    // 2. यदि कोई बैच डिलीवर हो गया है और कुछ अभी भी रास्ते में हैं, तो 'partially_fulfilled'
-    else if (uniqueBatches.some(b => b.status === 'delivered')) {
-        overallDeliveryStatus = 'partially_fulfilled';
-    }
-    // 3. यदि कोई भी बैच 'out_for_delivery' या 'picked_up' है, तो उसे 'confirmed' मानें 
-    // (क्योंकि ये अभी भी प्रोसेस में हैं)
-    else if (uniqueBatches.some(b => b.status === 'out_for_delivery' || b.status === 'picked_up')) {
-        overallDeliveryStatus = 'confirmed';
-    }
-}
+      if (uniqueBatches.length > 0) {
+          if (uniqueBatches.every(b => b.status === 'delivered')) {
+              overallDeliveryStatus = 'fulfilled';
+          } 
+          else if (uniqueBatches.some(b => b.status === 'delivered')) {
+              overallDeliveryStatus = 'partially_fulfilled';
+          }
+          else if (uniqueBatches.some(b => b.status === 'out_for_delivery' || b.status === 'picked_up')) {
+              overallDeliveryStatus = 'confirmed';
+          }
+      }
 
-      // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें (पुरानी मैपिंग बरकरार)
+      // प्रत्येक सब-ऑर्डर के लिए डिलीवरी बॉय और डिलीवरी स्टेटस जोड़ें
       const subOrdersWithDeliveryInfo = (masterOrder.subOrders || []).map(subOrder => {
         const deliveryBoy = subOrder.deliveryBatch?.deliveryBoy || null;
-        // डिलीवरी स्टेटस के लिए डिलीवरी बैच स्टेटस को प्राथमिकता दें
         const deliveryStatus = subOrder.deliveryBatch?.status || subOrder.status; 
         const estimatedDeliveryTime = subOrder.deliveryBatch?.estimatedDeliveryTime || null;
         const actualDeliveryTime = subOrder.deliveryBatch?.actualDeliveryTime || null;
@@ -1404,30 +1384,33 @@ if (uniqueBatches.length > 0) {
         };
       });
 
+      // सेफ़ एड्रेस पार्सिंग भाई
+      let parsedAddress = masterOrder.deliveryAddress;
+      if (typeof masterOrder.deliveryAddress === 'string') {
+        try { parsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
+      }
+
       return {
         ...masterOrder,
-        overallDeliveryStatus: overallDeliveryStatus, // 👈 Frontend पर दिखने वाला स्टेटस
-        deliveryBatches: uniqueBatches, // 👈 बैच-वाइज ट्रैकिंग के लिए
+        deliveryAddress: parsedAddress,
+        overallDeliveryStatus: overallDeliveryStatus, 
+        deliveryBatches: uniqueBatches, 
         subOrders: subOrdersWithDeliveryInfo,
       };
     });
 
     console.log(`✅ [API] Found ${masterOrders.length} master orders for user ${userId}.`);
-    res.status(200).json(formattedOrders);
+    return res.status(200).json(formattedOrders);
   } catch (error) {
     console.error("❌ Error fetching user orders:", error);
-    res.status(500).json({ message: "Failed to fetch orders." });
+    return res.status(500).json({ message: "Failed to fetch orders." });
   }
 };
 
 
 /**
  * ✅ GET /api/orders/:orderId/tracking
- * विशिष्ट मास्टर ऑर्डर के लिए विस्तृत ट्रैकिंग जानकारी फ़ेच करता है।
- * उद्देश्य: मैप पर ट्रैकिंग और बैच-वाइज डिलीवरी प्रगति दिखाना।
  */
-
-          
 export const getOrderTrackingDetails = async (
   req: AuthenticatedRequest,
   res: Response
@@ -1473,19 +1456,19 @@ export const getOrderTrackingDetails = async (
         )[0] || null
       : null;
 
-    /* 3️⃣ Sub Orders - Updated with Seller Details */
-const subOrdersList = await db.query.subOrders.findMany({
-  where: eq(subOrders.masterOrderId, orderId),
-  with: {
-    seller: { // 👈 Ye relation add karna zaroori hai
-      columns: {
-        businessName: true,
-        businessAddress: true,
+    /* 3️⃣ Sub Orders */
+    const subOrdersList = await db.query.subOrders.findMany({
+      where: eq(subOrders.masterOrderId, orderId),
+      with: {
+        seller: { 
+          columns: {
+            businessName: true,
+            businessAddress: true,
+          }
+        },
+        store: true 
       }
-    },
-    store: true // Agar store ka lat/lng bhi chahiye
-  }
-});
+    });
 
     /* 4️⃣ Delivery Batches */
     const deliveryBatchesList = await db
@@ -1494,46 +1477,41 @@ const subOrdersList = await db.query.subOrders.findMany({
       .where(eq(deliveryBatches.masterOrderId, orderId));
 
     
-    /* 5️⃣ Attach Delivery Boy (LIVE LOCATION FROM delivery_boys table) */
-   for (const batch of deliveryBatchesList) {
-  let deliveryBoy: any = null;
+    /* 5️⃣ Attach Delivery Boy LIVE LOCATION */
+    for (const batch of deliveryBatchesList) {
+      let deliveryBoy: any = null;
 
-  // delivery boy assigned hai ya nahi
-  if (batch.deliveryBoyId) {
-    const boyResult = await db
-      .select({
-        id: deliveryBoys.id,
-        name: deliveryBoys.name,
-        phone: deliveryBoys.phone,
-        currentLat: deliveryBoys.currentLat,
-        currentLng: deliveryBoys.currentLng,
-      })
-      .from(deliveryBoys)
-      .where(eq(deliveryBoys.id, batch.deliveryBoyId))
-      .limit(1);
+      if (batch.deliveryBoyId) {
+        const boyResult = await db
+          .select({
+            id: deliveryBoys.id,
+            name: deliveryBoys.name,
+            phone: deliveryBoys.phone,
+            currentLat: deliveryBoys.currentLat,
+            currentLng: deliveryBoys.currentLng,
+          })
+          .from(deliveryBoys)
+          .where(eq(deliveryBoys.id, batch.deliveryBoyId))
+          .limit(1);
 
-    if (boyResult.length > 0) {
-      const boy = boyResult[0];
-
-      deliveryBoy = {
-        id: boy.id,
-        name: boy.name,
-        phone: boy.phone,
-        currentLocation:
-          boy.currentLat !== null &&
-          boy.currentLng !== null
-            ? {
-                lat: Number(boy.currentLat),
-                lng: Number(boy.currentLng),
-              }
-            : null,
-      };
+        if (boyResult.length > 0) {
+          const boy = boyResult[0];
+          deliveryBoy = {
+            id: boy.id,
+            name: boy.name,
+            phone: boy.phone,
+            currentLocation:
+              boy.currentLat !== null && boy.currentLng !== null
+                ? {
+                    lat: Number(boy.currentLat),
+                    lng: Number(boy.currentLng),
+                  }
+                : null,
+          };
+        }
+      }
+      (batch as any).deliveryBoy = deliveryBoy;
     }
-  }
-
-  // 👇 batch me attach kar do (yeh line rehni hi chahiye)
-  (batch as any).deliveryBoy = deliveryBoy;
-   }
 
     /* 6️⃣ Tracking History */
     const trackingHistory = await db
@@ -1549,19 +1527,24 @@ const subOrdersList = await db.query.subOrders.findMany({
       const relatedSubOrders = subOrdersList.filter(
         so => so.deliveryBatchId === batch.id
       );
-//const sellerName = (subOrdersList[0] as any)?.seller?.businessName || "Shopnish Seller";
       deliveryBatchesSummary.push({
         batchId: batch.id,
         batchStatus: batch.status,
         deliveryBoy: (batch as any).deliveryBoy,
         subOrders: relatedSubOrders.map(so => ({
           subOrderId: so.id,
-          SellerName: (so as any).seller?.businessName || (so as any).sellerName || "Shopnish Seller",
+          SellerName: (so as any).seller?.businessName || "Shopnish Seller",
           subOrderStatus: so.status,
           isSelfDelivery: so.isSelfDeliveryBySeller,
         })),
         storeLocations: [],
       });
+    }
+
+    // मास्टर एड्रेस पार्सिंग भाई
+    let masterParsedAddress = masterOrder.deliveryAddress;
+    if (typeof masterOrder.deliveryAddress === 'string') {
+      try { masterParsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
     }
 
     /* ✅ FINAL RESPONSE */
@@ -1571,9 +1554,10 @@ const subOrdersList = await db.query.subOrders.findMany({
       status: masterOrder.status,
       paymentMethod: masterOrder.paymentMethod,
       paymentStatus: masterOrder.paymentStatus,
-      total: masterOrder.total,
+      total: Number(masterOrder.total || 0),
       estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
       createdAt: masterOrder.createdAt,
+      deliveryAddress: masterParsedAddress,
 
       customerDeliveryAddress,
       deliveryBatchesSummary,
@@ -1588,36 +1572,20 @@ const subOrdersList = await db.query.subOrders.findMany({
   }
 };
     
-// ---------------------------------------------------------------------------------
-// **NOTES:** getSubOrderDetails और getOrderDetail में मुख्य ट्रैकिंग लॉजिक शामिल नहीं है
-// ---------------------------------------------------------------------------------
 
 export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
     console.log("🔍 [API] Received request to get Master Order details (Legacy/Fallback).");
     try {
         const customerId = req.user?.id;
         const orderId = Number(req.params.orderId);
-        
-        // 🛑 FIX 1: sellerId की अपेक्षा करना बंद करें
-        // यह लाइन अभी भी Query से sellerId को पढ़ने की कोशिश करती है, 
-        // लेकिन हम इसे 400 त्रुटि देने के लिए उपयोग नहीं करेंगे।
-        const sellerIdQuery = req.query.sellerId; 
 
         if (!customerId) {
             return res.status(401).json({ message: "Unauthorized." });
         }
         
-        // ✅ FIX 2: Validation को केवल Master Order ID पर सीमित करें
         if (Number.isNaN(orderId)) {
-            // हमने 'Seller ID' संदर्भ हटा दिया है।
             return res.status(400).json({ message: "Invalid Order ID." }); 
         }
-
-        // ----------------------------------------------------------------------
-        // ⚠️ महत्वपूर्ण: यदि यह फ़ंक्शन अब Master Order डिटेल्स दिखाता है, 
-        // तो आपको इसकी Drizzle क्वेरी को भी बदलना होगा ताकि यह 'getOrderDetail' की तरह काम करे!
-        // (जैसा कि आपने getOrderDetail में किया था)
-        // ----------------------------------------------------------------------
 
         const masterOrderDetail = await db.query.orders.findFirst({
             where: and(
@@ -1625,61 +1593,58 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
                 eq(orders.customerId, customerId)
             ),
             with: {
-                deliveryAddress: true,
+                // 🎯 फिक्स 2: 'deliveryAddress' यहाँ से हटाया, और subOrders के साथ orderItems को भी लोड किया भाई!
                 subOrders: {
                     with: {
                         seller: {
                             columns: { id: true, businessName: true, businessAddress: true, businessPhone: true },
                         },
-                        // ... बाकी subOrders का डेटा ...
+                        orderItems: true // आइटम्स की लिस्ट देखने के लिए भाई
                     },
                 },
-             //   orderTracking: {
-                //    orderBy: [desc(orderTracking.createdAt)],
-              //  }
             },
         });
-        const trackingHistory = await db.query.orderTracking.findMany({
-  where: eq(orderTracking.masterOrderId, orderId),
-  orderBy: [desc(orderTracking.timestamp)],
-  limit: 5,
-});
-        // यदि masterOrderDetail नहीं मिला
+
         if (!masterOrderDetail) {
             return res.status(404).json({ message: "Master order not found or access denied." });
         }
 
-        // Parsing logic (सही है)
         let parsedDeliveryAddress = {};
         try {
             parsedDeliveryAddress = JSON.parse(masterOrderDetail.deliveryAddress as string);
         } catch (e) {
-            console.warn(`Failed to parse deliveryAddress JSON for master order ${masterOrderDetail.id}:`, e);
+            parsedDeliveryAddress = { raw: masterOrderDetail.deliveryAddress };
         }
 
-        // SubOrders data mapping (सही है)
+        // 🎯 फिक्स 3: '...subOrder' को स्प्रेड करना बेहद ज़रूरी था भाई, वरना सब-ऑर्डर की फ़ील्ड्स गायब हो जातीं!
         const detailedSubOrders = (masterOrderDetail.subOrders || []).map(subOrder => {
             const deliveryBoy = (subOrder as any)?.deliveryBatch?.deliveryBoy || null;
             const deliveryStatus = (subOrder as any)?.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : subOrder.status);
             
             return {
-                // ... subOrder fields
+                ...subOrder, // ✅ अब डेटा सुरक्षित है भाई!
+                total: Number(subOrder.total || 0),
+                subtotal: Number(subOrder.subtotal || 0),
+                deliveryCharge: Number(subOrder.deliveryCharge || 0),
                 deliveryBoy: deliveryBoy,
                 deliveryStatus: deliveryStatus,
+                items: subOrder.orderItems || []
             };
         });
 
         console.log(`✅ [API] Found master order ${orderId}.`);
         
-        // 🟢 FIX 3: Master Order फॉर्मेट में डेटा वापस करें
-        res.status(200).json({
+        return res.status(200).json({
           ...masterOrderDetail,
+          total: Number(masterOrderDetail.total || 0),
+          subtotal: Number(masterOrderDetail.subtotal || 0),
+          deliveryCharge: Number(masterOrderDetail.deliveryCharge || 0),
           deliveryAddress: parsedDeliveryAddress,
           subOrders: detailedSubOrders,
         });
 
     } catch (error: any) {
-        console.error("❌ Error fetching sub-order details (now master order details):", error);
+        console.error("❌ Error fetching sub-order details:", error);
         next(error);
     }
 };
@@ -1712,19 +1677,16 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) =
       return res.status(404).json({ message: "Order not found" });
     }
 
-    // 1. Address Parsing
     let parsedAddress = masterOrder.deliveryAddress;
     if (typeof masterOrder.deliveryAddress === 'string') {
       try { parsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
     }
 
-    // 2. Formatting Sub-Orders
     const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
       ...so,
-      // 🛑 यहाँ सभी अमाउंट्स को पक्का नंबर में बदलें
       total: Number(so.total || 0),
       subtotal: Number(so.subtotal || 0),
-      deliveryCharge: Number(so.deliveryCharge || 0), // 👈 यह लाइन एरर फिक्स करेगी
+      deliveryCharge: Number(so.deliveryCharge || 0), 
       
       items: (so.orderItems || []).map((item: any) => {
         const price = Number(item.productPrice || item.unitPrice || 0);
@@ -1738,14 +1700,13 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) =
       })
     }));
 
-    // 3. Response
     return res.json({
       step: 1, 
       masterOrder: {
         ...masterOrder,
         total: Number(masterOrder.total || 0),
         subtotal: Number(masterOrder.subtotal || 0),
-        deliveryCharge: Number(masterOrder.deliveryCharge || 0), // यहाँ भी सुरक्षित रखें
+        deliveryCharge: Number(masterOrder.deliveryCharge || 0), 
         deliveryAddress: parsedAddress
       },
       subOrders: formattedSubOrders 

@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db'; 
 import { sellersPgTable, stores, subOrders, products,productVariants, orders } from '../../shared/backend/schema'; 
-import { eq, and, gte, sql, desc, isNull, not, lte,or } from 'drizzle-orm';
+import { eq, and, gte, sql, desc, isNull, not, lte,or,inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
 // ✅ प्रोफेशनल Async Handler
@@ -19,8 +19,8 @@ const sellerUpdateSchema = z.object({
   pincode: z.string().regex(/^\d{6}$/, "Invalid Pincode").optional(),
   deliveryPincodes: z.array(z.string()).optional(),
   businessPhone: z.string().regex(/^\d{10}$/, "Invalid Phone Number").optional(),
-  isSelfDeliveryBySeller: z.boolean().optional(), // 🔥 New: Self Delivery Toggle
-  isOpen: z.boolean().optional(), // 🔥 New: Store Status Toggle
+  isSelfDeliveryBySeller: z.boolean().optional(), 
+  isOpen: z.boolean().optional(), 
   gstNumber: z.string().max(15).optional().nullable(),
   bankAccountNumber: z.string().regex(/^\d{9,18}$/).optional().nullable(),
   ifscCode: z.string().regex(/^[a-zA-Z]{4}0[a-zA-Z0-9]{6}$/).optional().nullable(),
@@ -30,7 +30,7 @@ const sellerUpdateSchema = z.object({
   longitude: z.union([z.number(), z.string()]).optional().nullable(),
 });
 
-// 1️⃣ Get Seller Dashboard Stats (Confirmed High-Class Logic)
+// 1️⃣ Get Seller Dashboard Stats (Confirmed High-Class Logic بھائی)
 export const getDashboardStats = asyncHandler(async (req: Request, res: Response) => {
     const sellerId = (req as any).user?.sellerId;
     if (!sellerId) return res.status(401).json({ message: "Seller ID not found." });
@@ -38,35 +38,28 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // A. Today's Delivered Sales (Asli Kamai)
-   
-// 1. Today's Delivered Sales (Ab dono cases handle honge)
-const salesResult = await db.select({
-    totalSales: sql<number>`sum(${subOrders.total})`.mapWith(Number)
-})
-.from(subOrders)
-.where(and(
-    eq(subOrders.sellerId, sellerId),
-    // ✅ "delivered" ki jagah inArray use karke dono statuses check karein
-    or(
-        eq(subOrders.status, 'delivered_by_seller'),
-        eq(subOrders.status, 'delivered_by_delivery_boy')
-    ),
-    gte(subOrders.createdAt, today)
-));
+    // 🎯 फिक्स 1: डिलीवर्ड के सारे संभावित स्टेटस शामिल किए भाई, ताकि सेलर की 'असली कमाई' एकदम सटीक दिखे!
+    const salesResult = await db.select({
+        totalSales: sql<number>`sum(${subOrders.total})`.mapWith(Number)
+    })
+    .from(subOrders)
+    .where(and(
+        eq(subOrders.sellerId, sellerId),
+        inArray(subOrders.status, [ 'delivered_by_seller', 'delivered_by_delivery_boy']),
+        gte(subOrders.createdAt, today)
+    ));
+
     // B. Pending Orders Count
     const pendingCount = await db.select({ count: sql<number>`count(*)` })
         .from(subOrders)
         .where(and(eq(subOrders.sellerId, sellerId), eq(subOrders.status, 'pending')));
 
     // C. Low Stock Items (Threshold = 5)
-   // 🎯 फिक्स: अब लो-स्टॉक काउंट सीधे वैरिएंट टेबल के अंदर जाकर चेक होगा भाई!
     const lowStockResult = await db.select({ count: sql<number>`count(distinct ${products.id})` })
         .from(products)
         .where(and(
             eq(products.sellerId, sellerId), 
             isNull(products.deletedAt),
-            // जादुई सबक्वेरी: चेक करो कि क्या इस प्रोडक्ट का कोई भी लाइव वैरिएंट 5 या उससे कम स्टॉक पर है भाई
             sql`exists (
               select 1 from ${productVariants} 
               where ${productVariants.productId} = ${products.id} 
@@ -78,10 +71,11 @@ const salesResult = await db.select({
     // D. Recent Orders (Latest 5)
     const recentOrders = await db.query.subOrders.findMany({
         where: eq(subOrders.sellerId, sellerId),
-        orderBy: [desc(subOrders.createdAt)],
+        orderBy: (subOrders, { desc }) => [desc(subOrders.createdAt)],
         limit: 5,
         with: {
-            masterOrder: { with: { customer: true } }
+            // 🎯 फिक्स 2: स्कीमा रिलेशंस के हिसाब से मास्टर ऑर्डर के यूजर/कस्टमर टेबल को बाइंड किया भाई
+            masterOrder: { with: { user: true, customer: true } }
         }
     });
 
@@ -95,16 +89,21 @@ const salesResult = await db.select({
         lowStockItems: lowStockResult[0]?.count || 0,
         isOpen: sellerInfo?.isOpen || false,
         isSelfDelivery: sellerInfo?.isSelfDeliveryBySeller || false,
-        recentOrders: recentOrders.map(o => ({
-            id: o.id,
-            orderNumber: o.subOrderNumber,
-            customerName: (o as any).masterOrder?.customer?.firstName || 'Customer',
-            totalAmount: o.total,
-            status: o.status
-        }))
+        recentOrders: recentOrders.map(o => {
+            const mOrder = (o as any).masterOrder;
+            // यूजर या कस्टमर ऑब्जेक्ट में से जो भी अवेलेबल हो, वहाँ से नाम उठाओ भाई
+            const customerName = mOrder?.user?.name || mOrder?.customer?.firstName || 'Customer';
+            
+            return {
+                id: o.id,
+                orderNumber: o.subOrderNumber,
+                customerName: customerName,
+                totalAmount: Number(o.total || 0),
+                status: o.status
+            };
+        })
     });
 });
-
 
 
 // 3️⃣ Get Seller Profile
@@ -117,10 +116,16 @@ export const getMySellerProfile = asyncHandler(async (req: Request, res: Respons
     return res.status(200).json({ success: true, data: seller });
 });
 
-// 4️⃣ Update Seller Profile (With Store Sync)
+
+// 4️⃣ Update Seller Profile (With Security & Store Sync भाई)
 export const updateMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
     const sellerIdParam = parseInt(req.params.id, 10);
-    const userId = (req as any).user?.id;
+    const loggedInSellerId = (req as any).user?.sellerId; // टोकन से निकाली आईडी भाई
+
+    // 🎯 फिक्स 3 (सिक्योरिटी लॉक): चेक करो कि सेलर सिर्फ अपनी ही आईडी अपडेट कर रहा है ना भाई!
+    if (loggedInSellerId && sellerIdParam !== loggedInSellerId) {
+        return res.status(403).json({ message: "Forbidden: You can only update your own profile भाई।" });
+    }
 
     const validation = sellerUpdateSchema.safeParse(req.body);
     if (!validation.success) return res.status(400).json({ errors: validation.error.flatten().fieldErrors });
@@ -156,5 +161,5 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         }
     });
 
-    return res.status(200).json({ success: true, message: "Profile and Store updated." });
+    return res.status(200).json({ success: true, message: "Profile and Store updated successfully भाई।" });
 });

@@ -37,28 +37,44 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
     }
   }
 
-  // Price Validation
-  if (data.price !== undefined) {
-    const priceNum = Number(data.price);
-    if (isNaN(priceNum) || priceNum <= 0) {
-      errors.push("Price must be a positive number.");
+  // 🎯 फिक्स: अब टॉप लेवल price/stock के बजाय वैरिएंट्स एरे को वैलिडेट करेंगे भाई!
+  if (data.variants !== undefined) {
+    if (!Array.isArray(data.variants) || data.variants.length === 0) {
+      errors.push("Variants must be a non-empty array भाई।");
     } else {
-      data.price = priceNum;
-    }
-  } else if (!isUpdate) {
-    errors.push("Price is required.");
-  }
+      data.variants.forEach((v: any, index: number) => {
+        // वैरिएंट प्राइस चेक
+        if (v.price !== undefined) {
+          const priceNum = Number(v.price);
+          if (isNaN(priceNum) || priceNum <= 0) {
+            errors.push(`Variant [${index}] price must be a positive number.`);
+          } else {
+            v.price = priceNum;
+          }
+        } else if (!isUpdate) {
+          errors.push(`Price is required for variant [${index}].`);
+        }
 
-  // Stock Validation
-  if (data.stock !== undefined) {
-    const stockNum = Number(data.stock);
-    if (isNaN(stockNum) || stockNum < 0) {
-      errors.push("Stock must be a non-negative number.");
-    } else {
-      data.stock = stockNum;
+        // वैरिएंट स्टॉक चेक
+        if (v.stock !== undefined) {
+          const stockNum = Number(v.stock);
+          if (isNaN(stockNum) || stockNum < 0) {
+            errors.push(`Variant [${index}] stock must be a non-negative number.`);
+          } else {
+            v.stock = stockNum;
+          }
+        } else if (!isUpdate) {
+          errors.push(`Stock is required for variant [${index}].`);
+        }
+
+        // वैरिएंट क्वांटिटी वैल्यू चेक (e.g. 250, 1, 5)
+        if (!isUpdate && (v.quantityValue === undefined || String(v.quantityValue).trim().length === 0)) {
+          errors.push(`Quantity value is required for variant [${index}].`);
+        }
+      });
     }
   } else if (!isUpdate) {
-    errors.push("Stock is required.");
+    errors.push("Product variants array is required بھائی।");
   }
 
   // Image Logic
@@ -76,14 +92,13 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
       errors.push("Additional images must be an array of valid URLs.");
     }
   }
-// 1. ADD HINDI & BRAND VALIDATION (Hindi support ke liye)
+
+  // Localization & Brand Support
   if (data.nameHindi !== undefined && typeof data.nameHindi !== 'string') errors.push("Product Hindi name must be a string.");
   if (data.descriptionHindi !== undefined && typeof data.descriptionHindi !== 'string') errors.push("Product Hindi description must be a string.");
   if (data.brand !== undefined && typeof data.brand !== 'string') errors.push("Brand must be a string.");
 
-  
-  // Delivery Radius & Pincode Logic (Very Important for Shopnish)
-  // 3. Delivery Radius & Pincode Logic (Cleaned - No Duplicates)
+  // Delivery Radius & Pincode Logic
   if (data.deliveryScope === 'LOCAL') {
     if (data.productDeliveryRadiusKM !== undefined) {
       const radiusNum = Number(data.productDeliveryRadiusKM);
@@ -107,22 +122,18 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
     }
   }
 
-  // Unit & Qty
-  if (data.unit !== undefined) {
-    if (typeof data.unit !== 'string' || data.unit.trim().length === 0) errors.push("Unit is required.");
-  } else if (!isUpdate) errors.push("Unit is required.");
-
+  // Order Limit Logic
   if (data.minOrderQty !== undefined) {
     const minNum = Number(data.minOrderQty);
     if (isNaN(minNum) || minNum < 1) errors.push("Minimum order quantity must be a positive number.");
     else data.minOrderQty = minNum;
-  } else if (!isUpdate) errors.push("Minimum order quantity is required.");
+  }
 
   if (data.maxOrderQty !== undefined) {
     const maxNum = Number(data.maxOrderQty);
     if (isNaN(maxNum) || maxNum < (data.minOrderQty || 1)) errors.push(`Maximum order quantity must be >= minimum order quantity.`);
     else data.maxOrderQty = maxNum;
-  } else if (!isUpdate) errors.push("Maximum order quantity is required.");
+  }
 
   return errors;
 }
@@ -197,7 +208,7 @@ export const bulkUploadProducts = async (req: any, res: any) => {
 // =========================================================================
 
 export const createProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
-  console.log("🚀 [API] Creating Product - Hybrid Mode (Master/Manual)");
+  console.log("🚀 [API] Creating Product - Variant Aware Hybrid Mode بھائی");
   
   const userId = req.user?.id;
   if (!userId) return res.status(401).json({ message: "Unauthorized: Seller not authenticated." });
@@ -208,57 +219,79 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
     if (!sellerProfile) return res.status(404).json({ message: "Seller profile not found." });
 
     const productData = req.body;
+const validationErrors = validateProductInput(productData, false);
+    if (validationErrors.length > 0) {
+      return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
+    }
+    // 🎯 फिक्स: फ्रंटएंड से वैरिएंट्स का एरे (variants) आना अनिवार्य है भाई!
+    // फ्रंटएंड पेलोड का फॉर्मेट ऐसा होना चाहिए: variants: [{ quantityValue: "250", unit: "gm", price: 100, stock: 50, originalPrice: 120 }]
+    const variants = productData.variants;
+    if (!variants || !Array.isArray(variants) || variants.length === 0) {
+      return res.status(400).json({ message: "At least one product variant (size/price) is required bhai!" });
+    }
 
-    // 2. इमेज हैंडलिंग (पुरानी Multer/File logic हटा दी क्योंकि अब Cloudinary URL सीधा body में आ रहा है)
-    // अगर फिर भी कोई फाइल आती है (बैकअप के लिए), तो आप पुरानी लॉजिक रख सकते हैं, 
-    // लेकिन अब 'productData.image' सीधा Frontend से मिलेगा।
+    // 2. ⚡ पूरा इंसर्शन ट्रांजेक्शन के अंदर सुरक्षित करें ताकि डेटा मिसमैच न हो भाई
+    const result = await db.transaction(async (tx) => {
+      
+      // a) मुख्य प्रोडक्ट को 'products' टेबल में डालें (बिना price और stock के भाई)
+      const [newProduct] = await tx.insert(products).values({
+        masterProductId: productData.masterProductId ? Number(productData.masterProductId) : null,
+        name: productData.name,
+        description: productData.description || null,
+        categoryId: productData.categoryId ? Number(productData.categoryId) : null,
+        image: productData.image || null,
+        brand: productData.brand || null,
+        sellerId: sellerProfile.id,
+        approvalStatus: 'pending',
+        isActive: productData.isActive ?? true,
+        
+        nameHindi: productData.nameHindi || null,
+        descriptionHindi: productData.descriptionHindi || null,
+        
+        deliveryScope: productData.deliveryScope || 'NATIONAL',
+        productDeliveryRadiusKM: productData.productDeliveryRadiusKM ? Number(productData.productDeliveryRadiusKM) : null,
+        productDeliveryPincodes: productData.productDeliveryPincodes || null,
+        estimatedDeliveryTime: productData.estimatedDeliveryTime || '2-3 business days',
+        
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      } as any).returning();
 
-    // 3. डेटाबेस में इंसर्ट (Hybrid Fields के साथ)
-    const [newProduct] = await db.insert(products).values({
-      // --- Hybrid Fields ---
-      masterProductId: productData.masterProductId ? Number(productData.masterProductId) : null,
-      
-      // --- Basic Info ---
-      name: productData.name,
-      description: productData.description || null,
-      price: String(productData.price),
-      stock: Number(productData.stock),
-      categoryId: productData.categoryId ? Number(productData.categoryId) : null,
-      image: productData.image || null, // Cloudinary URL यहाँ आएगा
-      
-      // --- Advanced Info (जो आपने दी थी) ---
-      originalPrice: productData.originalPrice ? String(productData.originalPrice) : null,
-      brand: productData.brand || null,
-      sellerId: sellerProfile.id,
-      unit: productData.unit || 'unit',
-      minOrderQty: Number(productData.minOrderQty) || 1,
-      maxOrderQty: productData.maxOrderQty ? Number(productData.maxOrderQty) : null,
-      approvalStatus: 'pending',
-      isActive: productData.isActive ?? true,
-      
-      // --- Localization ---
-      nameHindi: productData.nameHindi || null,
-      descriptionHindi: productData.descriptionHindi || null,
-      
-      // --- Shipping & Delivery ---
-      deliveryScope: productData.deliveryScope || 'NATIONAL',
-      productDeliveryRadiusKM: productData.productDeliveryRadiusKM ? Number(productData.productDeliveryRadiusKM) : null,
-      productDeliveryPincodes: productData.productDeliveryPincodes || null,
-      estimatedDeliveryTime: productData.estimatedDeliveryTime || '2-3 business days',
-      
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }as any).returning();
+      if (!newProduct) throw new Error("Master product creation failed.");
 
-    console.log("✅ Product Created Successfully:", newProduct.id);
-    res.status(201).json({ 
-      message: "Product created successfully. Awaiting admin approval.", 
-      product: newProduct 
+      // b) 🎯 लूप चलाकर सारे वैरिएंट्स को 'productVariants' टेबल में डालें भाई!
+      const insertedVariants = [];
+      for (const variant of variants) {
+        const [insertedVariant] = await tx.insert(productVariants).values({
+          productId: newProduct.id, // मुख्य प्रोडक्ट की आईडी बाइंड कर दी भाई
+          quantityValue: String(variant.quantityValue), // e.g. "500"
+          unit: variant.unit || productData.unit || 'piece', // e.g. "gm"
+          price: Number(variant.price), // सेलिंग प्राइस
+          originalPrice: variant.originalPrice ? Number(variant.originalPrice) : null, // MRP
+          stock: Number(variant.stock ?? 0), // स्टॉक लिमिट
+          minOrderQty: Number(variant.minOrderQty) || Number(productData.minOrderQty) || 1,
+          maxOrderQty: variant.maxOrderQty ? Number(variant.maxOrderQty) : (productData.maxOrderQty ? Number(productData.maxOrderQty) : null),
+          isActive: true,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any).returning();
+
+        insertedVariants.push(insertedVariant);
+      }
+
+      return { product: newProduct, variants: insertedVariants };
     });
 
-  } catch (error) { 
+    console.log("✅ Product & Variants Created Successfully:", result.product.id);
+    return res.status(201).json({ 
+      message: "Product and its variants created successfully. Awaiting admin approval.", 
+      product: result.product,
+      variants: result.variants
+    });
+
+  } catch (error: any) { 
     console.error("❌ Create Product Error:", error);
-    next(error); 
+    return res.status(500).json({ message: error?.message || "Failed to create product." });
   }
 };
     
@@ -267,45 +300,73 @@ export const createProduct = async (req: AuthenticatedRequest, res: Response, ne
 export const bulkCreateProducts = async (req: any, res: Response) => {
   try {
     const { products: productsList } = req.body;
-    const userId = req.user?.id; // यह आपकी User ID (34) है
+    const userId = req.user?.id;
 
     if (!Array.isArray(productsList) || productsList.length === 0) {
-      return res.status(400).json({ error: "कोई उत्पाद नहीं मिला।" });
+      return res.status(400).json({ error: "कोई उत्पाद नहीं मिला भाई।" });
     }
 
-    // 1. User ID का इस्तेमाल करके Sellers टेबल से असली Seller ID (10) निकालें
+    // 1. User ID का इस्तेमाल करके Sellers टेबल से असली Seller ID निकालें
     const sellerData = await db
       .select()
       .from(sellersPgTable)
       .where(eq(sellersPgTable.userId, userId))
       .limit(1);
 
-    // अगर सेलर प्रोफाइल नहीं मिलता
     if (!sellerData.length) {
       return res.status(404).json({ error: "सेलर प्रोफाइल नहीं मिला। कृपया पहले सेलर रजिस्टर करें।" });
     }
 
-    const realSellerId = sellerData[0].id; // यहाँ अब 10 आ जाएगा ✅
+    const realSellerId = sellerData[0].id;
 
-    // 2. पेलोड तैयार करें (असली Seller ID के साथ)
-    const productsToInsert: any[] = productsList.map((p: any) => ({
-      sellerId: realSellerId, // अब यहाँ 10 जाएगा, जिससे Foreign Key Error नहीं आएगा
-      masterProductId: p.masterProductId,
-      name: p.name,
-      image: p.image,
-      categoryId: p.categoryId,
-      price: p.price.toString(), // Decimal के लिए string में बदलना सुरक्षित है
-      stock: p.stock,
-      isActive: true,
-      approvalStatus: 'approved' as const, // Type safety के लिए
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }));
-    await db.insert(products).values(productsToInsert);
-    res.status(201).json({ message: `${productsList.length} products added successfully!` });
+    // 2. ⚡ पूरा बल्क इंसर्शन एक ट्रांजेक्शन में लपेटें भाई
+    await db.transaction(async (tx) => {
+      for (const p of productsList) {
+        // a) मुख्य प्रोडक्ट इन्फो डालें भाई
+        const [newProduct] = await tx.insert(products).values({
+          sellerId: realSellerId,
+          masterProductId: p.masterProductId ? Number(p.masterProductId) : null,
+          name: p.name,
+          image: p.image || null,
+          categoryId: p.categoryId ? Number(p.categoryId) : null,
+          isActive: true,
+          approvalStatus: 'approved', // एडमिन से डायरेक्ट अप्रूव्ड डेटा के लिए भाई
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as any).returning();
+
+        if (!newProduct) throw new Error("Bulk insert failed at master level.");
+
+        // b) 🎯 वैरिएंट्स टेबल में इसका डिफ़ॉल्ट वैरिएंट बनाएँ भाई!
+        // अगर फ्रंटएंड पेलोड में 'variants' एरे है तो उसपर लूप चलाएँ, नहीं तो फ्लैट प्राइस/स्टॉक को ही बेस वैरिएंट बना दें भाई
+        const variantsToInsert = p.variants && Array.isArray(p.variants) ? p.variants : [{
+          quantityValue: p.quantityValue || "1",
+          unit: p.unit || "piece",
+          price: Number(p.price || 0),
+          originalPrice: p.originalPrice ? Number(p.originalPrice) : null,
+          stock: Number(p.stock || 0)
+        }];
+
+        for (const v of variantsToInsert) {
+          await tx.insert(productVariants).values({
+            productId: newProduct.id,
+            quantityValue: String(v.quantityValue),
+            unit: v.unit || 'piece',
+            price: Number(v.price),
+            originalPrice: v.originalPrice ? Number(v.originalPrice) : null,
+            stock: Number(v.stock || 0),
+            isActive: true,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+          } as any);
+        }
+      }
+    });
+
+    return res.status(201).json({ message: `${productsList.length} products and their variants added successfully ভাই!` });
   } catch (error) {
     console.error("Bulk Insert Error:", error);
-    res.status(500).json({ error: "Bulk upload failed" });
+    return res.status(500).json({ error: "Bulk upload failed" });
   }
 };
 export const updateProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
@@ -317,65 +378,83 @@ export const updateProduct = async (req: AuthenticatedRequest, res: Response, ne
     if (!sellerProfile) return res.status(404).json({ message: "Seller profile not found." });
 
     const updateData = req.body;
-if (req.file) {
-  try {
-    // 1. Purani image delete karne ka logic (Jo aapki original file mein tha)
-    const [existingProductForImageCheck] = await db.select({ image: products.image })
-      .from(products)
-      .where(eq(products.id, productId));
-      
-    if (existingProductForImageCheck?.image) {
-      console.log(`[INFO] Attempting to delete old image: ${existingProductForImageCheck.image}`);
-      await deleteImage(existingProductForImageCheck.image);
-    }
 
-    // 2. Nayi image ko Buffer mein convert karein
-    const fileBuffer = fs.readFileSync(req.file.path);
-
-    // 3. uploadImage ko 3 arguments dein: Buffer, Name, aur ContentType (mimetype)
-    updateData.image = await uploadImage(
-      fileBuffer,            // Pehla argument: Buffer
-      req.file.originalname, // Dusra argument: FileName
-      req.file.mimetype      // Teesra argument: ContentType (Line 198 ka fix)
-    );
-
-    // 4. Temporary file ko delete karein
-    fs.unlinkSync(req.file.path);
-
-  } catch (uploadError: any) {
-    console.error("❌ Image upload failed during update:", uploadError);
-    return res.status(500).json({ message: "Image upload failed.", error: uploadError.message });
-  }
-}
-
-   const validationErrors = validateProductInput(updateData, true);
-    if (validationErrors.length > 0) return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
-
-    // 🎯 फिक्स: पहले रिक्वेस्ट बॉडी से मुख्य variantId निकालो भाई ताकि नीचे सर्विस कॉल खुश हो जाए!
-    const variantId = Number(updateData.variantId || req.body.variantId || updateData.id);
-
-    // 🔥 Calling the High-Class Service (अब पूरे 4 आर्गुमेंट्स के साथ भाई)
-    const updatedProduct = await ProductService.updateProduct(productId, variantId, sellerProfile.id, updateData);
-
-    // 🎯 जादुई फिक्स: अब हम प्रोडक्ट के बजाय उसके अपडेटेड वैरिएंट्स का स्टॉक चेक करेंगे भाई!
-    if (updateData.variants && Array.isArray(updateData.variants)) {
-      for (const variant of updateData.variants) {
-        if (variant.stock !== undefined) {
-          // 🎯 महा-फिक्स: यहाँ पूरे 4 आर्गुमेंट्स क्रम से पास कर दिए हैं और 'variant.id' को शामिल किया है भाई!
-          await ProductService.checkLowStockAndNotify(
-            productId,             // 1. मुख्य प्रोडक्ट आईडी
-            Number(variant.id),    // 2. विशिष्ट वैरिएंट आईडी (व्हाट्सएप अलर्ट के लिए भाई)
-            Number(variant.stock), // 3. उस वैरिएंट का नया स्टॉक
-            sellerProfile.id       // 4. सेलर आईडी
-          ).catch(err => console.error("Low Stock Alert Error inside Controller:", err));
+    // 1. इमेज अपलोड हैंडलर भाई
+    if (req.file) {
+      try {
+        const [existingProductForImageCheck] = await db.select({ image: products.image })
+          .from(products)
+          .where(eq(products.id, productId));
+          
+        if (existingProductForImageCheck?.image) {
+          console.log(`[INFO] Attempting to delete old image: ${existingProductForImageCheck.image}`);
+          await deleteImage(existingProductForImageCheck.image).catch(e => console.error("Old image deletion ignored:", e));
         }
+
+        const fileBuffer = fs.readFileSync(req.file.path);
+        updateData.image = await uploadImage(fileBuffer, req.file.originalname, req.file.mimetype);
+        fs.unlinkSync(req.file.path);
+      } catch (uploadError: any) {
+        console.error("❌ Image upload failed during update:", uploadError);
+        return res.status(500).json({ message: "Image upload failed.", error: uploadError.message });
       }
     }
 
-    res.status(200).json({ message: "Product updated successfully.", product: updatedProduct });
+    // इनपुट वैलिडेशन भाई
+    const validationErrors = validateProductInput(updateData, true);
+    if (validationErrors.length > 0) return res.status(400).json({ message: "Validation failed.", errors: validationErrors });
+
+    // 2. वैरिएंट आईडी को साफ़ निकालना भाई
+    const variantId = Number(updateData.variantId || req.body.variantId || updateData.id);
+    if (!variantId || Number.isNaN(variantId)) {
+      return res.status(400).json({ message: "variantId specifies required data to update product variant भाई!" });
+    }
+
+    // 3. 🎯 मास्टरस्ट्रोक: मुख्य प्रोडक्ट की फील्ड्स को 'products' टेबल में अलग से अपडेट करो भाई!
+    await db.update(products).set({
+      name: updateData.name,
+      description: updateData.description,
+      image: updateData.image,
+      categoryId: updateData.categoryId ? Number(updateData.categoryId) : undefined,
+      brand: updateData.brand,
+      updatedAt: new Date()
+    } as any).where(eq(products.id, productId));
+
+    // 4. 🔥 फ़िल्टर इंजन: सिर्फ वही फील्ड्स सर्विस को भेजेंगे जो वैरिएंट टेबल में मौजूद हैं भाई!
+    // इससे डेटाबेस का स्कीमा एरर आना बंद हो जाएगा।
+    const variantUpdateFields: any = {
+      price: updateData.price !== undefined ? Number(updateData.price) : undefined,
+      originalPrice: updateData.originalPrice !== undefined ? Number(updateData.originalPrice) : undefined,
+      stock: updateData.stock !== undefined ? Number(updateData.stock) : undefined,
+      quantityValue: updateData.quantityValue !== undefined ? String(updateData.quantityValue) : undefined,
+      unit: updateData.unit || undefined,
+      changeReason: updateData.changeReason || undefined // सर्विस इसे इतिहास रिकॉर्ड करने के लिए इस्तेमाल करेगी भाई
+    };
+
+    // फालतू undefined चाबियों को साफ़ करना ताकि सेट क्वेरी न फटे भाई
+    Object.keys(variantUpdateFields).forEach(key => variantUpdateFields[key] === undefined && delete variantUpdateFields[key]);
+
+    // 5. हाई-क्लास सर्विस को कॉल करो भाई
+    const updatedVariant = await ProductService.updateProduct(productId, variantId, sellerProfile.id, variantUpdateFields);
+
+    // 6. लो-स्टॉक व्हाट्सएप और इन-ऐप अलर्ट चेक भाई
+    if (updateData.variants && Array.isArray(updateData.variants)) {
+      for (const variant of updateData.variants) {
+        const vStock = variant.stock;
+        const vId = Number(variant.id || variantId);
+        if (vStock !== undefined) {
+          await ProductService.checkLowStockAndNotify(productId, vId, Number(vStock), sellerProfile.id)
+            .catch(err => console.error("Low Stock Alert Error inside Controller:", err));
+        }
+      }
+    } else if (variantUpdateFields.stock !== undefined) {
+      await ProductService.checkLowStockAndNotify(productId, variantId, variantUpdateFields.stock, sellerProfile.id)
+        .catch(err => console.error("Low Stock Alert Single Error:", err));
+    }
+
+    return res.status(200).json({ message: "Product and variant updated successfully भाई।", product: updatedVariant });
   } catch (error) { next(error); }
 };
-
 export const deleteProduct = async (req: AuthenticatedRequest, res: Response, next: NextFunction) => {
   const productId = Number(req.params.productId);
   const userId = req.user?.id;
@@ -409,22 +488,46 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
       return res.status(200).json({ message: "No products found (Profile missing).", products: [] });
     }
 
+    // 🎯 फिक्स: डेटाबेस से केटेगरी और वैरिएंट्स दोनों का डेटा फेच करना भाई
     const sellerProducts = await db.query.products.findMany({
       where: and(
         eq(products.sellerId, Number(sellerProfile.id)),
         showDeleted ? isNotNull(products.deletedAt) : isNull(products.deletedAt)
       ),
-      // 🔥 फिक्स: केटेगरी के साथ-साथ अब इसके सारे वैरिएंट्स भी उठकर आएंगे भाई!
       with: { 
         category: true,
-        variants: true 
+        // 🚨 ध्यान दें भाई: अगर आपके स्कीma रिलेशंस में इसका नाम 'productVariants' है, तो यहाँ 'productVariants: true' लिख देना भाई!
+        variants: true  
       },
-      orderBy: [desc(products.createdAt)],
+      orderBy: (products, { desc }) => [desc(products.createdAt)],
     });
 
-    res.status(200).json({ 
-      message: showDeleted ? "Trash items fetched." : "Active seller products fetched.", 
-      products: sellerProducts // फ़ॉर्मेटिंग अगर चेंज करनी हो तो वैरिएंट्स का ध्यान रखें भाई
+    // 🎯 जादुई फिक्स (Backward Compatibility Layer): फ्रंटएंड स्क्रीन को क्रैश होने से बचाने का अचूक नुस्खा भाई!
+    const formattedProducts = sellerProducts.map((prod: any) => {
+      const prodVariants = prod.variants || prod.productVariants || [];
+      
+      // 1. सबसे पहले वैरिएंट को बेस प्राइस मान लेते हैं भाई
+      const baseVariant = prodVariants[0]; 
+      
+      // 2. इस प्रोडक्ट के सारे वैरिएंट्स का कुल स्टॉक कितना है, वो जोड़ लेते हैं
+      const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+
+      return {
+        ...prod,
+        // फ्रंटएंड की पुरानी स्क्रीन के लिए फॉलबैक डेटा भाई (ताकि ऐप क्रैश न हो)
+        price: baseVariant ? String(baseVariant.price) : "0",
+        originalPrice: baseVariant ? String(baseVariant.originalPrice || baseVariant.price) : "0",
+        stock: totalStock,
+        unit: baseVariant ? baseVariant.unit : (prod.unit || 'piece'),
+        
+        // आपका नया कड़क मल्टी-वैरिएंट डेटा जो अब फ्रंटएंड की नई स्क्रीन यूज़ करेगी भाई
+        variants: prodVariants
+      };
+    });
+
+    return res.status(200).json({ 
+      message: showDeleted ? "Trash items fetched." : "Active seller products fetched successfully with variant compatibility بھائی!", 
+      products: formattedProducts // ✅ अब एकदम सेफ़ और सुधरा हुआ डेटा जाएगा
     });
 
   } catch (error) { 
@@ -432,7 +535,6 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
     next(error); 
   }
 };
-
 // ✅ 2. सबसे मुख्य: कस्टमर और सर्च के लिए सारे प्रोडक्ट्स लोड करना (SMART FILTER)
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
@@ -463,7 +565,7 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     } 
     else {
       if (!effectivePincode || isNaN(effectiveLat) || isNaN(effectiveLng)) {
-        return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai." });
+        return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai भाई।" });
       }
 
       const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
@@ -497,8 +599,7 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
     if (search) whereClauses.push(ilike(products.name, `%${search}%`));
 
-    // 🎯 प्लान 2 (डिस्काउंट/प्राइस फ़िल्टर): अब मिन/मैक्स प्राइस वैरिएंट टेबल के हिसाब से तय होगी भाई!
-    // हम उन प्रोडक्ट्स को ढूँढेंगे जिनके पास कम से कम एक ऐसा वैरिएंट हो जो इस प्राइस रेंज में आता हो
+    // 🎯 डिस्काउंट/प्राइस फ़िल्टर: वैरिएंट टेबल के हिसाब से भाई
     if (minPrice || maxPrice) {
       const min = Number(minPrice || 0);
       const max = Number(maxPrice || 999999);
@@ -519,7 +620,6 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     if (sortBy === 'name') {
       orderBy.push(sortOrder === 'asc' ? asc(products.name) : desc(products.name));
     } else if (sortBy === 'price') {
-      // 🔥 अगर प्राइस के आधार पर सॉर्ट करना है, तो हमें वैरिएंट के मिनिमम प्राइस के सबक्वेरी का सहारा लेना होगा भाई
       orderBy.push(
         sortOrder === 'asc' 
           ? asc(sql`(select min(${productVariants.price}) from ${productVariants} where ${productVariants.productId} = ${products.id})`)
@@ -529,14 +629,17 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       orderBy.push(desc(products.createdAt));
     }
 
-    // कुल प्रोडक्ट्स की गिनती
-    const [totalCountResult] = await db.select({ count: sql<number>`count(*)` }).from(products).where(and(...whereClauses));
+    // 🎯 फिक्स: काउंट क्वेरी को पूरी तरह से सेफ़ रखने के लिए plain sql बिल्डर का उपयोग भाई
+    const [totalCountResult] = await db
+      .select({ count: sql<number>`count(distinct ${products.id})` })
+      .from(products)
+      .where(and(...whereClauses));
+      
     const totalCount = Number(totalCountResult?.count || 0);
     
     // फाइनल डेटा फैचिंग
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
-      // 🔥 जादुई रिलेशंस: कैटेगरी, सेलर और उसके सारे लाइव वैरिएंट्स एक साथ लोड होंगे!
       with: { 
         category: true, 
         seller: { with: { user: true } },
@@ -550,12 +653,30 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       offset: offset,
     });
 
-    res.status(200).json({
+    // 🎯 जादुई फिक्स (Backward Compatibility Layer): फ्रंटएंड होम स्क्रीन को क्रैश से बचाएं भाई!
+    const formattedProducts = productList.map((prod: any) => {
+      const prodVariants = prod.variants || [];
+      const cheapestVariant = prodVariants[0]; // सॉर्टिंग की वजह से पहला ही सबसे सस्ता होगा भाई
+      const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+
+      return {
+        ...prod,
+        // पुरानी फ्रंटएंड स्क्रीन के लिए फ्लैट रिस्पॉन्स फॉलबैक भाई
+        price: cheapestVariant ? String(cheapestVariant.price) : "0",
+        originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0",
+        stock: totalStock,
+        unit: cheapestVariant ? cheapestVariant.unit : 'piece',
+        // नया आर्किटेक्चर डेटा
+        variants: prodVariants
+      };
+    });
+
+    return res.status(200).json({
       page: pageNum,
       limit: limitNum,
       total: totalCount,
       totalPages: Math.ceil(totalCount / limitNum),
-      products: productList,
+      products: formattedProducts, // ✅ अब एकदम सेफ़ डेटा जाएगा भाई
     });
 
   } catch (error) { 
@@ -563,34 +684,80 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     next(error); 
   }
 };
-
 // ✅ 3. एडमिन के लिए पेंडिंग प्रोडक्ट्स (वैरिएंट्स के साथ भाई)
 export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const pending = await db.query.products.findMany({
       where: eq(products.approvalStatus, approvalStatusEnum.enumValues[0]),
       with: { category: true, seller: true, variants: true },
-      orderBy: [desc(products.createdAt)],
+      orderBy: (products, { desc }) => [desc(products.createdAt)],
     });
-    res.status(200).json(pending);
+
+    // 🎯 फिक्स: एडमिन पैनल पर पेंडिंग प्रोडक्ट्स की लिस्ट देखते समय बेस प्राइस और टोटल स्टॉक दिखे भाई
+    const formattedPending = pending.map((prod: any) => {
+      const prodVariants = prod.variants || [];
+      const baseVariant = prodVariants[0];
+      const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+
+      return {
+        ...prod,
+        price: baseVariant ? String(baseVariant.price) : "0",
+        originalPrice: baseVariant ? String(baseVariant.originalPrice || baseVariant.price) : "0",
+        stock: totalStock,
+        unit: baseVariant ? baseVariant.unit : 'piece',
+        variants: prodVariants
+      };
+    });
+
+    return res.status(200).json(formattedPending);
   } catch (error) { next(error); }
 };
 
-// ✅ 4. प्रोडक्ट अप्रूव करना
+// ✅ 4. प्रोडक्ट अप्रूव करना (ट्रांजेक्शन सेफ्टी के साथ भाई)
 export const approveProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() })
-      .where(eq(products.id, Number(req.params.productId))).returning();
-    res.status(200).json({ message: "Approved", product: updated });
+    const productId = Number(req.params.productId);
+
+    const result = await db.transaction(async (tx) => {
+      // 1. मुख्य प्रोडक्ट स्टेटस 'approved' करो भाई
+      const [updated] = await tx.update(products)
+        .set({ approvalStatus: approvalStatusEnum.enumValues[1], updatedAt: new Date() })
+        .where(eq(products.id, productId))
+        .returning();
+
+      // 2. उसके सारे वैरिएंट्स को भी लाइव (isActive = true) कर दो भाई
+      await tx.update(productVariants)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(productVariants.productId, productId));
+
+      return updated;
+    });
+
+    return res.status(200).json({ message: "Approved successfully with variants activated bhai!", product: result });
   } catch (error) { next(error); }
 };
 
 // ✅ 5. प्रोडक्ट रिजेक्ट करना
 export const rejectProduct = async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const [updated] = await db.update(products).set({ approvalStatus: approvalStatusEnum.enumValues[2], rejectionReason: req.body.reason, updatedAt: new Date() })
-      .where(eq(products.id, Number(req.params.productId))).returning();
-    res.status(200).json({ message: "Rejected", product: updated });
+    const productId = Number(req.params.productId);
+
+    const result = await db.transaction(async (tx) => {
+      // 1. मुख्य प्रोडक्ट रिजेक्ट करो
+      const [updated] = await tx.update(products)
+        .set({ approvalStatus: approvalStatusEnum.enumValues[2], rejectionReason: req.body.reason, updatedAt: new Date() })
+        .where(eq(products.id, productId))
+        .returning();
+
+      // 2. वैरिएंट्स को भी डीएक्टिवेट कर दो भाई ताकि सेलर सुधार कर सके
+      await tx.update(productVariants)
+        .set({ isActive: false, updatedAt: new Date() })
+        .where(eq(productVariants.productId, productId));
+
+      return updated;
+    });
+
+    return res.status(200).json({ message: "Rejected", product: result });
   } catch (error) { next(error); }
 };
 
@@ -610,7 +777,7 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
         eq(products.isActive, true), 
         eq(products.approvalStatus, approvalStatusEnum.enumValues[1])
       ),
-      // 🔥 यहाँ भी वैरिएंट्स लोड करना बेहद ज़रूरी है भाई, तभी तो कस्टमर ड्रॉपडाउन में साइज़ चुन पाएगा!
+      // 🔥 यहाँ रिलेशंस एकदम परफेक्ट लोड हो रहे हैं भाई!
       with: { 
         category: true, 
         seller: { with: { user: true } },
@@ -621,8 +788,25 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
     });
 
     if (!product) return res.status(404).json({ message: "Product not found." });
+
+    // 🎯 जादुई फिक्स (Backward Compatibility Layer): कस्टमर की सिंगल प्रोडक्ट स्क्रीन पर 
+    // सबसे सस्ते वैरिएंट की प्राइस और टोटल स्टॉक फ्लैट लेवल पर चिपका दो भाई, ताकि पुराना यूआई न फटे!
+    const prodVariants = (product as any).variants || [];
+    const cheapestVariant = prodVariants.length > 0 
+      ? [...prodVariants].sort((a, b) => Number(a.price) - Number(b.price))[0] 
+      : null;
+    const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+
+    const formattedProduct = {
+      ...product,
+      price: cheapestVariant ? String(cheapestVariant.price) : "0",
+      originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0",
+      stock: totalStock,
+      unit: cheapestVariant ? cheapestVariant.unit : 'piece',
+      variants: prodVariants // नया आर्किटेक्चर डेटा जो अब कस्टमर की डिटेल स्क्रीन यूज़ करेगी भाई
+    };
     
-    res.status(200).json(product);
+    return res.status(200).json(formattedProduct);
 
   } catch (error) { 
     console.error("❌ getProductById Error:", error);
