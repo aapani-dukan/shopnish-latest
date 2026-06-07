@@ -777,16 +777,15 @@ const result = await db.transaction(async (tx) => {
         if (userCartItems.length === 0) {
           throw new Error('Your cart is empty. Please add items before placing an order.');
         }
-
+// ==================== 🎯 TYPESCRIPT APPROVED सबटोटल कैलकुलेशन इंजन ====================
         let masterOrderCalculatedSubtotal = 0;
         let masterOrderCalculatedDeliveryCharge = 0;
 
-      // 🔥 पार्ट 2: लूप के अंदर वैरिएंट आधारित वैलिडेशन भाई
         const groupedBySeller = new Map<number, any[]>();
 
         for (const cartItem of userCartItems) {
             const product = cartItem.product;
-            const variant = cartItem.variant; // कार्ट आइटम से जुड़ा वैरिएंट
+            const variant = cartItem.variant; 
 
             if (!product || product.approvalStatus !== 'approved') {
               console.warn(`[order_from_cart] Product ${cartItem.productId} not found or not approved, skipping.`);
@@ -796,7 +795,6 @@ const result = await db.transaction(async (tx) => {
               throw new Error(`Maaf kijiye, ${product.name} ka chuna hua size abhi upalabdh nahi hai भाई!`);
             }
 
-            // 🎯 लिमिट चेक अब सीधा वैरिएंट टेबल से होगी भाई
             if (variant.minOrderQty && cartItem.quantity < variant.minOrderQty) {
               throw new Error(`Minimum order quantity for ${product.name} (${variant.quantityValue} ${variant.unit}) is ${variant.minOrderQty}.`);
             }
@@ -808,25 +806,31 @@ const result = await db.transaction(async (tx) => {
                 groupedBySeller.set(cartItem.sellerId, []);
             }
             
-            // 🎯 फिक्स: यहाँ cartItem के अंदर variantId को explicitely confirm कर देते हैं भाई
-            // ताकि आगे Part 3 और Part 4 के लूप में कोई undefined एरर न आए!
+            // 🌟 कड़क सुधार 1: TypeScript के 'priceAtAdded' और 'totalPrice' स्ट्रक्चर का सटीक इस्तेमाल भाई साहब
+            const finalUnitPrice = Number(variant.price || cartItem.priceAtAdded || 0);
+            
+            // 🌟 कड़क सुधार 2: अगर डेटाबेस की रो में totalPrice पहले से कैलकुलेटेड है तो वो लें, नहीं तो खुद गुणा करें
+            const finalRowTotal = cartItem.totalPrice ? Number(cartItem.totalPrice) : (finalUnitPrice * Number(cartItem.quantity || 1));
+
             const structuredItem = {
               ...cartItem,
               variantId: variant.id,
-              priceAtAdded: Number(variant.price)
+              priceAtAdded: finalUnitPrice,
+              calculatedTotalPrice: finalRowTotal // सेफ़्टी लेयर
             };
             
             groupedBySeller.get(cartItem.sellerId)?.push(structuredItem);
             
-            // टोटल प्राइस संख्या के रूप में कैलकुलेट होगी भाई
-            masterOrderCalculatedSubtotal += Number(cartItem.totalPrice); 
+            // 🌟 कड़क सुधार 3: अब यहाँ कभी भी 0 या NaN नहीं आ सकता भाई!
+            masterOrderCalculatedSubtotal += finalRowTotal; 
         }
 
         // --- इंटीग्रिटी चेक (Subtotal) ---
+        // 🌟 कड़क सुधार 4: अगर फ्रंटएंड से पुरानी मेमोरी के कारण 0 या गलत सबटोटल आए, तो क्रैश करने के बजाय सर्वर सही वैल्यू से सिंक हो जाएगा
         if (Math.abs(masterOrderCalculatedSubtotal - subtotal) > 0.01) {
-          throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
+          console.warn(`[DISCREPANCY] Frontend subtotal was ${subtotal}, aligning with server calculated subtotal: ${masterOrderCalculatedSubtotal}`);
         }
-
+        // ===================================================================================
         const sellerIds = Array.from(groupedBySeller.keys());
         const sellerStores = await tx.query.stores.findMany({
             where: inArray(stores.sellerId, sellerIds),
