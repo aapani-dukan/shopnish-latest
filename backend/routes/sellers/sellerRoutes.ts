@@ -1663,11 +1663,16 @@ sellerRouter.get('/sub-orders/:orderId/details', requireSellerAuth, async (req: 
       
       deliveryAddress: subOrder.masterOrder?.deliveryAddress,
 
-      // 🛒 Items ki mapping
+      // 🛒 Items ki mapping - 🎯 यहाँ हुआ है कड़क सुधार भाई साहब!
       items: subOrder.orderItems.map((item: any) => ({
         productName: item.productName,
         quantity: item.quantity,
         unit: item.productUnit || 'unit',
+        
+        // 🌟 जादुई लाइन: डेटाबेस के 'variant_name' कॉलम को 'variantName' बनाकर फ्रंटएंड को भेज दो भाई!
+        // (अगर drizzle/db schema में इसका नाम variantName है तो item.variantName लिखो, अगर variant_name है तो item.variant_name लिखो)
+        variantName: item.variantName || item.variant_name || '', 
+        
         itemTotal: item.itemTotal
       })),
       
@@ -1681,6 +1686,5 @@ sellerRouter.get('/sub-orders/:orderId/details', requireSellerAuth, async (req: 
     return res.status(500).json({ error: "Internal Server Error" });
   }
 });
-
 export default sellerRouter;
             
