@@ -415,14 +415,14 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
         const [sellerInfo] = await tx.select().from(sellersPgTable).where(eq(sellersPgTable.id, sellerId)).limit(1);
         const isSelfDelivery = sellerInfo?.isSelfDeliveryBySeller || false;
 
+       // 🎯 बदला जाने वाला हिस्सा: अब सब-ऑर्डर में डिलीवरी चार्ज का कोई काम नहीं भाई साहब!
         const [subOrder] = await tx.insert(subOrders).values({
           masterOrderId: masterOrder.id,
           subOrderNumber: `${masterOrder.orderNumber}-${sellerId}`,
           sellerId: sellerId,
           storeId: sellerStore.id,
-          subtotal: calculatedSubtotal,
-          deliveryCharge: deliveryCharge,
-          total: total,
+          subtotal: calculatedSubtotal, // माल की शुद्ध कीमत (जैसे 500)
+          total: calculatedSubtotal,    // ✅ यहाँ कड़क सुधार: टोटल भी सिर्फ माल का मूल्य ही रहेगा, डिलीवरी चार्ज बिल्कुल खत्म!
           status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
           isSelfDeliveryBySeller: isSelfDelivery,
           createdAt: new Date(),
@@ -955,15 +955,15 @@ if (!masterOrder) throw new Error('Failed to create master order from cart.');
             return distA - distB;
         });
 
+       // 🎯 कड़क सुधार 1: अब नॉन-सेल्फ-डिलीवरी सब-ऑर्डर में डिलीवरी चार्ज नहीं जाएगा, total सिर्फ माल का रहेगा!
         for (const subOrderData of nonSelfDeliverySubOrders) {
             const [subOrder] = await tx.insert(subOrders).values({
                 masterOrderId: masterOrder.id,
                 subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}`,
                 sellerId: subOrderData.sellerId,
                 storeId: subOrderData.storeId,
-                subtotal: Number(subOrderData.subtotal),
-                deliveryCharge: Number(subOrderData.deliveryCharge),
-                total: Number(subOrderData.total),
+                subtotal: Number(subOrderData.subtotal), // माल की शुद्ध कीमत
+                total: Number(subOrderData.subtotal),    // ✅ डिलीवरी चार्ज हटाकर सिर्फ़ सबटोटल ही टोटल बनेगा भाई!
                 status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
                 isSelfDeliveryBySeller: false,
                 createdAt: new Date(),
@@ -994,15 +994,15 @@ if (!masterOrder) throw new Error('Failed to create master order from cart.');
         }
         
         // B) सेल्फ-डिलीवरी वाले सब-ऑर्डर के लिए (Create Sub-Orders and Items)
+      // 🎯 कड़क सुधार 2: अब सेल्फ-डिलीवरी सब-ऑर्डर से भी 'deliveryCharge' कॉलम पूरी तरह साफ़!
         for (const subOrderData of selfDeliverySubOrders) {
             const [subOrder] = await tx.insert(subOrders).values({
                 masterOrderId: masterOrder.id,
                 subOrderNumber: `${masterOrder.orderNumber}-${subOrderData.sellerId}-SELF`,
                 sellerId: subOrderData.sellerId,
                 storeId: subOrderData.storeId,
-                subtotal: Number(subOrderData.subtotal),
-                deliveryCharge: 0,
-                total: Number(subOrderData.subtotal),
+                subtotal: Number(subOrderData.subtotal), // माल की शुद्ध कीमत
+                total: Number(subOrderData.subtotal),    // ✅ सिर्फ़ माल का शुद्ध मूल्य टोटल बनेगा भाई साहब!
                 status: subOrderStatusEnum.enumValues?.[0] ?? 'pending',
                 isSelfDeliveryBySeller: true,
                 createdAt: new Date(),
@@ -1621,11 +1621,12 @@ export const getSubOrderDetails = async (req: AuthenticatedRequest, res: Respons
             const deliveryBoy = (subOrder as any)?.deliveryBatch?.deliveryBoy || null;
             const deliveryStatus = (subOrder as any)?.deliveryBatch?.status || (subOrder.isSelfDeliveryBySeller ? 'delivered_by_seller' : subOrder.status);
             
+            // 🎯 बदला जाने वाला हिस्सा: रिस्पॉन्स मैपिंग से डिलीवरी चार्ज बिल्कुल खत्म भाई साहब!
             return {
-                ...subOrder, // ✅ अब डेटा सुरक्षित है भाई!
-                total: Number(subOrder.total || 0),
+                ...subOrder, 
+                total: Number(subOrder.subtotal || 0), // ✅ टोटल अब सिर्फ़ माल का शुद्ध मूल्य रहेगा
                 subtotal: Number(subOrder.subtotal || 0),
-                deliveryCharge: Number(subOrder.deliveryCharge || 0),
+                // ❌ deliveryCharge वाली लाइन को यहाँ से पूरी तरह हटा दिया गया है भाई
                 deliveryBoy: deliveryBoy,
                 deliveryStatus: deliveryStatus,
                 items: subOrder.orderItems || []
@@ -1677,16 +1678,12 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) =
       return res.status(404).json({ message: "Order not found" });
     }
 
-    let parsedAddress = masterOrder.deliveryAddress;
-    if (typeof masterOrder.deliveryAddress === 'string') {
-      try { parsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
-    }
-
+    // 🎯 बदला जाने वाला हिस्सा: सब-ऑर्डर्स मैपिंग से डिलीवरी चार्ज का झंझट पूरी तरह ख़त्म भाई साहब!
     const formattedSubOrders = (masterOrder.subOrders || []).map(so => ({
       ...so,
-      total: Number(so.total || 0),
+      total: Number(so.subtotal || 0),   // ✅ यहाँ कड़क सुधार: टोटल अब सिर्फ़ माल का शुद्ध मूल्य रहेगा
       subtotal: Number(so.subtotal || 0),
-      deliveryCharge: Number(so.deliveryCharge || 0), 
+      // ❌ deliveryCharge वाली लाइन को यहाँ से पूरी तरह हटा दिया गया है भाई साहब
       
       items: (so.orderItems || []).map((item: any) => {
         const price = Number(item.productPrice || item.unitPrice || 0);
@@ -1699,19 +1696,27 @@ export const getOrderDetail = async (req: AuthenticatedRequest, res: Response) =
         };
       })
     }));
-
+   // 🎯 100% वाटरप्रूफ फिक्स: इन-लाइन एड्रेस पार्सिंग के साथ एरर का काम तमाम भाई साहब!
     return res.json({
       step: 1, 
       masterOrder: {
         ...masterOrder,
         total: Number(masterOrder.total || 0),
         subtotal: Number(masterOrder.subtotal || 0),
-        deliveryCharge: Number(masterOrder.deliveryCharge || 0), 
-        deliveryAddress: parsedAddress
+        // ❌ डिलीवरी चार्ज यहाँ मास्टर ऑर्डर रिस्पांस से भी साफ़ है भाई
+        deliveryAddress: (() => {
+          if (typeof masterOrder.deliveryAddress === 'string') {
+            try { 
+              return JSON.parse(masterOrder.deliveryAddress); 
+            } catch (e) { 
+              return masterOrder.deliveryAddress; // फॉलबैक अगर पहले से स्ट्रिंग हो
+            }
+          }
+          return masterOrder.deliveryAddress || {};
+        })()
       },
       subOrders: formattedSubOrders 
     });
-
   } catch (e) {
     console.error("❌ getOrderDetail Error:", e);
     return res.status(500).json({ error: true, message: "Internal Server Error" });

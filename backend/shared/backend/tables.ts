@@ -408,12 +408,10 @@ export const subOrders = pgTable("sub_orders", {
   sellerId: integer("seller_id").notNull().references(() => sellersPgTable.id, { onDelete: "cascade" }),
   storeId: integer("store_id").references(() => stores.id, { onDelete: 'set null' }),
   status: subOrderStatusEnum("status").default("pending").notNull(),
-  subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 })
-  .$type<number>()
-  .default(0)
-  .notNull(),
-  total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
+ // 🏪 सब-ऑर्डर टेबल के लिए बिल्कुल साफ़-सुथरा और सटीक स्कीमा भाई साहब
+subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
+
+total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
   deliveryBatchId: integer("delivery_batch_id").references(() => deliveryBatches.id),
   estimatedPreparationTime: text("estimated_preparation_time"),
   isSelfDeliveryBySeller: boolean("is_self_delivery_by_seller").default(false),

@@ -1,0 +1,1 @@
+ALTER TABLE "sub_orders" DROP COLUMN "delivery_charge";
