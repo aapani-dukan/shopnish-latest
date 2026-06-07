@@ -1407,9 +1407,8 @@ export const getUserOrders = async (req: AuthenticatedRequest, res: Response, ne
   }
 };
 
-
 /**
- * ✅ GET /api/orders/:orderId/tracking
+ * ✅ GET /api/orders/:orderId/tracking - 100% Full Details Fixed Engine
  */
 export const getOrderTrackingDetails = async (
   req: AuthenticatedRequest,
@@ -1456,7 +1455,7 @@ export const getOrderTrackingDetails = async (
         )[0] || null
       : null;
 
-    /* 3️⃣ Sub Orders */
+    /* 3️⃣ Sub Orders - 🌟 कड़क सुधार 1: अब इसके अंदर 'orderItems' को भी पूरा खींच लिया भाई साहब ताकि ₹90 और ₹150 वाले आइटम लोड हों */
     const subOrdersList = await db.query.subOrders.findMany({
       where: eq(subOrders.masterOrderId, orderId),
       with: {
@@ -1466,7 +1465,8 @@ export const getOrderTrackingDetails = async (
             businessAddress: true,
           }
         },
-        store: true 
+        store: true,
+        orderItems: true // ✅ डेटाबेस से सब-ऑर्डर आइटम्स की लाइव रिलेशनल मैपिंग भाई
       }
     });
 
@@ -1476,7 +1476,6 @@ export const getOrderTrackingDetails = async (
       .from(deliveryBatches)
       .where(eq(deliveryBatches.masterOrderId, orderId));
 
-    
     /* 5️⃣ Attach Delivery Boy LIVE LOCATION */
     for (const batch of deliveryBatchesList) {
       let deliveryBoy: any = null;
@@ -1523,20 +1522,42 @@ export const getOrderTrackingDetails = async (
     /* 7️⃣ Delivery Batch Summary */
     const deliveryBatchesSummary: any[] = [];
 
+    // फ्रंटएंड के लूप को खुश करने के लिए मास्टर कलेक्टेड आइटम्स एरे
+    const allOrderedItems: any[] = [];
+
     for (const batch of deliveryBatchesList) {
       const relatedSubOrders = subOrdersList.filter(
         so => so.deliveryBatchId === batch.id
       );
+      
       deliveryBatchesSummary.push({
         batchId: batch.id,
         batchStatus: batch.status,
         deliveryBoy: (batch as any).deliveryBoy,
-        subOrders: relatedSubOrders.map(so => ({
-          subOrderId: so.id,
-          SellerName: (so as any).seller?.businessName || "Shopnish Seller",
-          subOrderStatus: so.status,
-          isSelfDelivery: so.isSelfDeliveryBySeller,
-        })),
+        subOrders: relatedSubOrders.map(so => {
+          
+          // इस सबऑर्डर के आइटम्स को फ्रंटएंड के 'so.items' स्ट्रक्चर के मुताबिक ढाला भाई
+          const formattedItems = (so.orderItems || []).map((oi: any) => {
+            const itemObj = {
+              productName: oi.productName || oi.name || "Item",
+              quantity: oi.quantity || 1,
+              itemTotal: Number(oi.totalPrice || oi.itemTotal || 0),
+              variantName: oi.variantName || null,
+              productPrice: Number(oi.unitPrice || oi.price || 0)
+            };
+            // मास्टर लिस्ट में भी भर दो भाई सेफ़्टी के लिए
+            allOrderedItems.push(itemObj);
+            return itemObj;
+          });
+
+          return {
+            subOrderId: so.id,
+            sellerName: (so as any).seller?.businessName || "Shopnish Seller", // ✅ 'SellerName' की स्पेलिंग ठीक की भाई साहब
+            subOrderStatus: so.status,
+            isSelfDelivery: so.isSelfDeliveryBySeller,
+            items: formattedItems // ✅ फ्रंटएंड का मनपसंद आइटम्स एरे यहाँ ज़ोंबी की तरह जोड़ दिया!
+          };
+        }),
         storeLocations: [],
       });
     }
@@ -1547,20 +1568,25 @@ export const getOrderTrackingDetails = async (
       try { masterParsedAddress = JSON.parse(masterOrder.deliveryAddress); } catch (e) { }
     }
 
-    /* ✅ FINAL RESPONSE */
+    /* ✅ FINAL RESPONSE - 🌟 कड़क सुधार 2: अब इसमें सारे मिसिंग कॉलम्स (subtotal, deliveryCharge) जोड़ दिए हैं! */
     return res.status(200).json({
       masterOrderId: masterOrder.id,
       masterOrderNumber: masterOrder.orderNumber,
       status: masterOrder.status,
       paymentMethod: masterOrder.paymentMethod,
       paymentStatus: masterOrder.paymentStatus,
+      
+      subtotal: Number(masterOrder.subtotal || 0), // ✅ फ्रंटएंड की पहली मांग पूरी!
+      deliveryCharge: Number(masterOrder.deliveryCharge || 0), // ✅ फ्रंटएंड की दूसरी मांग पूरी!
       total: Number(masterOrder.total || 0),
+      
       estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
       createdAt: masterOrder.createdAt,
       deliveryAddress: masterParsedAddress,
 
       customerDeliveryAddress,
       deliveryBatchesSummary,
+      items: allOrderedItems, // 'Items Ordered' वाले सेफ़्टी कार्ड के लिए भाई
       masterOrderTrackingHistory: trackingHistory,
     });
 
