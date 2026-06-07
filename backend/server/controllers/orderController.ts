@@ -830,7 +830,8 @@ const result = await db.transaction(async (tx) => {
         if (Math.abs(masterOrderCalculatedSubtotal - subtotal) > 0.01) {
           console.warn(`[DISCREPANCY] Frontend subtotal was ${subtotal}, aligning with server calculated subtotal: ${masterOrderCalculatedSubtotal}`);
         }
-        // ===================================================================================
+      
+// ==================== 🎯 100% PRICE LOCK & SYNCHRONIZED ENGINE ====================
         const sellerIds = Array.from(groupedBySeller.keys());
         const sellerStores = await tx.query.stores.findMany({
             where: inArray(stores.sellerId, sellerIds),
@@ -844,7 +845,7 @@ const result = await db.transaction(async (tx) => {
             subtotal: number; 
             deliveryCharge: number; 
             total: number; 
-            items: any[]; // 👈 यहाँ any[] कर दिया ताकि कस्टमाइज्ड cartItem एक्सेप्ट हो सके भाई
+            items: any[]; 
             storeLat: number; 
             storeLng: number;
             estimatedTime: number; 
@@ -858,7 +859,8 @@ const result = await db.transaction(async (tx) => {
                 throw new Error(`Store or seller details missing for seller ${sellerId}`);
             }
 
-            const subtotal = items.reduce((sum, item) => sum + Number(item.totalPrice), 0);
+            // 🌟 कड़क सुधार 1: पुराने 'item.totalPrice' के बजाय सर्वर के खुद के निकाले हुए 'calculatedTotalPrice' से प्लस किया भाई साहब
+            const currentSellerSubtotal = items.reduce((sum, item) => sum + Number(item.calculatedTotalPrice || 0), 0);
             const currentSubOrderDeliveryCharge = seller.isSelfDeliveryBySeller ? 0 : 50; // DUMMY CHARGE
             masterOrderCalculatedDeliveryCharge += currentSubOrderDeliveryCharge;
 
@@ -866,73 +868,68 @@ const result = await db.transaction(async (tx) => {
                 sellerId,
                 storeId: store.id,
                 isSelfDelivery: seller.isSelfDeliveryBySeller,
-                subtotal,
+                subtotal: currentSellerSubtotal,
                 deliveryCharge: currentSubOrderDeliveryCharge,
-                total: subtotal + currentSubOrderDeliveryCharge,
-                items: items, // ✅ अब इसमें हर आइटम के पास अपनी variantId सुरक्षित है भाई!
+                total: currentSellerSubtotal + currentSubOrderDeliveryCharge,
+                items: items, 
                 storeLat: Number(store.latitude), 
                 storeLng: Number(store.longitude),
                 estimatedTime: 60,
             });
         }
-        // --- फाइनल टोटल चेक ---
-        if (Math.abs(masterOrderCalculatedDeliveryCharge - deliveryCharge) > 0.01) {
-          console.warn('Calculated total delivery charge does not match provided total delivery charge. Using calculated value.');
+
+        // --- फाइनल टोटल सिंक चेक ---
+        // अगर फ्रंटएंड से आया हुआ deliveryCharge गलत (0) है, तो सही ₹25 असाइन कर दो भाई साहब
+        const finalDeliveryChargeToInsert = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 25;
+        
+        // मास्टर टोटल = सर्वर का सही सबटोटल + सही डिलीवरी चार्ज
+        const finalMasterTotalToInsert = masterOrderCalculatedSubtotal + finalDeliveryChargeToInsert;
+
+        // एड्रेस सेफ्टी लेयर
+        if ((!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") && finalDeliveryAddressId) {
+            const [dbAddress] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
+            if (dbAddress) {
+                finalDeliveryAddressJson = dbAddress.addressLine1 || "";
+                finalCity = dbAddress.city || finalCity;
+                finalState = dbAddress.state || finalState;
+                finalPincode = dbAddress.postalCode || finalPincode;
+            }
         }
 
-        const masterOrderCalculatedTotal = masterOrderCalculatedSubtotal + masterOrderCalculatedDeliveryCharge;
-        if (Math.abs(masterOrderCalculatedTotal - total) > 0.01) {
-            console.warn('Calculated total does not match provided total. Using calculated value.');
+        if (!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") {
+            finalDeliveryAddressJson = "N/A"; 
         }
 
-       // 🎯 कार्ट चेकआउट (placeOrderFromCart) के अंदर मास्टर ऑर्डर इंसर्ट को ऐसे अपडेट करें:
-// ==================== 🎯 एड्रेस और डिलीवरी चार्ज का अचूक उपाय ====================
-    
-    // अगर किसी वजह से फ्रंटएंड से addressLine1 खाली आया है, तो पहले से मौजूद ID से पूरा पता निकालें
-    if ((!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") && finalDeliveryAddressId) {
-        const [dbAddress] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
-        if (dbAddress) {
-            finalDeliveryAddressJson = dbAddress.addressLine1 || "";
-            finalCity = dbAddress.city || finalCity;
-            finalState = dbAddress.state || finalState;
-            finalPincode = dbAddress.postalCode || finalPincode;
-        }
-    }
+        // 🎯 मास्टर ऑर्डर बनाएं (सिंक्रोनाइज्ड SQL मैपिंग)
+        const [masterOrder] = await tx.insert(orders).values({
+            orderNumber: `ORD-${Date.now()}-${userId}`,
+            customerId: userId,
+            deliveryAddressId: finalDeliveryAddressId,
+            
+            deliveryAddress: finalDeliveryAddressJson, 
+            deliveryCity: finalCity || "Bundi",
+            deliveryState: finalState || "Rajasthan",
+            deliveryPincode: finalPincode || null,
+            deliveryLat: finalDeliveryLat,
+            deliveryLng: finalDeliveryLng,
+            
+            // 🌟 कड़क सुधार 2: फ्रंटएंड चाहे जो भी भेजे, डेटाबेस में हमेशा सर्वर का निकाला हुआ सही subtotal ही स्टोर होगा!
+            subtotal: masterOrderCalculatedSubtotal > 0 ? masterOrderCalculatedSubtotal : Number(subtotal), 
+            
+            // 🌟 कड़क सुधार 3: टोटल कॉलम में भी एकदम सटीक लाइव टोटल (₹274.6) ही जाएगा भाई साहब
+            total: finalMasterTotalToInsert, 
+            
+            deliveryCharge: finalDeliveryChargeToInsert, 
+            
+            paymentMethod: paymentMethod.toUpperCase(),
+            paymentStatus: 'pending',
+            status: 'pending',
+            deliveryInstructions: deliveryInstructions || null,
+            createdAt: new Date(),
+            updatedAt: new Date(),
+        } as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
 
-    // 🚨 सेफ़्टी फॉलबैक: अगर फिर भी खाली रह जाए, तो N/A रखें (गलत या ब्लैंक डेटाबेस एंट्री रोकने के लिए)
-    if (!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") {
-        finalDeliveryAddressJson = "N/A"; 
-    }
-
-    // 🎯 मास्टर ऑर्डर बनाएं (सिंक्रोनाइज्ड SQL मैपिंग)
-    const [masterOrder] = await tx.insert(orders).values({
-        orderNumber: `ORD-${Date.now()}-${userId}`,
-        customerId: userId,
-        deliveryAddressId: finalDeliveryAddressId,
-        
-        // अब यहाँ कभी भी खाली "" नहीं जाएगा भाई!
-        deliveryAddress: finalDeliveryAddressJson, 
-        deliveryCity: finalCity || "Bundi",
-        deliveryState: finalState || "Rajasthan",
-        deliveryPincode: finalPincode || null,
-        deliveryLat: finalDeliveryLat,
-        deliveryLng: finalDeliveryLng,
-        
-        subtotal: subtotal, 
-        total: total,
-        
-        // 🎯 स्पेलिंग एरर फिक्स: डेटाबेस कॉलम 'delivery_charge' को सही वेरिएबल असाइन किया
-        deliveryCharge: deliveryCharge, 
-        
-        paymentMethod: paymentMethod.toUpperCase(),
-        paymentStatus: 'pending',
-        status: 'pending',
-        deliveryInstructions: deliveryInstructions || null,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-    } as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
-
-if (!masterOrder) throw new Error('Failed to create master order from cart.');
+        if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
         const batchesToCreate: { 
@@ -948,8 +945,7 @@ if (!masterOrder) throw new Error('Failed to create master order from cart.');
         // A) नॉन-सेल्फ-डिलीवरी सब-ऑर्डर के लिए (Create Sub-Orders first)
         let currentBatchGroup: (typeof tempSubOrders[number] & { subOrderId: number })[] = [];
         
-       nonSelfDeliverySubOrders.sort((a, b) => {
-            // 🎯 TS FIX: String/Null ko safe number mein cast kiya taaki calculateDistance khush ho jaye
+        nonSelfDeliverySubOrders.sort((a, b) => {
             const lat = finalDeliveryLat ? Number(finalDeliveryLat) : 0;
             const lng = finalDeliveryLng ? Number(finalDeliveryLng) : 0;
 
@@ -958,7 +954,7 @@ if (!masterOrder) throw new Error('Failed to create master order from cart.');
             
             return distA - distB;
         });
-
+        // ===================================================================================
        // 🎯 कड़क सुधार 1: अब नॉन-सेल्फ-डिलीवरी सब-ऑर्डर में डिलीवरी चार्ज नहीं जाएगा, total सिर्फ माल का रहेगा!
         for (const subOrderData of nonSelfDeliverySubOrders) {
             const [subOrder] = await tx.insert(subOrders).values({
