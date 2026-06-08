@@ -193,7 +193,7 @@ export const syncMasterTableOnly = async () => {
         like(masterProducts.image, `%t4.ftcdn.net%`)
       ))
       .orderBy(sql`RANDOM()`)
-      .limit(20);
+      .limit(100);
 console.log(
   `📦 Selected IDs: ${items.map(x => x.id).join(", ")}`
 );
@@ -302,7 +302,7 @@ export const syncProductGalleriesOnly = async () => {
 
   const items = await db.select().from(products)
     .where(or(isNull(products.images), eq(products.images, [])))
-    .limit(20);
+    .limit(100);
 
   console.log(`📦 Found ${items.length} products to generate galleries.`);
 

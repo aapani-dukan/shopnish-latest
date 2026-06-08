@@ -3,12 +3,13 @@ import { db } from '../db';
 import {
   products,
   productVariants,
+  products as sellerProducts, 
   masterProducts,
   categories as productCategories,
   sellersPgTable,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull,notExists } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
@@ -139,16 +140,15 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
 }
 // backend/controllers/productController.ts
 
-
-
 export const searchMasterProducts = async (req: any, res: any) => {
   const { q, categoryId } = req.query;
+  const sellerId = req.user?.id; // 🔑 करंट लॉगिन सेलर की आईडी निकालना बहुत ज़रूरी है भाई!
 
   try {
     const conditions: SQL[] = [];
 
     // 1. अगर कैटेगरी आईडी भेजी गई है, तो उसे फिल्टर में जोड़ें
-    if (categoryId && categoryId !== 'all' && categoryId !== ' ') {
+    if (categoryId && categoryId !== 'all' && categoryId !== ' ' && categoryId !== 'All') {
       conditions.push(eq(masterProducts.categoryId, Number(categoryId)));
     }
 
@@ -162,7 +162,25 @@ export const searchMasterProducts = async (req: any, res: any) => {
       );
     }
 
-    // 3. अगर न कैटेगरी है न सर्च, तो खाली लिस्ट भेजें
+    // 3. 🛡️ जादुई फ़िल्टर: केवल वही प्रोडक्ट्स लाओ जो इस दुकानदार ने अपनी दुकान में ADD नहीं किए हैं!
+    if (sellerId) {
+      conditions.push(
+        notExists(
+          db
+            .select()
+            .from(sellerProducts) // आपकी वो टेबल जहाँ वेंडर के खुद के एडेड प्रोडक्ट्स स्टोर होते हैं
+            .where(
+              and(
+                eq(sellerProducts.masterProductId, masterProducts.id), // मास्टर आईडी की मैपिंग
+                eq(sellerProducts.sellerId, sellerId) // सिर्फ इसी वेंडर का चेक
+              )
+            )
+        )
+      );
+    }
+
+    // 4. अगर न कैटेगरी है न सर्च, और कोई कंडीशन नहीं बनी तो खाली लिस्ट भेजें
+    // (नोट: अगर आप चाहते हैं कि बिना सर्च के भी कैटेगरी पर क्लिक करते ही सब दिख जाए, तो conditions.length === 0 की जाँच हटा भी सकते हैं)
     if (conditions.length === 0) {
       return res.json([]);
     }
@@ -170,8 +188,8 @@ export const searchMasterProducts = async (req: any, res: any) => {
     const results = await db
       .select()
       .from(masterProducts)
-      .where(and(...conditions)) // category AND (name OR brand)
-      .limit(50); // बल्क मोड है इसलिए लिमिट थोड़ी बढ़ा दी है
+      .where(and(...conditions)); // category AND (name OR brand) AND NOT_ALREADY_ADDED
+      // ❌ यहाँ से .limit(50) को उड़ा दिया है भाई ताकि मास्टर टेबल के सारे प्रोडक्ट्स आ सकें!
 
     res.json(results);
   } catch (error) {
@@ -179,7 +197,6 @@ export const searchMasterProducts = async (req: any, res: any) => {
     res.status(500).json({ message: "खोजने में समस्या आई" });
   }
 };
-
 // 2. बल्क अपलोड के लिए (जो हमने पहले डिस्कस किया था)
 export const bulkUploadProducts = async (req: any, res: any) => {
   try {
