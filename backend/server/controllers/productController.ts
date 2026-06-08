@@ -653,24 +653,30 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
       offset: offset,
     });
 
-    // 🎯 जादुई फिक्स (Backward Compatibility Layer): फ्रंटएंड होम स्क्रीन को क्रैश से बचाएं भाई!
+   // ==================== 🎯 100% सुरक्षित डबल-की सेफ़्टी इंजन (पुरानी + नई दोनों Keys लाइव) ====================
     const formattedProducts = productList.map((prod: any) => {
       const prodVariants = prod.variants || [];
-      const cheapestVariant = prodVariants[0]; // सॉर्टिंग की वजह से पहला ही सबसे सस्ता होगा भाई
+      const cheapestVariant = prodVariants[0]; // Pehla sabse sasta variant bhai
       const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+
+      // Variant se MRP nikalne ka full fallback safety layer
+      const variantMrp = cheapestVariant ? (cheapestVariant.mrp || cheapestVariant.originalPrice || cheapestVariant.price) : 0;
 
       return {
         ...prod,
-        // पुरानी फ्रंटएंड स्क्रीन के लिए फ्लैट रिस्पॉन्स फॉलबैक भाई
-        price: cheapestVariant ? String(cheapestVariant.price) : "0",
-        originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0",
+        price: cheapestVariant ? String(cheapestVariant.price) : "0", // Purani string structure ko touch nahi kiya
         stock: totalStock,
         unit: cheapestVariant ? cheapestVariant.unit : 'piece',
-        // नया आर्किटेक्चर डेटा
-        variants: prodVariants
+        variants: prodVariants,
+
+        // 🌟 जादू 1: 'mrp' key ko naya joda taaki HomeScreen aur CategoryDetailsScreen ka naya discount math chal sake!
+        mrp: Number(variantMrp),
+
+        // 🌟 जादू 2: 'originalPrice' key ko jaisa tha waisa hi rakha, taaki purani screens ka kaam bilkul kharab na ho!
+        originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0"
       };
     });
-
+    // =======================================================================================================
     return res.status(200).json({
       page: pageNum,
       limit: limitNum,
