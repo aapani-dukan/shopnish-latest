@@ -679,6 +679,15 @@ sellerRouter.post(
   upload.single('image'), // फ्रंटएंड से मल्टिपार्ट 'image' आएगी भाई
   async (req: any, res: Response) => {
     try {
+      console.log("========================================================");
+      console.log("🚀 [CONTRROLLER HIT SUCCESS]: Data reached inside product handler!");
+      console.log("📦 req.body content:", JSON.stringify(req.body, null, 2));
+      console.log("🖼️ req.file content:", req.file ? {
+        originalname: req.file.originalname,
+        mimetype: req.file.mimetype,
+        size: req.file.size
+      } : "NO FILE RECEIVED ❌");
+      console.log("========================================================");
       const userId = req.user?.id;
       if (!userId) {
         return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
