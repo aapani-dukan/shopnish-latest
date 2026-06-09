@@ -418,20 +418,19 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
         }
 
  // 🎯 असली फ़िक्स: रॉ SQL हटाकर ड्रिज़ल के आधिकारिक टाइप-सेफ फ़ंक्शन से सिंक कर दिया भाई साहब!
+       // 🎯 मास्टरस्ट्रोक: टेबल एलियास (Alias) मिसमैच को जड़ से शांत कर दिया भाई साहब!
         const availableBatches = await db.query.deliveryBatches.findMany({
-            where: and(
+            where: (deliveryBatches, { and, isNull, eq, exists }) => and(
                 isNull(deliveryBatches.deliveryBoyId), 
                 eq(deliveryBatches.status, 'pending'),
+                // ✅ ड्रिज़ल के इन-लाइन फंक्शन्स का उपयोग करके एसक्यूएल कंपाइलर को वॉटरप्रूफ कर दिया भाई!
                 exists(
-                    db.select()
+                    db.select({ id: subOrders.id })
                       .from(subOrders)
-                      .where(
-                          and(
-                              // रॉ स्ट्रिंग हटाकर सीधे ड्रिज़ल के कॉलम मैचिंग का उपयोग किया भाई साहब
-                              eq(subOrders.deliveryBatchId, deliveryBatches.id),
-                              eq(subOrders.status, 'ready_for_pickup')
-                          )
-                      )
+                      .where(and(
+                          eq(subOrders.deliveryBatchId, deliveryBatches.id),
+                          eq(subOrders.status, 'ready_for_pickup')
+                      ))
                 )
             ),
             with: {
