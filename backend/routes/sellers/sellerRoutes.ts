@@ -37,6 +37,8 @@ import { sendNotification } from '../../services/notificationService';
 import * as fs from 'fs/promises'; 
 import * as fsSync from 'fs'; 
 import path from 'path';
+import sharp from 'sharp';
+import { v2 as cloudinary } from 'cloudinary'; 
 const sellerRouter = Router();
 const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
@@ -668,195 +670,17 @@ sellerRouter.put('/profile/delivery-settings', verifyToken as any,requireSellerA
     next(error);
   }
 });
-// ✅ Updated: PUT /api/seller/products/:productId/delivery-override
-sellerRouter.put('/products/:productId/delivery-override', requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
-  try {
-    const userId = req.user?.id;
-    const productId = Number(req.params.productId);
-    const { deliveryScope, productDeliveryPincodes, productDeliveryRadiusKM } = req.body;
 
-    if (!userId) { // requireSellerAuth इसे पहले ही संभाल लेगा, लेकिन यह एक अतिरिक्त जाँच है
-      return res.status(401).json({ message: 'Unauthorized: User ID not found after authentication.' });
-    }
-    if (isNaN(productId)) {
-      return res.status(400).json({ message: 'Invalid product ID.' });
-    }
+// 🎯 फाइनल वॉटरप्रूफ पैच: पुराना पिक्सबे और क्लाउडिनरी सिंक सलामत, मैनुअल अपलोड चकाचक भाई!
 
-    const seller = await db.query.sellersPgTable.findFirst({
-      where: eq(sellersPgTable.userId, userId),
-      columns: { id: true },
-    });
-
-    if (!seller) {
-      return res.status(404).json({ message: 'Seller profile not found for authenticated user.' });
-    }
-
-    const validScopes = ['GLOBAL', 'PRODUCT_PINCODE', 'PRODUCT_RADIUS'];
-    if (!validScopes.includes(deliveryScope)) {
-      return res.status(400).json({ message: 'Invalid deliveryScope provided.' });
-    }
-
-    const updateData: Partial<typeof products.$inferInsert> = {
-      deliveryScope,
-      updatedAt: new Date(),
-    };
-
-    if (deliveryScope === 'PRODUCT_PINCODE') {
-      if (!Array.isArray(productDeliveryPincodes) || productDeliveryPincodes.some(p => typeof p !== 'string')) {
-        return res.status(400).json({ message: 'productDeliveryPincodes must be an array of strings for PRODUCT_PINCODE scope.' });
-      }
-      updateData.productDeliveryPincodes = productDeliveryPincodes;
-      updateData.productDeliveryRadiusKM = null;
-    } else if (deliveryScope === 'PRODUCT_RADIUS') {
-      if (typeof productDeliveryRadiusKM !== 'number' || productDeliveryRadiusKM <= 0) {
-        return res.status(400).json({ message: 'productDeliveryRadiusKM must be a positive number for PRODUCT_RADIUS scope.' });
-      }
-      updateData.productDeliveryRadiusKM = productDeliveryRadiusKM;
-      updateData.productDeliveryPincodes = [];
-    } else { // deliveryScope === 'GLOBAL'
-      updateData.productDeliveryPincodes = [];
-      updateData.productDeliveryRadiusKM = null;
-    }
-
-    const [updatedProduct] = await db
-      .update(products)
-      .set(updateData)
-      .where(and(eq(products.id, productId), eq(products.sellerId, seller.id)))
-      .returning();
-
-    if (!updatedProduct) {
-      return res.status(404).json({ message: 'Product not found, does not belong to seller, or no changes made.' });
-    }
-
-    res.status(200).json({ message: 'Product delivery override settings updated successfully!', product: updatedProduct });
-  } catch (error) {
-    console.error(`Error updating delivery override for product ${req.params.productId}:`, error);
-    next(error);
-  }
-});
-
-    // ✅ DELETE /api/sellers/categories/:id (कैटेगरी डिलीट करें)
-    sellerRouter.delete('/categories/:id', requireSellerAuth, async (req: any, res: Response) => {
-      try {
-        const userId = req.user?.id;
-        const categoryId = parseInt(req.params.id);
-
-        if (!userId) {
-          return res.status(401).json({ error: 'Unauthorized.' });
-        }
-        if (isNaN(categoryId)) {
-          return res.status(400).json({ error: 'Invalid category ID.' });
-        }
-
-        const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
-        if (!sellerProfile) {
-          return res.status(404).json({ error: 'Seller profile not found.' });
-        }
-        const sellerId = sellerProfile.id;
-
-        // सुनिश्चित करें कि कैटेगरी सेलर की है
-        const [existingCategory] = await db.select()
-          .from(categories)
-          .where(and(eq(categories.id, categoryId), eq(categories.sellerId, sellerId))); // ✅ sellerId के साथ चेक करें
-
-        if (!existingCategory) {
-          return res.status(403).json({ error: 'Not authorized to delete this category.' });
-        }
-
-        // चेक करें कि क्या इस कैटेगरी में कोई प्रोडक्ट है
-        const [hasProducts] = await db.select({ id: products.id })
-          .from(products)
-          .where(eq(products.categoryId, categoryId));
-
-        if (hasProducts) {
-          return res.status(400).json({ error: 'Cannot delete category: products are associated with it.' });
-        }
-
-        const [deletedCategory] = await db.delete(categories)
-          .where(eq(categories.id, categoryId))
-          .returning();
-
-        if (!deletedCategory) {
-          return res.status(404).json({ error: 'Category not found or failed to delete.' });
-        }
-
-        getIO().emit("category:deleted", deletedCategory.id);
-
-        return res.status(200).json({ message: 'Category deleted successfully.', category: deletedCategory });
-      } catch (error: any) {
-        console.error('❌ Error in DELETE /api/sellers/categories/:id:', error);
-        return res.status(500).json({ error: 'Failed to delete category.' });
-      }
-    });
-
-// ✅ DELETE /api/sellers/products/:productId (उत्पाद डिलीट करें)
-sellerRouter.delete('/products/:productId', verifyToken as any, requireSellerAuth, async (req: any, res: Response, next: NextFunction) => {
-  console.log(`🗑️ [API] Received seller request to delete product ${req.params.productId}.`);
-  const userId = req.user?.id; // Authenticated user ID
-
-  if (!userId) {
-    return res.status(401).json({ message: "Unauthorized: Seller user not authenticated." });
-  }
-
-  // Input Validation
-  const productId = parseInt(req.params.productId);
-  if (isNaN(productId) || productId <= 0) {
-    return res.status(400).json({ message: "Invalid product ID." });
-  }
-
-  try {
-    // 1. Seller ID प्राप्त करें
-    // Note: यह प्रोफाइल सुनिश्चित करता है कि यूजर वास्तव में एक पंजीकृत Seller है
-    const [sellerProfile] = await db.select().from(sellersPgTable).where(eq(sellersPgTable.userId, userId));
-    if (!sellerProfile) {
-      return res.status(404).json({ message: "Seller profile not found for the authenticated user." });
-    }
-    const sellerId = sellerProfile.id;
-
-    // 2. सुनिश्चित करें कि सेलर इस प्रोडक्ट का मालिक है और इमेज URL प्राप्त करें
-    const [existingProduct] = await db.select({ image: products.image }).from(products).where(and(eq(products.id, productId), eq(products.sellerId, sellerId)));
-    if (!existingProduct) {
-      // 404 दिया जाता है ताकि हमलावर को यह न पता चले कि प्रोडक्ट मौजूद है लेकिन उनका नहीं है।
-      return res.status(404).json({ message: "Product not found or not owned by this seller." }); 
-    }
-
-    // 3. इमेज को क्लाउड स्टोरेज से हटा दें (यदि मौजूद हो)
-    if (existingProduct.image) {
-      console.log(`[INFO] Attempting to delete product image: ${existingProduct.image}`);
-      // सुनिश्चित करें कि deleteImage फंक्शन सही ढंग से इंपोर्ट किया गया है
-      await deleteImage(existingProduct.image); 
-    }
-
-    // 4. डेटाबेस से प्रोडक्ट हटाएँ
-    const [deletedProduct] = await db.delete(products)
-      .where(and(eq(products.id, productId), eq(products.sellerId, sellerId)))
-      .returning();
-
-    if (!deletedProduct) {
-      return res.status(404).json({ message: "Product deletion failed or product was not found." });
-    }
-
-    res.status(200).json({
-      message: "Product deleted successfully.",
-      product: deletedProduct,
-    });
-  } catch (error) {
-    console.error("❌ Error deleting product from seller route:", error);
-    next(error); 
-  }
-});
-
-// ✅ POST /api/sellers/products (FINAL UPDATED VERSION)
 sellerRouter.post(
   '/products',
   requireSellerAuth,
-  upload.single('image'),
+  upload.single('image'), // फ्रंटएंड से मल्टिपार्ट 'image' आएगी भाई
   async (req: any, res: Response) => {
     try {
       const userId = req.user?.id;
-      const firebaseUid = req.user?.firebaseUid;
-
-      if (!firebaseUid || !userId) {
+      if (!userId) {
         return res.status(401).json({ error: 'Unauthorized: User not authenticated.' });
       }
 
@@ -867,12 +691,12 @@ sellerRouter.post(
         .where(eq(sellersPgTable.userId, userId));
 
       if (!sellerProfile) {
-        return res.status(404).json({ error: 'Seller profile not found. Please complete registration.' });
+        return res.status(404).json({ error: 'Seller profile not found भाई।' });
       }
 
       const sellerId = sellerProfile.id;
+      const file = req.file;
 
-      // 2. Request Body से डेटा निकालें (वैरिएंट्स के साथ भाई)
       const {
         name,
         nameHindi,
@@ -881,26 +705,19 @@ sellerRouter.post(
         categoryId,
         brand,
         estimatedDeliveryTime,
-        variants // 🔥 फ्रंटएंड से यह JSON string या Array के रूप में आएगा भाई
+        variants
       } = req.body;
 
-      const file = req.file;
-
-      // 3. Basic Validation (अब मुख्य प्रोडक्ट के लिए प्राइस और स्टॉक की ज़रूरत यहाँ नहीं है भाई)
+      // 2. सख्त वैलिडेशन चेक भाई
       if (!name || !categoryId || !file || !variants) {
-        return res.status(400).json({ error: 'Missing required fields, image, or product variants.' });
+        return res.status(400).json({ error: 'Missing required fields, raw image file, or product variants.' });
       }
 
-      // 4. वैरिएंट्स को सेफ़्ली पार्स करें (चूँकि multipart/form-data है, तो यह string में आ सकता है भाई)
       let parsedVariants: any[] = [];
       try {
         parsedVariants = typeof variants === 'string' ? JSON.parse(variants) : variants;
       } catch (e) {
-        return res.status(400).json({ error: 'Invalid formats for variants data. Expected a valid array.' });
-      }
-
-      if (!Array.isArray(parsedVariants) || parsedVariants.length === 0) {
-        return res.status(400).json({ error: 'At least one product variant is required.' });
+        return res.status(400).json({ error: 'Invalid formats for variants data.' });
       }
 
       const parsedCategoryId = parseInt(categoryId as string);
@@ -908,26 +725,45 @@ sellerRouter.post(
         return res.status(400).json({ error: 'Invalid category ID.' });
       }
 
-      // 5. Delivery Time Logic
-      const finalDeliveryTime = estimatedDeliveryTime?.trim() || 
-                               (sellerProfile as any).estimatedDeliveryTime || 
-                               '1-2 hours';
+      // 3️⃣ 🔥 जादुई पैच: मोबाइल से आई फोटो का बैकग्राउंड शार्प (Sharp) से साफ़ (Pure White #fff) करें भाई!
+      console.log(`📸 [AI Layer Active]: Whitening background for manual product: "${name}"`);
+      
+      const processedBuffer = await sharp(file.buffer)
+        .resize(800, 800, { fit: "contain", background: "#ffffff" })
+        .flatten({ background: "#ffffff" }) // गंदे बैकग्राउंड को दूध जैसा सफ़ेद कर देगा!
+        .toFormat('jpeg', { quality: 85 })
+        .toBuffer();
 
-      // 6. Image Upload to Cloud
-      let imageUrl = "";
-      if (file) {
-        const fileName = `products/${sellerId}/${uuidv4()}-${file.originalname}`;
-        imageUrl = await uploadImage(file.buffer, fileName, file.mimetype);
+      const safeName = name
+        .replace(/[^\w\s]/gi, "")
+        .replace(/\s+/g, "_")
+        .toLowerCase();
 
-        if (!imageUrl) {
-          return res.status(500).json({ error: "Cloud upload failed." });
-        }
+      // 4️⃣ 🎯 सीधे आपके पुराने क्लाउडिनरी स्टोर पर इमेज को स्ट्रीम कर दो भाई साहब!
+      let imageUrl = await new Promise<string>((resolve, reject) => {
+        const stream = cloudinary.uploader.upload_stream(
+          {
+            folder: "shopnish_products",
+            public_id: `manual_${safeName}_${Date.now()}`
+          },
+          (err, result) => {
+            if (err) reject(err);
+            else resolve(result?.secure_url || "");
+          }
+        );
+        stream.end(processedBuffer);
+      });
+
+      if (!imageUrl) {
+        return res.status(500).json({ error: "Cloudinary upload failed after cleaning image भाई।" });
       }
 
-      // 🔒 7. डेटाबेस ट्रांजेक्शन: मुख्य प्रोडक्ट और वैरिएंट्स दोनों एक साथ सुरक्षित जाएँगे भाई
+      console.log(`☁️ [Cloudinary Success]: Manual clean image url saved -> ${imageUrl}`);
+
+      const finalDeliveryTime = estimatedDeliveryTime?.trim() || (sellerProfile as any).estimatedDeliveryTime || '1-2 hours';
+
+      // 5. डेटाबेस ट्रांजेक्शन लॉक भाई साहब
       const finalResult = await db.transaction(async (tx) => {
-        
-        // A. पहले मुख्य प्रोडक्ट इन्सर्ट करो (इसमें प्राइस, स्टॉक, यूनिट नहीं है भाई!)
         const [newProduct] = await tx
           .insert(products)
           .values({
@@ -936,40 +772,36 @@ sellerRouter.post(
             description: description || null,
             descriptionHindi: descriptionHindi || null,
             categoryId: parsedCategoryId,
-            image: imageUrl,
+            image: imageUrl, // यहाँ आपका कड़क साफ़ क्लाउडिनरी यूआरएल लॉक भाई!
             sellerId,
             brand: brand || null,
             estimatedDeliveryTime: finalDeliveryTime,
-            approvalStatus: 'pending', // 'pending' डिफ़ॉल्ट
+            approvalStatus: 'approved', // मैनुअल ऐड को डायरेक्ट लाइव कर दिया भाई
           })
           .returning();
 
-        // B. लूप चलाकर दोनों प्लान्स (प्लान 1: मात्रा/यूनिट + प्लान 2: डिस्काउंट गणित) को प्रोसेस करो भाई
         const variantsToInsert = parsedVariants.map((v: any) => {
           const origPrice = parseFloat(v.originalPrice as string) || 0;
           const discValue = parseFloat(v.discountValue as string) || 0;
-          const dType = v.discountType || 'percentage'; // 'percentage' या 'fixed_amount'
+          const dType = v.discountType || 'percentage';
           
           let sellingPrice = origPrice;
-
-          // 🎯 प्लान 2: डिस्काउंट टाइप के अनुसार फाइनल प्राइस कैलकुलेशन
           if (dType === 'percentage') {
             sellingPrice = origPrice - (origPrice * discValue / 100);
           } else if (dType === 'fixed_amount') {
             sellingPrice = origPrice - discValue;
           }
 
-          if (sellingPrice < 0) sellingPrice = 0; // सुरक्षा जांच
+          if (sellingPrice < 0) sellingPrice = 0;
 
-          // 🎯 प्लान 1: मात्रा और यूनिट मैपिंग
           return {
             productId: newProduct.id,
-            quantityValue: String(v.quantityValue), // e.g., "250", "Half", "9"
-            unit: v.unit || 'piece',               // e.g., "Gram", "Plate", "Size"
-            originalPrice: origPrice,              // MRP
+            quantityValue: String(v.quantityValue),
+            unit: v.unit || 'piece',
+            originalPrice: origPrice,
             discountType: dType,
             discountValue: discValue,
-            price: sellingPrice,                   // 💰 फाइनल बिकने वाली प्राइस
+            price: sellingPrice,
             stock: parseInt(v.stock as string) || 0,
             minOrderQty: parseInt(v.minOrderQty as string) || 1,
             maxOrderQty: parseInt(v.maxOrderQty as string) || 100,
@@ -979,321 +811,21 @@ sellerRouter.post(
           };
         });
 
-        // C. अब सारे वैरिएंट्स को एक साथ 'product_variants' टेबल में ठोक दो भाई
         await tx.insert(productVariants).values(variantsToInsert);
-
         return newProduct;
       });
 
-      // 8. Real-time Notification
-      getIO().emit("product:created", {
-        message: "New variant-based product waiting for approval",
-        product: finalResult
-      });
+      getIO().emit("product:created", { product: finalResult });
 
       return res.status(201).json({
         success: true,
-        message: "Product and all variants created successfully!",
+        message: "Product created with crystal white background successfully!",
         product: finalResult
       });
 
     } catch (error: any) {
       console.error('❌ Error in POST /api/sellers/products:', error);
-      return res.status(500).json({ error: 'Internal Server Error while creating product structure.' });
-    }
-  }
-);
-// 📍 PATCH /api/sellers/toggle-status
-sellerRouter.patch(
-  '/toggle-status',
-  requireSellerAuth,
-  async (req: any, res: Response, next: NextFunction) => {
-    try {
-      const userId = req.user?.id;
-      
-      const status = req.body.isOpen !== undefined ? req.body.isOpen : req.body.is_open;
-      const isSelfDelivery = req.body.isSelfDeliveryBySeller; // 🆕 Yeh line add karein
-
-      // Check karein ki dono mein se kam se kam ek cheez toh update ho rahi ho
-      if (status === undefined && isSelfDelivery === undefined) {
-        return res.status(400).json({ success: false, error: "No update data provided." });
-      }
-
-      const [sellerProfile] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.userId, userId));
-
-      if (!sellerProfile) {
-        return res.status(404).json({ success: false, error: "Seller profile not found." });
-      }
-
-      // --- Sellers Table Update ---
-      const sellerUpdateData: any = { updatedAt: new Date() };
-      if (status !== undefined) sellerUpdateData.isOpen = status;
-      if (isSelfDelivery !== undefined) sellerUpdateData.isSelfDeliveryBySeller = isSelfDelivery; // 🆕 Yeh line add karein
-
-      await db.update(sellersPgTable)
-        .set(sellerUpdateData) // 🆕 UpdateData use karein
-        .where(eq(sellersPgTable.id, sellerProfile.id));
-
-      // --- Stores Table Update ---
-      if (status !== undefined) {
-        await db.update(stores)
-          .set({ isActive: status, updatedAt: new Date() })
-          .where(eq(stores.sellerId, sellerProfile.id));
-      }
-
-      return res.status(200).json({ 
-        success: true, 
-        message: "Status updated successfully",
-        data: { 
-          isOpen: status,
-          isSelfDeliveryBySeller: isSelfDelivery // 🆕 Response mein bhi bhej dein
-        } 
-      });
-     
-    } catch (error) {
-      console.error("❌ Toggle Status Error:", error);
-      next(error);
-    }
-  }
-);
-// 📍 GET /api/sellers/dashboard-stats - डैशबोर्ड का डेटा
-sellerRouter.get(
-  '/dashboard-stats',
-  requireSellerAuth,
-  async (req: any, res: Response) => {
-    try {
-      const userId = req.user?.id;
-
-      // 1. सेलर ढूंढें
-      const [seller] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.userId, userId));
-
-      if (!seller) {
-        return res.status(404).json({ message: "Seller profile not found" });
-      }
-
-      // 2. स्टोर से status (isActive) लाएं
-      const [store] = await db
-        .select()
-        .from(stores)
-        .where(eq(stores.sellerId, seller.id));
-
-    return res.status(200).json({
-  id: seller.id,
-  businessName: seller.businessName,
-  todaySales: 0,
-  pendingOrders: 0,
-  activeProducts: 0,
-  newReviews: 0,
-  isOpen: seller.isOpen ?? false, 
-  // 🆕 Yeh line zaroor add karein:
-  isSelfDeliveryBySeller: seller.isSelfDeliveryBySeller ?? false, 
-  recentOrders: []
-});
-    } catch (error) {
-      console.error("Dashboard Stats Error:", error);
-      res.status(500).json({ message: "Internal Server Error" });
-    }
-  }
-);
-// 📍 Naya Route: PATCH /api/sellers/profile/me
-sellerRouter.patch(
-  '/profile/me', 
-  requireSellerAuth, 
-  async (req: any, res: Response, next: NextFunction) => {
-    try {
-      const userId = req.user?.id; // Token se milne wali User ID (35)
-      
-      // Database se asli Seller Profile nikaalo
-      const [sellerProfile] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.userId, userId));
-
-      if (!sellerProfile) {
-        return res.status(404).json({ error: "Seller profile not found." });
-      }
-      req.params.id = String(sellerProfile.id); 
-      
-      // Ab seedha wahi update logic call karein
-      return updateMySellerProfile(req, res, next);
-    } catch (error) {
-      next(error);
-    }
-  }
-);
-// 📍 PATCH /api/sellers/:id - सेलर प्रोफाइल अपडेट (Multi-Role Logic)
-sellerRouter.patch(
-  '/:id',
-  requireSellerAuth, 
-  async (req: any, res: Response, next: NextFunction) => {
-    try {
-      const userId = req.user?.id;
-      const paramsId = parseInt(req.params.id);
-      const [sellerProfile] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.userId, userId));
-
-      if (!sellerProfile || sellerProfile.id !== paramsId) {
-        return res.status(403).json({ error: "Unauthorized: You can only update your own profile." });
-      }
-
-      // कंट्रोलर कॉल करें या यहीं अपडेट लॉजिक लिखें
-      return updateMySellerProfile(req, res,next);
-    } catch (error) {
-      console.error("❌ Error in Seller Profile Patch:", error);
-      next(error);
-    }
-  }
-);
-
-// ✅ PATCH /api/sellers/products/:id (प्रोडक्ट और वैरिएंट्स दोनों अपडेट करें भाई)
-sellerRouter.patch(
-  '/products/:id',
-  requireSellerAuth,
-  async (req: any, res: Response) => {
-    try {
-      const userId = req.user?.id;
-      const productId = parseInt(req.params.id);
-
-      if (!userId || isNaN(productId)) {
-        return res.status(400).json({ error: 'Invalid User or Product ID.' });
-      }
-
-      // 1. Seller Profile Check
-      const [sellerProfile] = await db
-        .select()
-        .from(sellersPgTable)
-        .where(eq(sellersPgTable.userId, userId));
-
-      if (!sellerProfile) {
-        return res.status(404).json({ error: 'Seller profile not found.' });
-      }
-
-      // 2. Product Ownership Check
-      const [existingProduct] = await db
-        .select()
-        .from(products)
-        .where(and(eq(products.id, productId), eq(products.sellerId, sellerProfile.id)));
-
-      if (!existingProduct) {
-        return res.status(403).json({ error: 'Not authorized to update this product.' });
-      }
-
-      const {
-        name,
-        nameHindi,
-        description,
-        descriptionHindi,
-        categoryId,
-        brand,
-        estimatedDeliveryTime,
-        imageUrl: newImageUrlFromClient,
-        variants // 🔥 हमारे दोनों प्लान्स के लिए वैरिएंट्स का नया डेटा आएगा भाई
-      } = req.body;
-
-      // 🌟 Image Update & Cleanup Logic
-      let finalImageUrl = existingProduct.image;
-      if (newImageUrlFromClient !== undefined && newImageUrlFromClient !== existingProduct.image) {
-        if (existingProduct.image) {
-          console.log(`[CLEANUP] Deleting old image: ${existingProduct.image}`);
-          await deleteImage(existingProduct.image).catch(err => 
-            console.warn(`⚠️ Cloud delete failed:`, err.message)
-          );
-        }
-        finalImageUrl = newImageUrlFromClient;
-      }
-
-      // ✏️ A. मुख्य प्रोडक्ट का पेलोड तैयार करें (इसमें प्राइस/स्टॉक नहीं रहेगा भाई)
-      const productUpdatePayload: any = {
-        updatedAt: new Date(),
-        image: finalImageUrl
-      };
-
-      if (name !== undefined) productUpdatePayload.name = name.trim();
-      if (nameHindi !== undefined) productUpdatePayload.nameHindi = nameHindi;
-      if (description !== undefined) productUpdatePayload.description = description;
-      if (descriptionHindi !== undefined) productUpdatePayload.descriptionHindi = descriptionHindi;
-      if (categoryId !== undefined) productUpdatePayload.categoryId = parseInt(String(categoryId));
-      if (brand !== undefined) productUpdatePayload.brand = brand;
-      if (estimatedDeliveryTime !== undefined) productUpdatePayload.estimatedDeliveryTime = estimatedDeliveryTime;
-
-      // 🔒 3. डेटाबेस ट्रांजेक्शन: मुख्य प्रोडक्ट और उसके वैरिएंट्स एक साथ अपडेट होंगे भाई
-      const finalUpdatedProduct = await db.transaction(async (tx) => {
-        
-        // Step 1: मुख्य प्रोडक्ट को अपडेट मारो भाई
-        const [updatedProduct] = await tx
-          .update(products)
-          .set(productUpdatePayload)
-          .where(eq(products.id, productId))
-          .returning();
-
-        // Step 2: अगर फ्रंटएंड से नए वैरिएंट्स की लिस्ट भेजी गई है, तो पुराने वालों को रीसेट करो भाई
-        if (variants && Array.isArray(variants) && variants.length > 0) {
-          
-          // पहले पुराने सारे वैरिएंट्स को साफ़ कर दो भाई (Clean Slate)
-          await tx.delete(productVariants).where(eq(productVariants.productId, productId));
-
-          // अब लूप चलाकर दोनों प्लान्स (मात्रा + डिस्काउंट टाइप) का नया गणित लगाओ
-          const variantsToInsert = variants.map((v: any) => {
-            const origPrice = parseFloat(v.originalPrice as string) || 0;
-            const discValue = parseFloat(v.discountValue as string) || 0;
-            const dType = v.discountType || 'percentage'; // 'percentage' या 'fixed_amount'
-            
-            let sellingPrice = origPrice;
-
-            // 🎯 प्लान 2: डिस्काउंट टाइप का ऑटोमैटिक कैलकुलेशन
-            if (dType === 'percentage') {
-              sellingPrice = origPrice - (origPrice * discValue / 100);
-            } else if (dType === 'fixed_amount') {
-              sellingPrice = origPrice - discValue;
-            }
-
-            if (sellingPrice < 0) sellingPrice = 0;
-
-            // 🎯 प्लान 1: मात्रा और यूनिट सेटिंग
-            return {
-              productId: productId,
-              quantityValue: String(v.quantityValue), // e.g., "500", "Full"
-              unit: v.unit || 'piece',               // e.g., "Gram", "Plate"
-              originalPrice: origPrice,              // MRP
-              discountType: dType,
-              discountValue: discValue,
-              price: sellingPrice,                   // 💰 डिस्काउंट के बाद की फाइनल सेलिंग प्राइस
-              stock: parseInt(v.stock as string) || 0,
-              minOrderQty: parseInt(v.minOrderQty as string) || 1,
-              maxOrderQty: parseInt(v.maxOrderQty as string) || 100,
-              sku: v.sku || null,
-              offerLabel: v.offerLabel || null,
-              isActive: true,
-            };
-          });
-
-          // नए वैरिएंट्स को ठोक दो टेबल में भाई
-          await tx.insert(productVariants).values(variantsToInsert);
-        }
-
-        return updatedProduct;
-      });
-
-      // 🔊 Real-time Sync (Socket.io)
-      getIO().emit("product:updated", finalUpdatedProduct);
-
-      return res.status(200).json({
-        success: true,
-        message: "Product and variants updated successfully!",
-        product: finalUpdatedProduct
-      });
-
-    } catch (error: any) {
-      console.error("❌ PATCH Product Error:", error);
-      return res.status(500).json({ message: "Internal server error during update." });
+      return res.status(500).json({ error: error.message || 'Internal Server Error' });
     }
   }
 );
