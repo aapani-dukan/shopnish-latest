@@ -417,7 +417,7 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             return res.status(401).json({ error: 'Unauthorized.' });
         }
 
-        // ✅ रिलेशंस से भरपूर और सुरक्षित क्वेरी:
+ // 🎯 असली फ़िक्स: रॉ SQL हटाकर ड्रिज़ल के आधिकारिक टाइप-सेफ फ़ंक्शन से सिंक कर दिया भाई साहब!
         const availableBatches = await db.query.deliveryBatches.findMany({
             where: and(
                 isNull(deliveryBatches.deliveryBoyId), 
@@ -427,7 +427,8 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                       .from(subOrders)
                       .where(
                           and(
-                              sql`"sub_orders"."delivery_batch_id" = "delivery_batches"."id"`, // टेबल नाम की केसिंग फिक्स भाई
+                              // रॉ स्ट्रिंग हटाकर सीधे ड्रिज़ल के कॉलम मैचिंग का उपयोग किया भाई साहब
+                              eq(subOrders.deliveryBatchId, deliveryBatches.id),
                               eq(subOrders.status, 'ready_for_pickup')
                           )
                       )
@@ -441,7 +442,6 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
                         },
                         masterOrder: {
                             with: {
-                                // 🎯 फिक्स 1: 'deliveryAddress' अब कोई रिलेशन नहीं रहा भाई, इसलिए इसे 'with' से हटा दिया।
                                 customer: {
                                     columns: { firstName: true, lastName: true, phone: true }
                                 }
@@ -452,7 +452,6 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
             },
             orderBy: (deliveryBatches, { desc }) => [desc(deliveryBatches.createdAt)],
         });
-
         const formattedBatches = availableBatches.map(batch => {
             const currentSubOrders = batch.subOrders || [];
             
@@ -1028,7 +1027,6 @@ router.post('/batches/:batchId/send-otp', requireDeliveryBoyAuth, async (req: an
         return res.status(500).json({ success: false, message: error.message || "Internal server error." });
     }
 });
-
 
 // 🎯 2. बैच स्टेटस अपडेट करने की एपीआई - आटोमैटिक क्लीनर और सिंक फिक्स भाई
 router.patch(
