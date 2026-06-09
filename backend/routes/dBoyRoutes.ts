@@ -481,13 +481,19 @@ router.get('/available-batches', requireDeliveryBoyAuth, async (req: any, res: R
 
             // 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
             let parsedAddressObj: any = null;
-            if (nestedMaster?.deliveryAddress && typeof nestedMaster.deliveryAddress === 'string') {
-                try {
-                    parsedAddressObj = JSON.parse(nestedMaster.deliveryAddress);
-                } catch (e) {
-                    console.warn("Failed to parse deliveryAddress JSON inside available batches:", e);
-                }
-            }
+           if (nestedMaster?.deliveryAddress && typeof nestedMaster.deliveryAddress === 'string') {
+    // 🎯 फिक्स: अगर एड्रेस कर्ली ब्रैकेट { से शुरू होता है, केवल तभी पार्स करो भाई!
+    if (nestedMaster.deliveryAddress.trim().startsWith('{')) {
+        try {
+            parsedAddressObj = JSON.parse(nestedMaster.deliveryAddress);
+        } catch (e) {
+            // शांत मोड ON - कोई कचरा लॉग प्रिंट नहीं होगा भाई
+        }
+    } else {
+        // अगर साधारण स्ट्रिंग है, तो उसे सीधा ऑब्जेक्ट के रूप में अलाइन कर दो भाई साहब
+        parsedAddressObj = { addressLine1: nestedMaster.deliveryAddress };
+    }
+}
 
             // 👤 CUSTOMER NAME EXTRACTION
             let finalCustomerName = "Customer"; 
