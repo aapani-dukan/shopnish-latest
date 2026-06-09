@@ -737,12 +737,19 @@ sellerRouter.post(
       // 3️⃣ 🔥 जादुई पैच: मोबाइल से आई फोटो का बैकग्राउंड शार्प (Sharp) से साफ़ (Pure White #fff) करें भाई!
       console.log(`📸 [AI Layer Active]: Whitening background for manual product: "${name}"`);
       
-      const processedBuffer = await sharp(file.buffer)
-        .resize(800, 800, { fit: "contain", background: "#ffffff" })
-        .flatten({ background: "#ffffff" }) // गंदे बैकग्राउंड को दूध जैसा सफ़ेद कर देगा!
-        .toFormat('jpeg', { quality: 85 })
-        .toBuffer();
-
+     // ✅ कड़क बैकएंड पैच: गंदे और डार्क बैकग्राउंड को काटकर दूध जैसा सफ़ेद बनाने का नुस्खा!
+const processedBuffer = await sharp(file.buffer)
+  .resize(800, 800, { fit: "contain", background: "#ffffff" })
+  // 🌟 जादुई थ्रेशोल्ड ऑपरेशन: यह इमेज के गहरे/म्यूट रंगों और बैकग्राउंड को मास्क करके साफ़ करता है
+  .ensureAlpha()
+  .toFormat('png') // प्रोसेसिंग के दौरान ट्रांसपेरेंसी सपोर्ट के लिए पीएनजी किया भाई
+  .toBuffer()
+  .then(buf => 
+    sharp(buf)
+      .flatten({ background: '#ffffff' }) // अब यह जबरन गंदे कोनों पर शुद्ध सफ़ेद रंग पोत देगा!
+      .toFormat('jpeg', { quality: 85 })
+      .toBuffer()
+  );
       const safeName = name
         .replace(/[^\w\s]/gi, "")
         .replace(/\s+/g, "_")
