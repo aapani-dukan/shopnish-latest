@@ -752,17 +752,21 @@ router.get('/batches', requireDeliveryBoyAuth, async (req: any, res: Response) =
       const nestedMaster = currentSubOrders[0]?.masterOrder as any;
       const mOrder = directMaster || nestedMaster;
       let targetOrder = Array.isArray(mOrder) ? mOrder[0] : mOrder;
-
-      // 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई!
+// 🎯 फिक्स 2: मास्टर ऑर्डर के स्ट्रिंग वाले 'deliveryAddress' को सेफ़ली पार्स करना भाई साहब!
       let parsedAddressObj: any = null;
       if (targetOrder?.deliveryAddress && typeof targetOrder.deliveryAddress === 'string') {
-          try {
-              parsedAddressObj = JSON.parse(targetOrder.deliveryAddress);
-          } catch (e) {
-              console.warn("Failed to parse deliveryAddress JSON inside assigned batches:", e);
+          // 🔔 कड़क सेफ़्टी: अगर एड्रेस कर्ली ब्रैकेट { से शुरू होता है (तभी वह असली JSON है), केवल तब पार्स करो भाई!
+          if (targetOrder.deliveryAddress.trim().startsWith('{')) {
+              try {
+                  parsedAddressObj = JSON.parse(targetOrder.deliveryAddress);
+              } catch (e) {
+                  // शांत मोड: पार्सिंग फेल होने पर भी सर्वर चुप रहेगा भाई
+              }
+          } else {
+              // अगर सादा टेक्स्ट एड्रेस ("C-230, Nav...") है, तो उसे सीधे ऑब्जेक्ट प्रॉपर्टी में सेट कर दो भाई!
+              parsedAddressObj = { addressLine1: targetOrder.deliveryAddress };
           }
       }
-
       const customerObj = targetOrder?.customer || targetOrder?.customer_user || {};
 
       // 👤 CUSTOMER NAME EXTRACTION
