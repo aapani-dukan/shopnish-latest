@@ -878,14 +878,27 @@ const result = await db.transaction(async (tx) => {
             });
         }
 
-        // --- फाइनल टोटल सिंक चेक ---
-        // अगर फ्रंटएंड से आया हुआ deliveryCharge गलत (0) है, तो सही ₹25 असाइन कर दो भाई साहब
-        const finalDeliveryChargeToInsert = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 25;
+      // =====================================================================
+        // 🎯 100% बुलेटप्रूफ सिंक: ₹500 से ऊपर होते ही डिलीवरी चार्ज सीधा ₹0 (FREE) भाई साहब!
+        // =====================================================================
         
-        // मास्टर टोटल = सर्वर का सही सबटोटल + सही डिलीवरी चार्ज
-        const finalMasterTotalToInsert = masterOrderCalculatedSubtotal + finalDeliveryChargeToInsert;
+        // कड़क चेक: अगर सर्वर द्वारा निकाला गया कुल सबटोटल ₹500 या उससे अधिक है, तो डिलीवरी चार्ज सीधा 0 करो!
+        // अन्यथा, अगर फ्रंटएंड से कोई चार्ज आया है तो वो रखो, नहीं तो डिफ़ॉल्ट ₹25 लगाओ भाई।
+        const masterSubtotalNum = Number(masterOrderCalculatedSubtotal > 0 ? masterOrderCalculatedSubtotal : subtotal);
+        
+        let finalDeliveryChargeToInsert = 25; // डिफ़ॉल्ट फॉलबैक
+        
+        if (masterSubtotalNum >= 500) {
+            finalDeliveryChargeToInsert = 0; // 🔥 ₹500 पर पूरी तरह फ्री भाई साहब!
+            console.log(`🎁 [FREE DELIVERY TRIGGERED]: Subtotal is ₹${masterSubtotalNum}, Charge set to ₹0`);
+        } else {
+            finalDeliveryChargeToInsert = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 25;
+        }
+        
+        // मास्टर टोटल = शुद्ध सबटोटल + हमारा सही डिलीवरी चार्ज (नंबर सेफ्टी के साथ)
+        const finalMasterTotalToInsert = masterSubtotalNum + finalDeliveryChargeToInsert;
 
-        // एड्रेस सेफ्टी लेयर
+        // एड्रेस सेफ्टी लेयर (पहले जैसा कड़क भाई)
         if ((!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") && finalDeliveryAddressId) {
             const [dbAddress] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
             if (dbAddress) {
@@ -913,12 +926,13 @@ const result = await db.transaction(async (tx) => {
             deliveryLat: finalDeliveryLat,
             deliveryLng: finalDeliveryLng,
             
-            // 🌟 कड़क सुधार 2: फ्रंटएंड चाहे जो भी भेजे, डेटाबेस में हमेशा सर्वर का निकाला हुआ सही subtotal ही स्टोर होगा!
-            subtotal: masterOrderCalculatedSubtotal > 0 ? masterOrderCalculatedSubtotal : Number(subtotal), 
+            // हमेशा सर्वर का निकाला हुआ सही सबटोटल स्टोर होगा
+            subtotal: masterSubtotalNum, 
             
-            // 🌟 कड़क सुधार 3: टोटल कॉलम में भी एकदम सटीक लाइव टोटल (₹274.6) ही जाएगा भाई साहब
+            // टोटल कॉलम में भी एकदम सटीक फ्री डिलीवरी वाला टोटल जाएगा भाई साहब
             total: finalMasterTotalToInsert, 
             
+            // यहाँ गया आपका शुद्ध ₹0 या ₹25 का डिलीवरी चार्ज भाई!
             deliveryCharge: finalDeliveryChargeToInsert, 
             
             paymentMethod: paymentMethod.toUpperCase(),
@@ -928,7 +942,6 @@ const result = await db.transaction(async (tx) => {
             createdAt: new Date(),
             updatedAt: new Date(),
         } as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
-
         if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
