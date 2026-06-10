@@ -117,20 +117,18 @@ export const getMySellerProfile = asyncHandler(async (req: Request, res: Respons
 });
 
 
-// 4️⃣ Update Seller Profile (With Security & Store Sync भाई)
 export const updateMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
-    const sellerIdParam = parseInt(req.params.id, 10);
-    const loggedInSellerId = (req as any).user?.sellerId; // टोकन से निकाली आईडी भाई
-
-    // 🎯 फिक्स 3 (सिक्योरिटी लॉक): चेक करो कि सेलर सिर्फ अपनी ही आईडी अपडेट कर रहा है ना भाई!
-    if (loggedInSellerId && sellerIdParam !== loggedInSellerId) {
-        return res.status(403).json({ message: "Forbidden: You can only update your own profile भाई।" });
-    }
+    const userId = parseInt(req.params.id, 10);
 
     const validation = sellerUpdateSchema.safeParse(req.body);
-    if (!validation.success) return res.status(400).json({ errors: validation.error.flatten().fieldErrors });
+    if (!validation.success) {
+        return res.status(400).json({
+            errors: validation.error.flatten().fieldErrors
+        });
+    }
 
     const updateData = validation.data;
+
     const finalUpdateData: any = {
         ...updateData,
         updatedAt: new Date(),
@@ -138,13 +136,28 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         longitude: updateData.longitude ? String(updateData.longitude) : undefined,
     };
 
-    // Clean undefined
-    Object.keys(finalUpdateData).forEach(key => finalUpdateData[key] === undefined && delete finalUpdateData[key]);
+    Object.keys(finalUpdateData).forEach(
+        key => finalUpdateData[key] === undefined && delete finalUpdateData[key]
+    );
 
     await db.transaction(async (tx) => {
-        await tx.update(sellersPgTable).set(finalUpdateData).where(eq(sellersPgTable.id, sellerIdParam));
-        
-        // Sync with Store table
+
+        // User ID se seller nikalo
+        const seller = await tx.query.sellersPgTable.findFirst({
+            where: eq(sellersPgTable.userId, userId),
+        });
+
+        if (!seller) {
+            throw new Error(`Seller not found for userId ${userId}`);
+        }
+
+        // Seller table update
+        await tx
+            .update(sellersPgTable)
+            .set(finalUpdateData)
+            .where(eq(sellersPgTable.id, seller.id));
+
+        // Store sync
         const storeUpdateData: any = {
             storeName: updateData.businessName,
             address: updateData.businessAddress,
@@ -154,12 +167,21 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
             longitude: finalUpdateData.longitude,
             updatedAt: new Date(),
         };
-        Object.keys(storeUpdateData).forEach(key => storeUpdateData[key] === undefined && delete storeUpdateData[key]);
-        
+
+        Object.keys(storeUpdateData).forEach(
+            key => storeUpdateData[key] === undefined && delete storeUpdateData[key]
+        );
+
         if (Object.keys(storeUpdateData).length > 1) {
-            await tx.update(stores).set(storeUpdateData).where(eq(stores.sellerId, sellerIdParam));
+            await tx
+                .update(stores)
+                .set(storeUpdateData)
+                .where(eq(stores.sellerId, seller.id));
         }
     });
 
-    return res.status(200).json({ success: true, message: "Profile and Store updated successfully भाई।" });
+    return res.status(200).json({
+        success: true,
+        message: "Profile and Store updated successfully भाई।"
+    });
 });
