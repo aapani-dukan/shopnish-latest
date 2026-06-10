@@ -39,6 +39,7 @@ import * as fsSync from 'fs';
 import path from 'path';
 import sharp from 'sharp';
 import { v2 as cloudinary } from 'cloudinary'; 
+
 const sellerRouter = Router();
 const upload = multer({
   storage: multer.memoryStorage(), // ✅ MemoryStorage का उपयोग करें
@@ -54,6 +55,7 @@ const upload = multer({
   }
 });
 
+sellerRouter.patch('/profile/:id', updateMySellerProfile as any);
 
 // ✅ POST /api/sellers/apply (Simplified & Clean)
 sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, next: NextFunction) => {
@@ -750,6 +752,7 @@ const processedBuffer = await sharp(file.buffer)
       .toFormat('jpeg', { quality: 85 })
       .toBuffer()
   );
+  
       const safeName = name
         .replace(/[^\w\s]/gi, "")
         .replace(/\s+/g, "_")
