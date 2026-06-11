@@ -142,58 +142,81 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         key => finalUpdateData[key] === undefined && delete finalUpdateData[key]
     );
 
-    await db.transaction(async (tx) => {
-        // User ID se seller nikalna compulsory hai
-        const seller = await tx.query.sellersPgTable.findFirst({
-            where: eq(sellersPgTable.userId, userId),
-        });
-
-        if (!seller) {
-            throw new Error(`Seller not found for userId ${userId}`);
-        }
-
-        // 🎯 २. Seller table को अपडेट मारो
-        await tx
-            .update(sellersPgTable)
-            .set(finalUpdateData)
-            .where(eq(sellersPgTable.id, seller.id));
-
-        // 🎯 ३. अब स्टोर का डेटा बिल्कुल ताज़ा और फ्रेश बनाओ (बिना किसी मिसिंग कीज़ के)
-        const storeUpdateData: any = {
-            storeName: updateData.businessName || seller.businessName || "My Shop",
-            address: updateData.businessAddress || seller.businessAddress || "",
-            city: updateData.city || "Bundi",
-            pincode: updateData.pincode || "323001",
-            latitude: finalUpdateData.latitude || null,
-            longitude: finalUpdateData.longitude || null,
-            updatedAt: new Date(),
-        };
-
-        // 🤖 असली जादुई लॉक: पहले चेक करो कि stores टेबल में लाला जी की दुकान की रो है या नहीं?
-        const existingStore = await tx
-            .select()
-            .from(stores)
-            .where(eq(stores.sellerId, seller.id))
-            .limit(1);
-
-        if (existingStore.length === 0) {
-            // 🆕 अगर डेटाबेस खाली है, तो तुरंत नई एंट्री ठोक दो भाई साहब! (Fixes Seller 14 Issue)
-            await tx.insert(stores).values({
-                ...storeUpdateData,
-                sellerId: seller.id,
-                createdAt: new Date(),
-            });
-            console.log(`🎉 Stores table me Seller ID ${seller.id} ki nayi dukan darj ho gayi hai!`);
-        } else {
-            // 🔄 अगर रो पहले से मौजूद है, तो डेटा चकाचक अपडेट कर दो
-            await tx
-                .update(stores)
-                .set(storeUpdateData)
-                .where(eq(stores.sellerId, seller.id));
-            console.log(`🔄 Stores table me Seller ID ${seller.id} ka data update ho gaya!`);
-        }
+   await db.transaction(async (tx) => {
+    // 1. User ID se seller nikalna compulsory hai भाई साहब
+    const seller = await tx.query.sellersPgTable.findFirst({
+        where: eq(sellersPgTable.userId, userId),
     });
 
+    if (!seller) {
+        throw new Error(`Seller not found for userId ${userId}`);
+    }
+
+    // 2. Seller table ko update maaro
+    await tx
+        .update(sellersPgTable)
+        .set(finalUpdateData)
+        .where(eq(sellersPgTable.id, seller.id));
+
+    // 🎯 🚀 असली जादुई मैजिक: category_id से वास्तविक कैटेगरी का नाम निकालो भाई!
+    let dynamicStoreType = "grocery"; // यह सिर्फ एक सेफ़ फॉलबैक रहेगा
+
+    // पक्का करो कि सेलर के पास categoryId है या नहीं
+    const sellerCategoryId = updateData.categoryId || seller.categoryId;
+
+    if (sellerCategoryId) {
+        // categories टेबल से उस आईडी का डेटा उठाओ
+        const categoryData = await tx.query.categoriesTable.findFirst({
+            where: eq(categoriesTable.id, sellerCategoryId),
+        });
+
+        // अगर कैटेगरी मिल गई, तो उसका असली नाम (जैसे: 'restaurant', 'fruits') ले लो भाई साहब!
+        if (categoryData && categoryData.slug) {
+            dynamicStoreType = categoryData.slug.toLowerCase(); // या categoryData.name
+        } else if (categoryData && categoryData.name) {
+            dynamicStoreType = categoryData.name.toLowerCase();
+        }
+    }
+
+    // 3. अब स्टोर का डेटा बिल्कुल वास्तविक वैल्यू के साथ तैयार करो भाई!
+    const storeUpdateData: any = {
+        storeName: updateData.businessName || seller.businessName || "My Shop",
+        
+        // 🎯 यहाँ आई डेटाबेस से निकाली हुई बिल्कुल असली और वास्तविक वैल्यू!
+        storeType: dynamicStoreType, 
+        
+        address: updateData.businessAddress || seller.businessAddress || "",
+        city: updateData.city || "Bundi",
+        pincode: updateData.pincode || "323001",
+        latitude: finalUpdateData.latitude || null,
+        longitude: finalUpdateData.longitude || null,
+        updatedAt: new Date(),
+    };
+
+    // 🤖 चेक करो कि क्या stores टेबल में लाला जी की दुकान की रो पहले से है?
+    const existingStore = await tx
+        .select()
+        .from(stores)
+        .where(eq(stores.sellerId, seller.id))
+        .limit(1);
+
+    if (existingStore.length === 0) {
+        // 🆕 अगर एंट्री नहीं है, तो बिल्कुल वास्तविक कैटेगरी के साथ नई रो ठोक दो भाई साहब!
+        await tx.insert(stores).values({
+            ...storeUpdateData,
+            sellerId: seller.id,
+            createdAt: new Date(),
+        });
+        console.log(`🎉 Stores table me Seller ${seller.id} ki dukan '${dynamicStoreType}' type ke saath darj ho gayi!`);
+    } else {
+        // 🔄 अगर रो पहले से मौजूद है, तो डेटा चकाचक अपडेट कर दो
+        await tx
+            .update(stores)
+            .set(storeUpdateData)
+            .where(eq(stores.sellerId, seller.id));
+        console.log(`🔄 Stores table me Seller ${seller.id} ka data actual value se update ho gaya!`);
+    }
+});
     return res.status(200).json({
         success: true,
         message: "Profile and Store updated successfully भाई साहब।"
