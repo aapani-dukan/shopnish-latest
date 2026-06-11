@@ -129,6 +129,7 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
 
     const updateData = validation.data;
 
+    // 🎯 १. पहले सेलर प्रोफाइल का डेटा साफ़ तैयार करो भाई साहब
     const finalUpdateData: any = {
         ...updateData,
         updatedAt: new Date(),
@@ -136,13 +137,13 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         longitude: updateData.longitude ? String(updateData.longitude) : undefined,
     };
 
+    // सिर्फ वही डिलीट करो जो सचमुच undefined हैं
     Object.keys(finalUpdateData).forEach(
         key => finalUpdateData[key] === undefined && delete finalUpdateData[key]
     );
 
     await db.transaction(async (tx) => {
-
-        // User ID se seller nikalo
+        // User ID se seller nikalna compulsory hai
         const seller = await tx.query.sellersPgTable.findFirst({
             where: eq(sellersPgTable.userId, userId),
         });
@@ -151,37 +152,50 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
             throw new Error(`Seller not found for userId ${userId}`);
         }
 
-        // Seller table update
+        // 🎯 २. Seller table को अपडेट मारो
         await tx
             .update(sellersPgTable)
             .set(finalUpdateData)
             .where(eq(sellersPgTable.id, seller.id));
 
-        // Store sync
+        // 🎯 ३. अब स्टोर का डेटा बिल्कुल ताज़ा और फ्रेश बनाओ (बिना किसी मिसिंग कीज़ के)
         const storeUpdateData: any = {
-            storeName: updateData.businessName,
-            address: updateData.businessAddress,
-            city: updateData.city,
-            pincode: updateData.pincode,
-            latitude: finalUpdateData.latitude,
-            longitude: finalUpdateData.longitude,
+            storeName: updateData.businessName || seller.businessName || "My Shop",
+            address: updateData.businessAddress || seller.businessAddress || "",
+            city: updateData.city || "Bundi",
+            pincode: updateData.pincode || "323001",
+            latitude: finalUpdateData.latitude || null,
+            longitude: finalUpdateData.longitude || null,
             updatedAt: new Date(),
         };
 
-        Object.keys(storeUpdateData).forEach(
-            key => storeUpdateData[key] === undefined && delete storeUpdateData[key]
-        );
+        // 🤖 असली जादुई लॉक: पहले चेक करो कि stores टेबल में लाला जी की दुकान की रो है या नहीं?
+        const existingStore = await tx
+            .select()
+            .from(stores)
+            .where(eq(stores.sellerId, seller.id))
+            .limit(1);
 
-        if (Object.keys(storeUpdateData).length > 1) {
+        if (existingStore.length === 0) {
+            // 🆕 अगर डेटाबेस खाली है, तो तुरंत नई एंट्री ठोक दो भाई साहब! (Fixes Seller 14 Issue)
+            await tx.insert(stores).values({
+                ...storeUpdateData,
+                sellerId: seller.id,
+                createdAt: new Date(),
+            });
+            console.log(`🎉 Stores table me Seller ID ${seller.id} ki nayi dukan darj ho gayi hai!`);
+        } else {
+            // 🔄 अगर रो पहले से मौजूद है, तो डेटा चकाचक अपडेट कर दो
             await tx
                 .update(stores)
                 .set(storeUpdateData)
                 .where(eq(stores.sellerId, seller.id));
+            console.log(`🔄 Stores table me Seller ID ${seller.id} ka data update ho gaya!`);
         }
     });
 
     return res.status(200).json({
         success: true,
-        message: "Profile and Store updated successfully भाई।"
+        message: "Profile and Store updated successfully भाई साहब।"
     });
 });
