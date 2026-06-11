@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db'; 
-import { sellersPgTable, stores, subOrders, products,productVariants, orders } from '../../shared/backend/schema'; 
+import { sellersPgTable, stores, subOrders, products,productVariants, orders, categories } from '../../shared/backend/schema'; 
 import { eq, and, gte, sql, desc, isNull, not, lte,or,inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -107,16 +107,6 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
 
 
 // 3️⃣ Get Seller Profile
-export const getMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
-    const userId = (req as any).user?.id;
-    const seller = await db.query.sellersPgTable.findFirst({
-        where: eq(sellersPgTable.userId, userId),
-    });
-    if (!seller) return res.status(404).json({ message: 'Seller profile not found.' });
-    return res.status(200).json({ success: true, data: seller });
-});
-
-
 export const updateMySellerProfile = asyncHandler(async (req: Request, res: Response) => {
     const userId = parseInt(req.params.id, 10);
 
@@ -127,9 +117,14 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         });
     }
 
-    const updateData = validation.data;
+    // 🚀 यहाँ है कड़क टाइप लॉजिक फिक्स भाई साहब:
+    // हमने TypeScript को साफ़ बता दिया कि updateData में Zod के साथ-साथ ये दोनों फील्ड्स भी आ रहे हैं!
+    const updateData = validation.data as typeof validation.data & {
+        categoryId?: number | null;
+        businessPhone?: string;
+    };
 
-    // 🎯 १. पहले सेलर प्रोफाइल का डेटा साफ़ तैयार करो भाई साहब
+    // १. पहले सेलर प्रोफाइल का डेटा साफ़ तैयार करो भाई साहब (बिना किसी हार्डकोडिंग के)
     const finalUpdateData: any = {
         ...updateData,
         updatedAt: new Date(),
@@ -137,86 +132,88 @@ export const updateMySellerProfile = asyncHandler(async (req: Request, res: Resp
         longitude: updateData.longitude ? String(updateData.longitude) : undefined,
     };
 
-    // सिर्फ वही डिलीट करो जो सचमुच undefined हैं
+    // सिर्फ वही कीज डिलीट करो जो सचमुच undefined हैं
     Object.keys(finalUpdateData).forEach(
         key => finalUpdateData[key] === undefined && delete finalUpdateData[key]
     );
 
-   await db.transaction(async (tx) => {
-    // 1. User ID se seller nikalna compulsory hai भाई साहब
-    const seller = await tx.query.sellersPgTable.findFirst({
-        where: eq(sellersPgTable.userId, userId),
+    await db.transaction(async (tx) => {
+        // User ID से ओरिजिनल सेलर रिकॉर्ड निकालो
+        const seller = await tx.query.sellersPgTable.findFirst({
+            where: eq(sellersPgTable.userId, userId),
+        });
+
+        if (!seller) {
+            throw new Error(`Seller not found for userId ${userId}`);
+        }
+
+        // २. Seller table को अपडेट मारो
+        await tx
+            .update(sellersPgTable)
+            .set(finalUpdateData)
+            .where(eq(sellersPgTable.id, seller.id));
+
+        // ३. category_id से वास्तविक कैटेगरी नाम (Slug या Name) निकालो भाई
+        let dynamicStoreType = "grocery"; 
+        const sellerCategoryId = updateData.categoryId || seller.categoryId;
+
+        if (sellerCategoryId) {
+            const categoryData = await tx.query.categories.findFirst({
+                where: eq(categories.id, sellerCategoryId),
+            });
+            if (categoryData && categoryData.slug) {
+                dynamicStoreType = categoryData.slug.toLowerCase();
+            } else if (categoryData && categoryData.name) {
+                dynamicStoreType = categoryData.name.toLowerCase();
+            }
+        }
+
+        // ४. अब स्टोर का डेटा 100% फ्रंटएंड फॉर्म और सेलर रिकॉर्ड से डायनेमिक उठाओ
+        const storeUpdateData: any = {
+            storeName: updateData.businessName || seller.businessName || "My Shop",
+            storeType: dynamicStoreType, 
+            
+            // फ्रंटएंड फॉर्म से आया हुआ असली फोन नंबर, फॉलबैक में सेलर का पुराना नंबर!
+            phone: updateData.businessPhone || seller.businessPhone, 
+            
+            address: updateData.businessAddress || seller.businessAddress,
+            city: updateData.city || seller.city || "Bundi",
+            pincode: updateData.pincode || seller.pincode || "323001",
+            latitude: finalUpdateData.latitude || seller.latitude || null,
+            longitude: finalUpdateData.longitude || seller.longitude || null,
+            updatedAt: new Date(),
+        };
+
+        // सुरक्षा कवच: अगर फोन नंबर बिल्कुल गायब मिले, तो रोको ताकि NOT-NULL एरर न आए
+        if (!storeUpdateData.phone) {
+            throw new Error(`Dukan ka phone number mandatory hai! Frontend form me input field lagana zaroori hai bhai साहब।`);
+        }
+
+        // 🤖 चेक करो कि क्या stores टेबल में लाला जी की दुकान की रो पहले से है?
+        const existingStore = await tx
+            .select()
+            .from(stores)
+            .where(eq(stores.sellerId, seller.id))
+            .limit(1);
+
+        if (existingStore.length === 0) {
+            // 🆕 अगर एंट्री नहीं है, तो बिल्कुल वास्तविक और शुद्ध डेटा के साथ नई रो ठोक दो!
+            await tx.insert(stores).values({
+                ...storeUpdateData,
+                sellerId: seller.id,
+                createdAt: new Date(),
+            });
+            console.log(`🎉 Stores table me Seller ID ${seller.id} ki dukan darj ho gayi!`);
+        } else {
+            // 🔄 अगर रो पहले से मौजूद है, तो डेटा चकाचक अपडेट कर दो
+            await tx
+                .update(stores)
+                .set(storeUpdateData)
+                .where(eq(stores.sellerId, seller.id));
+            console.log(`🔄 Stores table me Seller ID ${seller.id} ka data update ho gaya!`);
+        }
     });
 
-    if (!seller) {
-        throw new Error(`Seller not found for userId ${userId}`);
-    }
-
-    // 2. Seller table ko update maaro
-    await tx
-        .update(sellersPgTable)
-        .set(finalUpdateData)
-        .where(eq(sellersPgTable.id, seller.id));
-
-    // 🎯 🚀 असली जादुई मैजिक: category_id से वास्तविक कैटेगरी का नाम निकालो भाई!
-    let dynamicStoreType = "grocery"; // यह सिर्फ एक सेफ़ फॉलबैक रहेगा
-
-    // पक्का करो कि सेलर के पास categoryId है या नहीं
-    const sellerCategoryId = updateData.categoryId || seller.categoryId;
-
-    if (sellerCategoryId) {
-        // categories टेबल से उस आईडी का डेटा उठाओ
-        const categoryData = await tx.query.categoriesTable.findFirst({
-            where: eq(categoriesTable.id, sellerCategoryId),
-        });
-
-        // अगर कैटेगरी मिल गई, तो उसका असली नाम (जैसे: 'restaurant', 'fruits') ले लो भाई साहब!
-        if (categoryData && categoryData.slug) {
-            dynamicStoreType = categoryData.slug.toLowerCase(); // या categoryData.name
-        } else if (categoryData && categoryData.name) {
-            dynamicStoreType = categoryData.name.toLowerCase();
-        }
-    }
-
-    // 3. अब स्टोर का डेटा बिल्कुल वास्तविक वैल्यू के साथ तैयार करो भाई!
-    const storeUpdateData: any = {
-        storeName: updateData.businessName || seller.businessName || "My Shop",
-        
-        // 🎯 यहाँ आई डेटाबेस से निकाली हुई बिल्कुल असली और वास्तविक वैल्यू!
-        storeType: dynamicStoreType, 
-        
-        address: updateData.businessAddress || seller.businessAddress || "",
-        city: updateData.city || "Bundi",
-        pincode: updateData.pincode || "323001",
-        latitude: finalUpdateData.latitude || null,
-        longitude: finalUpdateData.longitude || null,
-        updatedAt: new Date(),
-    };
-
-    // 🤖 चेक करो कि क्या stores टेबल में लाला जी की दुकान की रो पहले से है?
-    const existingStore = await tx
-        .select()
-        .from(stores)
-        .where(eq(stores.sellerId, seller.id))
-        .limit(1);
-
-    if (existingStore.length === 0) {
-        // 🆕 अगर एंट्री नहीं है, तो बिल्कुल वास्तविक कैटेगरी के साथ नई रो ठोक दो भाई साहब!
-        await tx.insert(stores).values({
-            ...storeUpdateData,
-            sellerId: seller.id,
-            createdAt: new Date(),
-        });
-        console.log(`🎉 Stores table me Seller ${seller.id} ki dukan '${dynamicStoreType}' type ke saath darj ho gayi!`);
-    } else {
-        // 🔄 अगर रो पहले से मौजूद है, तो डेटा चकाचक अपडेट कर दो
-        await tx
-            .update(stores)
-            .set(storeUpdateData)
-            .where(eq(stores.sellerId, seller.id));
-        console.log(`🔄 Stores table me Seller ${seller.id} ka data actual value se update ho gaya!`);
-    }
-});
     return res.status(200).json({
         success: true,
         message: "Profile and Store updated successfully भाई साहब।"

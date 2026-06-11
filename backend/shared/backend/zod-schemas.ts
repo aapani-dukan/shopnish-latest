@@ -36,6 +36,16 @@ export const insertSellerSchema = createInsertSchema(sellersPgTable, {
   userId: z.number().int(),
   businessPhone: z.string().regex(/^\d{10}$/, "Phone number must be 10 digits"),
   pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits"),
+  categoryId: z.number().int().optional().nullable(),
+  businessName: z.string().min(1, "Business name is required"),
+  description: z.string().optional().nullable(),
+  businessAddress: z.string().min(1, "Business address is required"),
+  city: z.string().min(1, "City is required"),
+  gstNumber: z.string().optional().nullable(),
+  bankAccountNumber: z.string().optional().nullable(),
+  ifscCode: z.string().optional().nullable(),
+  isSelfDeliveryBySeller: z.boolean().optional(), 
+  isOpen: z.boolean().optional(),
   deliveryRadius: z.number().int().min(1, "Delivery Radius must be at least 1 km").optional().nullable(),
   latitude: z.number().optional().nullable(), // Decimal $type<number>
   longitude: z.number().optional().nullable(), // Decimal $type<number>
@@ -58,6 +68,10 @@ export const updateSellerSchema = insertSellerSchema.partial().extend({
     bankAccountNumber: z.string().optional().nullable(),
     ifscCode: z.string().optional().nullable(),
     deliveryRadius: z.number().int().min(1).nullable().optional(),
+    categoryId: z.number().int().optional().nullable(),
+    businessPhone: z.string().regex(/^\d{10}$/, "Phone number must be 10 digits").optional(),
+    pincode: z.string().regex(/^\d{6}$/, "Pincode must be 6 digits").optional(),
+
 }).omit({
     // userId को omit करें क्योंकि इसे update नहीं किया जाएगा
     userId: true,
@@ -112,7 +126,6 @@ export const insertSubOrderSchema = createInsertSchema(subOrders, {
   storeId: z.number().int().optional().nullable(),
   status: z.enum(subOrders.status.enumValues).optional(),
   subtotal: z.number(), // Decimal $type<number>
-  deliveryCharge: z.number().optional(), // Decimal $type<number> with default
   total: z.number(), // Decimal $type<number>
   estimatedPreparationTime: z.string().optional().nullable(),
   isSelfDeliveryBySeller: z.boolean().optional(),
@@ -161,20 +174,13 @@ export const insertCouponsPgTableSchema = createInsertSchema(couponsPgTable, {
 export const insertProductSchema = createInsertSchema(products, {
   sellerId: z.number().int().optional(), // Default in Drizzle, so optional here
   storeId: z.number().int().optional().nullable(),
-  
+  categoryId: z.number().int().optional().nullable(),
   name: z.string().min(1, "Product name is required"),
   nameHindi: z.string().optional().nullable(),
   description: z.string().optional().nullable(),
   descriptionHindi: z.string().optional().nullable(),
-  price: z.number(), // Decimal $type<number>
-  originalPrice: z.number().optional().nullable(), // Decimal $type<number>
   image: z.string().url("Must be a valid URL"),
   images: z.array(z.string().url("Must be a valid URL")).optional().nullable(),
-  unit: z.string().optional(), // Default in Drizzle
-  brand: z.string().optional().nullable(),
-  stock: z.number().int().optional(), // Default in Drizzle
-  minOrderQty: z.number().int().optional(), // Default in Drizzle
-  maxOrderQty: z.number().int().optional(), // Default in Drizzle
   isActive: z.boolean().optional(),
   deliveryScope: z.string().optional(), // Default in Drizzle
   productDeliveryPincodes: z.array(z.string()).optional().nullable(), // text array
