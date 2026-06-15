@@ -3,12 +3,13 @@ import { Router, Response } from 'express';
 import { db } from '../../db';
 import {
   products,
+  masterProducts,
   approvalStatusEnum,
   categories,
   sellersPgTable
 } from '../../../shared/backend/schema';
 import { AuthenticatedRequest } from '../../middleware/verifyToken';
-import { eq } from 'drizzle-orm';
+import { eq,sql,and } from 'drizzle-orm';
 import { authorize } from '../../middleware/authorize';
 import { validateRequest } from '../../middleware/validation';
 import { z } from 'zod';
@@ -186,6 +187,47 @@ adminProductsRouter.post('/sync-gallery', authorize(['admin']), async (req: any,
     });
   } catch (err) {
     return res.status(500).json({ error: "Gallery sync shuru karne mein vifal." });
+  }
+});
+// 🟢 ३. MULTI-MAPPED SYNC: मैपिंग टेबल के जरिए विशिष्ट ब्रांड को BRANDED करना
+adminProductsRouter.post('/sync-specific-branded', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    const { subCategoryId, brandName } = req.body;
+    if (!subCategoryId || !brandName) return res.status(400).json({ error: "Required fields missing ভাই!" });
+
+    // ⚡ मैपिंग टेबल के जरिए उन सभी मास्टर प्रोडक्ट्स का ब्रांड टाइप 'BRANDED' करो 
+    // जो इस सब-कैटेगरी से जुड़े हैं और नाम मैच करता है!
+    await db.execute(sql`
+      UPDATE master_products 
+      SET brand_type = 'BRANDED' 
+      WHERE id IN (
+        SELECT master_product_id FROM product_subcategories WHERE sub_category_id = ${parseInt(subCategoryId)}
+      ) AND name ILIKE ${'%' + brandName + '%'};
+    `);
+
+    return res.json({ success: true, message: `Boom! "${brandName}" सिंक होकर BRANDED ब्रैकेट में लॉक हो गया भाई साहब!` });
+  } catch (err) {
+    return res.status(500).json({ error: "Internal Server Error" });
+  }
+});
+
+// 🔴 ४. MULTI-MAPPED REVERSE: मैपिंग टेबल के जरिए वापस LOCAL तिजोरी में डालना
+adminProductsRouter.post('/mark-specific-local', authorize(['admin']), async (req: any, res: Response) => {
+  try {
+    const { subCategoryId, brandName } = req.body;
+    if (!subCategoryId || !brandName) return res.status(400).json({ error: "Required fields missing भाई!" });
+
+    await db.execute(sql`
+      UPDATE master_products 
+      SET brand_type = 'LOCAL' 
+      WHERE id IN (
+        SELECT master_product_id FROM product_subcategories WHERE sub_category_id = ${parseInt(subCategoryId)}
+      ) AND name ILIKE ${'%' + brandName + '%'};
+    `);
+
+    return res.json({ success: true, message: `सफलतापूर्वक! "${brandName}" वापस LOCAL (हैवी कमीशन) पर सेट हो गया भाई!` });
+  } catch (err) {
+    return res.status(500).json({ error: "Internal Server Error" });
   }
 });
 // ----------------------------------------------------------------------

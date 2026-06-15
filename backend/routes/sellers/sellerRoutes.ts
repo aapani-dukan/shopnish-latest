@@ -28,7 +28,7 @@ import multer from 'multer';
 import { uploadImage, deleteImage } from '../../server/cloudStorage';
 import { v4 as uuidv4 } from "uuid";
 import { getIO } from "../../server/socket"; // ✅ Ts फ़ाइल है, इसे .ts के साथ इम्पोर्ट करें
-import { getMySellerProfile, updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
+import { updateMySellerProfile } from '../../server/controllers/sellerController'; // 👈 यहाँ नया कंट्रोलर इम्पोर्ट करें
 import { authorize, protect } from '../../server/middleware/authorize'; // आपके ऑथेंटिकेशन मिडलवेयर
 import { categoryFormInputSchema } from '../../shared/backend/zod-schemas';
 import { z } from 'zod';
@@ -182,16 +182,13 @@ sellerRouter.get('/me', requireSellerAuth, async (req: any, res: Response) => {
       .where(eq(products.sellerId, sellerId));
 
     // कुल राजस्व की गणना (subOrders से, क्योंकि sellerId यहीं है)
-    
-    // Revenue calculation line (Line 130 ke paas):
-const [{ totalRevenueResult }] = await db
-  .select({ totalRevenueResult: sql<string | number>`sum(${subOrders.total}::numeric)` }) 
-  .from(subOrders)
-  .where(eq(subOrders.sellerId, sellerId));
+   const [{ totalRevenueResult }] = await db
+      .select({ totalRevenueResult: sql<string | number>`sum(COALESCE(${subOrders.total}::numeric, 0))` }) 
+      .from(subOrders)
+      .where(eq(subOrders.sellerId, sellerId));
 
-const totalRevenue = Number(totalRevenueResult) || 0; // ✅ String to Number safe conversion
-const sellerProfileWithRating = sellerProfile as unknown as { rating: number | null, [key: string]: any };
-
+    const totalRevenue = Number(totalRevenueResult) || 0; 
+    const sellerProfileWithRating = sellerProfile as unknown as { rating: number | null, [key: string]: any };
     // औसत रेटिंग की गणना
     // विकल्प 1: यदि sellerProfile में सीधे रेटिंग है (आपका वर्तमान कार्यान्वयन)
     const averageRatingFromProfile = sellerProfileWithRating.rating || 0;
@@ -714,6 +711,7 @@ sellerRouter.post(
         description,
         descriptionHindi,
         categoryId,
+        subCategoryId,
         brand,
         estimatedDeliveryTime,
         variants
@@ -735,11 +733,11 @@ sellerRouter.post(
       if (isNaN(parsedCategoryId)) {
         return res.status(400).json({ error: 'Invalid category ID.' });
       }
-
+const parsedSubCategoryId = subCategoryId ? parseInt(subCategoryId as string) : null;
       // 3️⃣ 🔥 जादुई पैच: मोबाइल से आई फोटो का बैकग्राउंड शार्प (Sharp) से साफ़ (Pure White #fff) करें भाई!
       console.log(`📸 [AI Layer Active]: Whitening background for manual product: "${name}"`);
       
-     // ✅ कड़क बैकएंड पैच: गंदे और डार्क बैकग्राउंड को काटकर दूध जैसा सफ़ेद बनाने का नुस्खा!
+     // ✅ कड़क बैकएंड पैच: गंदे और डार्क बैकग्राउंड को काटकर दूध जैसा सफ़ेद बनाने का नुसखा!
 const processedBuffer = await sharp(file.buffer)
   .resize(800, 800, { fit: "contain", background: "#ffffff" })
   // 🌟 जादुई थ्रेशोल्ड ऑपरेशन: यह इमेज के गहरे/म्यूट रंगों और बैकग्राउंड को मास्क करके साफ़ करता है
@@ -791,10 +789,12 @@ const processedBuffer = await sharp(file.buffer)
             description: description || null,
             descriptionHindi: descriptionHindi || null,
             categoryId: parsedCategoryId,
+            subCategoryId: parsedSubCategoryId,
             image: imageUrl, // यहाँ आपका कड़क साफ़ क्लाउडिनरी यूआरएल लॉक भाई!
             sellerId,
             brand: brand || null,
             estimatedDeliveryTime: finalDeliveryTime,
+            brandType: "Local", // मैनुअल ऐड के लिए डिफ़ॉल्ट ब्रांड टाइप
             approvalStatus: 'approved', // मैनुअल ऐड को डायरेक्ट लाइव कर दिया भाई
           })
           .returning();

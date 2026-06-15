@@ -106,6 +106,33 @@ export const categories = pgTable("categories", {
   deletedAt: timestamp("deleted_at"), // Default null rahega
 });
 
+// 🚀 नई सब-कैटेगरी टेबल (कमीशन के दोनों जादुई कॉलम्स के साथ)
+export const subcategories = pgTable("subcategories", {
+  id: serial("id").primaryKey(),
+    
+  name: varchar("name", { length: 255 }).notNull(), // जैसे: "Ghee & Oil", "Ethnic Wear"
+  nameHindi: varchar("name_hindi", { length: 255 }), // जैसे: "घी और तेल", "एथनिक पहनावा"
+  image: text("image"), // सब-कैटेगरी का छोटा सुंदर फोटो
+  
+  // 💰 कमीशन लेयर १: बड़े ब्रांड्स (Amul, Saras) के लिए डिफ़ॉल्ट कम कमीशन रेट
+  fmcgBrandCommission: numeric("fmcg_brand_commission", { precision: 5, scale: 2 }).default("3.00").notNull(), 
+  
+  // 💰 कमीशन लेयर २: लोकल ब्रांड्स (दीया बत्ती, लोकल कपड़े) के लिए हैवी कमीशन रेट
+  localBrandCommission: numeric("local_brand_commission", { precision: 5, scale: 2 }).default("12.00").notNull(),
+  
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+export const categorySubcategories = pgTable("category_subcategories", {
+  id: serial("id").primaryKey(),
+  categoryId: integer("category_id").references(() => categories.id, { onDelete: "cascade" }).notNull(),
+  subCategoryId: integer("sub_category_id").references(() => subcategories.id, { onDelete: "cascade" }).notNull(),
+});
+export const productSubcategories = pgTable("product_subcategories", {
+  id: serial("id").primaryKey(),
+  masterProductId: integer("master_product_id").references(() => masterProducts.id, { onDelete: "cascade" }).notNull(),
+  subCategoryId: integer("sub_category_id").references(() => subcategories.id, { onDelete: "cascade" }).notNull(),
+});
 // 3. deliveryAreas - किसी को संदर्भित नहीं करता
 export const deliveryAreas = pgTable("delivery_areas", {
   id: serial("id").primaryKey(),
@@ -259,6 +286,10 @@ export const products = pgTable("products", {
   sellerId: integer("seller_id").default(1).references(() => sellersPgTable.id),
   storeId: integer("store_id").references(() => stores.id),
   categoryId: integer("category_id").references(() => categories.id),
+  subCategoryId: integer("sub_category_id")
+  .references(() => subcategories.id, { onDelete: "set null" }),
+
+brandType: varchar("brand_type", { length: 50 }).default("LOCAL").notNull(), // BRANDED या LOCAL
   masterProductId: integer("master_product_id").references(() => masterProducts.id),
   name: text("name").notNull(),
   nameHindi: text("name_hindi"),
@@ -588,7 +619,10 @@ export const homeLayout = pgTable("home_layout", {
   id: serial("id").primaryKey(),
   masterSku: text("master_sku").unique(), // एक्सेल का Master_SKU यहाँ आएगा
   categoryId: integer("category_id").references(() => categories.id),
-  
+  subCategoryId: integer("sub_category_id")
+  .references(() => subcategories.id, { onDelete: "set null" }),
+
+brandType: varchar("brand_type", { length: 50 }).default("LOCAL").notNull(), // BRANDED या LOCAL
   name: text("name").notNull(), // एक्सेल का Product_Name
   nameHindi: text("name_hindi"),
   brand: text("brand"), // एक्सेल का Brand

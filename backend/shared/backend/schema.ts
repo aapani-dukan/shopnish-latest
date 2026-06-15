@@ -2,7 +2,7 @@ import { z } from "zod";
 import {
   users, sellersPgTable, stores, categories, products,productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
+  services, serviceProviders, serviceBookings, reviews,masterProducts,subcategories,productSubcategories,categorySubcategories, userRoleEnum, approvalStatusEnum,
   subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,wallets,walletTransactions,productHistory,notifications,masterOrderStatusEnum, subOrderStatusEnum,
   paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum
 } from './tables';
@@ -162,8 +162,8 @@ export {
   // Tables
   users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
-  services, serviceProviders, serviceBookings, reviews,masterProducts, userRoleEnum, approvalStatusEnum,
-  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,notifications,
+  services, serviceProviders, serviceBookings, reviews,masterProducts, subcategories, productSubcategories, categorySubcategories, userRoleEnum, approvalStatusEnum,
+  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets, masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,notifications,
 productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,productHistory,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,productVariantsRelations,
@@ -184,7 +184,7 @@ insertSubOrderSchema, insertDeliveryBatchesSchema, insertCouponsPgTableSchema,
 
 export const schema = {
   // Tables
-  users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
+  users, sellersPgTable, stores, categories, products, subcategories, productSubcategories, categorySubcategories, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,walletTransactions,wallets,homeLayout,adminSettings,masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,productHistory,notifications,
   

@@ -218,6 +218,20 @@
       "when": 1780824367915,
       "tag": "0030_chilly_dark_beast",
       "breakpoints": true
+    },
+    {
+      "idx": 31,
+      "version": "7",
+      "when": 1781445002757,
+      "tag": "0031_milky_santa_claus",
+      "breakpoints": true
+    },
+    {
+      "idx": 32,
+      "version": "7",
+      "when": 1781536188320,
+      "tag": "0032_faulty_black_widow",
+      "breakpoints": true
     }
   ]
 }

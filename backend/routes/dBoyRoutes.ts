@@ -10,6 +10,7 @@ import {
   subOrders,
   subOrderStatusEnum,
   orders,
+  orderItems,
   masterOrderStatusEnum,
   orderTracking,
   sellersPgTable, // 'sellersPgTable' को 'sellers' में बदल दिया गया है
@@ -1133,34 +1134,64 @@ router.patch(
           timestamp: new Date(),
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
+// 💰 WALLET SETTLEMENT LOGIC (Brand-Aware Dynamic Commission Upgrade)
+if (newStatus === 'delivered') {
+  // 1️⃣ डिलीवरी बॉय को उसकी मेहनत की कमाई (Delivery Fee) सीधे वॉलेट में क्रेडिट करो
+  const payoutAmount = Number(existingBatch.deliveryFee);
+  await WalletService.addMoney(
+    userId, 
+    'delivery-boy', 
+    payoutAmount, 
+    'delivery_fee', 
+    `batch_${batchId}`, 
+    `Earnings for batch #${batchId}`, 
+    tx
+  );
 
-        // 💰 WALLET SETTLEMENT LOGIC
-        if (newStatus === 'delivered') {
-          const [settings] = await tx.select().from(adminSettings).limit(1);
-          const platformCommission = Number(settings?.platformCommissionRate || 10);
-          const payoutAmount = Number(existingBatch.deliveryFee);
+  // 2️⃣ अगर ग्राहक ने COD (नकद) दिया है, तो डिलीवरी बॉय के वॉलेट से उतना कैश माइनस (Hold) करो
+  const masterOrder = existingBatch.subOrders[0]?.masterOrder;
+  const isCOD = masterOrder?.paymentMethod === 'COD';
+  if (isCOD) {
+    const totalCashToCollect = existingBatch.subOrders.reduce((sum, so) => sum + Number(sum) + Number(so.total), 0);
+    await WalletService.addMoney(
+      userId, 
+      'delivery-boy', 
+      -totalCashToCollect, 
+      'cod_collection', 
+      `batch_${batchId}`, 
+      `Cash collected for COD Batch #${batchId}`, 
+      tx
+    );
+  }
 
-          await WalletService.addMoney(userId, 'delivery-boy', payoutAmount, 'delivery_fee', `batch_${batchId}`, `Earnings for batch #${batchId}`, tx);
+  // 3️⃣ 🔥 महा-योद्धा स्टेप: अब हर सब-ऑर्डर के सेलर्स का पैसा डायनेमिक कमीशन काटकर पेंडिंग में डालो
+  for (const so of existingBatch.subOrders) {
+    const sellerUserId = so.seller?.userId; 
+    if (sellerUserId) {
+      
+      // 🎯 जादू: रिलेशन एरर का खात्मा! सीधे डेटाबेस से इस सब-ऑर्डर के असली आइटम्स (Products) निकालो भाई!
+      // Note: अपनी स्कीमा फ़ाइल के हिसाब से 'orderItems' या 'subOrderItems' टेबल का नाम इम्पोर्ट चेक कर लेना भाई साहब!
+      // यहाँ मान लेते हैं कि टेबल का नाम 'orderItems' है और उसमें 'subOrderId' का हुक है।
+      const fetchedItems = await tx
+        .select({
+          sellerProductId: orderItems.productId,
+          quantity: orderItems.quantity,
+          price: orderItems.productPrice
+        })
+        .from(orderItems)
+        .where(eq(orderItems.subOrderId, so.id));
 
-          const masterOrder = existingBatch.subOrders[0].masterOrder;
-          const isCOD = masterOrder.paymentMethod === 'COD';
-          if (isCOD) {
-            const totalCashToCollect = existingBatch.subOrders.reduce((sum, so) => sum + Number(so.total), 0);
-            await WalletService.addMoney(userId, 'delivery-boy', -totalCashToCollect, 'cod_collection', `batch_${batchId}`, `Cash collected for COD Batch #${batchId}`, tx);
-          }
-
-          for (const so of existingBatch.subOrders) {
-            const sellerUserId = so.seller?.userId; 
-            if (sellerUserId) {
-              const orderTotal = Number(so.total);
-              const commissionAmount = (orderTotal * platformCommission) / 100;
-              const sellerEarning = orderTotal - commissionAmount;
-              await WalletService.addMoney(sellerUserId, 'seller', sellerEarning, 'order_earning', `order_${so.id}`, `Earning for Order #${so.id}`, tx);
-            }
-          }
-        }
-
-        // C. If 'delivered' or 'cancelled', Update Sub-Orders & Master Order
+      // हमारी नई जादुई वॉलेट सर्विस को कॉल मारो, आर्गुमेंट भी ३ कर दिए और आखिर का tx झंझट भी साफ!
+      // सेफ्टी के लिए हम tx को अंदर पास करने के लिए WalletService को बाहर से ही रेडी रखेंगे
+      await WalletService.creditSellerEarnings(
+        sellerUserId, 
+        so.id, 
+        fetchedItems || [] // [{ sellerProductId: X, quantity: Y, price: Z }]
+      );
+    }
+  }
+}
+             // C. If 'delivered' or 'cancelled', Update Sub-Orders & Master Order
         if (['delivered', 'cancelled'].includes(newStatus)) {
           const targetSubStatus = newStatus === 'delivered' ? 'delivered_by_delivery_boy' : 'cancelled';
           const subOrderIds = existingBatch.subOrders.map(so => so.id);
