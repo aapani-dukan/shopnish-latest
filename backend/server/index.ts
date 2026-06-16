@@ -1,4 +1,11 @@
 // backend/server/index.ts
+import dotenv from "dotenv";
+
+dotenv.config({
+  path: process.env.NODE_ENV === "testing"
+    ? ".env.testing"
+    : ".env",
+});
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
 import cors from "cors";
 import apiRouter from "./routes";
@@ -17,13 +24,7 @@ import { rateLimit } from "express-rate-limit";
 import { db } from "./db"; // Removed databasePool if not directly used here
 
 import { initSocket } from "./socket";
-import dotenv from "dotenv";
 
-dotenv.config({
-  path: process.env.NODE_ENV === "testing"
-    ? ".env.testing"
-    : ".env",
-});
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
