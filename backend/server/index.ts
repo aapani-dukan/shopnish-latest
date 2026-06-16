@@ -1,5 +1,6 @@
 // backend/server/index.ts
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
+import "dotenv/config";
 import cors from "cors";
 import apiRouter from "./routes";
 import "./lib/firebaseAdmin";
@@ -56,9 +57,13 @@ async function runMigrations() {
   } 
 }
 
-// --- Start Server ---
 (async () => {
+  // 🎯 DEBUGGING: Server start hote hi check karo
+  console.log("🛠️ Current NODE_ENV:", process.env.NODE_ENV);
+  console.log("🔌 Database URL being used:", process.env.DATABASE_URL); // Yeh print hona chahiye!
+
   await runMigrations();
+  
   console.log("✅ Migrations done. Starting server...");
 
   // 🛡️ [सुरक्षा स्टेप 2]: यहाँ सुरक्षा चक्र लागू करें (रिक्वेस्ट लॉगिंग से पहले)
