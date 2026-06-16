@@ -2,9 +2,9 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Star, ShoppingCart, Heart, Share2, Plus, Minus } from "lucide-react";
+import { Star, ShoppingCart, Heart, Share2, Plus, Minus} from "lucide-react";
 import { Button } from "@/components/ui/button"; // Adjusted path
-import { Card, CardContent } from "@/components/ui/card"; // Adjusted path
+import { Card, CardContent} from "@/components/ui/card"; // Adjusted path
 import { Badge } from "@/components/ui/badge"; // Adjusted path
 import { Separator } from "@/components/ui/separator"; // Adjusted path
 import { Skeleton } from "@/components/ui/skeleton"; // Adjusted path
@@ -13,10 +13,10 @@ import { useToast } from "@/hooks/use-toast"; // Adjusted path
 import { apiRequest } from "@/lib/queryClient"; // Adjusted path
 //import Header from "@/components/header"; // Adjusted path
 import Footer from "@/components/footer"; // Adjusted path
+import { Label } from "recharts";
 // Removed direct import of api and auth as they are not used directly here anymore.
 // import api from "../lib/api.ts";
 // import { auth } from "../lib/firebase.ts";
-
 // ✅ Updated Product Interface
 interface Product {
   id: number;
@@ -49,12 +49,6 @@ interface Review {
   };
 }
 
-interface Category {
-  id: number;
-  name: string;
-  slug: string;
-}
-
 export default function ProductDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -62,12 +56,6 @@ export default function ProductDetail() {
   const [selectedImage, setSelectedImage] = useState(0); // ✅ Corrected casing
   const { toast } = useToast();
   const queryClient = useQueryClient();
-
-  // categories data fetching
-  const { data: categories = [] } = useQuery<Category[]>({
-    queryKey: ['/api/categories'],
-    queryFn: () => apiRequest("get", "/api/categories"), // ✅ Added queryFn
-  });
 
   // product data fetching
   const { data: product, isLoading: productLoading, error } = useQuery<Product>({ // ✅ Corrected casing
@@ -102,7 +90,7 @@ export default function ProductDetail() {
   // ✅ add to cart mutation
   const addToCartMutation = useMutation({ // ✅ Corrected casing
     mutationFn: async ({ productId, quantity }: { productId: number; quantity: number }) => { // ✅ Corrected casing
-      return await apiRequest("post", "/api/cart/add", { productId, quantity }); // ✅ Corrected casing
+      return await apiRequest("POST", "/api/cart/add", { productId, quantity }); // ✅ Corrected casing
     },
     onSuccess: (data) => {
       console.log("✅ Cart API response (onSuccess):", data);

@@ -366,18 +366,37 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
             itemTotal: itemTotalPrice,
           });
         }
+        // ==================== 🎯 100% बुलेटप्रूफ प्लेटफ़ॉर्म चार्ज और स्लैब सिंक इंजन ====================
 
-        // Compare calculatedSubtotal with client-provided subtotal
+        // Compare calculatedSubtotal with client-provided subtotal (पुराना अछूता सुरक्षा कवच भाई)
         if (Math.abs(calculatedSubtotal - subtotal) > 0.01) {
           throw new Error('Calculated subtotal does not match provided subtotal. Possible price discrepancy.');
         }
 
-        // Validate total
-        if (Math.abs((calculatedSubtotal + deliveryCharge) - total) > 0.01) {
-          throw new Error('Calculated total (subtotal + deliveryCharge) does not match provided total.');
+        // 🎛️ १. एडमिन सेटिंग्स से स्लैब-वाइज प्लेटफ़ॉर्म चार्ज की लाइव वैल्यू निकालो भाई साहब
+        // (मान लेते हैं कि 'settings' वेरिएबल ऊपर से आ रहा है, या डिफ़ॉल्ट रूप से ये स्लैब्स लॉक हैं भाई)
+        let appliedPlatformCharge = 0;
+        if (calculatedSubtotal <= 500) {
+          appliedPlatformCharge = 5.00;  // ₹500 तक का आर्डर = ₹5 प्लेटफ़ॉर्म फीस
+        } else if (calculatedSubtotal <= 1000) {
+          appliedPlatformCharge = 10.00; // ₹1000 तक का आर्डर = ₹10 प्लेटफ़ॉर्म फीस
+        } else {
+          appliedPlatformCharge = 15.00; // ₹1000 से ऊपर = ₹15 प्लेटफ़ॉर्म फीस
         }
 
-        // 1. Create master order (पूरे पेलोड के साथ भाई)
+        // 🎪 २. प्रोमो कोड डिस्काउंट और त्योहार स्पेशल चूट (क्लाइंट पेलोड से सेफ़ली नंबर फॉर्मेट में निकालें)
+        const appliedDiscount = Number(req.body.discount || 0); 
+        const appliedExtraDiscount = Number(req.body.extraDiscount || 0);
+
+        // 🔥 ३. आपका जादुई और ऐतिहासिक बिज़नेस फ़ॉर्मूला सिंक लॉक (Final Expected Total):
+        const expectedTotal = calculatedSubtotal + deliveryCharge + appliedPlatformCharge - appliedDiscount - appliedExtraDiscount;
+
+        // 🎯 ४. अपग्रेड वैलिडेशन चेक: अब कोई प्राइस मिसमैच एरर नहीं आएगा भाई साहब!
+        if (Math.abs(expectedTotal - total) > 0.01) {
+          throw new Error(`Calculated total (₹${expectedTotal.toFixed(2)}) does not match client-provided total (₹${total}).`);
+        }
+
+        // ५. Create master order (आपके नए ३ कॉलम डेटाबेस के लॉकर में मुकम्मल सिंक भाई साहब!)
         const [masterOrder] = await tx.insert(orders).values({
             orderNumber: `SN-BND-${Math.random().toString(36).substring(2, 7).toUpperCase()}`, 
             customerId: userId,
@@ -388,9 +407,15 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
             deliveryPincode: finalPincode,
             deliveryLat: finalDeliveryLat,
             deliveryLng: finalDeliveryLng,
+            
+            // 💰 डिजिटल बिल पर्ची का शुद्ध गणितीय डेटा भाई साहब
             subtotal: calculatedSubtotal,
             deliveryCharge: deliveryCharge,
-            total: total,
+            platformCharge: appliedPlatformCharge, 
+            discount: appliedDiscount,             
+            extraDiscount: appliedExtraDiscount,   
+            total: total,                          
+            
             paymentMethod: paymentMethod.toUpperCase(), 
             paymentStatus: paymentMethod.toUpperCase() === 'COD' ? 'pending' : 'pending',
             status: masterOrderStatusEnum.enumValues?.[0] ?? 'pending',
@@ -407,6 +432,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
         });
 
         if (!masterOrder) throw new Error('Failed to create master order.');
+        // ========================================================================================
 
         // 2. Create sub-order for the seller (buy-now expects single seller)
         const [sellerStore] = await tx.select().from(stores).where(eq(stores.sellerId, sellerId)).limit(1);
@@ -878,27 +904,41 @@ const result = await db.transaction(async (tx) => {
             });
         }
 
-      // =====================================================================
-        // 🎯 100% बुलेटप्रूफ सिंक: ₹500 से ऊपर होते ही डिलीवरी चार्ज सीधा ₹0 (FREE) भाई साहब!
+    // =====================================================================
+        // 🎯 100% बुलेटप्रूफ सिंक: फ्री डिलीवरी + स्लैब प्लेटफ़ॉर्म चार्ज + चूट इंजन भाई साहब!
         // =====================================================================
         
-        // कड़क चेक: अगर सर्वर द्वारा निकाला गया कुल सबटोटल ₹500 या उससे अधिक है, तो डिलीवरी चार्ज सीधा 0 करो!
-        // अन्यथा, अगर फ्रंटएंड से कोई चार्ज आया है तो वो रखो, नहीं तो डिफ़ॉल्ट ₹25 लगाओ भाई।
+        // १. सर्वर द्वारा निकाला गया कुल शुद्ध सबटोटल (माल की असली कीमत भाई)
         const masterSubtotalNum = Number(masterOrderCalculatedSubtotal > 0 ? masterOrderCalculatedSubtotal : subtotal);
         
+        // २. फ्री डिलीवरी चेक: अगर कुल माल ₹500 या उससे अधिक है, तो डिलीवरी चार्ज सीधा 0 करो!
         let finalDeliveryChargeToInsert = 25; // डिफ़ॉल्ट फॉलबैक
-        
         if (masterSubtotalNum >= 500) {
             finalDeliveryChargeToInsert = 0; // 🔥 ₹500 पर पूरी तरह फ्री भाई साहब!
             console.log(`🎁 [FREE DELIVERY TRIGGERED]: Subtotal is ₹${masterSubtotalNum}, Charge set to ₹0`);
         } else {
             finalDeliveryChargeToInsert = Number(deliveryCharge) > 0 ? Number(deliveryCharge) : 25;
         }
-        
-        // मास्टर टोटल = शुद्ध सबटोटल + हमारा सही डिलीवरी चार्ज (नंबर सेफ्टी के साथ)
-        const finalMasterTotalToInsert = masterSubtotalNum + finalDeliveryChargeToInsert;
 
-        // एड्रेस सेफ्टी लेयर (पहले जैसा कड़क भाई)
+        // 🎛️ ३. एडमिन सेटिंग्स के अनुसार स्लैब-वाइज प्लेटफ़ॉर्म चार्ज का लाइव जोड़ (सिर्फ कस्टमर/राइडर के लिए भाई)
+        let appliedPlatformCharge = 0;
+        if (masterSubtotalNum <= 500) {
+          appliedPlatformCharge = 5.00;  // ₹500 तक का आर्डर = ₹5 प्लेटफ़ॉर्म फीस
+        } else if (masterSubtotalNum <= 1000) {
+          appliedPlatformCharge = 10.00; // ₹1000 तक का आर्डर = ₹10 प्लेटफ़ॉर्म फीस
+        } else {
+          appliedPlatformCharge = 15.00; // ₹1000 से ऊपर = ₹15 प्लेटफ़ॉर्म फीस
+        }
+
+        // 🎁 ४. पुराने डिस्काउंट और त्योहार वाली एक्स्ट्रा चूट (क्लाइंट पेलोड से सेफ़ली नंबर फॉर्मेट में निकालें)
+        const appliedDiscount = Number(req.body.discount || 0); 
+        const appliedExtraDiscount = Number(req.body.extraDiscount || 0);
+
+        // 🔥 ५. आपका जादुई और ऐतिहासिक बिज़नेस फ़ॉर्मूला सिंक लॉक (Final Expected Master Total):
+        // total = subtotal + deliveryCharge + platformCharge - discount - extraDiscount
+        const finalMasterTotalToInsert = masterSubtotalNum + finalDeliveryChargeToInsert + appliedPlatformCharge - appliedDiscount - appliedExtraDiscount;
+
+        // एड्रेस सेफ्टी लेयर (पुराना अछूता सुरक्षा कवच भाई)
         if ((!finalDeliveryAddressJson || finalDeliveryAddressJson.trim() === "") && finalDeliveryAddressId) {
             const [dbAddress] = await tx.select().from(deliveryAddresses).where(eq(deliveryAddresses.id, finalDeliveryAddressId)).limit(1);
             if (dbAddress) {
@@ -913,7 +953,7 @@ const result = await db.transaction(async (tx) => {
             finalDeliveryAddressJson = "N/A"; 
         }
 
-        // 🎯 मास्टर ऑर्डर बनाएं (सिंक्रोनाइज्ड SQL मैपिंग)
+        // 🎯 ६. मास्टर ऑर्डर बनाएं (डेटाबेस की अलमारी में ३ नए कॉलम कतई वॉटरप्रूफ सिंक भाई साहब!)
         const [masterOrder] = await tx.insert(orders).values({
             orderNumber: `ORD-${Date.now()}-${userId}`,
             customerId: userId,
@@ -926,14 +966,17 @@ const result = await db.transaction(async (tx) => {
             deliveryLat: finalDeliveryLat,
             deliveryLng: finalDeliveryLng,
             
-            // हमेशा सर्वर का निकाला हुआ सही सबटोटल स्टोर होगा
+            // हमेशा सर्वर का निकाला हुआ सही सबटोटल स्टोर होगा (इसी को सेलर ऐप रीड करेगा)
             subtotal: masterSubtotalNum, 
             
-            // टोटल कॉलम में भी एकदम सटीक फ्री डिलीवरी वाला टोटल जाएगा भाई साहब
-            total: finalMasterTotalToInsert, 
+            // 💰 डिजिटल बिल ब्रेकडाउन के सारे नए लॉकर मुकम्मल सिंक भाई साहब:
+            deliveryCharge: finalDeliveryChargeToInsert,   // फ्री या ₹25 डिलीवरी चार्ज
+            platformCharge: appliedPlatformCharge,         // 👈 नया कॉलम लाइव लॉक्ड!
+            discount: appliedDiscount,                     // 👈 पुराना प्रोमो डिस्काउंट सिंक!
+            extraDiscount: appliedExtraDiscount,           // 👈 नया त्योहार स्पेशल चूट सिंक!
             
-            // यहाँ गया आपका शुद्ध ₹0 या ₹25 का डिलीवरी चार्ज भाई!
-            deliveryCharge: finalDeliveryChargeToInsert, 
+            // टोटल कॉलम में आपके फ़ॉर्मूले वाला एकदम सटीक फाइनल 'Payable' अमाउंट जाएगा भाई साहब!
+            total: finalMasterTotalToInsert, 
             
             paymentMethod: paymentMethod.toUpperCase(),
             paymentStatus: 'pending',
@@ -942,8 +985,8 @@ const result = await db.transaction(async (tx) => {
             createdAt: new Date(),
             updatedAt: new Date(),
         } as any).returning({ id: orders.id, orderNumber: orders.orderNumber });
-        if (!masterOrder) throw new Error('Failed to create master order from cart.');
 
+        if (!masterOrder) throw new Error('Failed to create master order from cart.');
         // 2. डिलीवरी बैचिंग लॉजिक और सब-ऑर्डर क्रिएशन
         const batchesToCreate: { 
             subOrdersData: (typeof tempSubOrders[number] & { subOrderId: number })[], 

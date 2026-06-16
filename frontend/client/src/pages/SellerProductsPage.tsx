@@ -63,6 +63,8 @@ interface Product {
   updatedat: string;
   // यदि API category name को join करके देता है तो आप इसे यहां जोड़ सकते हैं
   categoryName?: string;
+  subCategoryName?: string;
+  subCategoryNameHindi?: string;
 }
 
 const SellerProductsPage: React.FC = () => {
@@ -74,26 +76,6 @@ const SellerProductsPage: React.FC = () => {
   const [deletingProductId, setDeletingProductId] = useState<string | null>(null);
 
   // ✅ Firebase ID टोकन प्राप्त करने और उसे रिक्वेस्ट हेडर में जोड़ने के लिए सहायक फ़ंक्शन
-  const getAuthHeaders = useCallback(async () => {
-    const auth = getAuth();
-    const user = auth.currentUser;
-
-    if (!user) {
-      // यदि कोई यूजर लॉग इन नहीं है, तो एक त्रुटि थ्रो करें या null वापस करें
-      // और कॉलिंग फंक्शन इसे हैंडल करेगा।
-      throw new Error("No authenticated Firebase user found.");
-    }
-
-    const idToken = await user.getIdToken();
-    return {
-      headers: {
-        Authorization: `Bearer ${idToken}`,
-      },
-      // withCredentials: true; // यह अब आवश्यक नहीं है क्योंकि प्रमाणीकरण हेडर-आधारित है।
-                                  // यदि आपके बैकएंड में अन्य कुकी-आधारित लॉजिक है तो इसे रखें।
-    };
-  }, []); // इस हुक की निर्भरताएँ नहीं हैं क्योंकि getAuth() और currentUser हमेशा नवीनतम होते हैं।
-
 
     const fetchProducts = useCallback(async () => {
     setLoading(true);
@@ -151,12 +133,14 @@ const SellerProductsPage: React.FC = () => {
     fetchProducts();
   }, [fetchProducts]);
 
+  // 🎯 फिक्स 1: अब दुकानदार सब-कैटेगरी के नाम (मसाले, आटा-दाल) से भी अपने प्रोडक्ट्स सर्च कर पाएगा भाई!
   const filteredProducts = products.filter(product =>
     product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.namehindi?.toLowerCase().includes(searchTerm.toLowerCase()) || // हिंदी नाम के लिए भी सर्च करें
-    product.categoryName?.toLowerCase().includes(searchTerm.toLowerCase()) // यदि categoryName उपलब्ध है
+    product.namehindi?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+    product.categoryName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+    product.subCategoryName?.toLowerCase().includes(searchTerm.toLowerCase()) || // अंग्रेजी सब-कैटेगरी नाम सर्च
+    product.subCategoryNameHindi?.toLowerCase().includes(searchTerm.toLowerCase()) // हिंदी सब-कैटेगरी नाम सर्च
   );
-
   if (loading) {
     return (
       <Card className="p-4 sm:p-6 lg:p-8">
@@ -222,6 +206,8 @@ const SellerProductsPage: React.FC = () => {
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">स्टॉक</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">अनुमोदन</TableHead>
                   <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">क्रियाएं</TableHead>
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">श्रेणी ID</TableHead>
+                  <TableHead className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">सब-श्रेणी</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody className="bg-white divide-y divide-gray-200">
@@ -248,6 +234,17 @@ const SellerProductsPage: React.FC = () => {
                            product.approvalstatus === 'pending' ? 'समीक्षा में' :
                            'अस्वीकृत'}
                       </span>
+                    </TableCell>
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm text-gray-500">{product.categoryid || 'N/A'}</TableCell>
+                    
+                    {/* 🎛️ नया डेटा सेल: डेटाबेस से सब-कैटेगरी का हिंदी + इंग्लिश नाम एक साथ चमकेगा! */}
+                    <TableCell className="px-4 py-3 whitespace-nowrap text-sm">
+                      <div className="flex flex-col">
+                        <span className="font-semibold text-gray-800">{product.subCategoryName || 'N/A'}</span>
+                        {product.subCategoryNameHindi ? (
+                          <span className="text-[11px] text-indigo-600 font-medium">{product.subCategoryNameHindi}</span>
+                        ) : null}
+                      </div>
                     </TableCell>
                     <TableCell className="px-4 py-3 whitespace-nowrap text-right text-sm font-medium">
                       <Link to={`/seller-dashboard/products/edit/${product.id}`} className="text-indigo-600 hover:text-indigo-900 mr-2">

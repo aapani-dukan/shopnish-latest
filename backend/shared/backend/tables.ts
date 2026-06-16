@@ -378,22 +378,22 @@ export const orders = pgTable("orders", {
   deliveryOtp: text("delivery_otp"),
   deliveryOtpSentAt: timestamp("delivery_otp_sent_at"),
   subtotal: decimal("subtotal", { precision: 10, scale: 2 }).notNull().$type<number>(),
+deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 }) 
+  .$type<number>()
+  .default(0)
+  .notNull(),
+  platformCharge: decimal("platform_charge", { precision: 10, scale: 2 }).default("0.00").$type<number>(),
+  promoCode: text("promo_code"),
+discount: decimal("discount", { precision: 5, scale: 2 })
+  .$type<number>()
+  .default(0),
+  extraDiscount: decimal("extra_discount", { precision: 10, scale: 2 }).default("0.00").$type<number>(),
   total: decimal("total", { precision: 10, scale: 2 }).notNull().$type<number>(),
   paymentMethod: paymentMethodEnum("payment_method").notNull(),
   paymentStatus: paymentStatusEnum("payment_status").default("pending").notNull(),
   transactionId: text("transaction_id"),
   estimatedDeliveryTime: timestamp("estimated_delivery_time"),
   actualDeliveryTime: timestamp("actual_delivery_time"),
-  deliveryCharge: decimal("delivery_charge", { precision: 10, scale: 2 })
-  .$type<number>()
-  .default(0)
-  .notNull(),
-promoCode: text("promo_code"),
-discount: decimal("discount", { precision: 5, scale: 2 })
-  .$type<number>()
-  .default(0),
-  
-  
   status: masterOrderStatusEnum("status").default("pending").notNull(),
   createdAt: timestamp("created_at", { mode: 'string' }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { mode: 'string' }).defaultNow().notNull(),
