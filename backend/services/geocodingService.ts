@@ -1,5 +1,7 @@
 import axios from 'axios';
+import * as dotenv from 'dotenv';
 
+dotenv.config({ path: '.env' });
 const GOOGLE_MAPS_API_KEY = process.env.GOOGLE_MAPS_API_KEY;
 
 interface GeocodeResult {
