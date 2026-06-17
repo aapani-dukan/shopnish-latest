@@ -1,11 +1,6 @@
 // backend/server/index.ts
 import dotenv from "dotenv";
-
-dotenv.config({
-  path: process.env.NODE_ENV === "testing"
-    ? ".env.testing"
-    : ".env",
-});
+dotenv.config();
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
 import cors from "cors";
 import apiRouter from "./routes";
