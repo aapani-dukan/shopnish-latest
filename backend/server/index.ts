@@ -1,13 +1,19 @@
 // backend/server/index.ts
-import "dotenv/config";
+import * as dotenv from 'dotenv';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// पक्का करें कि यह सही फ़ाइल लोड कर रहा है
+dotenv.config({ path: path.resolve(process.cwd(), '.env') });
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
 import cors from "cors";
 import apiRouter from "./routes";
 import "./lib/firebaseAdmin";
 import { createServer, type Server } from "http";
 import { migrate } from "drizzle-orm/node-postgres/migrator";
-import path from "path";
-import { fileURLToPath } from "url";
 import cookieParser from "cookie-parser";
 
 // 🛡️ [सुरक्षा स्टेप 1]: पैकेजेस इम्पोर्ट करें
@@ -18,10 +24,6 @@ import { rateLimit } from "express-rate-limit";
 import { db } from "./db"; // Removed databasePool if not directly used here
 
 import { initSocket } from "./socket";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
-
 const app: Express = express();
 let server: Server;
 
