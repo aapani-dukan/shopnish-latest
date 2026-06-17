@@ -1,6 +1,5 @@
 // backend/server/index.ts
-import dotenv from "dotenv";
-dotenv.config();
+import "dotenv/config";
 import express, { type Request, type Response, type NextFunction, type Express } from "express";
 import cors from "cors";
 import apiRouter from "./routes";

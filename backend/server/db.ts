@@ -1,7 +1,7 @@
 // db.ts
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-
+import "dotenv/config";
 // 🛑 ध्यान दें: यहाँ '*' हटाकर केवल '{ schema }' (curly braces के साथ) इम्पोर्ट करें
 //import { schema } from "../shared/backend/schema.ts"; 
 import * as allSchema from "../shared/backend/schema";
