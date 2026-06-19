@@ -1634,6 +1634,10 @@ export const getOrderTrackingDetails = async (
       
       subtotal: Number(masterOrder.subtotal || 0), // ✅ फ्रंटएंड की पहली मांग पूरी!
       deliveryCharge: Number(masterOrder.deliveryCharge || 0), // ✅ फ्रंटएंड की दूसरी मांग पूरी!
+       platformCharge: Number(masterOrder.platformCharge || 0),
+  discount: Number(masterOrder.discount || 0),
+  extraDiscount: Number(masterOrder.extraDiscount || 0),
+
       total: Number(masterOrder.total || 0),
       
       estimatedDeliveryTime: masterOrder.estimatedDeliveryTime,
@@ -1644,6 +1648,7 @@ export const getOrderTrackingDetails = async (
       deliveryBatchesSummary,
       items: allOrderedItems, // 'Items Ordered' वाले सेफ़्टी कार्ड के लिए भाई
       masterOrderTrackingHistory: trackingHistory,
+    
     });
 
   } catch (error) {

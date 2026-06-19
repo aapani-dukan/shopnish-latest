@@ -84,7 +84,7 @@ const { address: contextAddress, city: contextCity, pincode: contextPincode } = 
   // ✅ fetch direct buy product
   const { data: productData, isLoading, error } = useQuery<ProductItem>({ // ✅ Corrected casing
     queryKey: ['product', directBuyProductId], // ✅ Corrected casing
-    queryFn: () => apiRequest("get", `/api/products/${directBuyProductId}`), // ✅ Corrected casing
+    queryFn: () => apiRequest("GET", `/api/products/${directBuyProductId}`), // ✅ Corrected casing
     enabled: !!directBuyProductId, // ✅ Only enable if product ID exists
   });
 
@@ -150,7 +150,7 @@ useEffect(() => {
   // ----------------------------------------------------------------------------------
   const createOrderMutation = useMutation({
   mutationFn: (orderData: any) =>
-    apiRequest("post", "/api/orders/buy-now", orderData),
+    apiRequest("POST", "/api/orders/buy-now", orderData),
 
   onSuccess: (data) => {
     toast({
