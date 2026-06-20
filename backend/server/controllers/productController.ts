@@ -705,6 +705,12 @@ latitude:true,
 longitude:true
 }
 },
+masterProduct:{
+    columns:{
+      id:true,
+      subCategoryId:true
+    }
+  },
       variants:{
 columns:{
 id:true,
@@ -737,6 +743,8 @@ orderBy:[asc(productVariants.price)]
         price: cheapestVariant ? String(cheapestVariant.price) : "0", // Purani string structure ko touch nahi kiya
         stock: totalStock,
         unit: cheapestVariant ? cheapestVariant.unit : 'piece',
+        subCategoryId:
+    prod.masterProduct?.subCategoryId ?? null,
         variants: prodVariants,
 
         // 🌟 जादू 1: 'mrp' key ko naya joda taaki HomeScreen aur CategoryDetailsScreen ka naya discount math chal sake!
