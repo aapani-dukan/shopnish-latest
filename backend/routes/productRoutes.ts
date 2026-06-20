@@ -4,7 +4,7 @@ import { requireSellerAuth, requireAdminAuth } from '../server/middleware/authMi
 import { upload } from '../server/middleware/multerConfig';
 import * as ProductController from '../server/controllers/productController';
 import { bulkCreateProducts } from "..//server/controllers/productController";
-
+import { getCategorySubcategories } from '../server/controllers/productController';
 const router = Router();
 
 // --- 1. Static Search & Master Routes ---
@@ -24,6 +24,10 @@ router.put('/admin/:productId/reject', verifyToken as any, requireAdminAuth, Pro
 
 // --- 4. Customer & General Endpoints ---
 router.get('/', ProductController.getAllProducts);
+router.get(
+  "/categories/:categoryId/subcategories",
+  getCategorySubcategories
+);
 
 // --- 5. Dynamic ID Routes (हमेशा सबसे नीचे) ---
 // अब यह सिर्फ तभी चलेगा जब ऊपर का कोई रूट मैच नहीं होगा

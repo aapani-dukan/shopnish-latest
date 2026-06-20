@@ -7,7 +7,7 @@ import {
   serviceBookings, cartItems, stores, products,productVariants, categories, 
   deliveryBoys, couponsPgTable, deliveryAddresses, subOrders, 
   deliveryBatches, orderItems, orderTracking, promoCodes, 
-  serviceCategories, services 
+  serviceCategories, services,categorySubcategories,productSubcategories,subcategories,masterProducts 
 } from './tables';
 
 // --- Drizzle ORM Relations ---
@@ -50,8 +50,27 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
 export const categoriesRelations = relations(categories, ({ many }) => ({
   shops: many(sellersPgTable),
   products: many(products),
+   categorySubcategories: many(categorySubcategories),
+   subCategories: many(categorySubcategories),
 }));
+export const subcategoriesRelations = relations(subcategories, ({ many }) => ({
+  categoryMappings: many(categorySubcategories),
+  productMappings: many(productSubcategories),
+}));
+export const categorySubcategoriesRelations = relations(
+  categorySubcategories,
+  ({ one }) => ({
+    category: one(categories, {
+      fields: [categorySubcategories.categoryId],
+      references: [categories.id],
+    }),
 
+    subcategory: one(subcategories, {
+      fields: [categorySubcategories.subCategoryId],
+      references: [subcategories.id],
+    }),
+  })
+);
 export const productsRelations = relations(products, ({ one, many }) => ({
   seller: one(sellersPgTable, {
     fields: [products.sellerId],
@@ -65,10 +84,43 @@ export const productsRelations = relations(products, ({ one, many }) => ({
     fields: [products.categoryId],
     references: [categories.id],
   }),
+  masterProduct: one(masterProducts, {
+  fields: [products.masterProductId],
+  references: [masterProducts.id],
+}),
   variants: many(productVariants),
   cartItems: many(cartItems),
   orderItems: many(orderItems),
   reviews: many(reviews),
+}));
+export const productSubcategoriesRelations = relations(
+  productSubcategories,
+  ({ one }) => ({
+    product: one(masterProducts, {
+      fields: [productSubcategories.masterProductId],
+      references: [masterProducts.id],
+    }),
+
+    subcategory: one(subcategories, {
+      fields: [productSubcategories.subCategoryId],
+      references: [subcategories.id],
+    }),
+  })
+);
+export const masterProductsRelations = relations(masterProducts, ({ one, many }) => ({
+  category: one(categories, {
+    fields: [masterProducts.categoryId],
+    references: [categories.id],
+  }),
+productSubcategories: many(productSubcategories),
+products: many(products),
+  subCategory: one(subcategories, {
+    fields: [masterProducts.subCategoryId],
+    references: [subcategories.id],
+    
+  }),
+
+ 
 }));
 export const productVariantsRelations = relations(productVariants, ({ one }) => ({
   product: one(products, {

@@ -271,17 +271,19 @@ router.use("/sellers", verifyToken as any, sellerRouter);
 // ✅ Categories with Related Shops and Products
 router.get("/categories", async (req: Request, res: Response) => {
   try {
-    // 1. db.query का उपयोग करें जो 'Include' करने की अनुमति देता है
-    const categoriesList = await db.query.categories.findMany({
+   const categoriesList = await db.query.categories.findMany({
+  with: {
+    shops: true,
+    products: {
+      limit: 6,
+    },
+    subCategories: {
       with: {
-        // यहाँ हम दुकानें जोड़ रहे हैं जो इस कैटेगरी से जुड़ी हैं
-        shops: true, 
-        // यहाँ हम प्रोडक्ट्स जोड़ रहे हैं (होम पेज के लिए सिर्फ 6 काफी हैं)
-        products: {
-          limit: 6,
-        },
+      
       },
-    });
+    },
+  },
+});
 
     res.status(200).json(categoriesList);
   } catch (error: any) {
