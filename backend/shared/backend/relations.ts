@@ -50,7 +50,6 @@ export const storesRelations = relations(stores, ({ one, many }) => ({
 export const categoriesRelations = relations(categories, ({ many }) => ({
   shops: many(sellersPgTable),
   products: many(products),
-   categorySubcategories: many(categorySubcategories),
    subCategories: many(categorySubcategories),
 }));
 export const subcategoriesRelations = relations(subcategories, ({ many }) => ({

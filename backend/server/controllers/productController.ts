@@ -589,32 +589,60 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
         return res.status(400).json({ message: "Sahi area ke products dikhane ke liye location zaroori hai भाई।" });
       }
 
-      const allApprovedSellers = await db.select().from(sellersPgTable).where(eq(sellersPgTable.approvalStatus, "approved"));
-      const deliverableSellerIds: number[] = [];
-      const distanceCheckPromises: Promise<void>[] = [];
+     const allApprovedSellers = await db
+  .select({
+    id: sellersPgTable.id,
+    latitude: sellersPgTable.latitude,
+    longitude: sellersPgTable.longitude,
+    deliveryRadius: sellersPgTable.deliveryRadius,
+    deliveryPincodes: sellersPgTable.deliveryPincodes,
+    isDistanceBasedDelivery: sellersPgTable.isDistanceBasedDelivery,
+  })
+  .from(sellersPgTable)
+  .where(eq(sellersPgTable.approvalStatus, "approved"));
+     const deliverableSellerIds = new Set<number>();
+for (const seller of allApprovedSellers) {
 
-      for (const seller of allApprovedSellers) {
-        const sLat = parseFloat(seller.latitude?.toString() || '');
-        const sLon = parseFloat(seller.longitude?.toString() || '');
-        const sRad = parseFloat(seller.deliveryRadius?.toString() || '');
+  const sLat = Number(seller.latitude);
+  const sLng = Number(seller.longitude);
+  const radius = Number(seller.deliveryRadius);
 
-        if (seller.isDistanceBasedDelivery) {
-          if (!isNaN(sLat) && !isNaN(sLon) && sRad > 0) {
-            distanceCheckPromises.push((async () => {
-              const distance = await calculateDistanceKm(sLat, sLon, effectiveLat, effectiveLng);
-              if (distance !== null && distance <= sRad) deliverableSellerIds.push(seller.id);
-            })());
-          }
-        } else {
-          if ((seller.deliveryPincodes as string[])?.includes(effectivePincode)) {
-            deliverableSellerIds.push(seller.id);
-          }
-        }
+  if (seller.isDistanceBasedDelivery) {
+
+    if (
+      !Number.isNaN(sLat) &&
+      !Number.isNaN(sLng) &&
+      radius > 0
+    ) {
+
+      const distance = await calculateDistanceKm(
+        sLat,
+        sLng,
+        effectiveLat,
+        effectiveLng
+      );
+
+      if (distance !== null && distance <= radius) {
+        deliverableSellerIds.add(seller.id);
       }
-      await Promise.all(distanceCheckPromises);
+    }
 
-      if (deliverableSellerIds.length === 0) return res.json({ products: [], total: 0 });
-      whereClauses.push(inArray(products.sellerId, deliverableSellerIds));
+  } else {
+
+    if (
+      seller.deliveryPincodes?.includes(effectivePincode)
+    ) {
+      deliverableSellerIds.add(seller.id);
+    }
+
+  }
+}
+
+   if (deliverableSellerIds.size === 0)
+      return res.json({ products: [], total: 0 });
+     whereClauses.push(
+  inArray(products.sellerId, [...deliverableSellerIds])
+);
     }
 
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
@@ -662,12 +690,33 @@ export const getAllProducts = async (req: Request, res: Response, next: NextFunc
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
       with: { 
-        category: true, 
-        seller: { with: { user: true } },
-        variants: {
-          where: eq(productVariants.isActive, true),
-          orderBy: [asc(productVariants.price)] // सबसे कम कीमत वाला वैरिएंट पहले दिखेगा भाई
-        }
+       category:{
+columns:{
+id:true,
+name:true
+}
+},
+       seller:{
+columns:{
+id:true,
+businessName:true,
+businessAddress:true,
+latitude:true,
+longitude:true
+}
+},
+      variants:{
+columns:{
+id:true,
+price:true,
+originalPrice:true,
+stock:true,
+unit:true,
+isActive:true
+},
+where:eq(productVariants.isActive,true),
+orderBy:[asc(productVariants.price)]
+},
       },
       orderBy: orderBy,
       limit: limitNum,
