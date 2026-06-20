@@ -3,7 +3,9 @@ import { db } from '../server/db';
 import { users } from '../shared/backend/schema';
 import { eq } from 'drizzle-orm';
 import { authAdmin } from '../server/lib/firebaseAdmin';
+import { verifyToken } from "../server/middleware/verifyToken";
 
+import { getCurrentUser } from "../server/controllers/userController";
 const userLoginRouter = Router();
 
 // ==========================================
@@ -131,5 +133,9 @@ const handleTokenUpdate = async (req: Request, res: Response) => {
 userLoginRouter.post("/update-token", handleTokenUpdate);
 userLoginRouter.post("/users/update-token", handleTokenUpdate);
 userLoginRouter.post("/api/users/update-token", handleTokenUpdate);
-
+userLoginRouter.get(
+   "/me",
+   verifyToken as any,
+   getCurrentUser
+);
 export default userLoginRouter;

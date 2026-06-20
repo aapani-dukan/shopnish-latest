@@ -42,6 +42,8 @@ import { masterProducts } from "../shared/backend/tables";
 import adminSettingsRouter from "../routes/adminSettingRoutes";
 import walletRoutes from '../routes/walletRoutes';
 import { formatPhone } from "./util/phoneFormatter"; // Path check kar lena
+import categoryRoutes from "../routes/categoryRoutes";
+import authRouter from "../routes/authRoutes";
 const router = Router();
 
 // ✅ Health Check
@@ -53,132 +55,8 @@ router.get("/health", (req: Request, res: Response) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// ✅ Register User
-router.post("/register", async (req: Request, res: Response) => {
-  try {
-    const { firebaseUid, phone, firstName, lastName } = req.body;
 
-    // 1. Pehle validation check karein
-    if (!firebaseUid || !phone) {
-      return res.status(400).json({ error: "Firebase UID and Phone are required." });
-    }
 
-    // 2. 🚩 Phone Number ko Standard format (+91) mein badlein
-    const standardizedPhone = formatPhone(phone);
-
-    // 3. Database mein insert karein (Sirf EK baar)
-    const result = await db.insert(users).values({
-      firebaseUid,
-      phone: standardizedPhone, // ✅ Standardized phone use ho raha hai
-      firstName: firstName || "User",
-      lastName: lastName || "",
-      role: "customer",
-      isCustomer: true,
-      isActive: true,
-      approvalStatus: "approved",
-      createdAt: new Date(),
-      updatedAt: new Date(),
-    }).returning();
-
-    // 4. Result se naya user nikalein (Destructuring error se bachne ke liye)
-    const newUser = result[0];
-
-    res.status(201).json(newUser);
-  } catch (error: any) {
-    console.error("❌ Registration failed:", error);
-    res.status(400).json({ error: error.message });
-  }
-});
-router.get("/users/me", verifyToken as any, async (req: any, res: Response) => {
-  try {
-    const { firebaseUid, phoneNumber, email, name, isNewUser } = req.user;
-
-    // 1. Pehle user dhundo
-    let [user] = await db.select().from(users).where(eq(users.firebaseUid, firebaseUid));
-
-    // 2. Agar user nahi hai (Middleware ne isNewUser flag bheja hai)
-    if (!user) {
-      const nameParts = (name || "User").split(" ");
-      const [newUser] = await db.insert(users).values({
-        firebaseUid: firebaseUid,
-        phone: formatPhone(phoneNumber),
-      //console.log(`[AUTH] Auto-registering: ${firebaseUid}`);
-        email: email || null,
-        firstName: nameParts[0] || "User",
-        lastName: nameParts.slice(1).join(" ") || "",
-        role: "customer",
-        isCustomer: true,
-        isActive: true,
-        approvalStatus: "approved",
-      }).returning();
-      
-      user = newUser;
-    }
-
-    // 3. Virtual role calculation
-    const virtualRole = user.isAdmin ? 'admin' : 
-                        user.isSeller ? 'seller' : 
-                        user.isDelivery ? 'delivery-boy' : 'customer';
-
-    // ✅ Response mein approval statuses add kiye hain taaki Frontend check kar sake
-    res.status(200).json({ 
-      ...user, 
-      role: virtualRole,
-      // Frontend ko ye batane ke liye ki approval pending hai ya nahi
-      currentDeliveryStatus: user.deliveryApprovalStatus, // Example: "pending", "approved", "rejected"
-      currentSellerStatus: user.sellerApprovalStatus      // Example: "pending", "approved", "rejected"
-    });
-
-  } catch (error: any) {
-    console.error("❌ Profile Sync Error:", error);
-    res.status(500).json({ error: "Internal server error." });
-  }
-});
-
-router.get(
-  "/:orderId/tracking", // यह URL /api/orders/170/tracking को मैच करेगा
-  requireAuth as any, // सुनिश्चित करें कि ग्राहक लॉग इन है
-  async (req: any, res: Response) => {
-    const authReq = req as AuthenticatedRequest;
-    const { orderId } = authReq.params;
-    const customerId = authReq.user?.firebaseUid;
-
-    if (!customerId) {
-      return res.status(401).json({ error: "Authentication required." });
-    }
-
-    try {
-  // 1. Database se order fetch karein
-  // Note: Yahan hum [orderData] variable use kar rahe hain taaki 'order' se conflict na ho
-  const [orderData] = await db
-    .select()
-    .from(orders) // Yeh aapke schema se aayi hui table hai
-    .where(eq(orders.id, Number(orderId))) // Table name 'orders' yahan fix hai
-    .limit(1);
-
-  // Aapne kaha tha variable ka naam 'order' rakhna hai
-  // Humne database se aaye data ko 'order' variable mein assign kar diya
-  const order = orderData as any; 
-
-  if (!order || order.customerId !== customerId) {
-    return res.status(404).json({ error: "Order not found or access denied." });
-  }
-
-  // 2. Response bhejye
-  res.status(200).json({
-    orderId: order.id,
-    status: order.status,
-    deliveryAddress: order.deliveryAddress,
-  });
-  
-} catch (error) {
-  console.error("❌ Tracking fetch failed:", error);
-  res.status(500).json({ error: "Internal server error" });
-}
-
-});
-
-// 1. ✅ Initial Login: Check if Email exists or needs Phone
 // ✅ Simple Login Check (After Firebase Phone OTP)
 router.post("/auth/login", async (req: Request, res: Response) => {
   try {
@@ -256,7 +134,7 @@ await db.insert(masterProducts)
     return res.status(500).json({ error: error.message });
   }
 });
-
+router.use("/auth", authRouter);
 // ✅ Routes mapping
 router.use("/users", userLoginRouter);
 router.use("/auth", apiAuthLoginRouter);
@@ -268,29 +146,10 @@ router.use("/order-confirmation", orderConfirmationRouter);
 router.use("/sellers", verifyToken as any, sellerRouter);
 
 // ✅ Categories
-// ✅ Categories with Related Shops and Products
-router.get("/categories", async (req: Request, res: Response) => {
-  try {
-   const categoriesList = await db.query.categories.findMany({
-  with: {
-    shops: true,
-    products: {
-      limit: 6,
-    },
-    subCategories: {
-      with: {
-      
-      },
-    },
-  },
-});
-
-    res.status(200).json(categoriesList);
-  } catch (error: any) {
-    console.error("Error fetching categories with relations:", error);
-    res.status(500).json({ error: "Internal error." });
-  }
-});
+router.use(
+  "/categories",
+  categoryRoutes
+);
 // ✅ Products
 router.use("/products", productsRouter);
 router.use("/whatsapp", whatsappRouter);
