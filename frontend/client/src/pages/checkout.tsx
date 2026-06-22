@@ -80,7 +80,7 @@ const { address: contextAddress, city: contextCity, pincode: contextPincode } = 
   // ✅ fetch cart items
   const { data, isLoading } = useQuery({ // ✅ Corrected casing
     queryKey: ["/api/cart"], // ✅ Corrected casing
-    queryFn: async () => await apiRequest("get", "/api/cart"), // ✅ Corrected casing
+    queryFn: async () => await apiRequest("GET", "/api/cart"), // ✅ Corrected casing
     enabled: isAuthenticated, // ✅ Only fetch for authenticated user
   });
 
@@ -95,7 +95,7 @@ const { address: contextAddress, city: contextCity, pincode: contextPincode } = 
 
   // ✅ create order mutation
   const createOrderMutation = useMutation({ // ✅ Corrected casing
-    mutationFn: (orderData: any) => apiRequest("post", "/api/orders", orderData), // ✅ Use apiRequest directly
+    mutationFn: (orderData: any) => apiRequest("POST", "/api/orders", orderData), // ✅ Use apiRequest directly
 
     onSuccess: (data) => { // ✅ Corrected casing
       toast({
