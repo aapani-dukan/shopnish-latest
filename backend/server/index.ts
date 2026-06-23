@@ -28,11 +28,24 @@ const app: Express = express();
 let server: Server;
 
 // CLIENT_URL को सीधे environment variable से पढ़ें, क्योंकि यह अब production के लिए ही होगा
-const clientURL = process.env.CLIENT_URL || "http://shopnish.com"; // fallback
+//const clientURL = process.env.CLIENT_URL || "http://shopnish.com"; // fallback
+
+const allowedOrigins = [
+  "http://shopnish.com", 
+  "https://shopnish.com", 
+  "https://testing.shopnish.com" // Ye zaroori hai!
+];
 
 app.use(
   cors({
-    origin: clientURL, // यह अब Frontend के URL के लिए कॉन्फ़िगर किया जाएगा
+    origin: function (origin, callback) {
+      // Agar origin allow list mein hai, ya request server-to-server hai (origin undefined), toh allow karo
+      if (!origin || allowedOrigins.includes(origin)) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
     credentials: true,
   })
