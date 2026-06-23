@@ -73,10 +73,10 @@ const Header: React.FC<HeaderProps> = ({ categories = [], onCartClick }) => {
     enabled: isAuthenticated,
   });
 
- const totalItemsInCart = (cartData?.items ?? []).reduce((sum, item) => {
-  return sum + (Number(item?.quantity) || 0);
-}, 0);
-
+ // ✅ Sabse safe version
+const totalItemsInCart = (cartData?.items && Array.isArray(cartData.items)) 
+  ? cartData.items.reduce((sum, item) => sum + (Number(item?.quantity) || 0), 0) 
+  : 0;
   const handleSearch = (e: React.FormEvent) => { // ✅ Corrected casing
     e.preventDefault();
     if (searchValue.trim()) {
