@@ -6,6 +6,7 @@ import {
   useJsApiLoader,
 } from "@react-google-maps/api";
 import { Truck, Store as StoreIconLucide } from "lucide-react";
+import { googleMapsApiKey } from "@/config/firebaseKeys";
 
 /* ==========================================================================
    INTERFACES & TYPES
@@ -46,8 +47,7 @@ interface GoogleMapTrackerProps {
    ========================================================================== */
 const containerStyle = { width: "100%", height: "100%" };
 const LIBRARIES: ("geometry" | "marker")[] = ["geometry", "marker"];
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
-
+const GOOGLE_MAPS_API_KEY = googleMapsApiKey;
 // ✅ हेल्पर: किसी भी की (lat/latitude) से शुद्ध नंबर निकालना
 const getCoords = (obj: any): { lat: number; lng: number } => {
   const lat = parseFloat(String(obj?.lat || obj?.latitude || 0));

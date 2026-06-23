@@ -10,6 +10,7 @@ import React, {
 } from "react";
 import axios from "axios";
 import { useAuth } from '@/hooks/useAuth';
+import { API_BASE_URL } from "@/config/apiConfig";
 // --- Interfaces for Location Data ---
 interface LatLng {
   lat: number;
@@ -63,8 +64,8 @@ export const LocationProvider: React.FC<LocationProviderProps> = ({ children }) 
   const [loadingLocation, setLoadingLocation] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth(); 
-  const API_BASE_URL =
-    import.meta.env.VITE_API_BASE_URL || "https://api.shopnish.com";
+  
+    
 
   // 🔐 Get token
  // const getAuthToken = useCallback((): string | null => {

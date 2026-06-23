@@ -12,13 +12,15 @@ import { signOutUser } from "@/lib/firebase";
 export async function apiRequest <T = any>(
   method: "GET" | "POST" | "PUT" | "DELETE" | "PATCH",
   path: string,
-  data?: unknown | FormData
+  data?: unknown | FormData,
+  token?: string
 ): Promise<T> {
   try {
     const config = {
       method,
       url: path,
       data,
+      headers: token ? { Authorization: `Bearer ${token}` } : {}
     };
     const res = await api(config);
     return res.data;

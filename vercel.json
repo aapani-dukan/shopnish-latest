@@ -2,8 +2,7 @@
   "rewrites": [
     {
       "source": "/api/:path*",
-      "destination": "http://66.116.235.235:5001/api/:path*"
-
+      "destination": "https://api.shopnish.com/api/:path*"
     },
     {
       "source": "/(.*)",

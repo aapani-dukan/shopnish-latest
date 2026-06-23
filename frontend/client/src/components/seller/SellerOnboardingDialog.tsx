@@ -30,9 +30,10 @@ import {
   FormDescription,
 } from "@/components/ui/form";
 import { apiRequest } from "@/lib/queryClient";
+import { googleMapsApiKey } from "@/config/firebaseKeys";
 
 // Google Maps API Key को .env फ़ाइल से लोड करें
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY; 
+const GOOGLE_MAPS_API_KEY =  googleMapsApiKey;
 
 // 📦 Form Validation Schema
 const sellerFormSchema = z.object({

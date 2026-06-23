@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useAuth } from "../../hooks/useAuth";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -22,12 +22,15 @@ import { z } from "zod";
 import { useNavigate } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient"; // Make sure this path is correct
+import { googleMapsApiKey } from "@/config/firebaseKeys";
 import { formatNumberWithPrecision } from '../../utils/formatters'; 
 // Google Maps API Key को .env फ़ाइल से लोड करें
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
+
+const GOOGLE_MAPS_API_KEY =  googleMapsApiKey;
 
 // 📦 Form Validation Schema (SellerOnboardingDialog से समान)
 const sellerProfileSchema = z.object({
+  id : z.string().optional(),
   businessName: z.string().min(3).max(100),
   description: z.string().min(10).max(500),
   businessAddress: z.string().min(10).max(200),
@@ -60,6 +63,7 @@ export default function SellerProfileEdit() {
   isLoading: isLoadingSeller,
   isError: isErrorSeller,
   error: sellerError,
+  
 } = useQuery<FormData>({
   queryKey: ["sellerProfile", user?.uid],
   queryFn: async () => {
@@ -67,7 +71,8 @@ export default function SellerProfileEdit() {
     
     // 💡 यहाँ बदलाव है: `response.data` को लौटाएँ
     // apiRequest को कॉल करें
-    const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
+   // Sahi tarika (token ko headers object mein daal do)
+const response = await apiRequest("GET", `/api/sellers/me`, null, user.idToken);
    return response;
     // return response.data;
     },
@@ -260,14 +265,18 @@ export default function SellerProfileEdit() {
                 <FormItem>
                   <FormLabel>{label}</FormLabel>
                   <FormControl>
-                    {type === "textarea" ? (
-                      <Textarea {...field} />
-                    ) : (
-                      <Input
-                        {...field}
-                        type={type === "number" ? "number" : "text"}
-                      />
-                    )}
+                   {type === "textarea" ? (
+  <Textarea 
+    {...field} 
+    value={field.value ?? ""} // ✅ null/undefined hone par "" (empty string)
+  />
+) : (
+  <Input
+    {...field}
+    value={field.value ?? ""} // ✅ null/undefined hone par "" (empty string)
+    type={type === "number" ? "number" : "text"}
+  />
+)}
                   </FormControl>
                   <FormMessage />
                 </FormItem>
@@ -286,7 +295,7 @@ export default function SellerProfileEdit() {
               <FormControl>
                 <Input
                   type="text"
-                  Value={`Lat: ${formatNumberWithPrecision(form.watch('latitude'), 7)}, Lng: ${formatNumberWithPrecision(form.watch('longitude'), 7)}`}
+                  value={`Lat: ${formatNumberWithPrecision(form.watch('latitude'), 7)}, Lng: ${formatNumberWithPrecision(form.watch('longitude'), 7)}`}
                   readOnly
                   className="bg-gray-100 cursor-not-allowed"
                 />

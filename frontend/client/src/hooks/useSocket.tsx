@@ -1,7 +1,7 @@
 import React, { useEffect, useState, createContext, useContext, useCallback } from "react";
 import { io, type Socket } from "socket.io-client";
 import { useAuth } from "@/hooks/useAuth";
-
+import { SOCKET_URL } from "@/config/apiConfig";
 interface SocketContextType {
   socket: Socket | null;
   isConnected: boolean;
@@ -39,7 +39,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     // 2. Prevent multiple connections
     if (socket?.connected) return;
 
-    const socketUrl = import.meta.env.VITE_API_BASE_URL || "https://api.shopnish.com";
+    const socketUrl = SOCKET_URL;
 
     console.log("🔌 Attempting socket connection to:", socketUrl);
 

@@ -6,6 +6,7 @@ import AddressInputWithMap from './AddressInputWithMap';
 import axios from 'axios';
 // 🛑 FIX 1: Firebase Auth Context इम्पोर्ट करें
 import { useAuth } from '@/hooks/useAuth'; 
+import { googleMapsApiKey } from '@/config/firebaseKeys';
 
 // Interfaces for LatLng data received from Map component
 interface MapLocationData { 
@@ -23,7 +24,7 @@ interface LocationModalProps {
 const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
     
     // 🛑 FIX 2: useAuth से यूजर डेटा और टोकन प्राप्त करने के लिए फ़ंक्शन प्राप्त करें
-    const { user, refetchUser } = useAuth(); 
+    const { user} = useAuth(); 
     // AuthContext से टोकन प्राप्त करने का सीधा तरीका नहीं है, इसलिए हम एक Helper फंक्शन बनाएंगे
     
     const { 
@@ -67,8 +68,8 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
             addressLine1: addressString,
             city: locationData.city,
             pincode: locationData.pincode,
-            latitude: locationData.lat,
-            longitude: locationData.lng,
+            lat: locationData.lat,
+            lng: locationData.lng,
             inServiceArea: true, 
             label: 'नया पता', 
         });
@@ -90,7 +91,7 @@ const LocationModal: React.FC<LocationModalProps> = ({ isOpen, onClose }) => {
 
         
         try {
-            const API_URL = import.meta.env.VITE_API_BASE_URL;
+            const API_URL = googleMapsApiKey;
             
             // 🛑 FIX 1: URL में '/api' जोड़कर fullApiUrl को परिभाषित करें
             const fullApiUrl = `${API_URL}/api/addresses`; 

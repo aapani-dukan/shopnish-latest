@@ -8,10 +8,10 @@ import {
   Autocomplete,
 } from "@react-google-maps/api";
 import { useLocation } from '@/context/LocationContext';
-
+import { googleMapsApiKey } from "@/config/firebaseKeys";
+const GOOGLE_MAPS_API_KEY = googleMapsApiKey;
 const containerStyle = { width: "100%", height: "200px" };
 const libraries: ("places")[] = ["places"];
-const GOOGLE_MAPS_API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY;
 
 interface LatLngLiteral {
   lat: number;

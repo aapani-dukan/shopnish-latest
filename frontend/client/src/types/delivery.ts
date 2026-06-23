@@ -6,6 +6,7 @@ export interface SellerDeliverySettings {
   deliveryRadius: number | null;
   latitude: number | null; // From sellersPgTable
   longitude: number | null; // From sellersPgTable
+  id : string
 }
 
 export type DeliveryScope = 'GLOBAL' | 'PRODUCT_PINCODE' | 'PRODUCT_RADIUS';
