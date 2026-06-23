@@ -21,7 +21,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
     console.log("📍 Location update received:", data);
     setLatestLocation(data);
   }, []);
-
+const userId = user?.uid || user?.id;
   useEffect(() => {
     // 1. Auth check
     if (isLoadingAuth) return;
@@ -45,7 +45,9 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
 
     const newSocket = io(socketUrl, {
       // ✅ Polling aur Websocket dono rakhein taaki connection fail na ho
-      transports: ["polling", "websocket"], 
+      transports: ["websocket"], 
+      secure: true,
+      rejectUnauthorized: false,
       withCredentials: true,
       auth: { 
         token: user.idToken || (user as any).token 
@@ -90,7 +92,7 @@ export const SocketProvider = ({ children }: { children: React.ReactNode }) => {
       setSocket(null);
       setIsConnected(false);
     };
-  }, [isAuthenticated, isLoadingAuth, user, handleLocationUpdate]);
+  }, [isAuthenticated, isLoadingAuth, userId, handleLocationUpdate]);
 
   const contextValue: SocketContextType = {
     socket,
