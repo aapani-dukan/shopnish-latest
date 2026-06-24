@@ -12,7 +12,7 @@ import {
   productSubcategories,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull,notExists } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull,notExists,exists } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
@@ -142,10 +142,9 @@ export function validateProductInput(data: any, isUpdate: boolean = false) {
 
   return errors;
 }
-// backend/controllers/productController.ts
 
 export const searchMasterProducts = async (req: any, res: any) => {
-  const { q, categoryId } = req.query;
+  const { q, categoryId, subCategoryId } = req.query;
   const sellerId = req.user?.id; // 🔑 करंट लॉगिन सेलर की आईडी निकालना बहुत ज़रूरी है भाई!
 
   try {
@@ -155,7 +154,34 @@ export const searchMasterProducts = async (req: any, res: any) => {
     if (categoryId && categoryId !== 'all' && categoryId !== ' ' && categoryId !== 'All') {
       conditions.push(eq(masterProducts.categoryId, Number(categoryId)));
     }
+// 🎯 SUBCATEGORY FILTER
+if (
+  subCategoryId &&
+  subCategoryId !== 'all' &&
+  subCategoryId !== ' '
+) {
+  console.log("FILTERING SUBCATEGORY =", subCategoryId);
 
+  conditions.push(
+    exists(
+      db
+        .select()
+        .from(productSubcategories)
+        .where(
+          and(
+            eq(
+              productSubcategories.masterProductId,
+              masterProducts.id
+            ),
+            eq(
+              productSubcategories.subCategoryId,
+              Number(subCategoryId)
+            )
+          )
+        )
+    )
+  );
+}
     // 2. अगर सर्च टर्म (q) भेजा गया है और 2 अक्षर से बड़ा है
     if (q && q.length >= 2) {
       conditions.push(
@@ -193,8 +219,6 @@ export const searchMasterProducts = async (req: any, res: any) => {
       .select()
       .from(masterProducts)
       .where(and(...conditions)); // category AND (name OR brand) AND NOT_ALREADY_ADDED
-      // ❌ यहाँ से .limit(50) को उड़ा दिया है भाई ताकि मास्टर टेबल के सारे प्रोडक्ट्स आ सकें!
-
     res.json(results);
   } catch (error) {
     console.error("Master search error:", error);
