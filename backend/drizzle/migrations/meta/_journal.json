@@ -239,6 +239,13 @@
       "when": 1781606936716,
       "tag": "0033_chemical_betty_brant",
       "breakpoints": true
+    },
+    {
+      "idx": 34,
+      "version": "7",
+      "when": 1782402223700,
+      "tag": "0034_round_glorian",
+      "breakpoints": true
     }
   ]
 }

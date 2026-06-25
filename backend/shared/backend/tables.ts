@@ -127,7 +127,15 @@ export const categorySubcategories = pgTable("category_subcategories", {
   id: serial("id").primaryKey(),
   categoryId: integer("category_id").references(() => categories.id, { onDelete: "cascade" }).notNull(),
   subCategoryId: integer("sub_category_id").references(() => subcategories.id, { onDelete: "cascade" }).notNull(),
-});
+},
+ (table) => ({
+    uniqueCategorySubcategory: unique().on(
+      table.categoryId,
+      table.subCategoryId
+    ),
+  })
+);
+
 export const productSubcategories = pgTable("product_subcategories", {
   id: serial("id").primaryKey(),
   masterProductId: integer("master_product_id").references(() => masterProducts.id, { onDelete: "cascade" }).notNull(),
