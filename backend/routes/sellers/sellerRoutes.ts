@@ -68,7 +68,7 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
     const {
       businessName, businessAddress, businessPhone, email, 
       city, pincode, gstNumber, businessType, latitude, longitude, description, 
-      bankAccountNumber, ifscCode,deliverypincodes
+      bankAccountNumber, ifscCode,deliveryPincodes,deliveryRadius
     } = req.body;
 
     // --- 🔍 STEP 1: Sirf ye check karo ki kahin ye banda PEHLE SE SELLER toh nahi hai? ---
@@ -102,7 +102,8 @@ sellerRouter.post("/apply", verifyToken as any, async (req: any, res: Response, 
                 latitude: String(latitude), 
                 longitude: String(longitude),
                 businessType,
-                deliverypincodes,
+                deliveryPincodes,
+                deliveryRadius
             } as any)
             .returning();
         
