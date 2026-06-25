@@ -253,7 +253,10 @@ return {
 };
       })
     );
-
+console.log(
+  "SUBCATEGORY IDS =",
+  result.map((x: any) => x.id)
+);
     // ✅ यही missing था
     return res.status(200).json({
 
