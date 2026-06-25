@@ -69,6 +69,14 @@ export const getCategorySubcategories = async (req: Request, res: Response) => {
         },
       },
     });
+    console.log(
+  "MAPPINGS",
+  subCategoryMappings.map(x => ({
+    id: x.id,
+    categoryId: x.categoryId,
+    subCategoryId: x.subCategoryId,
+  }))
+);
 const categoryShopsMap = new Map<number, any>();
     const result = await Promise.all(
       subCategoryMappings.map(async (item) => {
