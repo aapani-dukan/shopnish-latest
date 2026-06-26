@@ -6,7 +6,7 @@ import {
   placeOrder,
   getHomeProducts,
 } from "../server/controllers/homeProductController";
-import { verifyToken } from "middleware/verifyToken";
+import { verifyToken } from "../server/middleware/verifyToken";
 const router = Router();
 
 // =========================
