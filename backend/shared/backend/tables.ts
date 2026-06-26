@@ -735,3 +735,42 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
+export const productAffinity = pgTable("product_affinity", {
+  id: serial("id").primaryKey(),
+
+  userId: integer("user_id")
+    .notNull()
+    .references(() => users.id, { onDelete: "cascade" }),
+
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+
+  score: integer("score").default(0),
+
+  lastInteraction: timestamp("last_interaction")
+    .defaultNow()
+    .notNull(),
+
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+export const productViews = pgTable("product_views", {
+  id: serial("id").primaryKey(),
+
+  userId: integer("user_id").references(() => users.id),
+
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id, { onDelete: "cascade" }),
+
+  viewedAt: timestamp("viewed_at").defaultNow(),
+});
+export const productAffinityIndexes = {
+  userProductIdx: index("idx_affinity_user_product").on(
+    productAffinity.userId,
+    productAffinity.productId
+  ),
+
+  userIdx: index("idx_affinity_user").on(productAffinity.userId),
+};

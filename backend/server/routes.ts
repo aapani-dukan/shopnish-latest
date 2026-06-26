@@ -44,6 +44,7 @@ import walletRoutes from '../routes/walletRoutes';
 import { formatPhone } from "./util/phoneFormatter"; // Path check kar lena
 import categoryRoutes from "../routes/categoryRoutes";
 import authRouter from "../routes/authRoutes";
+import homeProductRoutes from "../routes/homeProducts";
 const router = Router();
 
 // ✅ Health Check
@@ -159,7 +160,7 @@ router.use("/delivery", dBoyRouter);
 // ✅ Home Layout (Banners, Ads, Unique Sections)
 router.use("/layout", layoutRoutes);
 router.use("/wallet", walletRoutes); // वॉलेट राउट्स जोड़ें
-
+router.use("/home-products", homeProductRoutes);
 // ✅ Admin Routes
 router.use("/admin", adminSettingsRouter);
 const adminRouter = Router();
