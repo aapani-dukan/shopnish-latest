@@ -1,5 +1,5 @@
 import { db } from "../server/db";
-import { productAffinity } from "../shared/backend/schema";
+import { productAffinity,productViews } from "../shared/backend/schema";
 import { and, eq, sql } from "drizzle-orm";
 
 type EventType = "view" | "cart" | "wishlist" | "order";
@@ -21,7 +21,12 @@ export const trackProductEvent = async ({
   type: EventType;
 }) => {
   const weight = weightMap[type] || 1;
-
+if (type === "view") {
+  await db.insert(productViews).values({
+    userId,
+    productId,
+  });
+}
   const existing = await db
     .select()
     .from(productAffinity)
@@ -102,4 +107,20 @@ const applyBoost = (score: number, lastInteraction: Date) => {
   if (hours < 24) return score * 1.2;
 
   return score;
+};
+export const getTrendingProducts = async () => {
+  const since = new Date();
+
+  since.setDate(since.getDate() - 7);
+
+  const rows = await db
+    .select({
+      productId: productViews.productId,
+      count: sql<number>`count(*)`,
+    })
+    .from(productViews)
+    .where(sql`${productViews.viewedAt} >= ${since}`)
+    .groupBy(productViews.productId);
+
+  return rows;
 };

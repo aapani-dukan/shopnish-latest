@@ -38,6 +38,7 @@ console.log({
 });
 import { ProductService } from "../../services/productService";
 import { sendNotification } from '../../services/notificationService';
+import { trackProductEvent } from "../../services/homeRecommendationService";
 // 🎯 रेडियन कनवर्टर को एक बार डिक्लेयर कर दिया भाई ताकि बार-बार कैलकुलेशन का लोड न पड़े
 const TO_RAD = Math.PI / 180;
 
@@ -645,7 +646,28 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
       };
       await emitOrderAlert(sellerIdForNotification);
     }
+// ===============================
+// 🔥 AI ORDER LEARNING
+// ===============================
 
+const learnedProducts = new Set<number>();
+
+for (const subOrder of finalResult.tempSubOrders) {
+  for (const item of subOrder.items) {
+    if (!item.product?.id) continue;
+
+    // Duplicate product skip
+    if (learnedProducts.has(item.product.id)) continue;
+
+    learnedProducts.add(item.product.id);
+
+    await trackProductEvent({
+      userId,
+      productId: item.product.id,
+      type: "order",
+    });
+  }
+}
     return res.status(201).json({
       message: "Order placed successfully with all configurations!",
       orderId: finalResult.masterOrder.id,
@@ -699,8 +721,6 @@ export const placeOrderFromCart = async (req: AuthenticatedRequest, res: Respons
     let transactionResult: { masterOrder: any, tempSubOrders: any[] };
 const userPhoneNumberForUpdate = newDeliveryAddress?.phoneNumber;
     
-    // Server-side transaction
-  // Server-side transaction
 const result = await db.transaction(async (tx) => {
   try {
     // 🎯 --- 100% CONFIRM ADDRESS FIX (DIRECT INSERT IF NEW) ---
@@ -1345,6 +1365,28 @@ if (!transactionResult || !transactionResult.masterOrder) {
         console.log(`🎯 [CART DIRECT HIT]: Signal fired for User: ${sellerUserId}`);
       }
     }));
+    // ===============================
+// 🔥 AI ORDER LEARNING
+// ===============================
+
+const learnedProducts = new Set<number>();
+
+for (const subOrder of transactionResult.tempSubOrders) {
+  for (const item of subOrder.items) {
+    if (!item.product?.id) continue;
+
+    // Duplicate product skip
+    if (learnedProducts.has(item.product.id)) continue;
+
+    learnedProducts.add(item.product.id);
+
+    await trackProductEvent({
+      userId,
+      productId: item.product.id,
+      type: "order",
+    });
+  }
+}
     return res.status(201).json({
         message: "Orders placed successfully!",
         masterOrderId: transactionResult.masterOrder.id,

@@ -12,7 +12,7 @@ import { eq, and } from "drizzle-orm";
 import { AuthenticatedRequest } from "../server/middleware/verifyToken";
 import { requireAuth } from "../server/middleware/authMiddleware";
 import { getIO } from "../server/socket";
-
+import { trackProductEvent } from "../services/homeRecommendationService";
 const cartRouter = Router();
 
 /* ============================================
@@ -251,7 +251,11 @@ cartRouter.post(
 
         item = newItem[0];
       }
-
+await trackProductEvent({
+  userId,
+  productId,
+  type: "cart",
+});
       getIO().emit("cart:updated", { userId });
       return res.status(200).json({ message: "Item added to cart successfully.", item });
     } catch (error: any) {
