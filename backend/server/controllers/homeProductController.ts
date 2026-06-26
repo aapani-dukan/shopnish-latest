@@ -15,6 +15,7 @@ import { calculateDistanceKm } from "../../services/locationService";
 // VIEW PRODUCT
 // =========================
 export const viewProduct = async (req: any, res: Response) => {
+  
   try {
     const userId = req.user?.id;
     const productId = Number(req.params.id);
