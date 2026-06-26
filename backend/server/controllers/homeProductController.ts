@@ -416,7 +416,17 @@ for (const row of interestRows) {
   );
 
 }
-
+const recentlyViewed = [...interestRows]
+  .sort(
+    (a, b) =>
+      new Date(b.lastInteraction).getTime() -
+      new Date(a.lastInteraction).getTime()
+  )
+  .map(x => x.productId);
+  const recentlyViewedProducts = recentlyViewed
+  .map(id => scoredProducts.find(p => p.id === id))
+  .filter(Boolean)
+  .slice(0, 18);
 // =====================================
 // BEST SELLING
 // =====================================
@@ -492,7 +502,16 @@ const scoredProducts = allProducts.map(
 
   }
 );
-
+const recommendedProducts = [...scoredProducts]
+  .sort((a, b) => b.aiScore - a.aiScore)
+  .slice(0, 18);
+  const trendingProducts = [...scoredProducts]
+  .sort(
+    (a, b) =>
+      (b.bestSelling || 0) -
+      (a.bestSelling || 0)
+  )
+  .slice(0, 18);
 // =====================================
 // CATEGORY GROUPING
 // =====================================
@@ -691,25 +710,18 @@ selected.push(
 // =====================================
 // FORMAT PRODUCTS
 // =====================================
+const formatProducts = (productsList: any[]) => {
+  return productsList.map((prod: any) => {
 
-const formattedProducts =
-  finalProducts.map((prod: any) => {
+    const variants = prod.variants || [];
 
-    const variants =
-      prod.variants || [];
-
-    const cheapest =
-      variants[0];
+    const cheapest = variants[0];
 
     const totalStock =
       variants.reduce(
-
         (sum: number, v: any) =>
-          sum +
-          Number(v.stock || 0),
-
+          sum + Number(v.stock || 0),
         0
-
       );
 
     const mrp =
@@ -721,14 +733,11 @@ const formattedProducts =
         : 0;
 
     return {
-
       ...prod,
 
       price:
         cheapest
-          ? String(
-              cheapest.price
-            )
+          ? String(cheapest.price)
           : "0",
 
       originalPrice:
@@ -739,11 +748,9 @@ const formattedProducts =
             )
           : "0",
 
-      mrp:
-        Number(mrp),
+      mrp: Number(mrp),
 
-      stock:
-        totalStock,
+      stock: totalStock,
 
       unit:
         cheapest
@@ -751,8 +758,7 @@ const formattedProducts =
           : "piece",
 
       subCategoryId:
-        prod.masterProduct
-          ?.subCategoryId ??
+        prod.masterProduct?.subCategoryId ??
         null,
 
       variants,
@@ -760,10 +766,21 @@ const formattedProducts =
       aiScore: undefined,
       interest: undefined,
       bestSelling: undefined,
-
     };
 
   });
+};
+const formattedProducts =
+  formatProducts(finalProducts);
+
+const formattedRecommended =
+  formatProducts(recommendedProducts);
+
+const formattedTrending =
+  formatProducts(trendingProducts);
+
+const formattedRecentlyViewed =
+  formatProducts(recentlyViewedProducts);
 
 // =====================================
 // RESPONSE
@@ -773,14 +790,19 @@ return res.status(200).json({
 
   success: true,
 
-  total:
-    formattedProducts.length,
+  total: formattedProducts.length,
 
-  categories:
-    categoryMap.size,
+  categories: categoryMap.size,
 
-  products:
-    formattedProducts,
+  // Home Feed (पहले जैसा)
+  products: formattedProducts,
+
+  // AI Sections
+  recommendedProducts: formattedRecommended,
+
+  trendingProducts: formattedTrending,
+
+  recentlyViewedProducts: formattedRecentlyViewed,
 
 });
 
