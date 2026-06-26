@@ -12,7 +12,7 @@ const router = Router();
 // =========================
 // HOME FEED
 // =========================
-router.get("/home", getHomeProducts);
+router.get("/", getHomeProducts);
 
 // =========================
 // EVENT TRACKING ROUTES
