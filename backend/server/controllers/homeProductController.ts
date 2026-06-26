@@ -416,17 +416,7 @@ for (const row of interestRows) {
   );
 
 }
-const recentlyViewed = [...interestRows]
-  .sort(
-    (a, b) =>
-      new Date(b.lastInteraction).getTime() -
-      new Date(a.lastInteraction).getTime()
-  )
-  .map(x => x.productId);
-  const recentlyViewedProducts = recentlyViewed
-  .map(id => scoredProducts.find(p => p.id === id))
-  .filter(Boolean)
-  .slice(0, 18);
+
 // =====================================
 // BEST SELLING
 // =====================================
@@ -511,6 +501,17 @@ const recommendedProducts = [...scoredProducts]
       (b.bestSelling || 0) -
       (a.bestSelling || 0)
   )
+  .slice(0, 18);
+  const recentlyViewed = [...interestRows]
+  .sort(
+    (a, b) =>
+      new Date(b.lastInteraction).getTime() -
+      new Date(a.lastInteraction).getTime()
+  )
+  .map(x => x.productId);
+  const recentlyViewedProducts = recentlyViewed
+  .map(id => scoredProducts.find(p => p.id === id))
+  .filter(Boolean)
   .slice(0, 18);
 // =====================================
 // CATEGORY GROUPING
