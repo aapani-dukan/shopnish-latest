@@ -735,42 +735,55 @@ export const notifications = pgTable("notifications", {
   isRead: boolean("is_read").default(false),
   createdAt: timestamp("created_at").defaultNow(),
 });
-export const productAffinity = pgTable("product_affinity", {
-  id: serial("id").primaryKey(),
+export const productAffinity = pgTable(
+  "product_affinity",
+  {
+    id: serial("id").primaryKey(),
 
-  userId: integer("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
+    userId: integer("user_id")
+      .notNull()
+      .references(() => users.id, { onDelete: "cascade" }),
 
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id, { onDelete: "cascade" }),
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
 
-  score: integer("score").default(0),
+    score: integer("score").default(0).notNull(),
 
-  lastInteraction: timestamp("last_interaction")
-    .defaultNow()
-    .notNull(),
+    lastInteraction: timestamp("last_interaction")
+      .defaultNow()
+      .notNull(),
 
-  createdAt: timestamp("created_at").defaultNow(),
-  updatedAt: timestamp("updated_at").defaultNow(),
-});
-export const productViews = pgTable("product_views", {
-  id: serial("id").primaryKey(),
+    createdAt: timestamp("created_at").defaultNow(),
 
-  userId: integer("user_id").references(() => users.id),
+    updatedAt: timestamp("updated_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_affinity_user_product").on(
+      table.userId,
+      table.productId
+    ),
 
-  productId: integer("product_id")
-    .notNull()
-    .references(() => products.id, { onDelete: "cascade" }),
+    index("idx_affinity_user").on(
+      table.userId
+    ),
+  ]
+);
+export const productViews = pgTable(
+  "product_views",
+  {
+    id: serial("id").primaryKey(),
 
-  viewedAt: timestamp("viewed_at").defaultNow(),
-});
-export const productAffinityIndexes = {
-  userProductIdx: index("idx_affinity_user_product").on(
-    productAffinity.userId,
-    productAffinity.productId
-  ),
+    userId: integer("user_id").references(() => users.id),
 
-  userIdx: index("idx_affinity_user").on(productAffinity.userId),
-};
+    productId: integer("product_id")
+      .notNull()
+      .references(() => products.id, { onDelete: "cascade" }),
+
+    viewedAt: timestamp("viewed_at").defaultNow(),
+  },
+  (table) => [
+    index("idx_product_views_user").on(table.userId),
+    index("idx_product_views_product").on(table.productId),
+  ]
+);

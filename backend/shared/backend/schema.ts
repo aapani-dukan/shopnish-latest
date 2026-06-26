@@ -4,7 +4,7 @@ import {
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts,subcategories,productSubcategories,categorySubcategories, userRoleEnum, approvalStatusEnum,
   subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,wallets,walletTransactions,productHistory,notifications,
- productAffinity,productViews, productAffinityIndexes,masterOrderStatusEnum, subOrderStatusEnum,
+ productAffinity,productViews,masterOrderStatusEnum, subOrderStatusEnum,
   paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum
 } from './tables';
 
@@ -165,7 +165,7 @@ export {
   users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, subcategories, productSubcategories, categorySubcategories, userRoleEnum, approvalStatusEnum,
-  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,productAffinity,productViews, productAffinityIndexes,
+  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,productAffinity,productViews,
    masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,notifications,
 productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,productHistory,
   // Relations
@@ -191,7 +191,7 @@ export const schema = {
   users, sellersPgTable, stores, categories, products, subcategories, productSubcategories, categorySubcategories, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,walletTransactions,wallets,homeLayout,adminSettings,masterProducts,
-  productAffinity,productViews, productAffinityIndexes,
+  productAffinity,productViews,
   masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,productHistory,notifications,
   
   // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
