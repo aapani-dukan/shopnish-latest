@@ -24,7 +24,10 @@ router.put('/admin/:productId/reject', verifyToken as any, requireAdminAuth, Pro
 // --- 4. Customer & General Endpoints ---
 router.get('/', ProductController.getAllProducts);
 
-
+router.get(
+  '/category-products',
+  ProductController.getCategoryProducts
+);
 router.get('/:id', ProductController.getProductById);
 
 // --- 6. Update/Delete Endpoints ---
