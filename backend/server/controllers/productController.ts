@@ -819,7 +819,7 @@ export const getCategoryProducts = async (req: Request, res: Response, next: Nex
 
   page = 1,
 
-  limit = 9
+  limit = 30
 
 } = req.query;
 
