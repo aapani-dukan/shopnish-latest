@@ -802,7 +802,7 @@ prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
     next(error); 
   }
 };
-   // ✅ 2. सबसे मुख्य: कस्टमर और सर्च के लिए सारे प्रोडक्ट्स लोड करना (SMART FILTER)
+ 
 export const getCategoryProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
    const {
@@ -819,10 +819,9 @@ export const getCategoryProducts = async (req: Request, res: Response, next: Nex
 
   page = 1,
 
-  limit = 30
+  limit = 9
 
 } = req.query;
-
     const pageNum = Number(page);
     const limitNum = Number(limit);
     const offset = (pageNum - 1) * limitNum;
@@ -830,17 +829,12 @@ export const getCategoryProducts = async (req: Request, res: Response, next: Nex
     const effectivePincode = (pincode?.toString() || customerPincode?.toString() || "").trim();
     const effectiveLat = parseFloat(lat?.toString() || customerLat?.toString() || "");
     const effectiveLng = parseFloat(lng?.toString() || customerLng?.toString() || "");
-     if (!categoryId) {
-      return res.status(400).json({
-        message: "categoryId required",
-      });
-    }
+
     // बेस कंडीशन्स
     const whereClauses: any[] = [
       eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
       eq(products.isActive, true),
-      isNull(products.deletedAt),
-       eq(products.categoryId, Number(categoryId)),
+      isNull(products.deletedAt) 
     ];
 
     // लोकेशन / सेलर फ़िल्टर
@@ -860,7 +854,6 @@ export const getCategoryProducts = async (req: Request, res: Response, next: Nex
     deliveryRadius: sellersPgTable.deliveryRadius,
     deliveryPincodes: sellersPgTable.deliveryPincodes,
     isDistanceBasedDelivery: sellersPgTable.isDistanceBasedDelivery,
-
   })
   .from(sellersPgTable)
   .where(eq(sellersPgTable.approvalStatus, "approved"));
@@ -908,16 +901,12 @@ for (const seller of allApprovedSellers) {
   inArray(products.sellerId, [...deliverableSellerIds])
 );
     }
- 
-whereClauses.push(
+
+   whereClauses.push(
   eq(products.categoryId, Number(categoryId))
 );
     
-
-    // 🎯 डिस्काउंट/प्राइस फ़िल्टर: वैरिएंट टेबल के हिसाब से भाई
-
-   
-
+    
     // 🎯 फिक्स: काउंट क्वेरी को पूरी तरह से सेफ़ रखने के लिए plain sql बिल्डर का उपयोग भाई
     const [totalCountResult] = await db
       .select({ count: sql<number>`count(distinct ${products.id})` })
@@ -925,7 +914,6 @@ whereClauses.push(
       .where(and(...whereClauses));
       
     const totalCount = Number(totalCountResult?.count || 0);
-    
     // फाइनल डेटा फैचिंग
     const productList = await db.query.products.findMany({
       where: and(...whereClauses),
@@ -967,17 +955,17 @@ where:eq(productVariants.isActive,true),
 orderBy:[asc(productVariants.price)]
 },
       },
-      orderBy: [
-        asc(productVariants.price),
-      ]
+     orderBy: [
+  desc(products.createdAt)
+],
+      limit: limitNum,
+      offset: offset,
     });
 
    // ==================== 🎯 100% सुरक्षित डबल-की सेफ़्टी इंजन (पुरानी + नई दोनों Keys लाइव) ====================
     const formattedProducts = productList.map((prod: any) => {
       const prodVariants = prod.variants || [];
-      const variants = prod.variants || [];
       const cheapestVariant = prodVariants[0]; // Pehla sabse sasta variant bhai
-
       const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
 
       // Variant se MRP nikalne ka full fallback safety layer
@@ -990,10 +978,7 @@ orderBy:[asc(productVariants.price)]
         unit: cheapestVariant ? cheapestVariant.unit : 'piece',
        subCategoryId:
 prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
-        variants:
-          prod.masterProduct
-            ?.productSubcategories?.[0]
-            ?.subCategoryId ?? null,
+        variants: prodVariants,
 
         // 🌟 जादू 1: 'mrp' key ko naya joda taaki HomeScreen aur CategoryDetailsScreen ka naya discount math chal sake!
         mrp: Number(variantMrp),
@@ -1002,20 +987,24 @@ prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
         originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0"
       };
     });
-    // =======================================================================================================
-    return res.status(200).json({
-      page: pageNum,
-      limit: limitNum,
-      total: totalCount,
-      totalPages: Math.ceil(totalCount / limitNum),
-      products: formattedProducts, // ✅ अब एकदम सेफ़ डेटा जाएगा भाई
-    });
+ 
+  const hasMore = pageNum * limitNum < totalCount;
+
+return res.status(200).json({
+  page: pageNum,
+  limit: limitNum,
+  total: totalCount,
+  totalPages: Math.ceil(totalCount / limitNum),
+  hasMore,
+  products: formattedProducts,
+});
 
   } catch (error) { 
     console.error("Fetch Error:", error);
     next(error); 
   }
 };
+
 // ✅ 3. एडमिन के लिए पेंडिंग प्रोडक्ट्स (वैरिएंट्स के साथ भाई)
 export const getPendingProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
