@@ -584,7 +584,7 @@ export const getSellerProducts = async (req: AuthenticatedRequest, res: Response
 export const getAllProducts = async (req: Request, res: Response, next: NextFunction) => {
   try {
     const { 
-      categoryId, sellerId, search, pincode, lat, lng, 
+      categoryId,subCategoryId, sellerId, search, pincode, lat, lng, 
       customerPincode, customerLat, customerLng,
       minPrice, maxPrice, sortBy = 'createdAt', sortOrder = 'desc', page = 1, limit = 10 
     } = req.query;
@@ -670,6 +670,13 @@ for (const seller of allApprovedSellers) {
     }
 
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
+    if (subCategoryId) {
+
+   whereClauses.push(
+      eq(masterProducts.subCategoryId, Number(subCategoryId))
+   );
+
+}
     if (search) whereClauses.push(ilike(products.name, `%${search}%`));
 
     // 🎯 डिस्काउंट/प्राइस फ़िल्टर: वैरिएंट टेबल के हिसाब से भाई
@@ -730,11 +737,14 @@ longitude:true
 }
 },
 masterProduct:{
-    columns:{
-      id:true,
-      subCategoryId:true
-    }
-  },
+   with:{
+      productSubcategories:{
+         columns:{
+            subCategoryId:true
+         }
+      }
+   }
+},
       variants:{
 columns:{
 id:true,
@@ -767,8 +777,8 @@ orderBy:[asc(productVariants.price)]
         price: cheapestVariant ? String(cheapestVariant.price) : "0", // Purani string structure ko touch nahi kiya
         stock: totalStock,
         unit: cheapestVariant ? cheapestVariant.unit : 'piece',
-        subCategoryId:
-    prod.masterProduct?.subCategoryId ?? null,
+       subCategoryId:
+prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
         variants: prodVariants,
 
         // 🌟 जादू 1: 'mrp' key ko naya joda taaki HomeScreen aur CategoryDetailsScreen ka naya discount math chal sake!
