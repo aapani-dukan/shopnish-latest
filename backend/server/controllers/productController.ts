@@ -961,7 +961,12 @@ orderBy:[asc(productVariants.price)]
       limit: limitNum,
       offset: offset,
     });
-
+console.log(
+  productList.map((p: any) => ({
+    name: p.name,
+    productSubcategories: p.masterProduct?.productSubcategories,
+  }))
+);
    // ==================== 🎯 100% सुरक्षित डबल-की सेफ़्टी इंजन (पुरानी + नई दोनों Keys लाइव) ====================
     const formattedProducts = productList.map((prod: any) => {
       const prodVariants = prod.variants || [];
@@ -987,7 +992,12 @@ prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
         originalPrice: cheapestVariant ? String(cheapestVariant.originalPrice || cheapestVariant.price) : "0"
       };
     });
- 
+ console.log(
+  formattedProducts.map((p: any) => ({
+    name: p.name,
+    subCategoryId: p.subCategoryId,
+  }))
+);
   const hasMore = pageNum * limitNum < totalCount;
 
 return res.status(200).json({
