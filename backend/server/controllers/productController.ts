@@ -807,6 +807,7 @@ export const getCategoryProducts = async (req: Request, res: Response, next: Nex
   try {
    const {
   categoryId,
+  subCategoryId,
   sellerId,
 
   pincode,
