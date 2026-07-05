@@ -377,13 +377,15 @@ export const bulkCreateProducts = async (req: any, res: Response) => {
   .from(masterProducts)
   .where(eq(masterProducts.id, Number(p.masterProductId)))
   .limit(1);
-        // a) मुख्य प्रोडक्ट इन्फो डालें भाई
+          console.log("MASTER =", master);
+console.log("INSERT NAME HINDI =", master?.nameHindi);
         const [newProduct] = await tx.insert(products).values({
           sellerId: realSellerId,
           masterProductId: p.masterProductId ? Number(p.masterProductId) : null,
           name: p.name,
-          nameHindi: p.nameHindi || null,
-          description: p.description || null,
+         nameHindi: master?.nameHindi ?? null,
+
+  description: master?.description ?? p.description ?? null,
           image: p.image || null,
           categoryId: p.categoryId ? Number(p.categoryId) : null,
           isActive: true,
