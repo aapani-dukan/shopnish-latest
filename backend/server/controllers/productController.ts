@@ -343,6 +343,8 @@ const validationErrors = validateProductInput(productData, false);
 // backend/controllers/productController.ts
 
 export const bulkCreateProducts = async (req: any, res: Response) => {
+  console.log("========== BULK CREATE CONTROLLER ==========");
+console.log(__filename);
   try {
     const { products: productsList } = req.body;
     const userId = req.user?.id;
