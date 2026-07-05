@@ -372,6 +372,7 @@ export const bulkCreateProducts = async (req: any, res: Response) => {
           sellerId: realSellerId,
           masterProductId: p.masterProductId ? Number(p.masterProductId) : null,
           name: p.name,
+          nameHindi: p.nameHindi || null,
           image: p.image || null,
           categoryId: p.categoryId ? Number(p.categoryId) : null,
           isActive: true,
