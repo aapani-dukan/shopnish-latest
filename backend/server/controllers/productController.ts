@@ -366,13 +366,24 @@ export const bulkCreateProducts = async (req: any, res: Response) => {
 
     // 2. ⚡ पूरा बल्क इंसर्शन एक ट्रांजेक्शन में लपेटें भाई
     await db.transaction(async (tx) => {
+
       for (const p of productsList) {
+         const [master] = await tx
+  .select({
+    nameHindi: masterProducts.nameHindi,
+    description: masterProducts.description,
+    
+  })
+  .from(masterProducts)
+  .where(eq(masterProducts.id, Number(p.masterProductId)))
+  .limit(1);
         // a) मुख्य प्रोडक्ट इन्फो डालें भाई
         const [newProduct] = await tx.insert(products).values({
           sellerId: realSellerId,
           masterProductId: p.masterProductId ? Number(p.masterProductId) : null,
           name: p.name,
           nameHindi: p.nameHindi || null,
+          description: p.description || null,
           image: p.image || null,
           categoryId: p.categoryId ? Number(p.categoryId) : null,
           isActive: true,
