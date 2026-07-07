@@ -938,7 +938,8 @@ for (const seller of allApprovedSellers) {
        category:{
 columns:{
 id:true,
-name:true
+name:true,
+nameHindi:true,
 }
 },
        seller:{
@@ -981,6 +982,10 @@ orderBy:[asc(productVariants.price)]
 console.log(
   productList.map((p: any) => ({
     name: p.name,
+    nameHindi: p.nameHindi,
+    description: p.description,
+    descriptionHindi: p.descriptionHindi,
+    categoryId: p.categoryId,
     productSubcategories: p.masterProduct?.productSubcategories,
   }))
 );
@@ -1012,6 +1017,10 @@ prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
  console.log(
   formattedProducts.map((p: any) => ({
     name: p.name,
+    nameHindi: p.nameHindi,
+    description: p.description,
+    descriptionHindi: p.descriptionHindi,
+    categoryId: p.categoryId,
     subCategoryId: p.subCategoryId,
   }))
 );
