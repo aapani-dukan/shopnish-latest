@@ -13,7 +13,7 @@ frontend/dist/
 # Environment variables
 .env            # for backend/.env
 frontend/.env   # for frontend/.env
-
+backend/.env
 # Logs
 *.log
 npm-debug.log*
