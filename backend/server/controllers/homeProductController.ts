@@ -312,6 +312,7 @@ export const getHomeProducts = async (
             columns: {
               id: true,
               name: true,
+              nameHindi: true,
             },
           },
 

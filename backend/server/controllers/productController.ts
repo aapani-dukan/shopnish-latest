@@ -343,6 +343,8 @@ const validationErrors = validateProductInput(productData, false);
 // backend/controllers/productController.ts
 
 export const bulkCreateProducts = async (req: any, res: Response) => {
+  console.log("========== BULK CREATE CONTROLLER ==========");
+
   try {
     const { products: productsList } = req.body;
     const userId = req.user?.id;
@@ -366,12 +368,26 @@ export const bulkCreateProducts = async (req: any, res: Response) => {
 
     // 2. ⚡ पूरा बल्क इंसर्शन एक ट्रांजेक्शन में लपेटें भाई
     await db.transaction(async (tx) => {
+
       for (const p of productsList) {
-        // a) मुख्य प्रोडक्ट इन्फो डालें भाई
+         const [master] = await tx
+  .select({
+    nameHindi: masterProducts.nameHindi,
+    description: masterProducts.description,
+    
+  })
+  .from(masterProducts)
+  .where(eq(masterProducts.id, Number(p.masterProductId)))
+  .limit(1);
+          console.log("MASTER =", master);
+console.log("INSERT NAME HINDI =", master?.nameHindi);
         const [newProduct] = await tx.insert(products).values({
           sellerId: realSellerId,
           masterProductId: p.masterProductId ? Number(p.masterProductId) : null,
           name: p.name,
+         nameHindi: master?.nameHindi ?? null,
+
+  description: master?.description ?? p.description ?? null,
           image: p.image || null,
           categoryId: p.categoryId ? Number(p.categoryId) : null,
           isActive: true,
@@ -922,7 +938,8 @@ for (const seller of allApprovedSellers) {
        category:{
 columns:{
 id:true,
-name:true
+name:true,
+nameHindi:true,
 }
 },
        seller:{
@@ -965,6 +982,10 @@ orderBy:[asc(productVariants.price)]
 console.log(
   productList.map((p: any) => ({
     name: p.name,
+    nameHindi: p.nameHindi,
+    description: p.description,
+    descriptionHindi: p.descriptionHindi,
+    categoryId: p.categoryId,
     productSubcategories: p.masterProduct?.productSubcategories,
   }))
 );
@@ -996,6 +1017,10 @@ prod.masterProduct?.productSubcategories?.[0]?.subCategoryId ?? null,
  console.log(
   formattedProducts.map((p: any) => ({
     name: p.name,
+    nameHindi: p.nameHindi,
+    description: p.description,
+    descriptionHindi: p.descriptionHindi,
+    categoryId: p.categoryId,
     subCategoryId: p.subCategoryId,
   }))
 );
