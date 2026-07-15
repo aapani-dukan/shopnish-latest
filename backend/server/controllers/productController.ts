@@ -1309,6 +1309,7 @@ export const rejectProduct = async (req: Request, res: Response, next: NextFunct
 
 // ✅ 6. आईडी से सिंगल प्रोडक्ट की पूरी कुंडली निकालना (Details Screen के लिए भाई)
 export const getProductById = async (req: Request, res: Response, next: NextFunction) => {
+  console.log("🔥 NEW PRODUCT DETAILS API RUNNING");
   try {
     const productId = Number(req.params.id);
 
