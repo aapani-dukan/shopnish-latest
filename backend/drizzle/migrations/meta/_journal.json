@@ -253,6 +253,13 @@
       "when": 1782472964588,
       "tag": "0035_mature_spitfire",
       "breakpoints": true
+    },
+    {
+      "idx": 36,
+      "version": "7",
+      "when": 1784028099857,
+      "tag": "0036_unique_lizard",
+      "breakpoints": true
     }
   ]
 }

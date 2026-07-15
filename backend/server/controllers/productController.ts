@@ -12,7 +12,7 @@ import {
   productSubcategories,
   approvalStatusEnum,
 } from '../../shared/backend/schema';
-import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull,notExists,exists } from 'drizzle-orm';
+import { eq,ilike, like, inArray, and, desc, asc, sql, or,SQL, isNull,isNotNull,notExists,exists,ne, gt } from 'drizzle-orm';
 import { calculateDistanceKm } from '../../services/locationService';
 import { AuthenticatedRequest } from '../middleware/verifyToken';
 import { deleteImage, uploadImage } from '../cloudStorage';
@@ -686,14 +686,124 @@ for (const seller of allApprovedSellers) {
     }
 
     if (categoryId) whereClauses.push(eq(products.categoryId, Number(categoryId)));
-    if (subCategoryId) {
+   // =====================================
+// SUB CATEGORY FILTER
+// =====================================
 
-   whereClauses.push(
-      eq(masterProducts.subCategoryId, Number(subCategoryId))
-   );
+if (subCategoryId) {
+
+  const subMasters = await db.query.masterProducts.findMany({
+
+    where: eq(
+
+      masterProducts.subCategoryId,
+
+      Number(subCategoryId)
+
+    ),
+
+    columns: {
+
+      id: true,
+
+    },
+
+  });
+
+  const masterIds = subMasters.map(x => x.id);
+
+  if (masterIds.length === 0) {
+
+    return res.status(200).json({
+
+      page: pageNum,
+
+      limit: limitNum,
+
+      total: 0,
+
+      totalPages: 0,
+
+      products: []
+
+    });
+
+  }
+
+  whereClauses.push(
+
+    inArray(
+
+      products.masterProductId,
+
+      masterIds
+
+    )
+
+  );
 
 }
-    if (search) whereClauses.push(ilike(products.name, `%${search}%`));
+   // =====================================
+// SEARCH ENGINE (NEW)
+// =====================================
+
+let searchMasterIds: number[] = [];
+
+if (search && search.toString().trim().length > 0) {
+
+  const keyword = search.toString().trim();
+
+  const matchedMasters = await db.query.masterProducts.findMany({
+    limit: 500, 
+
+    where: or(
+
+    sql`lower(${masterProducts.search_group}) LIKE lower(${`%${keyword}%`})`,
+
+sql`lower(${masterProducts.search_keywords}) LIKE lower(${`%${keyword}%`})`,
+
+sql`lower(${masterProducts.name}) LIKE lower(${`%${keyword}%`})`,
+
+sql`lower(${masterProducts.brand}) LIKE lower(${`%${keyword}%`})`
+    ),
+
+    columns: {
+      id: true,
+    }
+
+  });
+
+  searchMasterIds = matchedMasters.map(x => x.id);
+
+  // अगर कुछ नहीं मिला
+  if (searchMasterIds.length === 0) {
+
+    return res.status(200).json({
+
+      page: pageNum,
+
+      limit: limitNum,
+
+      total: 0,
+
+      totalPages: 0,
+
+      products: []
+
+    });
+
+  }
+
+  whereClauses.push(
+
+    inArray(
+      products.masterProductId,
+      searchMasterIds
+    )
+
+  );
+
+}
 
     // 🎯 डिस्काउंट/प्राइस फ़िल्टर: वैरिएंट टेबल के हिसाब से भाई
     if (minPrice || maxPrice) {
@@ -778,7 +888,86 @@ orderBy:[asc(productVariants.price)]
       limit: limitNum,
       offset: offset,
     });
+// =====================================
+// SEARCH RANKING
+// =====================================
 
+if (search) {
+
+  const keyword = search
+    .toString()
+    .trim()
+    .toLowerCase();
+
+  productList.sort((a: any, b: any) => {
+
+    const score = (p: any) => {
+
+      const mp = p.masterProduct;
+
+      let s = 0;
+
+      // ⭐⭐⭐⭐⭐ Search Group
+      if (
+        mp?.search_group
+          ?.toLowerCase()
+          .includes(keyword)
+      ) {
+        s += 1000;
+      }
+
+      // ⭐⭐⭐⭐ Search Keywords
+      if (
+        mp?.search_keywords
+          ?.toLowerCase()
+          .includes(keyword)
+      ) {
+        s += 800;
+      }
+
+      // ⭐⭐⭐ Brand
+      if (
+        mp?.brand
+          ?.toLowerCase()
+          .includes(keyword)
+      ) {
+        s += 500;
+      }
+
+      // ⭐⭐ Product Name
+      if (
+        mp?.name
+          ?.toLowerCase()
+          .includes(keyword)
+      ) {
+        s += 300;
+      }
+
+      // ⭐ Exact Match Bonus
+      if (
+        mp?.name
+          ?.toLowerCase() === keyword
+      ) {
+        s += 5000;
+      }
+// Product Starts With
+
+if (
+  mp?.name
+    ?.toLowerCase()
+    .startsWith(keyword)
+) {
+  s += 1500;
+}
+      return s;
+
+    };
+
+    return score(b) - score(a);
+
+  });
+
+}
    // ==================== 🎯 100% सुरक्षित डबल-की सेफ़्टी इंजन (पुरानी + नई दोनों Keys लाइव) ====================
     const formattedProducts = productList.map((prod: any) => {
       const prodVariants = prod.variants || [];
@@ -1135,16 +1324,195 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
         eq(products.approvalStatus, approvalStatusEnum.enumValues[1])
       ),
       // 🔥 यहाँ रिलेशंस एकदम परफेक्ट लोड हो रहे हैं भाई!
-      with: { 
-        category: true, 
-        seller: { with: { user: true } },
-        variants: {
-          where: eq(productVariants.isActive, true)
-        }
-      }
+    with: {
+  category: true,
+
+  masterProduct: true,
+
+  seller: {
+    with: {
+      user: true,
+    },
+  },
+
+ variants: {
+
+    where: and(
+
+        eq(productVariants.isActive,true),
+
+        gt(productVariants.stock,0)
+
+    ),
+
+    orderBy:[asc(productVariants.price)]
+
+}
+}
     });
 
-    if (!product) return res.status(404).json({ message: "Product not found." });
+    if (!product)
+      return res.status(404).json({ message: "Product not found." });
+const searchGroup = product.masterProduct?.search_group;
+const subCategoryId = product.masterProduct?.subCategoryId;
+let similarProducts: any[] = [];
+
+if (searchGroup) {
+
+  const similarMasterProducts = await db.query.masterProducts.findMany({
+
+    where: and(
+
+      eq(masterProducts.search_group, searchGroup),
+
+      ne(masterProducts.id, product.masterProductId!),
+ne(products.id, product.id)
+    ),
+
+    columns: {
+      id: true,
+    }
+
+  });
+
+  const masterIds = similarMasterProducts.map(x => x.id);
+
+  if (masterIds.length > 0) {
+
+    similarProducts = await db.query.products.findMany({
+
+      where: and(
+
+        eq(products.isActive, true),
+gt(productVariants.stock, 0),
+        eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
+
+        inArray(products.masterProductId, masterIds)
+
+      ),
+
+      with: {
+
+        category: true,
+
+        seller: true,
+
+        masterProduct: true,
+
+        variants: {
+
+          where: and(
+
+            eq(productVariants.isActive, true),
+
+            gt(productVariants.stock, 0)
+
+          ),
+
+          orderBy: [asc(productVariants.price)]
+
+        }
+
+      },
+
+      limit: 12
+
+    });
+
+  }
+
+}
+// =====================================
+// SUB CATEGORY FALLBACK
+// =====================================
+
+if (similarProducts.length < 12 && subCategoryId != null) {
+
+  // उसी Sub Category के Master Products निकालो
+  const masters = await db.query.masterProducts.findMany({
+
+    where: eq(
+      masterProducts.subCategoryId,
+      subCategoryId
+    ),
+
+    columns: {
+      id: true,
+    },
+
+  });
+
+  const masterIds = masters.map(x => x.id);
+
+  if (masterIds.length > 0) {
+
+    const extraProducts = await db.query.products.findMany({
+
+      where: and(
+
+        inArray(
+          products.masterProductId,
+          masterIds
+        ),
+
+        eq(products.isActive, true),
+
+        eq(
+          products.approvalStatus,
+          approvalStatusEnum.enumValues[1]
+        ),
+
+        ne(products.id, product.id)
+
+      ),
+
+      with: {
+
+        category: true,
+
+        seller: true,
+
+        masterProduct: true,
+
+        variants: {
+
+          where: and(
+
+            eq(productVariants.isActive, true),
+
+            gt(productVariants.stock, 0)
+
+          ),
+
+          orderBy: [
+            asc(productVariants.price)
+          ]
+
+        }
+
+      },
+
+      limit: 20
+
+    });
+
+    for (const p of extraProducts) {
+
+      if (!similarProducts.find(x => x.id === p.id)) {
+
+        similarProducts.push(p);
+
+      }
+
+      if (similarProducts.length >= 12) {
+        break;
+      }
+
+    }
+
+  }
+
+}
 
     // 🎯 जादुई फिक्स (Backward Compatibility Layer): कस्टमर की सिंगल प्रोडक्ट स्क्रीन पर 
     // सबसे सस्ते वैरिएंट की प्राइस और टोटल स्टॉक फ्लैट लेवल पर चिपका दो भाई, ताकि पुराना यूआई न फटे!
@@ -1153,7 +1521,38 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
       ? [...prodVariants].sort((a, b) => Number(a.price) - Number(b.price))[0] 
       : null;
     const totalStock = prodVariants.reduce((sum: number, v: any) => sum + Number(v.stock || 0), 0);
+    similarProducts = similarProducts.filter(
+  p => p.id !== product.id
+);
+const formattedSimilarProducts = similarProducts.map((p: any) => {
 
+  const vars = p.variants || [];
+
+  const cheapest =
+    vars.length > 0
+      ? [...vars].sort((a, b) => Number(a.price) - Number(b.price))[0]
+      : null;
+
+  return {
+
+    ...p,
+
+    price: cheapest ? String(cheapest.price) : "0",
+
+    originalPrice: cheapest
+      ? String(cheapest.originalPrice || cheapest.price)
+      : "0",
+
+    stock: vars.reduce(
+      (sum: number, v: any) => sum + Number(v.stock || 0),
+      0
+    ),
+
+    unit: cheapest?.unit || "piece",
+
+  };
+
+});
     const formattedProduct = {
       ...product,
       price: cheapestVariant ? String(cheapestVariant.price) : "0",
@@ -1163,7 +1562,13 @@ export const getProductById = async (req: Request, res: Response, next: NextFunc
       variants: prodVariants // नया आर्किटेक्चर डेटा जो अब कस्टमर की डिटेल स्क्रीन यूज़ करेगी भाई
     };
     
-    return res.status(200).json(formattedProduct);
+   return res.status(200).json({
+
+  ...formattedProduct,
+
+  similarProducts: formattedSimilarProducts
+
+});
 
   } catch (error) { 
     console.error("❌ getProductById Error:", error);

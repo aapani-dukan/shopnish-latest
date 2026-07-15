@@ -636,6 +636,8 @@ brandType: varchar("brand_type", { length: 50 }).default("LOCAL").notNull(), // 
   brand: text("brand"), // एक्सेल का Brand
   unit: text("unit").notNull().default("piece"), // एक्सेल का Standard_Unit
   productType: text("product_type"), // एक्सेल का Product_Type (Branded/Unique)
+  search_group: text("search_group"), // एक्सेल का Search_Group
+  search_keywords: text("search_keywords"), // एक्सेल का Search_Keywords
   image: text("image").notNull(), 
   description: text("description"),
   isActive: boolean("is_active").default(true),
