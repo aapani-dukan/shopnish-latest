@@ -1385,7 +1385,6 @@ ne(products.id, product.id)
       where: and(
 
         eq(products.isActive, true),
-gt(productVariants.stock, 0),
         eq(products.approvalStatus, approvalStatusEnum.enumValues[1]),
 
         inArray(products.masterProductId, masterIds)
