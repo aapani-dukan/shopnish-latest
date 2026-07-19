@@ -1636,13 +1636,22 @@ export const getOrderTrackingDetails = async (
           
           // इस सबऑर्डर के आइटम्स को फ्रंटएंड के 'so.items' स्ट्रक्चर के मुताबिक ढाला भाई
           const formattedItems = (so.orderItems || []).map((oi: any) => {
-            const itemObj = {
-              productName: oi.productName || oi.name || "Item",
-              quantity: oi.quantity || 1,
-              itemTotal: Number(oi.totalPrice || oi.itemTotal || 0),
-              variantName: oi.variantName || null,
-              productPrice: Number(oi.unitPrice || oi.price || 0)
-            };
+           const itemObj = {
+  id: oi.id,
+  orderItemId: oi.id, 
+  orderId: oi.orderId,                 // ⭐ सबसे जरूरी
+  productId: oi.productId,
+  variantId: oi.variantId,
+
+  productName: oi.productName || oi.name || "Item",
+  quantity: oi.quantity || 1,
+  itemTotal: Number(oi.totalPrice || oi.itemTotal || 0),
+  variantName: oi.variantName || null,
+  productPrice: Number(oi.unitPrice || oi.productPrice || 0),
+
+  status: oi.status,          // delivered / returned / return_requested...
+  image: oi.productImage,
+};
             // मास्टर लिस्ट में भी भर दो भाई सेफ़्टी के लिए
             allOrderedItems.push(itemObj);
             return itemObj;
