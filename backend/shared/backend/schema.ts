@@ -4,8 +4,8 @@ import {
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts,subcategories,productSubcategories,categorySubcategories, userRoleEnum, approvalStatusEnum,
   subOrders,deliveryBatches,couponsPgTable,homeLayout,adminSettings,wallets,walletTransactions,productHistory,notifications,
- productAffinity,productViews,masterOrderStatusEnum, subOrderStatusEnum,
-  paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum
+  returnRequests, productAffinity,productViews,masterOrderStatusEnum, subOrderStatusEnum,
+  paymentMethodEnum, discountTypeEnum, couponScopeEnum,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum,returnTypeEnum,returnStatusEnum
 } from './tables';
 
 import {
@@ -13,7 +13,7 @@ import {
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, couponRelations, subOrdersRelations,deliveryBatchesRelations,
-  categorySubcategoriesRelations,masterProductsRelations,subcategoriesRelations,productSubcategoriesRelations
+  categorySubcategoriesRelations,masterProductsRelations,subcategoriesRelations,productSubcategoriesRelations,returnRequestsRelations
 //orderTrackingRelations,
 } from './relations';
 
@@ -165,15 +165,15 @@ export {
   users, sellersPgTable, stores, categories, products, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews,masterProducts, subcategories, productSubcategories, categorySubcategories, userRoleEnum, approvalStatusEnum,
-  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,productAffinity,productViews,
+  subOrders, deliveryBatches, couponsPgTable, adminSettings,walletTransactions,wallets,productAffinity,productViews,returnRequests,
    masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,notifications,
-productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,productHistory,
+productCategoryEnum,deliveryStatusEnum,sectionTypeEnum, homeLayout,productHistory,returnTypeEnum,returnStatusEnum,
   // Relations
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations,productVariantsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
   servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations,couponRelations,subOrdersRelations,deliveryBatchesRelations,
-  subcategoriesRelations,categorySubcategoriesRelations,masterProductsRelations,productSubcategoriesRelations,
+  subcategoriesRelations,categorySubcategoriesRelations,masterProductsRelations,productSubcategoriesRelations,returnRequestsRelations,
 //orderTrackingRelations,
   // Schemas
   insertUserSchema, insertSellerSchema, updateSellerSchema, insertStoreSchema, insertCategorySchema,
@@ -191,14 +191,14 @@ export const schema = {
   users, sellersPgTable, stores, categories, products, subcategories, productSubcategories, categorySubcategories, productVariants, deliveryAreas, deliveryBoys, cartItems,
   deliveryAddresses, orders, orderItems, orderTracking, promoCodes, serviceCategories,
   services, serviceProviders, serviceBookings, reviews, subOrders, deliveryBatches, couponsPgTable,walletTransactions,wallets,homeLayout,adminSettings,masterProducts,
-  productAffinity,productViews,
+  productAffinity,productViews,returnRequests,productCategoryEnum,deliveryStatusEnum,sectionTypeEnum,returnTypeEnum,returnStatusEnum,
   masterOrderStatusEnum, subOrderStatusEnum, paymentMethodEnum, discountTypeEnum, couponScopeEnum,productHistory,notifications,
   
   // Relations - 🔥 यह सबसे ज़रूरी हिस्सा है!
   usersRelations, sellersRelations, storesRelations, categoriesRelations, productsRelations, productVariantsRelations,
   deliveryBoysRelations, cartItemsRelations, deliveryAddressesRelations, ordersRelations,
   orderItemsRelations,  promoCodesRelations, serviceCategoriesRelations,
-  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, 
+  servicesRelations, serviceProvidersRelations, serviceBookingsRelations, reviewsRelations, returnRequestsRelations,
   couponRelations, subOrdersRelations, deliveryBatchesRelations,categorySubcategoriesRelations,subcategoriesRelations,productSubcategoriesRelations,masterProductsRelations
 //orderTrackingRelations,
 };

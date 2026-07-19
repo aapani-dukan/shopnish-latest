@@ -260,6 +260,20 @@
       "when": 1784028099857,
       "tag": "0036_unique_lizard",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1784388468636,
+      "tag": "0037_breezy_owl",
+      "breakpoints": true
+    },
+    {
+      "idx": 38,
+      "version": "7",
+      "when": 1784448670644,
+      "tag": "0038_fancy_puff_adder",
+      "breakpoints": true
     }
   ]
 }

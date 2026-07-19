@@ -22,7 +22,9 @@ export const subOrderStatusEnum = pgEnum('sub_order_status', [
   'delivered_by_delivery_boy'
   ]);
 export const orderItemStatusEnum = pgEnum("order_item_status_enum", [
-  "pending", "processing", "shipped", "delivered", "cancelled", "returned"
+  "pending", "processing", "shipped", "delivered","return_requested",
+  "return_accepted",
+  "picked_up", "cancelled", "returned"
 ]);
 export const deliveryStatusEnum = pgEnum("delivery_status_enum", [
   "pending", "assigned", "ready_for_pickup", "picked_up", "out_for_delivery", "delivered", "failed", "exepted", "cancelled"
@@ -47,7 +49,18 @@ export const paymentMethodEnum = pgEnum("payment_method", ["COD", "ONLINE"]);
 export const paymentStatusEnum = pgEnum("payment_status", ["pending", "paid", "failed", "refunded"]);
 export const discountTypeEnum = pgEnum('discount_type', ['percentage', 'fixed_amount']);
 export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_seller', 'specific_product', 'category']);
+export const returnStatusEnum = pgEnum("return_status_enum", [
+  "requested",
+  "accepted",
+  "picked_up",
+  "completed",
+  "rejected"
+]);
 
+export const returnTypeEnum = pgEnum("return_type_enum", [
+  "shop",
+  "pickup"
+]);
 // =========================================================================
 // Core Tables (सबसे कम निर्भरता से सबसे अधिक निर्भरता तक)
 // =========================================================================
@@ -789,3 +802,67 @@ export const productViews = pgTable(
     index("idx_product_views_product").on(table.productId),
   ]
 );
+
+
+export const returnRequests = pgTable("return_requests", {
+  id: serial("id").primaryKey(),
+
+  orderId: integer("order_id")
+    .notNull()
+    .references(() => orders.id, { onDelete: "cascade" }),
+
+  subOrderId: integer("sub_order_id")
+    .notNull()
+    .references(() => subOrders.id, { onDelete: "cascade" }),
+
+  orderItemId: integer("order_item_id")
+    .notNull()
+    .references(() => orderItems.id, { onDelete: "cascade" }),
+
+  customerId: integer("customer_id")
+    .notNull()
+    .references(() => users.id),
+
+  sellerId: integer("seller_id")
+    .notNull()
+    .references(() => sellersPgTable.id),
+
+  productId: integer("product_id")
+    .notNull()
+    .references(() => products.id),
+
+  variantId: integer("variant_id")
+    .references(() => productVariants.id),
+
+  deliveryBoyId: integer("delivery_boy_id")
+    .references(() => deliveryBoys.id),
+
+  returnType: returnTypeEnum("return_type")
+    .notNull(),
+
+  reason: text("reason").notNull(),
+
+  refundPhonePe: text("refund_phonepe"),
+
+  refundUpi: text("refund_upi"),
+
+  pickupFee: decimal("pickup_fee", {
+    precision: 10,
+    scale: 2,
+  })
+    .$type<number>()
+    .default(0)
+    .notNull(),
+
+  status: returnStatusEnum("status")
+    .default("requested")
+    .notNull(),
+
+  createdAt: timestamp("created_at", {
+    mode: "string",
+  }).defaultNow(),
+
+  updatedAt: timestamp("updated_at", {
+    mode: "string",
+  }).defaultNow(),
+});

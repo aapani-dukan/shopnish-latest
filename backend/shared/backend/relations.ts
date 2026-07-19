@@ -6,8 +6,8 @@ import {
   users, sellersPgTable, orders, reviews, serviceProviders, 
   serviceBookings, cartItems, stores, products,productVariants, categories, 
   deliveryBoys, couponsPgTable, deliveryAddresses, subOrders, 
-  deliveryBatches, orderItems, orderTracking, promoCodes, 
-  serviceCategories, services,categorySubcategories,productSubcategories,subcategories,masterProducts 
+  deliveryBatches, orderItems, orderTracking, promoCodes,walletTransactions,wallets, 
+  serviceCategories, services,categorySubcategories,productSubcategories,subcategories,masterProducts,returnRequests 
 } from './tables';
 
 // --- Drizzle ORM Relations ---
@@ -17,6 +17,7 @@ export const usersRelations = relations(users, ({ one, many }) => ({
     fields: [users.id],
     references: [sellersPgTable.userId],
   }),
+  returns: many(returnRequests),
   orders: many(orders),
   reviews: many(reviews),
   serviceProviders: many(serviceProviders),
@@ -33,6 +34,7 @@ export const sellersRelations = relations(sellersPgTable, ({ one, many }) => ({
     fields: [sellersPgTable.categoryId], // चेक करें कि आपकी टेबल में categoryId कॉलम है
     references: [categories.id],
   }),
+  returns: many(returnRequests),
   products: many(products),
   stores: many(stores),
   subOrders: many(subOrders),
@@ -87,6 +89,7 @@ export const productsRelations = relations(products, ({ one, many }) => ({
   fields: [products.masterProductId],
   references: [masterProducts.id],
 }),
+returns: many(returnRequests),
   variants: many(productVariants),
   cartItems: many(cartItems),
   orderItems: many(orderItems),
@@ -132,7 +135,9 @@ export const deliveryBoysRelations = relations(deliveryBoys, ({ one, many }) => 
     fields: [deliveryBoys.userId],
     references: [users.id],
   }),
+  returns: many(returnRequests),
   deliveryBatches: many(deliveryBatches),
+  wallets: many(wallets),
 }));
 
 export const couponRelations = relations(couponsPgTable, ({ one }) => ({
@@ -225,7 +230,7 @@ export const deliveryBatchesRelations = relations(deliveryBatches, ({ one, many 
     subOrders: many(subOrders),
 }));
 
-export const orderItemsRelations = relations(orderItems, ({ one }) => ({
+export const orderItemsRelations = relations(orderItems, ({ one, many }) => ({
   subOrder: one(subOrders, {
     fields: [orderItems.subOrderId],
     references: [subOrders.id],
@@ -238,6 +243,11 @@ export const orderItemsRelations = relations(orderItems, ({ one }) => ({
     fields: [orderItems.variantId],
     references: [productVariants.id],
   }),
+  returns: many(returnRequests),
+  returnRequest: one(returnRequests, {
+  fields: [orderItems.id],
+  references: [returnRequests.orderItemId],
+}),
 }));
 
 //export const orderTrackingRelations = relations(orderTracking, ({ one }) => ({
@@ -315,3 +325,30 @@ export const reviewsRelations = relations(reviews, ({ one }) => ({
     references: [orders.id],
   }), 
 })); 
+export const returnRequestsRelations = relations(
+  returnRequests,
+  ({ one }) => ({
+    orderItem: one(orderItems, {
+      fields: [returnRequests.orderItemId],
+      references: [orderItems.id],
+    }),
+product: one(products, {
+      fields: [returnRequests.productId],
+      references: [products.id],
+    }),
+    customer: one(users, {
+      fields: [returnRequests.customerId],
+      references: [users.id],
+    }),
+
+    seller: one(sellersPgTable, {
+      fields: [returnRequests.sellerId],
+      references: [sellersPgTable.id],
+    }),
+
+    deliveryBoy: one(deliveryBoys, {
+      fields: [returnRequests.deliveryBoyId],
+      references: [deliveryBoys.id],
+    }),
+  })
+);
