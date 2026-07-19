@@ -321,6 +321,65 @@ for (const request of requests) {
 
   }
 });
+router.post("/:id/accept-pickup", requireAuth, async (req: any, res: Response) => {
+
+  try {
+
+    const deliveryBoy = await db.query.deliveryBoys.findFirst({
+      where: eq(deliveryBoys.userId, req.user.id),
+    });
+
+    if (!deliveryBoy) {
+      return res.status(404).json({
+        success: false,
+        message: "Delivery Boy not found",
+      });
+    }
+
+    const request = await db.query.returnRequests.findFirst({
+      where: eq(returnRequests.id, Number(req.params.id)),
+    });
+
+    if (!request) {
+      return res.status(404).json({
+        success: false,
+        message: "Return Request not found",
+      });
+    }
+
+    if (request.status !== "accepted") {
+      return res.status(400).json({
+        success: false,
+        message: "Pickup already assigned",
+      });
+    }
+
+    await db
+      .update(returnRequests)
+      .set({
+        deliveryBoyId: deliveryBoy.id,
+        status: "assigned",
+        updatedAt: new Date().toISOString(),
+      })
+      .where(eq(returnRequests.id, request.id));
+
+    return res.json({
+      success: true,
+      message: "Pickup Accepted",
+    });
+
+  } catch (err) {
+
+    console.error(err);
+
+    return res.status(500).json({
+      success: false,
+      message: "Server Error",
+    });
+
+  }
+
+});
 router.post("/:id/pickup", requireAuth, async (req: any, res: Response) => {
 
   try {
@@ -348,11 +407,22 @@ router.post("/:id/pickup", requireAuth, async (req: any, res: Response) => {
         message: "Return Request not found",
       });
     }
-if (request.status !== "accepted") {
+if (request.status !== "assigned") {
 
     return res.status(400).json({
         success:false,
-        message:"Already picked"
+        message:"Pickup not assigned"
+    });
+
+}
+if (request.deliveryBoyId !== deliveryBoy.id) {
+
+    return res.status(403).json({
+
+        success:false,
+
+        message:"This pickup is assigned to another delivery partner"
+
     });
 
 }

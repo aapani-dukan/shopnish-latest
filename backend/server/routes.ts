@@ -45,6 +45,7 @@ import { formatPhone } from "./util/phoneFormatter"; // Path check kar lena
 import categoryRoutes from "../routes/categoryRoutes";
 import authRouter from "../routes/authRoutes";
 import homeProductRoutes from "../routes/homeProducts";
+import returnsRouter from "../routes/returns";
 const router = Router();
 
 // ✅ Health Check
@@ -145,7 +146,7 @@ router.use("/cart", cartRouter);
 router.use("/orders", orderRoutes);
 router.use("/order-confirmation", orderConfirmationRouter);
 router.use("/sellers", verifyToken as any, sellerRouter);
-
+router.use("/returns", returnsRouter); // Returns routes
 // ✅ Categories
 router.use(
   "/categories",

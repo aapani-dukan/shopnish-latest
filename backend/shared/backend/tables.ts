@@ -52,6 +52,7 @@ export const couponScopeEnum = pgEnum('coupon_scope', ['all_orders', 'specific_s
 export const returnStatusEnum = pgEnum("return_status_enum", [
   "requested",
   "accepted",
+  "assigned",
   "picked_up",
   "completed",
   "rejected"
