@@ -2,7 +2,7 @@ import express from "express";
 import { Response } from 'express';
 import { db } from "../server/db";
 import {requireAuth} from "../server/middleware/authMiddleware";
-import { orderItems, returnRequests,sellersPgTable,deliveryBoys,walletTransactions,wallets,deliveryBatches } from "../shared/backend/schema";
+import { orderItems, returnRequests,sellersPgTable,deliveryBoys,walletTransactions,wallets,deliveryBatches, deliveryAddresses } from "../shared/backend/schema";
 import { eq,and } from "drizzle-orm";
 
 const router = express.Router();
@@ -159,6 +159,7 @@ router.get("/seller", requireAuth, async (req: any, res: Response) => {
         product: true,
         customer: true,
         orderItem: true,
+        order: true,
       },
 
       orderBy: (returnRequests, { desc }) => [
@@ -277,6 +278,7 @@ router.get("/delivery", requireAuth, async (req: any, res: Response) => {
         seller: true,
 
         orderItem: true,
+        order: true,
 
       },
 
@@ -285,7 +287,24 @@ router.get("/delivery", requireAuth, async (req: any, res: Response) => {
       ],
 
     });
+for (const request of requests) {
 
+  if (request.order?.deliveryAddressId) {
+
+    const address = await db.query.deliveryAddresses.findFirst({
+
+      where: eq(
+        deliveryAddresses.id,
+        request.order.deliveryAddressId
+      ),
+
+    });
+
+    (request as any).deliveryAddress = address;
+
+  }
+
+}
     return res.json({
       success: true,
       data: requests,

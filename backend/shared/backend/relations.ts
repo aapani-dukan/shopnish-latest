@@ -332,6 +332,10 @@ export const returnRequestsRelations = relations(
       fields: [returnRequests.orderItemId],
       references: [orderItems.id],
     }),
+    order: one(orders, {
+  fields: [returnRequests.orderId],
+  references: [orders.id],
+}),
 product: one(products, {
       fields: [returnRequests.productId],
       references: [products.id],
