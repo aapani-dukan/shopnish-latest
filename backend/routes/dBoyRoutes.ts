@@ -1131,7 +1131,7 @@ router.patch(
           status: newStatus as any,
           updatedByUserId: userId,
           updatedByUserRole: 'delivery-boy',
-          timestamp: new Date(),
+          timestamp: new Date().toISOString(),
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
 // 💰 WALLET SETTLEMENT LOGIC (Brand-Aware Dynamic Commission Upgrade)
@@ -1199,7 +1199,21 @@ if (newStatus === 'delivered') {
           await tx.update(subOrders)
             .set({ status: targetSubStatus as any, updatedAt: new Date() })
             .where(inArray(subOrders.id, subOrderIds));
+// ✅ Order Items Status Update
+const itemStatus =
+  newStatus === "delivered"
+    ? "delivered"
+    : "cancelled";
 
+await tx
+  .update(orderItems)
+  .set({
+    status: itemStatus as any,
+    updatedAt: new Date().toISOString(),
+  })
+  .where(
+    inArray(orderItems.subOrderId, subOrderIds)
+  );
           for (const sId of subOrderIds) {
             await tx.insert(orderTracking).values({
               masterOrderId,
@@ -1207,7 +1221,7 @@ if (newStatus === 'delivered') {
               status: targetSubStatus as any,
               updatedByUserId: userId,
               updatedByUserRole: 'delivery-boy',
-              timestamp: new Date(),
+              timestamp: new Date().toISOString(),
               message: `Sub-order marked as ${targetSubStatus.replace(/_/g, ' ')}.`,
             } as any);
           }
@@ -1240,7 +1254,7 @@ if (newStatus === 'delivered') {
               status: finalMasterStatus as any,
               updatedByUserId: userId,
               updatedByUserRole: 'delivery-boy',
-              timestamp: new Date(),
+              timestamp: new Date().toISOString(),
               message: `Master order moved to ${finalMasterStatus} state.`,
             } as any);
 

@@ -321,65 +321,7 @@ for (const request of requests) {
 
   }
 });
-router.post("/:id/accept-pickup", requireAuth, async (req: any, res: Response) => {
 
-  try {
-
-    const deliveryBoy = await db.query.deliveryBoys.findFirst({
-      where: eq(deliveryBoys.userId, req.user.id),
-    });
-
-    if (!deliveryBoy) {
-      return res.status(404).json({
-        success: false,
-        message: "Delivery Boy not found",
-      });
-    }
-
-    const request = await db.query.returnRequests.findFirst({
-      where: eq(returnRequests.id, Number(req.params.id)),
-    });
-
-    if (!request) {
-      return res.status(404).json({
-        success: false,
-        message: "Return Request not found",
-      });
-    }
-
-    if (request.status !== "accepted") {
-      return res.status(400).json({
-        success: false,
-        message: "Pickup already assigned",
-      });
-    }
-
-    await db
-      .update(returnRequests)
-      .set({
-        deliveryBoyId: deliveryBoy.id,
-        status: "assigned",
-        updatedAt: new Date().toISOString(),
-      })
-      .where(eq(returnRequests.id, request.id));
-
-    return res.json({
-      success: true,
-      message: "Pickup Accepted",
-    });
-
-  } catch (err) {
-
-    console.error(err);
-
-    return res.status(500).json({
-      success: false,
-      message: "Server Error",
-    });
-
-  }
-
-});
 router.post("/:id/assign", requireAuth, async (req: any, res: Response) => {
 
   try {
@@ -644,6 +586,12 @@ if (request.status === "completed") {
     });
 
 }
+if (request.status !== "picked_up") {
+  return res.status(400).json({
+    success: false,
+    message: "Return must be picked up before completion",
+  });
+}
     // Return Complete
 
     await db.update(returnRequests)
@@ -783,7 +731,7 @@ router.get("/:id", requireAuth, async (req: any, res: Response) => {
 
     }
 if (
-    request.status !== "accepted" &&
+    request.status !== "assigned" &&
     request.status !== "picked_up"
 ) {
     return res.status(400).json({
