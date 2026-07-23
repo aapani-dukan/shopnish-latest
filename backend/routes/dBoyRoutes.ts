@@ -1199,7 +1199,21 @@ if (newStatus === 'delivered') {
           await tx.update(subOrders)
             .set({ status: targetSubStatus as any, updatedAt: new Date() })
             .where(inArray(subOrders.id, subOrderIds));
+// ✅ Order Items Status Update
+const itemStatus =
+  newStatus === "delivered"
+    ? "delivered"
+    : "cancelled";
 
+await tx
+  .update(orderItems)
+  .set({
+    status: itemStatus as any,
+    updatedAt: new Date().toISOString(),
+  })
+  .where(
+    inArray(orderItems.subOrderId, subOrderIds)
+  );
           for (const sId of subOrderIds) {
             await tx.insert(orderTracking).values({
               masterOrderId,

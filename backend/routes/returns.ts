@@ -644,6 +644,12 @@ if (request.status === "completed") {
     });
 
 }
+if (request.status !== "picked_up") {
+  return res.status(400).json({
+    success: false,
+    message: "Return must be picked up before completion",
+  });
+}
     // Return Complete
 
     await db.update(returnRequests)
@@ -783,7 +789,7 @@ router.get("/:id", requireAuth, async (req: any, res: Response) => {
 
     }
 if (
-    request.status !== "accepted" &&
+    request.status !== "assigned" &&
     request.status !== "picked_up"
 ) {
     return res.status(400).json({
