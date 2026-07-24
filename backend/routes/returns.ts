@@ -644,7 +644,10 @@ if (request.status === "completed") {
     });
 
 }
-if (request.status !== "picked_up") {
+if (
+  request.returnType === "pickup" &&
+  request.status !== "picked_up"
+) {
   return res.status(400).json({
     success: false,
     message: "Return must be picked up before completion",
