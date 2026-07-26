@@ -1378,18 +1378,17 @@ const learnedProducts = new Set<number>();
 
 for (const subOrder of transactionResult.tempSubOrders) {
   for (const item of subOrder.items) {
-    if (!item.product?.id) continue;
+   if (!item.productId) continue;
 
-    // Duplicate product skip
-    if (learnedProducts.has(item.product.id)) continue;
+if (learnedProducts.has(item.productId)) continue;
 
-    learnedProducts.add(item.product.id);
+learnedProducts.add(item.productId);
 
-    await trackProductEvent({
-      userId,
-      productId: item.product.id,
-      type: "order",
-    });
+await trackProductEvent({
+  userId,
+  productId: item.productId,
+  type: "order",
+});
   }
 }
     return res.status(201).json({
