@@ -1374,7 +1374,7 @@ if (!transactionResult || !transactionResult.masterOrder) {
 // 🔥 AI ORDER LEARNING
 // ===============================
 
-/*const learnedProducts = new Set<number>();
+const learnedProducts = new Set<number>();
 
 for (const subOrder of transactionResult.tempSubOrders) {
   for (const item of subOrder.items) {
@@ -1390,7 +1390,7 @@ await trackProductEvent({
   type: "order",
 });
   }
-} */
+} 
     return res.status(201).json({
         message: "Orders placed successfully!",
         masterOrderId: transactionResult.masterOrder.id,
