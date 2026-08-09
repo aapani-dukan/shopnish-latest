@@ -549,16 +549,25 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
                 .where(eq(subOrders.id, subOrder.id));
         }
 
-        const [sellerUser] = await tx
-            .select({ fcmToken: users.fcmToken })
-            .from(users)
-            .where(eq(users.id, sellerId)) 
-            .limit(1);
+      let sellerToken = null;
+
+if (sellerInfo?.userId) {
+  const [sellerUser] = await tx
+    .select({
+      fcmToken: users.fcmToken,
+    })
+    .from(users)
+    .where(eq(users.id, sellerInfo.userId))
+    .limit(1);
+
+  sellerToken = sellerUser?.fcmToken || null;
+}
 
         return { 
             masterOrder, 
             subOrder, 
-            sellerToken: sellerUser?.fcmToken || null 
+            sellerToken,
+            validatedItems
         };
 
       } catch (error: any) {
@@ -569,7 +578,7 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
     // 🔥 BACKGROUND TRING TRING NOTIFICATION LOGIC
     const finalResult = result as any;
-    const sellerIdForNotification = sellerId || finalResult.subOrder?.sellerId;
+    const sellerIdForNotification = sellerId;
 
     if (sellerIdForNotification) {
       (async () => {
@@ -610,7 +619,8 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
     io.emit(`user:${userId}`, { 
       type: 'order-placed', 
       order: finalResult.masterOrder, 
-      subOrder: finalResult.subOrder 
+      subOrder: finalResult.subOrder,
+      items: finalResult.validatedItems 
     });
 
     if (sellerIdForNotification) {
@@ -652,21 +662,16 @@ export const placeOrderBuyNow = async (req: AuthenticatedRequest, res: Response,
 
 const learnedProducts = new Set<number>();
 
-for (const subOrder of finalResult.tempSubOrders) {
-  for (const item of subOrder.items) {
-    if (!item.product?.id) continue;
+for (const item of finalResult.validatedItems) {
+  if (learnedProducts.has(item.productId)) continue;
 
-    // Duplicate product skip
-    if (learnedProducts.has(item.product.id)) continue;
+  learnedProducts.add(item.productId);
 
-    learnedProducts.add(item.product.id);
-
-    await trackProductEvent({
-      userId,
-      productId: item.product.id,
-      type: "order",
-    });
-  }
+  await trackProductEvent({
+    userId,
+    productId: item.productId,
+    type: "order",
+  });
 }
     return res.status(201).json({
       message: "Order placed successfully with all configurations!",
@@ -1373,20 +1378,19 @@ const learnedProducts = new Set<number>();
 
 for (const subOrder of transactionResult.tempSubOrders) {
   for (const item of subOrder.items) {
-    if (!item.product?.id) continue;
+   if (!item.productId) continue;
 
-    // Duplicate product skip
-    if (learnedProducts.has(item.product.id)) continue;
+if (learnedProducts.has(item.productId)) continue;
 
-    learnedProducts.add(item.product.id);
+learnedProducts.add(item.productId);
 
-    await trackProductEvent({
-      userId,
-      productId: item.product.id,
-      type: "order",
-    });
+await trackProductEvent({
+  userId,
+  productId: item.productId,
+  type: "order",
+});
   }
-}
+} 
     return res.status(201).json({
         message: "Orders placed successfully!",
         masterOrderId: transactionResult.masterOrder.id,

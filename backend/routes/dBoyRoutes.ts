@@ -870,11 +870,13 @@ router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res
 
         // 🎯 नियम 2: केवल 'delivery_charge' या 'deliveryCharge' को उठाना है भाई
         const firstSubOrder = batchSubOrders[0];
-        let mOrder = Array.isArray(firstSubOrder) ? firstSubOrder[14] : firstSubOrder?.masterOrder;
+
+        const mOrder = Array.isArray(firstSubOrder) ? firstSubOrder[14] : firstSubOrder?.masterOrder;
         
         let deliveryChargeToApply = 0;
-
+     let platformChargeToApply = 0;
         if (mOrder) {
+      const masterOrderId = Array.isArray(mOrder) ? mOrder[2] : mOrder.id;
             const earlierBatches = await db.query.deliveryBatches.findMany({
                 where: and(
                     eq(deliveryBatches.masterOrderId, Array.isArray(mOrder) ? mOrder[2] : mOrder.id),
@@ -886,20 +888,24 @@ router.get('/batch-price/:batchId', requireDeliveryBoyAuth, async (req: any, res
             if (earlierBatches.length === 0) {
                 if (Array.isArray(mOrder)) {
                     deliveryChargeToApply = Number(mOrder[21] || 0);
+                    platformChargeToApply = Number(mOrder[27] || 0);
                 } else {
                     deliveryChargeToApply = Number(mOrder.deliveryCharge || mOrder.delivery_charge || 0);
+                    platformChargeToApply = Number(mOrder.platformCharge || mOrder.platform_charge || 0);
                 }
             } else {
                 deliveryChargeToApply = 0; 
+                platformChargeToApply = 0;
             }
         }
 
-        const finalBatchPrice = pureSubOrdersSum + deliveryChargeToApply;
+        const finalBatchPrice = pureSubOrdersSum + deliveryChargeToApply + platformChargeToApply;
 
         return res.status(200).json({
             batchId: Number(batchId),
             subOrdersSubtotalSum: pureSubOrdersSum,
             masterOrderDeliveryCharge: deliveryChargeToApply,
+            masterOrderPlatformCharge: platformChargeToApply,
             totalToCollect: finalBatchPrice 
         });
 
