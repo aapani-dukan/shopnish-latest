@@ -1137,7 +1137,7 @@ router.patch(
           status: newStatus as any,
           updatedByUserId: userId,
           updatedByUserRole: 'delivery-boy',
-          timestamp: new Date().toISOString(),
+          timestamp: new Date(),
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
 // 💰 WALLET SETTLEMENT LOGIC (Brand-Aware Dynamic Commission Upgrade)
@@ -1227,7 +1227,7 @@ await tx
               status: targetSubStatus as any,
               updatedByUserId: userId,
               updatedByUserRole: 'delivery-boy',
-              timestamp: new Date().toISOString(),
+              timestamp: new Date(),
               message: `Sub-order marked as ${targetSubStatus.replace(/_/g, ' ')}.`,
             } as any);
           }
@@ -1260,7 +1260,7 @@ await tx
               status: finalMasterStatus as any,
               updatedByUserId: userId,
               updatedByUserRole: 'delivery-boy',
-              timestamp: new Date().toISOString(),
+              timestamp: new Date(),
               message: `Master order moved to ${finalMasterStatus} state.`,
             } as any);
 
