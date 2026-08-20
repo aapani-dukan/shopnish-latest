@@ -1,0 +1,1 @@
+ALTER TYPE "public"."return_status_enum" ADD VALUE 'assigned' BEFORE 'picked_up';

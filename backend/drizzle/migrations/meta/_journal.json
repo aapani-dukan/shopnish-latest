@@ -274,6 +274,13 @@
       "when": 1784448670644,
       "tag": "0038_fancy_puff_adder",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1786854520864,
+      "tag": "0039_clean_stick",
+      "breakpoints": true
     }
   ]
 }
