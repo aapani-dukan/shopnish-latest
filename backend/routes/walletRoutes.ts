@@ -66,6 +66,7 @@ try {
     const allWallets = await db.select({
       walletId: wallets.id,
       balance: wallets.balance,
+      codBalance:wallets.codBalance,
       userType: wallets.userType,
       userName: users.firstName,
       userLastName: users.lastName,
@@ -83,29 +84,83 @@ try {
 });
 
 // 2. COD Settlement (जब डिलीवरी बॉय कैश जमा कर दे)
-router.post('/admin/settle-cash', requireAuth, async (req: any, res: Response) => {
-  if (!req.user.isAdmin) return res.status(403).json({ error: 'Access Denied' });
 
-  const { targetUserId, amount, note } = req.body; 
+export default router;router.post('/admin/settle-cash', requireAuth, async (req: any, res: Response) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Access Denied' });
+  }
+
+  const { targetUserId, amount, note } = req.body;
 
   try {
-    await db.transaction(async (tx) => {
-      // वॉलेट में पैसा वापस जोड़ना (Negative balance को 0 की तरफ लाना)
-      await WalletService.addMoney(
-        targetUserId,
-        'delivery-boy',
-        Number(amount), // जितना कैश उसने जमा किया
-        'settlement',
-        `settle_${Date.now()}`,
-        note || 'Cash settlement by admin',
-        tx
-      );
+    const settlementAmount = Number(amount);
+
+    if (!Number.isFinite(settlementAmount) || settlementAmount <= 0) {
+      return res.status(400).json({
+        error: 'Invalid settlement amount'
+      });
+    }
+
+    // Admin की ID
+    const adminUserId = Number(req.user.id);
+
+    const result = await WalletService.settleDeliveryBoyCOD(
+      Number(targetUserId),
+      settlementAmount,
+      adminUserId,
+      `settle_${Date.now()}`,
+      note || 'COD cash settlement by admin'
+    );
+
+    res.json({
+      message: 'COD settlement successful',
+      ...result
     });
 
-    res.json({ message: 'Cash settlement successful' });
-  } catch (error) {
-    res.status(500).json({ error: 'Settlement failed' });
+  } catch (error: any) {
+    console.error('COD Settlement Error:', error);
+
+    res.status(500).json({
+      error: error?.message || 'Settlement failed'
+    });
   }
 });
+// 3. Seller Wallet Settlement
+router.post('/admin/settle-seller', requireAuth, async (req: any, res: Response) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Access Denied' });
+  }
 
-export default router;
+  const { targetUserId, amount, note } = req.body;
+
+  try {
+    const settlementAmount = Number(amount);
+
+    if (!Number.isFinite(settlementAmount) || settlementAmount <= 0) {
+      return res.status(400).json({
+        error: 'Invalid settlement amount'
+      });
+    }
+
+    const result = await WalletService.addMoney(
+      Number(targetUserId),
+      'seller',
+      -settlementAmount,
+      'payout',
+      `seller_settle_${Date.now()}`,
+      note || 'Seller payout by admin'
+    );
+
+    res.json({
+      message: 'Seller settlement successful',
+      ...result
+    });
+
+  } catch (error: any) {
+    console.error('Seller Settlement Error:', error);
+
+    res.status(500).json({
+      error: error?.message || 'Seller settlement failed'
+    });
+  }
+});
