@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Wallet, ArrowUpCircle, ArrowDownCircle, Search, CheckCircle, RefreshCcw } from 'lucide-react';
+import { Wallet, Search, CheckCircle, RefreshCcw } from 'lucide-react';
 import { auth } from '../../lib/firebase';
 interface WalletData {
   walletId: number;
@@ -9,6 +9,7 @@ interface WalletData {
   userPhone: string;
   userType: 'seller' | 'delivery-boy' | 'admin' | 'customer';
   balance: string | number;
+  codBalance: string | number;
 }
 const AdminWalletManager = () => {
   const [wallets, setWallets] = useState<WalletData[]>([]);
@@ -56,38 +57,86 @@ const fetchWallets = async () => {
   useEffect(() => {
     fetchWallets();
   }, []);
+const platformBalance = wallets
+  .filter(w => w.userType === 'admin')
+  .reduce(
+    (acc, curr) => acc + Number(curr.balance || 0),
+    0
+  );
 
+const totalCODCollected = wallets
+  .filter(w => w.userType === 'delivery-boy')
+  .reduce(
+    (acc, curr) => acc + Number(curr.codBalance || 0),
+    0
+  );
   // 2. Settlement Logic (कैश जमा करना)
-  const handleSettle = async (userId:number, amount:number, type:string) => {
-    const defaultNote = `Settlement for ${type.toUpperCase()} - Cash received`;
-    const note = prompt("Enter settlement note:", defaultNote);
-    if (!note) return;
-
-    try {
-    const token = await auth.currentUser?.getIdToken(); // ✅ Get fresh token
-    
-    const res = await fetch('/api/wallet/admin/settle-cash', {
-      method: 'POST',
-      headers: { 
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}` 
-      },
-      body: JSON.stringify({ targetUserId: userId, amount, note })
-    });
-    
-    if (res.ok) {
-      alert("Settlement Successful!");
-      fetchWallets();
-    }
-  } catch (error) {
-    alert("Settlement failed!");
-  }
-};
-
-  const filteredWallets = wallets.filter(w => 
-    w.userName?.toLowerCase().includes(searchTerm.toLowerCase()) || 
+ 
+  const filteredWallets = wallets
+  .filter(w => w.userType !== 'admin' && w.userType !== 'customer')
+  .filter(w =>
+    w.userName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
     w.userPhone?.includes(searchTerm)
   );
+  const handleSettle = async (
+  userId: number,
+  amount: number,
+  type: string
+) => {
+  const defaultNote =
+    type === 'delivery-boy'
+      ? 'COD cash received from delivery boy'
+      : 'Seller payout';
+
+  const note = prompt('Enter settlement note:', defaultNote);
+
+  if (!note) return;
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+
+    if (!token) {
+      alert('Authentication token not found.');
+      return;
+    }
+
+    const endpoint =
+      type === 'delivery-boy'
+        ? '/api/wallet/admin/settle-cash'
+        : '/api/wallet/admin/settle-seller';
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        targetUserId: userId,
+        amount,
+        note
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data?.error || 'Settlement failed');
+    }
+
+    alert(
+      type === 'delivery-boy'
+        ? 'COD Settlement Successful!'
+        : 'Seller Settlement Successful!'
+    );
+
+    fetchWallets();
+
+  } catch (error: any) {
+    console.error('Settlement Error:', error);
+    alert(error?.message || 'Settlement failed!');
+  }
+};
 
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
@@ -105,10 +154,55 @@ const fetchWallets = async () => {
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-        <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
-          <p className="text-sm text-gray-500 uppercase font-bold">Total Platform Balance</p>
-          <h2 className="text-3xl font-black">₹{wallets.reduce((acc, curr) => acc + Number(curr.balance), 0).toFixed(2)}</h2>
-        </div>
+        {/* ADMIN / PLATFORM BALANCE */}
+  <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-blue-500">
+    <p className="text-sm text-gray-500 uppercase font-bold">
+      Platform Balance
+    </p>
+
+    <h2 className="text-3xl font-black text-blue-600">
+      ₹{platformBalance.toFixed(2)}
+    </h2>
+
+    <p className="text-xs text-gray-400 mt-1">
+      Admin Wallet
+    </p>
+  </div>
+   {/* DELIVERY BOY COD */}
+  <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-orange-500">
+    <p className="text-sm text-gray-500 uppercase font-bold">
+      COD With Delivery Partners
+    </p>
+
+    <h2 className="text-3xl font-black text-orange-600">
+      ₹{totalCODCollected.toFixed(2)}
+    </h2>
+
+    <p className="text-xs text-gray-400 mt-1">
+      Cash not yet deposited
+    </p>
+    </div>
+     {/* TOTAL SELLER BALANCE */}
+  <div className="bg-white p-6 rounded-xl shadow-sm border-l-4 border-green-500">
+    <p className="text-sm text-gray-500 uppercase font-bold">
+      Seller Payables
+    </p>
+
+    <h2 className="text-3xl font-black text-green-600">
+      ₹
+      {wallets
+        .filter(w => w.userType === 'seller')
+        .reduce(
+          (acc, curr) => acc + Number(curr.balance || 0),
+          0
+        )
+        .toFixed(2)}
+    </h2>
+
+    <p className="text-xs text-gray-400 mt-1">
+      Amount payable to sellers
+    </p>
+  </div>
       </div>
 
       {/* Search Bar */}
@@ -148,37 +242,61 @@ const fetchWallets = async () => {
                   </span>
                 </td>
                 <td className="px-6 py-4 font-mono">
-  <div className="flex items-center gap-3">
-    {/* 🚀 आइकन्स का असली इस्तेमाल यहाँ है */}
-    {Number(wallet.balance) < 0 ? (
-      <div className="p-2 bg-red-100 rounded-full text-red-600">
-        <ArrowDownCircle size={20} />
-      </div>
-    ) : (
-      <div className="p-2 bg-green-100 rounded-full text-green-600">
-        <ArrowUpCircle size={20} />
+  <div className="space-y-2">
+
+    {/* EARNING BALANCE */}
+    <div>
+      <p className="text-[10px] text-gray-400 uppercase font-bold">
+        Earning Balance
+      </p>
+
+      <span className="text-lg font-bold text-green-600">
+        ₹{Number(wallet.balance || 0).toFixed(2)}
+      </span>
+    </div>
+
+    {/* COD BALANCE - केवल Delivery Boy */}
+    {wallet.userType === 'delivery-boy' && (
+      <div>
+        <p className="text-[10px] text-orange-500 uppercase font-bold">
+          COD Collected
+        </p>
+
+        <span className="text-lg font-bold text-orange-600">
+          ₹{Number(wallet.codBalance || 0).toFixed(2)}
+        </span>
       </div>
     )}
 
-    <div>
-      <span className={`text-lg font-bold ${Number(wallet.balance) < 0 ? 'text-red-500' : 'text-green-600'}`}>
-        {Number(wallet.balance) < 0 ? '-' : '+'}₹{Math.abs(Number(wallet.balance)).toFixed(2)}
-      </span>
-      {Number(wallet.balance) < 0 ? (
-        <p className="text-[10px] text-red-400 font-sans uppercase tracking-wider font-bold">Cash Due to Office</p>
-      ) : (
-        <p className="text-[10px] text-green-400 font-sans uppercase tracking-wider font-bold">Earnings Ready</p>
-      )}
-    </div>
   </div>
 </td>
+                
                 <td className="px-6 py-4 text-center">
-                  <button 
-                    onClick={() => handleSettle(wallet.userId, Math.abs(Number(wallet.balance)), wallet.userType)}
-                    className="flex items-center gap-2 mx-auto bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition text-sm"
-                  >
-                    <CheckCircle size={16} /> Settle Full
-                  </button>
+                 <button 
+  onClick={() => {
+    const settlementAmount =
+      wallet.userType === 'delivery-boy'
+        ? Number(wallet.codBalance || 0)
+        : Math.abs(Number(wallet.balance || 0));
+
+    if (settlementAmount <= 0) {
+      alert('There is no amount available for settlement.');
+      return;
+    }
+
+    handleSettle(
+      wallet.userId,
+      settlementAmount,
+      wallet.userType
+    );
+  }}
+  className="flex items-center gap-2 mx-auto bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition text-sm"
+>
+  <CheckCircle size={16} />
+  {wallet.userType === 'delivery-boy'
+    ? 'Settle COD'
+    : 'Settle Full'}
+</button>
                 </td>
               </tr>
             ))}
