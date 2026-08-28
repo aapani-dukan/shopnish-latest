@@ -17,6 +17,8 @@ import {
   approvalStatusEnum,
   userRoleEnum,
   adminSettings,
+  walletTransactions,
+  wallets
 } from '../shared/backend/schema';
 import { eq, and, or, not, desc, asc, inArray, isNull,exists,sql,lt } from 'drizzle-orm';
 import { AuthenticatedRequest, verifyToken } from '../server/middleware/verifyToken';
@@ -1141,43 +1143,98 @@ router.patch(
           message: `Batch status changed to ${newStatus.replace(/_/g, ' ')}.`,
         } as any);
 // 💰 WALLET SETTLEMENT LOGIC (Brand-Aware Dynamic Commission Upgrade)
+// 💰 WALLET SETTLEMENT LOGIC
 if (newStatus === 'delivered') {
-  // 1️⃣ डिलीवरी बॉय को उसकी मेहनत की कमाई (Delivery Fee) सीधे वॉलेट में क्रेडिट करो
-  const payoutAmount = Number(existingBatch.deliveryFee);
-  await WalletService.addMoney(
-    userId, 
-    'delivery-boy', 
-    payoutAmount, 
-    'delivery_fee', 
-    `batch_${batchId}`, 
-    `Earnings for batch #${batchId}`, 
-    tx
-  );
 
-  // 2️⃣ अगर ग्राहक ने COD (नकद) दिया है, तो डिलीवरी बॉय के वॉलेट से उतना कैश माइनस (Hold) करो
-  const masterOrder = existingBatch.subOrders[0]?.masterOrder;
-  const isCOD = masterOrder?.paymentMethod === 'COD';
-  if (isCOD) {
-    const totalCashToCollect = existingBatch.subOrders.reduce((sum, so) => sum + Number(sum) + Number(so.total), 0);
+  // 1️⃣ Delivery Boy की अपनी earning
+  // यह COD amount से बिल्कुल स्वतंत्र है
+  const payoutAmount = Number(existingBatch.deliveryFee || 0);
+
+  if (payoutAmount > 0) {
     await WalletService.addMoney(
-      userId, 
-      'delivery-boy', 
-      -totalCashToCollect, 
-      'cod_collection', 
-      `batch_${batchId}`, 
-      `Cash collected for COD Batch #${batchId}`, 
+      userId,
+      'delivery-boy',
+      payoutAmount,
+      'delivery_fee',
+      `batch_${batchId}`,
+      `Earnings for delivery batch #${batchId}`,
       tx
     );
   }
 
-  // 3️⃣ 🔥 महा-योद्धा स्टेप: अब हर सब-ऑर्डर के सेलर्स का पैसा डायनेमिक कमीशन काटकर पेंडिंग में डालो
+  // 2️⃣ COD Collection
+  // COD को Delivery Boy के codBalance में जमा करो
+  // earning balance में नहीं
+  const masterOrder = existingBatch.subOrders[0]?.masterOrder;
+  const isCOD = masterOrder?.paymentMethod === 'COD';
+
+  if (isCOD) {
+
+    const totalCashToCollect = existingBatch.subOrders.reduce(
+      (sum, so) => sum + Number(so.total || 0),
+      0
+    );
+
+    if (totalCashToCollect > 0) {
+
+      let [wallet] = await tx
+        .select()
+        .from(wallets)
+        .where(
+          and(
+            eq(wallets.userId, userId),
+            eq(wallets.userType, 'delivery-boy')
+          )
+        );
+
+      // Wallet नहीं है तो बनाओ
+      if (!wallet) {
+        [wallet] = await tx
+          .insert(wallets)
+          .values({
+            userId,
+            userType: 'delivery-boy',
+            balance: 0,
+            codBalance: 0,
+            pendingAmount: 0
+          })
+          .returning();
+      }
+
+      const newCodBalance =
+        (Number(wallet.codBalance) || 0) +
+        totalCashToCollect;
+
+      await tx
+        .update(wallets)
+        .set({
+          codBalance: newCodBalance,
+          updatedAt: new Date()
+        })
+        .where(eq(wallets.id, wallet.id));
+
+      await tx.insert(walletTransactions).values({
+        walletId: wallet.id,
+        amount: totalCashToCollect,
+        type: 'credit',
+        purpose: 'cod_collection',
+        referenceId: `batch_${batchId}`,
+        closingBalance: newCodBalance,
+        description:
+          `COD collected from customer for delivery batch #${batchId}`,
+        status: 'completed'
+      });
+    }
+  }
+
+  // 3️⃣ Seller Earnings
+  // यह COD से स्वतंत्र है और COD हो या न हो, चलेगा
   for (const so of existingBatch.subOrders) {
-    const sellerUserId = so.seller?.userId; 
+
+    const sellerUserId = so.seller?.userId;
+
     if (sellerUserId) {
-      
-      // 🎯 जादू: रिलेशन एरर का खात्मा! सीधे डेटाबेस से इस सब-ऑर्डर के असली आइटम्स (Products) निकालो भाई!
-      // Note: अपनी स्कीमा फ़ाइल के हिसाब से 'orderItems' या 'subOrderItems' टेबल का नाम इम्पोर्ट चेक कर लेना भाई साहब!
-      // यहाँ मान लेते हैं कि टेबल का नाम 'orderItems' है और उसमें 'subOrderId' का हुक है।
+
       const fetchedItems = await tx
         .select({
           sellerProductId: orderItems.productId,
@@ -1187,12 +1244,11 @@ if (newStatus === 'delivered') {
         .from(orderItems)
         .where(eq(orderItems.subOrderId, so.id));
 
-      // हमारी नई जादुई वॉलेट सर्विस को कॉल मारो, आर्गुमेंट भी ३ कर दिए और आखिर का tx झंझट भी साफ!
-      // सेफ्टी के लिए हम tx को अंदर पास करने के लिए WalletService को बाहर से ही रेडी रखेंगे
       await WalletService.creditSellerEarnings(
-        sellerUserId, 
-        so.id, 
-        fetchedItems || [] // [{ sellerProductId: X, quantity: Y, price: Z }]
+        sellerUserId,
+        so.id,
+        fetchedItems || [],
+        tx
       );
     }
   }

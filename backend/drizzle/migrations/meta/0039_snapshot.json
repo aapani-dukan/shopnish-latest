@@ -1,5 +1,5 @@
 {
-  "id": "bb5602aa-a07f-440a-a5dd-0a950dd77ebd",
+  "id": "8f81ff23-bffb-416d-9a0b-5e0be37373ab",
   "prevId": "58fa8d06-ba77-4fa8-af89-c568ab99d193",
   "version": "7",
   "dialect": "postgresql",
@@ -4437,6 +4437,13 @@
         },
         "balance": {
           "name": "balance",
+          "type": "double precision",
+          "primaryKey": false,
+          "notNull": true,
+          "default": 0
+        },
+        "cod_balance": {
+          "name": "cod_balance",
           "type": "double precision",
           "primaryKey": false,
           "notNull": true,

@@ -32,7 +32,15 @@ export const WalletService = {
         }).returning();
       }
 
-      const newBalance = (Number(wallet.balance) || 0) + amount;
+      const currentBalance = Number(wallet.balance) || 0;
+const newBalance = currentBalance + amount;
+
+// Debit के कारण wallet negative नहीं होना चाहिए
+if (amount < 0 && Math.abs(amount) > currentBalance) {
+  throw new Error(
+    `Insufficient wallet balance. Available: ₹${currentBalance.toFixed(2)}`
+  );
+}
 
       // 2. Main Balance update karein
       await tx.update(wallets)
@@ -114,7 +122,17 @@ export const WalletService = {
 
     return externalTx ? logic(externalTx) : await db.transaction(logic);
   },
-async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ sellerProductId: number, quantity: number, price: number }>) {
+async creditSellerEarnings(
+  userId: number,
+  orderId: number,
+  orderItems: Array<{
+    sellerProductId: number,
+    quantity: number,
+    price: number
+  }>,
+  externalTx?: any
+) {
+  const tx = externalTx || db;
     let totalFinalEarnings = 0;
     let totalCommissionDeducted = 0;
 
@@ -122,7 +140,7 @@ async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ 
       const itemTotalAmount = Number(item.price) * (item.quantity || 1);
 
       // १. पहले सेलर प्रोडक्ट से उसका ब्रांड टाइप और मास्टर प्रोडक्ट आईडी निकालो भाई
-      const [productData] = await db
+      const [productData] = await tx
         .select({
           id: products.id,
           masterProductId: products.masterProductId,
@@ -137,7 +155,7 @@ async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ 
 
       // २. अगर यह मास्टर प्रोडक्ट है, तो हमारी नई मैपिंग टेबल (product_subcategories) से रेट लाओ
       if (productData?.masterProductId) {
-        const [mappedSubCategory] = await db
+        const [mappedSubCategory] = await tx
           .select({
             fmcgBrandCommission: subcategories.fmcgBrandCommission,
             localBrandCommission: subcategories.localBrandCommission
@@ -161,7 +179,7 @@ async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ 
 
       } else if (productData?.sellerSubCategoryId) {
         // अगर सेलर ने मैनुअल ऐड किया था और सीधे सब-कैटेगरी चुनी थी
-        const [subCat] = await db
+        const [subCat] = await tx
           .select()
           .from(subcategories)
           .where(eq(subcategories.id, productData.sellerSubCategoryId));
@@ -186,14 +204,15 @@ async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ 
     }
 
     // कुल शुद्ध कमाई दुकानदार के पेंडिंग वॉलेट में जमा करो भाई साहब
-    return await this.addPendingMoney(
-      userId, 
-      'seller', 
-      Math.round(totalFinalEarnings * 100) / 100, 
-      'order_earning', 
-      `order_${orderId}`, 
-      `Earnings for Order #${orderId}. Total Commission Deducted: ₹${totalCommissionDeducted.toFixed(2)}`
-    );
+    return await this.addPendingMoney( 
+  userId,  
+  'seller',  
+  Math.round(totalFinalEarnings * 100) / 100,  
+  'order_earning',  
+  `order_${orderId}`,  
+  `Earnings for Order #${orderId}. Total Commission Deducted: ₹${totalCommissionDeducted.toFixed(2)}`,
+  tx
+);
   },
   /**
    * 🚚 DELIVERY BOY EARNINGS: Direct credit
@@ -207,5 +226,178 @@ async creditSellerEarnings(userId: number, orderId: number, orderItems: Array<{ 
       `batch_${batchId}`, 
       `Earnings for delivery batch #${batchId}`
     );
-  }
+  },
+  async creditDeliveryBoyCOD(
+  userId: number,
+  batchId: number,
+  codAmount: number
+) {
+  const logic = async (tx: any) => {
+
+    let [wallet] = await tx.select().from(wallets).where(
+      and(
+        eq(wallets.userId, userId),
+        eq(wallets.userType, 'delivery-boy')
+      )
+    );
+
+    if (!wallet) {
+      [wallet] = await tx.insert(wallets).values({
+        userId,
+        userType: 'delivery-boy',
+        balance: 0,
+        codBalance: 0,
+        pendingAmount: 0
+      }).returning();
+    }
+
+    const newCodBalance =
+      (Number(wallet.codBalance) || 0) + Number(codAmount);
+
+    await tx.update(wallets)
+      .set({
+        codBalance: newCodBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, wallet.id));
+
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      amount: Number(codAmount),
+      type: 'credit',
+      purpose: 'cod_collection',
+      referenceId: `batch_${batchId}`,
+      closingBalance: newCodBalance,
+      description:
+        `COD collected from customer for delivery batch #${batchId}`,
+      status: 'completed'
+    });
+
+    return {
+      success: true,
+      codBalance: newCodBalance
+    };
+  };
+
+  return await db.transaction(logic);
+},
+async settleDeliveryBoyCOD(
+  deliveryBoyId: number,
+  amount: number,
+  adminUserId: number,
+  referenceId: string,
+  description: string
+) {
+  const logic = async (tx: any) => {
+    // 1. Delivery Boy wallet
+    const [deliveryWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, deliveryBoyId),
+          eq(wallets.userType, 'delivery-boy')
+        )
+      );
+
+    if (!deliveryWallet) {
+      throw new Error('Delivery Boy wallet not found');
+    }
+
+    const currentCOD = Number(deliveryWallet.codBalance) || 0;
+    const settlementAmount = Number(amount);
+
+    // 2. सुरक्षा: जितना COD है उससे ज्यादा settle नहीं कर सकते
+    if (settlementAmount <= 0) {
+      throw new Error('Invalid settlement amount');
+    }
+
+    if (settlementAmount > currentCOD) {
+      throw new Error(
+        `Settlement amount ₹${settlementAmount} is greater than COD balance ₹${currentCOD}`
+      );
+    }
+
+    const newCODBalance = currentCOD - settlementAmount;
+
+    // 3. Delivery Boy का COD balance कम करें
+    await tx
+      .update(wallets)
+      .set({
+        codBalance: newCODBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, deliveryWallet.id));
+
+    // 4. Delivery Boy COD transaction
+    await tx.insert(walletTransactions).values({
+      walletId: deliveryWallet.id,
+      amount: settlementAmount,
+      type: 'debit',
+      purpose: 'cod_settlement',
+      referenceId,
+      closingBalance: newCODBalance,
+      description,
+      status: 'completed'
+    });
+
+    // 5. Admin wallet खोजें
+    let [adminWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, adminUserId),
+          eq(wallets.userType, 'admin')
+        )
+      );
+
+    // 6. Admin wallet नहीं है तो बनाएं
+    if (!adminWallet) {
+      [adminWallet] = await tx
+        .insert(wallets)
+        .values({
+          userId: adminUserId,
+          userType: 'admin',
+          balance: 0,
+          codBalance: 0,
+          pendingAmount: 0
+        })
+        .returning();
+    }
+
+    const newAdminBalance =
+      (Number(adminWallet.balance) || 0) + settlementAmount;
+
+    // 7. Admin balance बढ़ाएं
+    await tx
+      .update(wallets)
+      .set({
+        balance: newAdminBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, adminWallet.id));
+
+    // 8. Admin transaction
+    await tx.insert(walletTransactions).values({
+      walletId: adminWallet.id,
+      amount: settlementAmount,
+      type: 'credit',
+      purpose: 'cod_settlement',
+      referenceId,
+      closingBalance: newAdminBalance,
+      description,
+      status: 'completed'
+    });
+
+    return {
+      success: true,
+      settledAmount: settlementAmount,
+      deliveryBoyCODBalance: newCODBalance,
+      adminBalance: newAdminBalance
+    };
+  };
+
+  return await db.transaction(logic);
+},
 };

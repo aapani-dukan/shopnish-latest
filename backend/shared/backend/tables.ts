@@ -683,7 +683,8 @@ export const wallets = pgTable('wallets', {
   
   // मुख्य बैलेंस जो निकाला जा सकता है
   balance: doublePrecision('balance').default(0).notNull(),
-  
+  // delivery boy dwara customer se collect kiya COD payment
+  codBalance: doublePrecision('cod_balance').default(0).notNull(),
   // वो पैसा जो अभी तक 'Clear' नहीं हुआ (जैसे ऑर्डर तो डिलीवर हो गया पर रिटर्न पीरियड अभी बाकी है)
   pendingAmount: doublePrecision('pending_amount').default(0).notNull(),
   
