@@ -4,6 +4,7 @@ import { wallets, walletTransactions,users } from '../shared/backend/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { requireAuth } from '../server/middleware/authMiddleware'; // आपका Auth Middleware
 import { WalletService } from '../services/walletService'; // अपना सही पाथ दें
+import { error } from 'node:console';
 const router = Router();
 
 // ✅ वॉलेट बैलेंस और ट्रांजैक्शन हिस्ट्री देखने की API
@@ -85,7 +86,8 @@ try {
 
 // 2. COD Settlement (जब डिलीवरी बॉय कैश जमा कर दे)
 
-export default router;router.post('/admin/settle-cash', requireAuth, async (req: any, res: Response) => {
+
+router.post('/admin/settle-cash', requireAuth, async (req: any, res: Response) => {
   if (!req.user.isAdmin) {
     return res.status(403).json({ error: 'Access Denied' });
   }
@@ -122,6 +124,50 @@ export default router;router.post('/admin/settle-cash', requireAuth, async (req:
 
     res.status(500).json({
       error: error?.message || 'Settlement failed'
+    });
+  }
+});
+router.post('/admin/settle-earning', requireAuth, async (req: any, res: Response) => {
+  if (!req.user.isAdmin) {
+    return res.status(403).json({ error: 'Access Denied' });
+  }
+
+  const { targetUserId, amount, note } = req.body;
+
+  const deliveryBoyId = Number(targetUserId);
+  const settlementAmount = Number(amount);
+   const adminUserId = Number(req.user.id);
+  if (!Number.isInteger(deliveryBoyId) || deliveryBoyId <= 0) {
+    return res.status(400).json({ error: 'Invalid delivery boy ID' });
+  }
+
+  if (!Number.isFinite(settlementAmount) || settlementAmount <= 0) {
+    return res.status(400).json({ error: 'Invalid settlement amount' });
+  }
+  if (!Number.isInteger(adminUserId) || adminUserId<=0){
+    return res.status(400).json({error:'Invalid admin ID'});
+  }
+  try {
+    const result = await 
+    WalletService.settleDeliveryBoyEarning(
+        deliveryBoyId,
+        settlementAmount,
+        adminUserId,
+       `earning_settlement_${Date.now()}` ,
+        note || 'Delivery earning paid by admin'
+      );
+
+    return res.json({
+      success: true,
+      message: 'Delivery earning settlement successful',
+      settlement: result
+    });
+
+  } catch (error: any) {
+    console.error('Delivery Earning Settlement Error:', error);
+
+    return res.status(400).json({
+      error: error?.message || 'Earning settlement failed'
     });
   }
 });
@@ -164,3 +210,4 @@ router.post('/admin/settle-seller', requireAuth, async (req: any, res: Response)
     });
   }
 });
+export default router;

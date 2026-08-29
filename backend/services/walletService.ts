@@ -336,7 +336,7 @@ async settleDeliveryBoyCOD(
       type: 'debit',
       purpose: 'cod_settlement',
       referenceId,
-      closingBalance: newCODBalance,
+      closingBalance: Number(deliveryWallet.Balance) || 0,
       description,
       status: 'completed'
     });
@@ -400,4 +400,130 @@ async settleDeliveryBoyCOD(
 
   return await db.transaction(logic);
 },
+async settleDeliveryBoyEarning(
+  deliveryBoyId: number,
+  amount: number,
+  adminUserId: number,
+  referenceId: string,
+  description: string
+) {
+  const logic = async (tx: any) => {
+
+    // 1. Delivery Boy wallet
+    const [deliveryWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, deliveryBoyId),
+          eq(wallets.userType, 'delivery-boy')
+        )
+      );
+
+    if (!deliveryWallet) {
+      throw new Error('Delivery Boy wallet not found');
+    }
+
+    const currentBalance = Number(deliveryWallet.balance) || 0;
+    const settlementAmount = Number(amount);
+
+    // 2. Security checks
+    if (settlementAmount <= 0) {
+      throw new Error('Invalid settlement amount');
+    }
+
+    if (settlementAmount > currentBalance) {
+      throw new Error(
+        `Settlement amount ₹${settlementAmount} is greater than earning balance ₹${currentBalance}`
+      );
+    }
+
+    const newDeliveryBalance =
+      currentBalance - settlementAmount;
+
+    // 3. Delivery Boy earning balance कम करें
+    await tx
+      .update(wallets)
+      .set({
+        balance: newDeliveryBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, deliveryWallet.id));
+
+    // 4. Delivery Boy transaction
+    await tx.insert(walletTransactions).values({
+      walletId: deliveryWallet.id,
+      amount: settlementAmount,
+      type: 'debit',
+      purpose: 'earning_settlement',
+      referenceId,
+      closingBalance: newDeliveryBalance,
+      description,
+      status: 'completed'
+    });
+
+    // 5. Admin wallet खोजें
+    let [adminWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, adminUserId),
+          eq(wallets.userType, 'admin')
+        )
+      );
+
+    // 6. Admin wallet नहीं है तो बनाएं
+    if (!adminWallet) {
+      [adminWallet] = await tx
+        .insert(wallets)
+        .values({
+          userId: adminUserId,
+          userType: 'admin',
+          balance: 0,
+          codBalance: 0,
+          pendingAmount: 0
+        })
+        .returning();
+    }
+
+    const currentAdminBalance =
+      Number(adminWallet.balance) || 0;
+
+    const newAdminBalance =
+      currentAdminBalance - settlementAmount;
+
+    // 7. Admin balance कम करें
+    await tx
+      .update(wallets)
+      .set({
+        balance: newAdminBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, adminWallet.id));
+
+    // 8. Admin transaction
+    await tx.insert(walletTransactions).values({
+      walletId: adminWallet.id,
+      amount: settlementAmount,
+      type: 'debit',
+      purpose: 'delivery_earning_payout',
+      referenceId,
+      closingBalance: newAdminBalance,
+      description:
+        `Payment of delivery earning to delivery boy #${deliveryBoyId}`,
+      status: 'completed'
+    });
+
+    return {
+      success: true,
+      settledAmount: settlementAmount,
+      deliveryBoyBalance: newDeliveryBalance,
+      adminBalance: newAdminBalance
+    };
+  };
+
+  return await db.transaction(logic);
+},
+
 };

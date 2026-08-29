@@ -137,7 +137,60 @@ const totalCODCollected = wallets
     alert(error?.message || 'Settlement failed!');
   }
 };
+const handleSettleEarning = async (
+  userId: number,
+  amount: number
+) => {
+  const settlementAmount = Math.abs(Number(amount));
 
+  if (settlementAmount <= 0) {
+    alert("No earning balance available for settlement.");
+    return;
+  }
+
+  const note = prompt(
+    "Enter earning settlement note:",
+    "Delivery earning paid by admin"
+  );
+
+  if (!note) return;
+
+  try {
+    const token = await auth.currentUser?.getIdToken();
+
+    if (!token) {
+      alert("Authentication token not found.");
+      return;
+    }
+
+    const res = await fetch('/api/wallet/admin/settle-earning', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        targetUserId: userId,
+        amount: settlementAmount,
+        note
+      })
+    });
+
+    const data = await res.json();
+
+    if (!res.ok) {
+      alert(data?.error || "Earning settlement failed!");
+      return;
+    }
+
+    alert("Delivery earning settlement successful!");
+    fetchWallets();
+
+  } catch (error) {
+    console.error("Earning settlement error:", error);
+    alert("Earning settlement failed!");
+  }
+};
   return (
     <div className="p-6 bg-gray-50 min-h-screen">
       <div className="flex justify-between items-center mb-8">
@@ -270,34 +323,65 @@ const totalCODCollected = wallets
 
   </div>
 </td>
-                
-                <td className="px-6 py-4 text-center">
-                 <button 
-  onClick={() => {
-    const settlementAmount =
-      wallet.userType === 'delivery-boy'
-        ? Number(wallet.codBalance || 0)
-        : Math.abs(Number(wallet.balance || 0));
+              <td className="px-6 py-4 text-center">
+  <div className="flex flex-col items-center gap-2">
 
-    if (settlementAmount <= 0) {
-      alert('There is no amount available for settlement.');
-      return;
-    }
+    {/* Delivery Boy Earning Settlement */}
+    {wallet.userType === 'delivery-boy' && (
+      <button
+        onClick={() =>
+          handleSettleEarning(
+            wallet.userId,
+            Math.abs(Number(wallet.balance || 0))
+          )
+        }
+        disabled={Number(wallet.balance || 0) <= 0}
+        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <CheckCircle size={16} />
+        Settle Earning
+      </button>
+    )}
 
-    handleSettle(
-      wallet.userId,
-      settlementAmount,
-      wallet.userType
-    );
-  }}
-  className="flex items-center gap-2 mx-auto bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition text-sm"
->
-  <CheckCircle size={16} />
-  {wallet.userType === 'delivery-boy'
-    ? 'Settle COD'
-    : 'Settle Full'}
-</button>
-                </td>
+    {/* Delivery Boy COD Settlement */}
+    {wallet.userType === 'delivery-boy' && (
+      <button
+        onClick={() =>
+          handleSettle(
+            wallet.userId,
+            Number(wallet.codBalance || 0),
+            wallet.userType
+          )
+        }
+        disabled={Number(wallet.codBalance || 0) <= 0}
+        className="flex items-center gap-2 bg-orange-600 text-white px-4 py-2 rounded-lg hover:bg-orange-700 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <CheckCircle size={16} />
+        Settle COD
+      </button>
+    )}
+
+    {/* Seller Settlement */}
+    {wallet.userType === 'seller' && (
+      <button
+        onClick={() =>
+          handleSettle(
+            wallet.userId,
+            Math.abs(Number(wallet.balance || 0)),
+            wallet.userType
+          )
+        }
+        disabled={Number(wallet.balance || 0) <= 0}
+        className="flex items-center gap-2 mx-auto bg-black text-white px-4 py-2 rounded-lg hover:bg-gray-800 transition text-sm disabled:opacity-40 disabled:cursor-not-allowed"
+      >
+        <CheckCircle size={16} />
+        Settle Full
+      </button>
+    )}
+
+  </div>
+</td>  
+               
               </tr>
             ))}
           </tbody>
