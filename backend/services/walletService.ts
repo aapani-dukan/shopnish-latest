@@ -10,7 +10,7 @@ export const WalletService = {
    */
   async addMoney(
     userId: number, 
-    userType: 'seller' | 'delivery-boy', 
+    userType: 'seller' | 'delivery-boy' | 'admin', 
     amount: number, 
     purpose: string, 
     referenceId: string, 
@@ -28,6 +28,7 @@ export const WalletService = {
           userId,
           userType,
           balance: 0,
+          codBalance: 0,
           pendingAmount: 0
         }).returning();
       }
@@ -122,6 +123,8 @@ if (amount < 0 && Math.abs(amount) > currentBalance) {
 
     return externalTx ? logic(externalTx) : await db.transaction(logic);
   },
+
+  
 async creditSellerEarnings(
   userId: number,
   orderId: number,
@@ -130,90 +133,269 @@ async creditSellerEarnings(
     quantity: number,
     price: number
   }>,
+  adminUserId: number,
   externalTx?: any
 ) {
   const tx = externalTx || db;
-    let totalFinalEarnings = 0;
-    let totalCommissionDeducted = 0;
 
-    for (const item of orderItems) {
-      const itemTotalAmount = Number(item.price) * (item.quantity || 1);
+  let totalFinalEarnings = 0;
+  let totalCommissionDeducted = 0;
 
-      // १. पहले सेलर प्रोडक्ट से उसका ब्रांड टाइप और मास्टर प्रोडक्ट आईडी निकालो भाई
-      const [productData] = await tx
+  for (const item of orderItems) {
+
+    const itemTotalAmount =
+      Number(item.price) * (item.quantity || 1);
+
+    // 1️⃣ Product की जानकारी
+    const [productData] = await tx
+      .select({
+        id: products.id,
+        masterProductId: products.masterProductId,
+        sellerBrandType: products.brandType,
+        sellerSubCategoryId: products.subCategoryId,
+      })
+      .from(products)
+      .where(eq(products.id, item.sellerProductId));
+
+    const finalBrandType =
+      productData?.sellerBrandType || "LOCAL";
+
+    // Default commission
+    let commissionRate =
+      finalBrandType === "BRANDED" ? 3.00 : 12.00;
+
+
+    // 2️⃣ Master Product → Subcategory commission
+    if (productData?.masterProductId) {
+
+      const [mappedSubCategory] = await tx
         .select({
-          id: products.id,
-          masterProductId: products.masterProductId,
-          sellerBrandType: products.brandType,
-          sellerSubCategoryId: products.subCategoryId, 
+          fmcgBrandCommission:
+            subcategories.fmcgBrandCommission,
+
+          localBrandCommission:
+            subcategories.localBrandCommission
         })
-        .from(products)
-        .where(eq(products.id, item.sellerProductId));
+        .from(productSubcategories)
+        .leftJoin(
+          subcategories,
+          eq(
+            productSubcategories.subCategoryId,
+            subcategories.id
+          )
+        )
+        .where(
+          eq(
+            productSubcategories.masterProductId,
+            productData.masterProductId
+          )
+        )
+        .limit(1);
 
-      const finalBrandType = productData?.sellerBrandType || "LOCAL";
-      let commissionRate = finalBrandType === "BRANDED" ? 3.00 : 12.00; 
 
-      // २. अगर यह मास्टर प्रोडक्ट है, तो हमारी नई मैपिंग टेबल (product_subcategories) से रेट लाओ
-      if (productData?.masterProductId) {
-        const [mappedSubCategory] = await tx
-          .select({
-            fmcgBrandCommission: subcategories.fmcgBrandCommission,
-            localBrandCommission: subcategories.localBrandCommission
-          })
-          .from(productSubcategories)
-          .leftJoin(subcategories, eq(productSubcategories.subCategoryId, subcategories.id))
-          .where(eq(productSubcategories.masterProductId, productData.masterProductId))
-          .limit(1);
-
-        // 🛡️ [सख्त बिज़नेस ताला]: अगर मैपिंग नहीं मिली या रेट खाली है, तो सीधे एरर फेंको!
-        if (!mappedSubCategory) {
-          throw new Error(`[CRITICAL FINANCE ERROR]: मास्टर प्रोडक्ट आईडी #${productData.masterProductId} किसी भी सब-कैटेगरी से मैप नहीं है!`);
-        }
-        if (!mappedSubCategory.fmcgBrandCommission || !mappedSubCategory.localBrandCommission) {
-          throw new Error(`[CRITICAL FINANCE ERROR]: इस प्रोडक्ट से जुड़ी सब-कैटेगरी का कमीशन रेट डेटाबेस में खाली (null) है!`);
-        }
-
-        commissionRate = finalBrandType === "BRANDED" 
-          ? parseFloat(mappedSubCategory.fmcgBrandCommission) 
-          : parseFloat(mappedSubCategory.localBrandCommission);
-
-      } else if (productData?.sellerSubCategoryId) {
-        // अगर सेलर ने मैनुअल ऐड किया था और सीधे सब-कैटेगरी चुनी थी
-        const [subCat] = await tx
-          .select()
-          .from(subcategories)
-          .where(eq(subcategories.id, productData.sellerSubCategoryId));
-        
-        if (!subCat) {
-          throw new Error(`[CRITICAL FINANCE ERROR]: मैनुअल प्रोडक्ट की सब-कैटेगरी आईडी #${productData.sellerSubCategoryId} डेटाबेस में गायब है!`);
-        }
-        if (!subCat.fmcgBrandCommission || !subCat.localBrandCommission) {
-          throw new Error(`[CRITICAL FINANCE ERROR]: सब-कैटेगरी आईडी #${subCat.id} का कमीशन रेट खाली (null) है!`);
-        }
-
-        commissionRate = finalBrandType === "BRANDED" 
-          ? parseFloat(subCat.fmcgBrandCommission) 
-          : parseFloat(subCat.localBrandCommission);
+      if (!mappedSubCategory) {
+        throw new Error(
+          `[CRITICAL FINANCE ERROR]: Master Product ID #${productData.masterProductId} किसी भी Subcategory से mapped नहीं है!`
+        );
       }
 
-      const itemCommission = (itemTotalAmount * commissionRate) / 100;
-      const itemEarnings = itemTotalAmount - itemCommission;
+      if (
+        !mappedSubCategory.fmcgBrandCommission ||
+        !mappedSubCategory.localBrandCommission
+      ) {
+        throw new Error(
+          `[CRITICAL FINANCE ERROR]: Subcategory का commission rate खाली है!`
+        );
+      }
 
-      totalFinalEarnings += itemEarnings;
-      totalCommissionDeducted += itemCommission;
+
+      commissionRate =
+        finalBrandType === "BRANDED"
+          ? parseFloat(
+              mappedSubCategory.fmcgBrandCommission
+            )
+          : parseFloat(
+              mappedSubCategory.localBrandCommission
+            );
     }
 
-    // कुल शुद्ध कमाई दुकानदार के पेंडिंग वॉलेट में जमा करो भाई साहब
-    return await this.addPendingMoney( 
-  userId,  
-  'seller',  
-  Math.round(totalFinalEarnings * 100) / 100,  
-  'order_earning',  
-  `order_${orderId}`,  
-  `Earnings for Order #${orderId}. Total Commission Deducted: ₹${totalCommissionDeducted.toFixed(2)}`,
-  tx
-);
-  },
+
+    // 3️⃣ Manual Product → Direct Subcategory
+    else if (productData?.sellerSubCategoryId) {
+
+      const [subCat] = await tx
+        .select()
+        .from(subcategories)
+        .where(
+          eq(
+            subcategories.id,
+            productData.sellerSubCategoryId
+          )
+        );
+
+
+      if (!subCat) {
+        throw new Error(
+          `[CRITICAL FINANCE ERROR]: Subcategory ID #${productData.sellerSubCategoryId} database में नहीं मिली!`
+        );
+      }
+
+      if (
+        !subCat.fmcgBrandCommission ||
+        !subCat.localBrandCommission
+      ) {
+        throw new Error(
+          `[CRITICAL FINANCE ERROR]: Subcategory ID #${subCat.id} का commission rate खाली है!`
+        );
+      }
+
+
+      commissionRate =
+        finalBrandType === "BRANDED"
+          ? parseFloat(subCat.fmcgBrandCommission)
+          : parseFloat(subCat.localBrandCommission);
+    }
+
+
+    // 4️⃣ Commission calculation
+    const itemCommission =
+      (itemTotalAmount * commissionRate) / 100;
+
+    const itemEarnings =
+      itemTotalAmount - itemCommission;
+
+
+    totalFinalEarnings += itemEarnings;
+    totalCommissionDeducted += itemCommission;
+  }
+
+
+  // पैसे को 2 decimal तक round करें
+  const finalSellerEarnings =
+    Math.round(totalFinalEarnings * 100) / 100;
+
+  const finalCommission =
+    Math.round(totalCommissionDeducted * 100) / 100;
+
+
+  // 5️⃣ Seller को commission काटकर Pending में डालो
+  const sellerResult =
+    await this.addMoney(
+      userId,
+      'seller',
+      finalSellerEarnings,
+      'order_earning',
+      `order_${orderId}`,
+      `Order #${orderId} Earnings. Product Value: ₹${(
+        finalSellerEarnings + finalCommission
+      ).toFixed(2)} | Commission: ₹${finalCommission.toFixed(2)}`,
+      tx
+    );
+
+
+  // 6️⃣ Commission Admin Wallet में डालो
+  if (finalCommission > 0) {
+
+    await this.addMoney(
+      adminUserId,
+      'admin',
+      finalCommission,
+      'seller_commission',
+      `order_${orderId}`,
+      `Seller commission from Order #${orderId}`,
+      tx
+    );
+  }
+
+
+  return {
+    success: true,
+    sellerEarnings: finalSellerEarnings,
+    commission: finalCommission,
+    sellerResult
+  };
+},
+async releaseSellerPending(
+  sellerUserId: number,
+  amount: number,
+  adminUserId: number,
+  referenceId: string,
+  description: string
+) {
+  const logic = async (tx: any) => {
+
+    // 1. Seller wallet खोजें
+    const [sellerWallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, sellerUserId),
+          eq(wallets.userType, 'seller')
+        )
+      );
+
+    if (!sellerWallet) {
+      throw new Error('Seller wallet not found');
+    }
+
+    const currentPending =
+      Number(sellerWallet.pendingAmount) || 0;
+
+    const releaseAmount = Number(amount);
+
+    // 2. Security checks
+    if (!Number.isFinite(releaseAmount) || releaseAmount <= 0) {
+      throw new Error('Invalid release amount');
+    }
+
+    if (releaseAmount > currentPending) {
+      throw new Error(
+        `Release amount ₹${releaseAmount.toFixed(2)} is greater than pending amount ₹${currentPending.toFixed(2)}`
+      );
+    }
+
+    const currentBalance =
+      Number(sellerWallet.balance) || 0;
+
+    const newPending =
+      currentPending - releaseAmount;
+
+    const newBalance =
+      currentBalance + releaseAmount;
+
+    // 3. Pending कम + Main Balance बढ़ाएं
+    await tx
+      .update(wallets)
+      .set({
+        balance: newBalance,
+        pendingAmount: newPending,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, sellerWallet.id));
+
+    // 4. Seller transaction
+    await tx.insert(walletTransactions).values({
+      walletId: sellerWallet.id,
+      amount: releaseAmount,
+      type: 'credit',
+      purpose: 'pending_release',
+      referenceId,
+      closingBalance: newBalance,
+      description,
+      status: 'completed'
+    });
+
+    return {
+      success: true,
+      releasedAmount: releaseAmount,
+      sellerBalance: newBalance,
+      sellerPendingAmount: newPending
+    };
+  };
+
+  return await db.transaction(logic);
+},
   /**
    * 🚚 DELIVERY BOY EARNINGS: Direct credit
    */
@@ -336,7 +518,7 @@ async settleDeliveryBoyCOD(
       type: 'debit',
       purpose: 'cod_settlement',
       referenceId,
-      closingBalance: Number(deliveryWallet.Balance) || 0,
+      closingBalance: newCODBalance,
       description,
       status: 'completed'
     });

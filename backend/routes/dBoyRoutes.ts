@@ -1121,7 +1121,20 @@ router.patch(
 
       // --- Database Transaction ---
       const finalBatch = await db.transaction(async (tx) => {
-        
+        // 🔎 पता करें कि यह Master Order का पहला Delivery Batch है या नहीं
+const [firstBatch] = await tx
+  .select({
+    id: deliveryBatches.id
+  })
+  .from(deliveryBatches)
+  .where(
+    eq(deliveryBatches.masterOrderId, masterOrderId)
+  )
+  .orderBy(asc(deliveryBatches.id))
+  .limit(1);
+
+const isFirstBatch = firstBatch?.id === batchId;
+
         // A. Update Delivery Batch
         const [updatedBatch] = await tx.update(deliveryBatches)
           .set({
@@ -1144,7 +1157,12 @@ router.patch(
         } as any);
 // 💰 WALLET SETTLEMENT LOGIC (Brand-Aware Dynamic Commission Upgrade)
 // 💰 WALLET SETTLEMENT LOGIC
-if (newStatus === 'delivered') {
+// 💰 WALLET SETTLEMENT LOGIC
+// Wallet settlement केवल पहली बार delivered होने पर होगा
+const wasAlreadyDelivered =
+  existingBatch.status === 'delivered';
+
+if (newStatus === 'delivered' && !wasAlreadyDelivered) {
 
   // 1️⃣ Delivery Boy की अपनी earning
   // यह COD amount से बिल्कुल स्वतंत्र है
@@ -1162,71 +1180,85 @@ if (newStatus === 'delivered') {
     );
   }
 
-  // 2️⃣ COD Collection
-  // COD को Delivery Boy के codBalance में जमा करो
-  // earning balance में नहीं
-  const masterOrder = existingBatch.subOrders[0]?.masterOrder;
-  const isCOD = masterOrder?.paymentMethod === 'COD';
+// 2️⃣ COD Collection
+// COD में customer से वही amount लिया जाएगा जो इस batch के लिए payable है
 
-  if (isCOD) {
+const masterOrder = existingBatch.subOrders[0]?.masterOrder;
+const isCOD = masterOrder?.paymentMethod === 'COD';
 
-    const totalCashToCollect = existingBatch.subOrders.reduce(
-      (sum, so) => sum + Number(so.total || 0),
-      0
-    );
+if (isCOD) {
 
-    if (totalCashToCollect > 0) {
+  // इस batch के सभी SubOrders का product/order amount
+  const subOrdersAmount = existingBatch.subOrders.reduce(
+    (sum, so) => sum + Number(so.total || 0),
+    0
+  );
 
-      let [wallet] = await tx
-        .select()
-        .from(wallets)
-        .where(
-          and(
-            eq(wallets.userId, userId),
-            eq(wallets.userType, 'delivery-boy')
-          )
-        );
+  // केवल FIRST BATCH पर customer charges जोड़ें
+  const deliveryCharge = isFirstBatch
+    ? Number(masterOrder?.deliveryCharge || 0)
+    : 0;
 
-      // Wallet नहीं है तो बनाओ
-      if (!wallet) {
-        [wallet] = await tx
-          .insert(wallets)
-          .values({
-            userId,
-            userType: 'delivery-boy',
-            balance: 0,
-            codBalance: 0,
-            pendingAmount: 0
-          })
-          .returning();
-      }
+  const platformCharge = isFirstBatch
+    ? Number(masterOrder?.platformCharge || 0)
+    : 0;
 
-      const newCodBalance =
-        (Number(wallet.codBalance) || 0) +
-        totalCashToCollect;
+  const totalCashToCollect =
+    subOrdersAmount +
+    deliveryCharge +
+    platformCharge;
 
-      await tx
-        .update(wallets)
-        .set({
-          codBalance: newCodBalance,
-          updatedAt: new Date()
+  if (totalCashToCollect > 0) {
+
+    let [wallet] = await tx
+      .select()
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, userId),
+          eq(wallets.userType, 'delivery-boy')
+        )
+      );
+
+    if (!wallet) {
+      [wallet] = await tx
+        .insert(wallets)
+        .values({
+          userId,
+          userType: 'delivery-boy',
+          balance: 0,
+          codBalance: 0,
+          pendingAmount: 0
         })
-        .where(eq(wallets.id, wallet.id));
-
-      await tx.insert(walletTransactions).values({
-        walletId: wallet.id,
-        amount: totalCashToCollect,
-        type: 'credit',
-        purpose: 'cod_collection',
-        referenceId: `batch_${batchId}`,
-        closingBalance: newCodBalance,
-        description:
-          `COD collected from customer for delivery batch #${batchId}`,
-        status: 'completed'
-      });
+        .returning();
     }
-  }
 
+    const newCodBalance =
+      (Number(wallet.codBalance) || 0) +
+      totalCashToCollect;
+
+    await tx
+      .update(wallets)
+      .set({
+        codBalance: newCodBalance,
+        updatedAt: new Date()
+      })
+      .where(eq(wallets.id, wallet.id));
+
+    await tx.insert(walletTransactions).values({
+      walletId: wallet.id,
+      amount: totalCashToCollect,
+      type: 'credit',
+      purpose: 'cod_collection',
+      referenceId: `batch_${batchId}`,
+      closingBalance: newCodBalance,
+      description:
+        `COD collected for Batch #${batchId}. SubOrders ₹${subOrdersAmount.toFixed(2)} + Delivery ₹${deliveryCharge.toFixed(2)} + Platform ₹${platformCharge.toFixed(2)}`,
+      status: 'completed'
+    });
+  }
+}
+ 
   // 3️⃣ Seller Earnings
   // यह COD से स्वतंत्र है और COD हो या न हो, चलेगा
   for (const so of existingBatch.subOrders) {
@@ -1248,6 +1280,7 @@ if (newStatus === 'delivered') {
         sellerUserId,
         so.id,
         fetchedItems || [],
+        Number(req.user.id),
         tx
       );
     }
