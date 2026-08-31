@@ -180,24 +180,52 @@ router.post('/admin/settle-seller', requireAuth, async (req: any, res: Response)
   const { targetUserId, amount, note } = req.body;
 
   try {
+    const sellerUserId = Number(targetUserId);
+
     const settlementAmount = Number(amount);
+ const adminUserId = Number(req.user.id);
+ if(!Number.isInteger(sellerUserId) || sellerUserId<=0) {
+  return res.status(400).json({
+    error:'Invalid seller Id'});
+ }
 
     if (!Number.isFinite(settlementAmount) || settlementAmount <= 0) {
       return res.status(400).json({
         error: 'Invalid settlement amount'
       });
     }
+if (!Number.isInteger(adminUserId) || adminUserId <= 0) {
+      return res.status(400).json({
+        error: 'Invalid admin ID'
+      });
+    }
+    const result = await db.transaction(async(tx)=>{
 
-    const result = await WalletService.addMoney(
-      Number(targetUserId),
+    const sellerResult = await WalletService.addMoney(
+      sellerUserId,
       'seller',
       -settlementAmount,
       'payout',
       `seller_settle_${Date.now()}`,
-      note || 'Seller payout by admin'
+      note || 'Seller payout by admin',
+      tx
     );
-
+const adminResult = await WalletService.addMoney(
+  adminUserId,
+  'admin',
+  -settlementAmount,
+  'seller_payout',
+  'seller_settle_${Date.now()}',
+  'payment paid to seller #${sellerUserId}',
+  tx
+);
+return{
+  seller: sellerResult,
+  admin: adminResult
+};
+    });
     res.json({
+      sucess:true,
       message: 'Seller settlement successful',
       ...result
     });
@@ -205,7 +233,7 @@ router.post('/admin/settle-seller', requireAuth, async (req: any, res: Response)
   } catch (error: any) {
     console.error('Seller Settlement Error:', error);
 
-    res.status(500).json({
+    res.status(400).json({
       error: error?.message || 'Seller settlement failed'
     });
   }
