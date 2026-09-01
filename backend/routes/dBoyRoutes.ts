@@ -178,7 +178,71 @@ router.get('/me', requireDeliveryBoyAuth, async (req: any, res: Response) => {
     return res.status(500).json({ error: 'Internal server error.' });
   }
 });
+// 💰 Delivery Boy Profile + Wallet
+router.get('/profile', requireDeliveryBoyAuth, async (req: any, res: Response) => {
+  try {
+    const userId = req.user?.id;
 
+    if (!userId) {
+      return res.status(401).json({
+        error: 'Unauthorized: Missing user data.'
+      });
+    }
+
+    // 1. Delivery Boy Profile
+    const [deliveryBoyProfile] = await db
+      .select()
+      .from(deliveryBoys)
+      .where(eq(deliveryBoys.userId, userId));
+
+    if (!deliveryBoyProfile) {
+      return res.status(404).json({
+        error: 'Delivery Boy profile not found.'
+      });
+    }
+
+    // 2. Delivery Boy Wallet
+    const [wallet] = await db
+      .select({
+        balance: wallets.balance,
+        codBalance: wallets.codBalance,
+        pendingAmount: wallets.pendingAmount,
+        updatedAt: wallets.updatedAt
+      })
+      .from(wallets)
+      .where(
+        and(
+          eq(wallets.userId, userId),
+          eq(wallets.userType, 'delivery-boy')
+        )
+      );
+
+    // 3. Profile + Wallet response
+    return res.status(200).json({
+      profile: {
+        ...deliveryBoyProfile,
+
+        // 💰 Earning Balance
+        totalEarnings: Number(wallet?.balance || 0),
+
+        // 💵 Customer से collected COD
+        codBalance: Number(wallet?.codBalance || 0),
+
+        // ⏳ अगर भविष्य में pending use करें
+        pendingAmount: Number(wallet?.pendingAmount || 0),
+
+        walletUpdatedAt: wallet?.updatedAt || null
+      }
+    });
+
+  } catch (error: any) {
+    console.error('❌ Error in GET /api/delivery/profile:', error);
+
+    return res.status(500).json({
+      error: 'Internal server error.'
+    });
+  }
+});
 // PUT /api/delivery/update-location
 // 🎯 फिक्स: लोकेशन सिंक को 100% एरर-फ़्री और टाइप-सेफ़ बनाया भाई!
 router.put('/update-location', requireDeliveryBoyAuth, async (req: any, res: Response) => {
