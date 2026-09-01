@@ -40,6 +40,7 @@ router.get('/my-wallet', requireAuth, async (req: any, res: Response) => {
     // 3. रिस्पॉन्स भेजें (Frontend के लिए एकदम रेडी JSON)
     res.json({
       balance: Number(wallet.balance),
+      codBalance:Number(wallet.codBalance || 0),
       pendingAmount: Number(wallet.pendingAmount || 0), // 🔥 ये अब फ्रंटेंड में यूज़ होगा
       currency: "INR",
       lastUpdated: wallet.updatedAt,
