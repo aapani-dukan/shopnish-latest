@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
 import { db } from '../db'; 
-import { sellersPgTable, stores, subOrders, products,productVariants, orders, categories } from '../../shared/backend/schema'; 
+import { sellersPgTable, stores, subOrders, products,productVariants, orders, categories,reviews } from '../../shared/backend/schema'; 
 import { eq, and, gte, sql, desc, isNull, not, lte,or,inArray } from 'drizzle-orm';
 import { z } from 'zod';
 
@@ -46,13 +46,22 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
     .where(and(
         eq(subOrders.sellerId, sellerId),
         inArray(subOrders.status, [ 'delivered_by_seller', 'delivered_by_delivery_boy']),
-        gte(subOrders.createdAt, today)
+        gte(subOrders.updatedAt, today)
     ));
 
     // B. Pending Orders Count
-    const pendingCount = await db.select({ count: sql<number>`count(*)` })
-        .from(subOrders)
-        .where(and(eq(subOrders.sellerId, sellerId), eq(subOrders.status, 'pending')));
+    const pendingCount = await db.select({
+    count: sql<number>`count(*)`
+})
+.from(subOrders)
+.where(and(
+    eq(subOrders.sellerId, sellerId),
+    inArray(subOrders.status, [
+        'pending',
+        'accepted',
+        'preparing'
+    ])
+));
 
     // C. Low Stock Items (Threshold = 5)
     const lowStockResult = await db.select({ count: sql<number>`count(distinct ${products.id})` })
@@ -67,7 +76,15 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
               and ${productVariants.isActive} = true
             )`
         ));
-
+const newReviewsResult = await db.select({
+    count: sql<number>`count(*)`
+})
+.from(reviews)
+.innerJoin(products, eq(reviews.productId, products.id))
+.where(and(
+    eq(products.sellerId, sellerId),
+    gte(reviews.createdAt, today)
+));
     // D. Recent Orders (Latest 5)
     const recentOrders = await db.query.subOrders.findMany({
         where: eq(subOrders.sellerId, sellerId),
@@ -87,6 +104,7 @@ export const getDashboardStats = asyncHandler(async (req: Request, res: Response
         todaySales: salesResult[0]?.totalSales || 0,
         pendingOrders: pendingCount[0]?.count || 0,
         lowStockItems: lowStockResult[0]?.count || 0,
+        newReviews: Number(newReviewsResult[0]?.count || 0),
         isOpen: sellerInfo?.isOpen || false,
         isSelfDelivery: sellerInfo?.isSelfDeliveryBySeller || false,
         recentOrders: recentOrders.map(o => {
