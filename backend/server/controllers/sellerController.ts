@@ -32,11 +32,24 @@ const sellerUpdateSchema = z.object({
 
 // 1️⃣ Get Seller Dashboard Stats (Confirmed High-Class Logic بھائی)
 export const getDashboardStats = asyncHandler(async (req: Request, res: Response) => {
-    const sellerId = (req as any).user?.sellerId;
-    if (!sellerId) return res.status(401).json({ message: "Seller ID not found." });
-
+    
     const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    today.setHours(0, 0, 0, 0);const userId = (req as any).user?.id;
+
+if (!userId) {
+    return res.status(401).json({ message: "User ID not found." });
+}
+
+const [sellerProfile] = await db
+    .select({ id: sellersPgTable.id })
+    .from(sellersPgTable)
+    .where(eq(sellersPgTable.userId, userId));
+
+if (!sellerProfile) {
+    return res.status(404).json({ message: "Seller profile not found." });
+}
+
+const sellerId = sellerProfile.id;
 
     // 🎯 फिक्स 1: डिलीवर्ड के सारे संभावित स्टेटस शामिल किए भाई, ताकि सेलर की 'असली कमाई' एकदम सटीक दिखे!
     const salesResult = await db.select({
