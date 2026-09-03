@@ -103,16 +103,17 @@ const newReviewsResult = await db.select({
     gte(reviews.createdAt, today)
 ));
     // D. Recent Orders (Latest 5)
-    const recentOrders = await db.query.subOrders.findMany({
-        where: eq(subOrders.sellerId, sellerId),
-        orderBy: (subOrders, { desc }) => [desc(subOrders.createdAt)],
-        limit: 5,
-        with: {
-            // 🎯 फिक्स 2: स्कीमा रिलेशंस के हिसाब से मास्टर ऑर्डर के यूजर/कस्टमर टेबल को बाइंड किया भाई
-            masterOrder: { with: { user: true, customer: true } }
-        }
-    });
-
+   const recentOrders = await db
+    .select({
+        id: subOrders.id,
+        orderNumber: subOrders.subOrderNumber,
+        totalAmount: subOrders.total,
+        status: subOrders.status,
+    })
+    .from(subOrders)
+    .where(eq(subOrders.sellerId, sellerId))
+    .orderBy(desc(subOrders.createdAt))
+    .limit(5);
     const sellerInfo = await db.query.sellersPgTable.findFirst({
         where: eq(sellersPgTable.id, sellerId)
     });
@@ -124,19 +125,13 @@ const newReviewsResult = await db.select({
         newReviews: Number(newReviewsResult[0]?.count || 0),
         isOpen: sellerInfo?.isOpen || false,
         isSelfDelivery: sellerInfo?.isSelfDeliveryBySeller || false,
-        recentOrders: recentOrders.map(o => {
-            const mOrder = (o as any).masterOrder;
-            // यूजर या कस्टमर ऑब्जेक्ट में से जो भी अवेलेबल हो, वहाँ से नाम उठाओ भाई
-            const customerName = mOrder?.user?.name || mOrder?.customer?.firstName || 'Customer';
-            
-            return {
-                id: o.id,
-                orderNumber: o.subOrderNumber,
-                customerName: customerName,
-                totalAmount: Number(o.total || 0),
-                status: o.status
-            };
-        })
+       recentOrders: recentOrders.map(o => ({
+    id: o.id,
+    orderNumber: o.orderNumber,
+    customerName: 'Customer',
+    totalAmount: Number(o.totalAmount || 0),
+    status: o.status
+}))
     });
 });
 
