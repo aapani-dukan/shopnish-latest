@@ -34,17 +34,21 @@ const sellerUpdateSchema = z.object({
 export const getDashboardStats = asyncHandler(async (req: Request, res: Response) => {
     
     const today = new Date();
-    today.setHours(0, 0, 0, 0);const userId = (req as any).user?.id;
+    today.setHours(0, 0, 0, 0);
+    const userId = (req as any).user?.id;
 
 if (!userId) {
     return res.status(401).json({ message: "User ID not found." });
 }
-
+console.log("🔍 DASHBOARD USER:", {
+    userId,
+    user: (req as any).user
+});
 const [sellerProfile] = await db
     .select({ id: sellersPgTable.id })
     .from(sellersPgTable)
     .where(eq(sellersPgTable.userId, userId));
-
+console.log("🔍 SELLER PROFILE:", sellerProfile);
 if (!sellerProfile) {
     return res.status(404).json({ message: "Seller profile not found." });
 }
