@@ -13,7 +13,8 @@ router.get('/master-search', ProductController.searchMasterProducts);
 // ✅ अब '/seller' आईडी वाले राउट से ऊपर है, तो 400 Error नहीं आएगा
 router.get('/seller', verifyToken as any, requireSellerAuth, ProductController.getSellerProducts as any);
 router.post("/bulk", verifyToken as any, requireSellerAuth, bulkCreateProducts);
-router.post('/', verifyToken as any, requireSellerAuth, upload.single('image'), ProductController.createProduct as any);
+router.post('/', verifyToken as any, requireSellerAuth, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 5 }]),
+ ProductController.createProduct as any);
 
 // --- 3. Admin Endpoints ---
 router.get('/admin/pending', verifyToken as any, requireAdminAuth, ProductController.getPendingProducts);
@@ -31,7 +32,7 @@ router.get(
 router.get('/:id', ProductController.getProductById);
 
 // --- 6. Update/Delete Endpoints ---
-router.put('/:productId', verifyToken as any, requireSellerAuth, upload.single('image'), ProductController.updateProduct as any);
+router.put('/:productId', verifyToken as any, requireSellerAuth, upload.fields([{ name: 'image', maxCount: 1 }, { name: 'images', maxCount: 5 }]), ProductController.updateProduct as any);
 router.delete('/:productId', verifyToken as any, requireSellerAuth, ProductController.deleteProduct as any);
 
 export default router;
